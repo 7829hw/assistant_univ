@@ -1,0 +1,68 @@
+# geoflow_templates/trip_fare_metric.yaml
+# 실차 운행 구간(trip)의 요금 통계.
+# "요금"은 operation의 revenue(1일 영업 수익금)와 다른 개념이므로 별도 template을 둔다.
+# 장소 조건은 optional이며, 질문에 없으면 place와 place_scope가 함께 사라진다.
+
+name: TRIP_FARE_METRIC
+description: 실차 운행 구간(trip)의 택시 요금(fare) 통계값을 구한다. 1일 영업 수익금(revenue)이 아니다.
+question_examples:
+  - "대구시의 평균 택시 요금은?"
+  - "평균 택시 요금은?"
+
+# metric은 이 template에서 fare 하나뿐이므로 slot으로 묻지 않고 고정한다.
+# 값이 하나뿐인 필수 slot은 Planner가 생략하기 쉬워 실패 경로만 늘린다.
+required_slots: []
+optional_slots: [place, aggregation, date, time]
+slot_types:
+  place: place
+  aggregation:
+    enum: [max, min, sum, avg, med]
+  date: date
+  time: time
+
+concepts:
+  - id: place
+    concept: LOCATION
+    subtype: place
+    role: SUBCOND
+    source: user
+    from_slot: place
+    optional: true
+  - id: place_scope
+    concept: LOCATION
+    subtype: scope
+    role: COND
+    source: tool
+    optional: true
+  - id: measure
+    concept: AMOUNT
+    subtype: fare
+    role: MEASURE
+    source: tool
+
+transformations:
+  - id: resolve_place
+    operator: RESOLVE_PLACE_SCOPE
+    inputs:
+      place_name: {node: place, field: name}
+      place_region: {node: place, field: region}
+    params:
+      include_vicinity: false
+    outputs: [place_scope]
+
+  - id: trip_metric
+    operator: TRIP_METRIC
+    inputs:
+      area: {node: place_scope}
+    params:
+      metric: fare
+      aggregation: {slot: aggregation}
+      date: {slot: date}
+      time: {slot: time}
+    outputs: [measure]
+
+final_node: measure
+
+answer:
+  kind: metric
+  label: 택시 요금

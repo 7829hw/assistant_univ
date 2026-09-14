@@ -10,6 +10,7 @@
 order:
   - role
   - task
+  - metric_vocabulary
   - place_rules
   - value_rules
   - scope_rules
@@ -33,8 +34,46 @@ sections:
     - optional_slots는 질문에 근거가 있을 때만 채웁니다.
     - 목록에 없는 template 이름이나 slot 이름을 만들지 않습니다.
     - 질문에 없는 장소, 날짜, 시간, taxi_type, metric을 추측해서 채우지 않습니다.
+    - template은 질문의 의미와 정확히 맞을 때만 고릅니다. 비슷해 보인다는
+      이유로 고르지 않습니다.
+    - 그룹화(분포) template은 질문에 "요일별", "지역별", "시도별", "상위 N곳"
+      같은 그룹화 표현이 실제로 있을 때만 고릅니다. 단순히 평균이나 합계를
+      묻는 질문에는 그룹화 template을 쓰지 않습니다.
     - 어떤 template으로도 표현할 수 없으면 template에 "NONE"을 넣고 slots는
-      빈 object로 둡니다.
+      빈 object로 둡니다. 맞지 않는 template을 고르는 것보다 "NONE"이 낫습니다.
+
+  metric_vocabulary: |-
+    [분석 개체와 metric 어휘]
+    TIMS의 metric은 각각 소속된 분석 개체가 다릅니다. 이름이 비슷해도 서로
+    다른 개념이므로 절대 바꿔 쓰지 않습니다.
+
+    passage (도로 edge 단위 통행)
+     - speed  = 속도
+     - rpm    = 분당 회전 속도
+     - 통행량, 통과 차량 대수 = passage 건수
+
+    trip (승하차 기준 실차 구간)
+     - fare   = 택시 요금, 승객이 낸 운임
+     - 실차 구간 건수 = trip 건수
+
+    drive (기동부터 운행 종료까지 전체 경로)
+     - vacant_ratio = 공차율, 공차로 운행되는 비율
+
+    operation (일 단위 택시 영업)
+     - revenue         = 1일 영업 수익금, 택시 수입
+     - operating_count = 영업 횟수
+     - operating_ratio = 영업 운행률
+     - hours           = 영업 시간
+
+    혼동하기 쉬운 쌍
+     - "요금"은 fare(trip)입니다. revenue(operation)가 아닙니다.
+     - "수입"은 revenue(operation)입니다. fare(trip)가 아닙니다.
+     - "공차율"은 vacant_ratio(drive)입니다. operating_ratio(operation)가 아닙니다.
+     - "운행률"은 operating_ratio(operation)입니다. vacant_ratio(drive)가 아닙니다.
+
+    질문의 metric 개념이 고른 template의 metric 목록에 없으면, 비슷한 값으로
+    바꾸지 말고 그 개념을 지원하는 다른 template을 찾습니다. 그런 template이
+    없으면 "NONE"을 반환합니다. 값을 치환하는 것은 오답을 만드는 것입니다.
 
   place_rules: |-
     [장소 표현 해석 규칙]

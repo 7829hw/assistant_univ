@@ -15,6 +15,7 @@ import yaml
 from agent_graph import extract_scopes
 
 from geoflow.errors import TemplateError
+from geoflow.operator_registry import get_operator
 from geoflow.types import (
     GEOFLOW_VERSION,
     ConceptNode,
@@ -100,12 +101,16 @@ class GeoFlowTemplate:
     def instantiate(self, question, slots):
         """slot을 채워 typed ``GeoFlowPlan``을 만든다."""
         filled = self._validate_slots(slots, question)
+        dropped = self._dropped_nodes(filled)
         concepts = [
-            self._build_concept(spec, filled) for spec in self.concepts
+            self._build_concept(spec, filled)
+            for spec in self.concepts
+            if spec["id"] not in dropped
         ]
         transformations = [
-            self._build_transformation(spec, filled)
+            self._build_transformation(spec, filled, dropped)
             for spec in self.transformations
+            if not self._is_dropped(spec, dropped)
         ]
         return GeoFlowPlan(
             version=GEOFLOW_VERSION,
@@ -115,6 +120,70 @@ class GeoFlowTemplate:
             transformations=transformations,
             final_node=self.final_node,
             slots=filled,
+        )
+
+    # -- optional concept -------------------------------------------------
+
+    def _dropped_nodes(self, filled):
+        """질문에 없는 optional 조건과 그에 의존하는 node를 걸러낸다.
+
+        예: "평균 택시 요금은?"처럼 장소 조건이 없는 질문에서는 place와
+        place_scope가 사라지고 metric tool만 scope 없이 실행된다. 질문에 없는
+        조건을 임의로 채우지 않기 위한 장치다.
+        """
+        dropped = {
+            spec["id"]
+            for spec in self.concepts
+            if spec.get("optional")
+            and "from_slot" in spec
+            and spec["from_slot"] not in filled
+        }
+        optional_ids = {
+            spec["id"] for spec in self.concepts if spec.get("optional")
+        }
+
+        changed = True
+        while changed:
+            changed = False
+            for spec in self.transformations:
+                if not self._has_dropped_required_input(spec, dropped):
+                    continue
+                for output_id in spec.get("outputs") or []:
+                    if output_id in dropped:
+                        continue
+                    if output_id not in optional_ids:
+                        raise TemplateError(
+                            f"{self.name}: {spec['id']}의 필수 입력이 사라져 "
+                            f"{output_id}를 만들 수 없지만 optional이 "
+                            "아닙니다.",
+                            context={"template": self.name},
+                        )
+                    dropped.add(output_id)
+                    changed = True
+
+        if self.final_node in dropped:
+            raise TemplateError(
+                f"{self.name}: final_node({self.final_node})가 질문에 없는 "
+                "조건에 의존합니다.",
+                context={"template": self.name},
+            )
+        return dropped
+
+    def _has_dropped_required_input(self, spec, dropped):
+        operator = get_operator(spec["operator"])
+        for port, reference in (spec.get("inputs") or {}).items():
+            if reference["node"] not in dropped:
+                continue
+            port_spec = None if operator is None else operator.input(port)
+            # optional port는 argument만 빠지고 transformation은 살아남는다.
+            if port_spec is None or port_spec.required:
+                return True
+        return False
+
+    def _is_dropped(self, spec, dropped):
+        outputs = spec.get("outputs") or []
+        return bool(outputs) and all(
+            output_id in dropped for output_id in outputs
         )
 
     # -- slot -------------------------------------------------------------
@@ -282,9 +351,11 @@ class GeoFlowTemplate:
             attributes=dict(spec.get("attributes") or {}),
         )
 
-    def _build_transformation(self, spec, slots):
+    def _build_transformation(self, spec, slots, dropped=frozenset()):
         inputs = {}
         for port, reference in (spec.get("inputs") or {}).items():
+            if reference["node"] in dropped:
+                continue
             inputs[port] = ValueRef(
                 node_id=reference["node"],
                 field=reference.get("field"),
@@ -437,6 +508,13 @@ def load_template(path):
                 context={"path": str(path)},
             )
         _validate_by_slot(where, spec.get("by_slot"), slots, path)
+        if spec.get("optional") and slot_name is not None:
+            if slots[slot_name].required:
+                raise TemplateError(
+                    f"{where}: optional concept가 required slot "
+                    f"{slot_name!r}을 참조합니다.",
+                    context={"path": str(path)},
+                )
 
     for index, spec in enumerate(transformations):
         where = f"{path.name}.transformations[{index}]"

@@ -123,8 +123,36 @@ class TemplateLoadingTest(unittest.TestCase):
                 "VICINITY_SCOPE_METRIC",
                 "OD_TRIP_COUNT",
                 "GROUPED_AGGREGATE",
+                "DIRECT_SCOPE_PASSAGE_COUNT",
+                "VICINITY_PASSAGE_COUNT",
+                "TRIP_FARE_METRIC",
+                "DRIVE_RATIO_METRIC",
             },
         )
+
+    def test_every_template_instantiates_and_validates(self):
+        """모든 template이 required slot만으로 검증을 통과해야 한다."""
+        samples = {
+            "place": {"name": "대구", "region": ""},
+            "origin": {"name": "동성로", "region": "대구"},
+            "destination": {"name": "신천동", "region": ""},
+            "scope": "scope:edge:1742",
+            "metric": None,
+            "dimension": "dayofweek",
+        }
+        tool_names = new_tool_executor().tool_names
+        for template in self.registry.all():
+            with self.subTest(template=template.name):
+                slots = {}
+                for name in template.required_slots:
+                    spec = template.slots[name]
+                    slots[name] = (
+                        spec.enum_values[0] if spec.enum_values
+                        else samples[name]
+                    )
+                plan = template.instantiate(DIRECT_QUESTION, slots)
+                report = validate(plan, available_tools=tool_names)
+                self.assertTrue(report.ok, report.errors)
 
     def test_unknown_template_is_rejected(self):
         with self.assertRaises(TemplateError) as caught:
@@ -146,6 +174,7 @@ class TemplateLoadingTest(unittest.TestCase):
         self.assertIn("허용되지 않은 slot", caught.exception.detail)
 
     def test_enum_slot_value_is_validated(self):
+        """PLACE_SCOPE_METRIC은 passage metric만 받는다. fare는 trip 개념이다."""
         template = self.registry.require("PLACE_SCOPE_METRIC")
         with self.assertRaises(TemplateError) as caught:
             template.instantiate(
@@ -261,6 +290,69 @@ class CompilerTest(unittest.TestCase):
         self.assertIs(
             execution_plan.steps[0].arguments["include_vicinity"], True,
         )
+
+
+class OptionalConceptTest(unittest.TestCase):
+    """질문에 없는 optional 조건은 node와 Tool 호출에서 함께 사라진다."""
+
+    def setUp(self):
+        self.registry = TemplateRegistry.from_directory()
+        self.tool_executor = new_tool_executor()
+
+    def _steps(self, template_name, question, slots):
+        plan = self.registry.require(template_name).instantiate(
+            question, slots,
+        )
+        report = validate(
+            plan, available_tools=self.tool_executor.tool_names,
+        )
+        self.assertTrue(report.ok, report.errors)
+        return plan, compile_plan(plan).steps
+
+    def test_absent_place_drops_resolve_step(self):
+        plan, steps = self._steps(
+            "TRIP_FARE_METRIC", "평균 택시 요금은?", {},
+        )
+        self.assertEqual([step.tool_name for step in steps],
+                         ["get_trip_metrics"])
+        self.assertNotIn("scope", steps[0].arguments)
+        self.assertEqual(plan.node_ids, ["measure"])
+
+    def test_present_place_keeps_resolve_step(self):
+        plan, steps = self._steps(
+            "TRIP_FARE_METRIC",
+            "대구시의 평균 택시 요금은?",
+            {"place": {"name": "대구", "region": ""}},
+        )
+        self.assertEqual(
+            [step.tool_name for step in steps],
+            ["get_place_scope", "get_trip_metrics"],
+        )
+        self.assertEqual(steps[1].arguments["scope"], ValueRef("place_scope"))
+        self.assertIn("place_scope", plan.node_ids)
+
+    def test_drive_ratio_without_place(self):
+        _plan, steps = self._steps(
+            "DRIVE_RATIO_METRIC",
+            "공차로 운행되는 택시 비율은?",
+            {},
+        )
+        self.assertEqual([step.tool_name for step in steps],
+                         ["get_drive_metrics"])
+        self.assertEqual(steps[0].arguments["metric"], "vacant_ratio")
+
+    def test_optional_drop_still_executes(self):
+        _plan, steps = self._steps(
+            "DRIVE_RATIO_METRIC",
+            "공차로 운행되는 택시 비율은?",
+            {},
+        )
+        plan = self.registry.require("DRIVE_RATIO_METRIC").instantiate(
+            "공차로 운행되는 택시 비율은?", {},
+        )
+        result = execute_plan(compile_plan(plan), self.tool_executor)
+        self.assertEqual(result.status, STATUS_OK, result.error)
+        self.assertIsNotNone(result.final_value)
 
 
 def _synthetic_plan(concepts, transformations, final_node, question=""):

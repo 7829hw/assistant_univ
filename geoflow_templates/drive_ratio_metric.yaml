@@ -1,0 +1,69 @@
+# geoflow_templates/drive_ratio_metric.yaml
+# 전체 운행 경로(drive)의 공차율.
+# "공차율"은 operation의 operating_ratio(운행률)와 다른 개념이므로 별도 template을 둔다.
+
+name: DRIVE_RATIO_METRIC
+description: 전체 운행 경로(drive)의 공차 운행 비율(vacant_ratio)을 구한다. 영업 운행률(operating_ratio)이 아니다.
+question_examples:
+  - "공차로 운행되는 택시 비율은?"
+  - "대구 지역 법인택시의 공차율은?"
+
+# metric은 이 template에서 vacant_ratio 하나뿐이므로 slot으로 묻지 않고 고정한다.
+required_slots: []
+optional_slots: [place, taxi_type, aggregation, date, time]
+slot_types:
+  place: place
+  taxi_type:
+    enum: [private, corporate, all]
+  aggregation:
+    enum: [max, min, sum, avg, med]
+  date: date
+  time: time
+
+concepts:
+  - id: place
+    concept: LOCATION
+    subtype: place
+    role: SUBCOND
+    source: user
+    from_slot: place
+    optional: true
+  - id: place_scope
+    concept: LOCATION
+    subtype: scope
+    role: COND
+    source: tool
+    optional: true
+  - id: measure
+    concept: PROPORTION
+    subtype: vacant_ratio
+    role: MEASURE
+    source: tool
+
+transformations:
+  - id: resolve_place
+    operator: RESOLVE_PLACE_SCOPE
+    inputs:
+      place_name: {node: place, field: name}
+      place_region: {node: place, field: region}
+    params:
+      include_vicinity: false
+    outputs: [place_scope]
+
+  - id: drive_metric
+    operator: DRIVE_METRIC
+    inputs:
+      area: {node: place_scope}
+    params:
+      metric: vacant_ratio
+      taxi_type: {slot: taxi_type}
+      aggregation: {slot: aggregation}
+      date: {slot: date}
+      time: {slot: time}
+    outputs: [measure]
+
+final_node: measure
+
+answer:
+  kind: metric
+  label: 공차율
