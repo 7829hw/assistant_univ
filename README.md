@@ -38,6 +38,10 @@ LLM은 한 번의 질의를 처리하면서 필요한 Tool을 순차적으로 �
 
 Tool 실행 결과가 오류인 경우 오류 내용을 LLM에 다시 전달하며, 수정 가능한 오류인 경우 다음 model hop에서 arguments를 변경하여 Tool을 다시 호출할 수 있음.
 
+위 흐름이 기본 실행 모드인 `react`임. 질문을 바로 Tool Calling으로 보내지 않고 명시적인
+planning 단계를 먼저 거치는 `geoflow` 모드도 선택할 수 있음. 자세한 내용은
+[21. Agent Mode — GeoFlow Planner](#21-agent-mode--geoflow-planner)를 참고함.
+
 ## 2. 주요 파일
 
 ```text
@@ -54,12 +58,35 @@ tool_handlers.py
 stub_query.yaml
 
 prompts/
-└─ system.yaml
+├─ system.yaml
+└─ geoflow_planner.yaml
 
 schemas/
 ├─ _common.yaml
 ├─ gazetteer.yaml
 └─ tims.yaml
+
+geoflow/
+├─ types.py
+├─ errors.py
+├─ templates.py
+├─ operator_registry.py
+├─ validator.py
+├─ compiler.py
+├─ executor.py
+├─ planner.py
+├─ answer.py
+└─ pipeline.py
+
+geoflow_templates/
+├─ direct_scope_metric.yaml
+├─ place_scope_metric.yaml
+├─ vicinity_scope_metric.yaml
+├─ od_trip_count.yaml
+└─ grouped_aggregate.yaml
+
+tests/
+└─ test_geoflow.py
 
 requirements.txt
 README.md
@@ -79,6 +106,10 @@ README.md
 | `mock_responses.py`      | Gazetteer/TIMS Mock Tool 응답 제공          |
 | `query_loader.py`        | YAML 질의 파일 로드 및 Query ID 선택             |
 | `prompts/system.yaml`    | LLM에 전달하는 System Prompt                 |
+| `prompts/geoflow_planner.yaml` | GeoFlow Planner 전용 System Prompt  |
+| `geoflow/`               | GeoFlow IR, template, validator, compiler, executor |
+| `geoflow_templates/`     | GeoFlow template 정의 YAML                |
+| `tests/`                 | GeoFlow 및 react mode 회귀 테스트             |
 | `schemas/_common.yaml`   | Tool Schema 공통 정의                       |
 | `schemas/gazetteer.yaml` | Gazetteer Tool 정의                       |
 | `schemas/tims.yaml`      | TIMS Tool 정의                            |
@@ -571,3 +602,178 @@ python assistant_cli.py \
 ```
 
 실행 과정에서 Tool 이름, arguments, Tool Result 및 최종 응답을 콘솔과 결과 파일에서 확인할 수 있음.
+
+## 21. Agent Mode — GeoFlow Planner
+
+기존 ReAct 방식과 별개로 GeoFlow planning 기반 실행 모드를 제공함.
+
+`--agent-mode`로 선택하며 기본값은 기존 동작을 보존하는 `react`임.
+
+```bash
+# 기존 동작 (기본값)
+python assistant_cli.py \
+  --model qwen3:8b \
+  --query-file stub_query.yaml
+
+# GeoFlow planning 모드
+python assistant_cli.py \
+  --agent-mode geoflow \
+  --model qwen3:8b \
+  --query-file stub_query.yaml
+```
+
+### 실행 흐름
+
+```text
+자연어 질의
+    ↓
+GeoFlow Planner (LLM 1회, Tool 미제공)
+    ↓
+Template 선택 + Slot 채우기
+    ↓
+Typed GeoFlow Plan
+    ↓
+GeoFlow Validator (G1~G6)
+    ↓
+Execution Plan Compiler
+    ↓
+Deterministic Tool Execution (기존 ToolExecutor 재사용)
+    ↓
+최종 응답
+```
+
+`react` 모드가 model hop마다 다음 Tool을 LLM에게 묻는 것과 달리, `geoflow` 모드는
+LLM을 1회만 호출하고 이후 Tool 선택·호출 순서·argument binding을 프로그램이 결정함.
+
+### Planner의 역할 제한
+
+Planner는 Tool Call을 생성하지 않으며 Tool 이름도 출력하지 않음.
+
+Planner가 반환하는 값은 template과 slots뿐임.
+
+```json
+{
+  "template": "OD_TRIP_COUNT",
+  "slots": {
+    "origin": {"name": "동성로동", "region": "대구"},
+    "destination": {"name": "신천동", "region": ""}
+  }
+}
+```
+
+Planner 출력은 모두 untrusted input으로 취급하며, JSON 파싱 실패·미등록 template·
+미정의 slot·형식 불일치는 모두 planner 오류로 처리함.
+
+### Template
+
+`geoflow_templates/*.yaml`은 Prompt용 설명문이 아니라 프로그램이 읽어 GeoFlow Plan을
+생성하는 구조화 데이터임.
+
+| Template                | 용도                                  |
+| ----------------------- | ----------------------------------- |
+| `DIRECT_SCOPE_METRIC`   | 사용자가 scope를 직접 제시한 통행 통계          |
+| `PLACE_SCOPE_METRIC`    | 장소/지역 내부의 통행 통계                    |
+| `VICINITY_SCOPE_METRIC` | 장소 주변(근처/부근) 포함 통행 통계              |
+| `OD_TRIP_COUNT`         | 출발지/도착지 실차 구간(trip) 건수             |
+| `GROUPED_AGGREGATE`     | 일 단위 영업(operation) 통계의 dimension 분포 |
+
+Planner Prompt의 template 목록은 이 YAML 정의에서 자동 생성되므로 별도 동기화가 필요 없음.
+
+### Semantic Operator
+
+Template은 실제 Tool 이름을 지정하지 않고 semantic operator만 지정함.
+
+실제 Tool 이름과 argument 이름 binding은 `geoflow/operator_registry.py`에서만 결정함.
+
+```text
+RESOLVE_PLACE_SCOPE → get_place_scope
+PASSAGE_METRIC      → get_passage_metrics
+PASSAGE_COUNT       → get_passage_count
+TRIP_COUNT          → get_trip_count
+TRIP_METRIC         → get_trip_metrics
+DRIVE_METRIC        → get_drive_metrics
+OPERATION_METRIC    → get_operation_metrics
+SCOPE_NAME          → get_scope_name
+```
+
+출발지/도착지 역할 뒤바뀜을 막기 위해 `TRIP_COUNT`의 port binding은 registry에 고정되어 있음.
+
+```text
+origin_scope      → scope_pickup
+destination_scope → scope_dropoff
+```
+
+이 mapping은 LLM이 결정하지 않음.
+
+### Validator
+
+Tool을 호출하기 전에 다음 규칙을 검사함.
+
+```text
+G1 ACYCLICITY         dependency graph에 cycle이 없을 것
+G2 ROLE_ORDERING      명백한 procedural role 역행이 없을 것
+G3 TYPE_COMPATIBILITY operator input/output의 semantic type이 맞을 것
+G4 EXECUTABILITY      operator가 registry에 있고 Tool도 사용 가능할 것
+G5 CONNECTIVITY       final_node까지 입력이 모두 연결되어 있을 것
+G6 SCOPE_PROVENANCE   scope는 source=user 또는 source=tool만 허용
+```
+
+`G6`는 기존 scope 정책을 IR 수준에서 다시 강제함. `source=user`인 scope는 실제
+사용자 발화에 포함된 값이어야 하며, template이나 Planner가 만든 scope literal은 거부됨.
+
+실행 단계에서도 `agent_graph.py`와 동일한 known scope 검사를 한 번 더 수행함.
+
+### 실행 결과 저장
+
+`geoflow` 모드로 실행하면 `query_raw.json`의 각 record에 `geoflow` 항목이 추가됨.
+
+```text
+agent_mode
+planner (출력 원문 포함)
+template / slots
+plan (concepts / transformations / final_node)
+validation (검사한 규칙, 실패 규칙, 오류 목록)
+execution_plan (ToolStep 목록)
+execution (state / trace)
+final_answer
+error
+durations (planner_ms / execution_ms / total_ms)
+```
+
+`query_report.md`에는 다음 순서로 기록됨.
+
+```text
+질문
+↓
+Planner (template / slots)
+↓
+GeoFlow (concepts / transformations)
+↓
+Validation
+↓
+Tool Steps
+↓
+Tool Result
+↓
+최종 응답
+```
+
+`react` 모드의 기존 report 형식은 그대로 유지됨.
+
+### 테스트
+
+새 dependency 없이 표준 라이브러리 `unittest`로 실행함.
+
+```bash
+python -m unittest discover -s tests -t .
+```
+
+### 현재 제한
+
+* v1 template은 5개이며 그 밖의 질의 유형(`get_trip_metrics`, `get_drive_metrics`,
+  `get_passage_count` 단독 질의 등)은 아직 template이 없음.
+* 실행 중 Tool 오류가 발생하면 재시도 없이 구조화된 실행 실패를 반환함.
+  ReAct 모드의 재시도 동작은 기존과 동일하게 유지됨.
+* 최종 응답은 코드 기반 format을 사용함. Tool 결과에 없는 수치가 생성되지 않도록
+  LLM 문장 생성 단계를 두지 않음.
+* GeoFlow 모드는 turn 간 대화 맥락을 참조하지 않고 질문 단위로 독립 실행함.

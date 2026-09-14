@@ -4,10 +4,16 @@
 import copy
 import time
 
-from agent_graph import run_agent_graph
+from agent_graph import extract_scopes, run_agent_graph
 
 
 MAX_TOOL_HOPS = 10
+
+#: agent 실행 모드. 기존 동작 보존을 위해 기본값은 react다.
+AGENT_MODE_REACT = "react"
+AGENT_MODE_GEOFLOW = "geoflow"
+AGENT_MODES = (AGENT_MODE_REACT, AGENT_MODE_GEOFLOW)
+DEFAULT_AGENT_MODE = AGENT_MODE_REACT
 
 
 def _duration_ms(started_at):
@@ -17,12 +23,31 @@ def _duration_ms(started_at):
 class AssistantRuntime:
     """외부에서 받은 client와 YAML Config 값으로 질문을 실행한다."""
 
-    def __init__(self, *, client, tools, system_prompt, tool_executor, model=None):
+    def __init__(
+        self,
+        *,
+        client,
+        tools,
+        system_prompt,
+        tool_executor,
+        model=None,
+        agent_mode=DEFAULT_AGENT_MODE,
+        geoflow=None,
+    ):
+        if agent_mode not in AGENT_MODES:
+            raise ValueError(
+                f"지원하지 않는 agent mode입니다: {agent_mode} "
+                f"(사용 가능: {', '.join(AGENT_MODES)})"
+            )
+        if agent_mode == AGENT_MODE_GEOFLOW and geoflow is None:
+            raise ValueError("geoflow mode에는 GeoFlow pipeline이 필요합니다.")
         self.client = client
         self.tools = tools
         self.system_prompt = system_prompt
         self.tool_executor = tool_executor
         self.model = model if model is not None else getattr(client, "model", None)
+        self.agent_mode = agent_mode
+        self.geoflow = geoflow
 
     def initial_messages(self, question):
         """전달받은 System Prompt를 변경 없이 첫 message에 사용한다."""
@@ -52,6 +77,7 @@ class AssistantRuntime:
         result = {
             "question": question,
             "model": self.model,
+            "agent_mode": self.agent_mode,
             "hop_log": [],
             "model_calls": [],
             "final_answer": None,
@@ -62,6 +88,16 @@ class AssistantRuntime:
 
         if cancel_checker is not None and cancel_checker():
             result["cancelled"] = True
+            result["total_duration_ms"] = _duration_ms(started_at)
+            return result
+
+        if self.agent_mode == AGENT_MODE_GEOFLOW:
+            self._run_geoflow(
+                question,
+                result,
+                event_handler=event_handler,
+                cancel_checker=cancel_checker,
+            )
             result["total_duration_ms"] = _duration_ms(started_at)
             return result
 
@@ -90,6 +126,41 @@ class AssistantRuntime:
         result["total_duration_ms"] = _duration_ms(started_at)
         return result
 
+    def _run_geoflow(self, question, result, *, event_handler, cancel_checker):
+        """GeoFlow 파이프라인 결과를 기존 결과 계약에 맞춰 채운다."""
+        try:
+            run = self.geoflow.run(
+                question,
+                event_handler=event_handler,
+                cancel_checker=cancel_checker,
+            )
+        except Exception as error:  # noqa: BLE001 - 예기치 못한 실패도 결과로 반환
+            result["runtime_error"] = (
+                f"GeoFlow 실행 실패: {type(error).__name__}: {error}"
+            )
+            return result
+
+        planner_duration = run.durations.get("planner_ms")
+        result.update({
+            "hop_log": [dict(entry) for entry in run.hop_log],
+            "model_calls": [{
+                "event": "model_call",
+                "model_hop": 1,
+                "phase": "geoflow_planner",
+                "duration_ms": planner_duration,
+                "error": (
+                    run.error.get("detail")
+                    if run.error and run.error.get("stage") == "planner"
+                    else None
+                ),
+            }],
+            "final_answer": run.final_answer,
+            "runtime_error": run.runtime_error,
+            "cancelled": bool(run.cancelled),
+            "geoflow": run.to_dict(),
+        })
+        return result
+
     def run_turn(
         self,
         question,
@@ -107,6 +178,7 @@ class AssistantRuntime:
         result = {
             "question": question,
             "model": self.model,
+            "agent_mode": self.agent_mode,
             "hop_log": [],
             "model_calls": [],
             "final_answer": None,
@@ -119,6 +191,29 @@ class AssistantRuntime:
 
         if cancel_checker is not None and cancel_checker():
             result["cancelled"] = True
+            result["total_duration_ms"] = _duration_ms(started_at)
+            return result
+
+        if self.agent_mode == AGENT_MODE_GEOFLOW:
+            # GeoFlow v1은 turn별 독립 실행이다. 이전 대화는 참조하지 않지만
+            # 확인된 scope와 대화 기록은 기존 계약대로 이어서 반환한다.
+            self._run_geoflow(
+                question,
+                result,
+                event_handler=event_handler,
+                cancel_checker=cancel_checker,
+            )
+            answer = result["final_answer"]
+            result["messages"] = [
+                *previous_messages,
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": answer or ""},
+            ]
+            result["known_scopes"] = sorted(
+                set(previous_scopes)
+                | set(extract_scopes(question))
+                | _trace_scopes(result["hop_log"])
+            )
             result["total_duration_ms"] = _duration_ms(started_at)
             return result
 
@@ -155,3 +250,11 @@ class AssistantRuntime:
 def _copy_messages(messages):
     """Conversation 전체가 아닌 mutable message 목록만 복사한다."""
     return copy.deepcopy(list(messages or []))
+
+
+def _trace_scopes(hop_log):
+    """GeoFlow 실행 trace의 성공 결과에서 확인된 scope를 모은다."""
+    scopes = set()
+    for entry in hop_log or ():
+        scopes.update(extract_scopes(entry.get("result")))
+    return scopes

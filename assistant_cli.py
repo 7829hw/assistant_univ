@@ -9,8 +9,16 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from assistant_runtime import AssistantRuntime
+from assistant_runtime import (
+    AGENT_MODE_GEOFLOW,
+    AGENT_MODE_REACT,
+    AGENT_MODES,
+    DEFAULT_AGENT_MODE,
+    AssistantRuntime,
+)
 from build import build
+from geoflow.errors import GeoFlowError
+from geoflow.pipeline import GeoFlowPipeline
 from query_loader import (
     QuerySelectionError,
     QueryValidationError,
@@ -38,6 +46,7 @@ OLLAMA_HOST = os.environ.get("OLLAMA_HOST", DEFAULT_OLLAMA_HOST)
 MODEL_NAME = os.environ.get("OLLAMA_MODEL", DEFAULT_MODEL_NAME)
 CHAT_TIMEOUT = DEFAULT_CHAT_TIMEOUT
 OLLAMA_CLIENT = None
+AGENT_MODE = DEFAULT_AGENT_MODE
 
 ARRAY_PREVIEW_LIMIT = 3
 INLINE_RESULT_LIMIT = 8
@@ -69,6 +78,18 @@ def get_ollama_client():
     return OLLAMA_CLIENT
 
 
+def configure_agent_mode(agent_mode):
+    """CLI가 선택한 실행 모드를 전역 설정에 반영한다."""
+    global AGENT_MODE
+    if agent_mode not in AGENT_MODES:
+        raise SystemExit(
+            f"지원하지 않는 agent mode입니다: {agent_mode} "
+            f"(사용 가능: {', '.join(AGENT_MODES)})"
+        )
+    AGENT_MODE = agent_mode
+    return AGENT_MODE
+
+
 def check_ollama_connection():
     """Ollama 연결, 모델 존재 여부, 실제 capability를 확인한다."""
     client = get_ollama_client()
@@ -93,15 +114,24 @@ def check_ollama_connection():
         print(f"  오류 내용: {error}")
         raise SystemExit(1)
 
-    if "tools" not in set(capabilities):
+    # geoflow mode의 Planner는 tools 없이 JSON만 생성하므로 native Tool
+    # capability를 요구하지 않는다. react mode의 요구 조건은 그대로 둔다.
+    if AGENT_MODE == AGENT_MODE_REACT and "tools" not in set(capabilities):
         print(f"✗ {MODEL_NAME} 모델은 native Tool Calling을 지원하지 않습니다.")
-        print("  Assistant 실행에는 capabilities의 tools가 필수입니다.")
+        print("  react mode 실행에는 capabilities의 tools가 필수입니다.")
         print("  /api/show의 capabilities에 tools가 있는 모델을 선택하세요.")
         raise SystemExit(1)
 
     print(f"✓ Ollama 연결 확인 완료 (모델: {MODEL_NAME})")
     print(f"  capabilities: {', '.join(capabilities) or '(없음)'}")
-    print("  실행 모드: NATIVE_TOOL_AGENT")
+    print(
+        "  실행 모드: "
+        + (
+            "GEOFLOW_PLANNER"
+            if AGENT_MODE == AGENT_MODE_GEOFLOW
+            else "NATIVE_TOOL_AGENT"
+        )
+    )
 
 
 def list_installed_models(host):
@@ -409,6 +439,24 @@ def _make_graph_event_handler():
             print(f"{indent}← ERROR\n{indent}   {payload['error']}")
         elif event == "max_hops":
             print(f"\n[Max Hops] ERROR | {payload['error']}")
+        elif event == "geoflow_plan":
+            print(f"\n[Planner] template={payload['template']}")
+            print("\n".join(_wrap_trace_items(
+                "  → ", _format_argument_items(payload["slots"]),
+            )))
+        elif event == "geoflow_validation":
+            report = payload["report"]
+            status = report.get("status")
+            if status == "OK":
+                print(f"[Validation] OK | {len(report['checked_rules'])}개 규칙 통과")
+            else:
+                print(f"[Validation] ERROR | {', '.join(report['failed_rules'])}")
+                for item in report["errors"]:
+                    print(f"     {item['message']}")
+        elif event == "geoflow_execution_plan":
+            steps = payload["execution_plan"]["steps"]
+            names = " → ".join(step["tool_name"] for step in steps)
+            print(f"[Execution Plan] {len(steps)} step | {names}")
 
     return handle
 
@@ -421,20 +469,32 @@ def _print_result_footer(result):
     ))
 
 
-def _new_runtime(tools, system_prompt, *, tool_handlers=None):
+def _new_runtime(tools, system_prompt, *, tool_handlers=None, agent_mode=None):
     """현재 CLI 설정과 YAML Config로 UI 독립 Runtime을 만든다."""
     selected_handlers = (
         get_tool_handlers() if tool_handlers is None else tool_handlers
     )
+    selected_mode = AGENT_MODE if agent_mode is None else agent_mode
+    client = get_ollama_client()
+    tool_executor = ToolExecutor(tools=tools, handlers=selected_handlers)
+    geoflow = None
+    if selected_mode == AGENT_MODE_GEOFLOW:
+        try:
+            geoflow = GeoFlowPipeline.create(
+                client=client,
+                tool_executor=tool_executor,
+                model=MODEL_NAME,
+            )
+        except GeoFlowError as error:
+            raise SystemExit(f"GeoFlow 구성 실패: {error.detail}") from error
     return AssistantRuntime(
-        client=get_ollama_client(),
+        client=client,
         tools=tools,
         system_prompt=system_prompt,
-        tool_executor=ToolExecutor(
-            tools=tools,
-            handlers=selected_handlers,
-        ),
+        tool_executor=tool_executor,
         model=MODEL_NAME,
+        agent_mode=selected_mode,
+        geoflow=geoflow,
     )
 
 
@@ -517,9 +577,10 @@ def _load_queries_with_source(path):
 
 
 def _raw_record(item, result):
-    return {
+    record = {
         "id": item["id"],
         "question": item["question"],
+        "agent_mode": result.get("agent_mode", AGENT_MODE_REACT),
         "hops": [dict(hop) for hop in result["hop_log"]],
         "model_calls": [dict(call) for call in result.get("model_calls", [])],
         "total_duration_ms": result.get("total_duration_ms"),
@@ -528,6 +589,86 @@ def _raw_record(item, result):
         "runtime_status": "ERROR" if result["runtime_error"] else "OK",
         "cancelled": bool(result.get("cancelled")),
     }
+    geoflow = result.get("geoflow")
+    if geoflow is not None:
+        # planner output / template / slots / plan / validation /
+        # execution plan / trace / 단계별 소요 시간을 그대로 보존한다.
+        record["geoflow"] = geoflow
+    return record
+
+
+def _geoflow_report_lines(geoflow):
+    """geoflow mode 실행의 planning 과정을 사람이 읽을 수 있게 정리한다."""
+    lines = ["### Planner", ""]
+    template = geoflow.get("template") or "(선택 실패)"
+    lines.append(f"- Template: `{template}`")
+    slots = geoflow.get("slots") or {}
+    if slots:
+        lines.append("- Slots:")
+        for key, value in slots.items():
+            lines.append(f"  - `{key}` = {_format_value(value)}")
+    else:
+        lines.append("- Slots: (없음)")
+    duration = (geoflow.get("durations") or {}).get("planner_ms")
+    if duration is not None:
+        lines.append(f"- Planner 소요: {duration:g} ms")
+    lines.append("")
+
+    plan = geoflow.get("plan")
+    if plan:
+        lines.extend(["### GeoFlow", "", "```text"])
+        for node in plan["concepts"]:
+            lines.append(
+                f"[{node['id']}] {node['concept']}/{node['subtype']} "
+                f"role={node['role']} source={node['source']}"
+            )
+        for transformation in plan["transformations"]:
+            inputs = ", ".join(
+                f"{port}←{ref['$ref']}"
+                + (f".{ref['field']}" if ref.get("field") else "")
+                for port, ref in transformation["inputs"].items()
+            )
+            outputs = ", ".join(transformation["outputs"])
+            lines.append(
+                f"({transformation['id']}) {transformation['operator']}"
+                f"({inputs}) → {outputs}"
+            )
+        lines.append(f"final_node = {plan['final_node']}")
+        lines.extend(["```", ""])
+
+    validation = geoflow.get("validation")
+    if validation:
+        lines.extend(["### Validation", ""])
+        if validation["status"] == "OK":
+            lines.append(
+                f"OK — {', '.join(validation['checked_rules'])} 통과"
+            )
+        else:
+            lines.append(f"ERROR — {', '.join(validation['failed_rules'])}")
+            for error in validation["errors"]:
+                lines.append(f"- [{error['rule']}] {error['message']}")
+        lines.append("")
+
+    execution_plan = geoflow.get("execution_plan")
+    if execution_plan:
+        lines.extend(["### Tool Steps", ""])
+        for index, step in enumerate(execution_plan["steps"], start=1):
+            lines.append(
+                f"{index}. `{step['operator']}` → `{step['tool_name']}`"
+            )
+        lines.append("")
+
+    error = geoflow.get("error")
+    if error:
+        lines.extend([
+            "### GeoFlow Error",
+            "",
+            f"- Stage: {error.get('stage')}",
+            f"- Code: {error.get('code')}",
+            f"- Detail: {error.get('detail')}",
+            "",
+        ])
+    return lines
 
 
 def _write_query_report(path, records, timestamp):
@@ -535,6 +676,7 @@ def _write_query_report(path, records, timestamp):
         "# Query Suite Raw Execution Report",
         "",
         f"- Model: {MODEL_NAME}",
+        f"- Agent mode: {AGENT_MODE}",
         f"- Timestamp: {timestamp}",
         "- 실행 trace만 기록하며 응답의 정답 여부는 판정하지 않습니다.",
         "",
@@ -551,6 +693,8 @@ def _write_query_report(path, records, timestamp):
             record["question"],
             "",
         ])
+        if record.get("geoflow"):
+            lines.extend(_geoflow_report_lines(record["geoflow"]))
         if record["hops"]:
             for hop_index, hop in enumerate(record["hops"], start=1):
                 lines.extend([
@@ -601,6 +745,7 @@ def _save_query_run(
     }
     raw = {
         "model": MODEL_NAME,
+        "agent_mode": AGENT_MODE,
         "chat_timeout_seconds": CHAT_TIMEOUT,
         "timestamp": timestamp,
         "query_count": len(records),
@@ -746,6 +891,15 @@ def parse_args(argv=None):
         action="store_true",
         help="설치 모델과 native Tool capability를 출력하고 종료",
     )
+    parser.add_argument(
+        "--agent-mode",
+        choices=AGENT_MODES,
+        default=DEFAULT_AGENT_MODE,
+        help=(
+            "실행 모드. react=기존 순차 Tool Calling, "
+            f"geoflow=GeoFlow planning 후 결정적 실행(기본: {DEFAULT_AGENT_MODE})"
+        ),
+    )
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--query", help="실행할 단일 자연어 Query")
     source.add_argument("--query-file", help="실행할 Query YAML 경로")
@@ -811,6 +965,7 @@ def main(argv=None):
     except ValueError as error:
         raise SystemExit(str(error)) from error
 
+    configure_agent_mode(args.agent_mode)
     configure_ollama_client(
         args.ollama_host,
         args.model,
@@ -818,7 +973,7 @@ def main(argv=None):
     )
     print(
         f"설정 — 모델: {MODEL_NAME} / 주소: {OLLAMA_HOST} "
-        f"/ chat timeout: {CHAT_TIMEOUT:g}초"
+        f"/ chat timeout: {CHAT_TIMEOUT:g}초 / agent mode: {AGENT_MODE}"
     )
     check_ollama_connection()
     try:
