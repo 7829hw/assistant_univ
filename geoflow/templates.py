@@ -12,6 +12,8 @@ from typing import Any
 
 import yaml
 
+from agent_graph import extract_scopes
+
 from geoflow.errors import TemplateError
 from geoflow.types import (
     GEOFLOW_VERSION,
@@ -97,7 +99,7 @@ class GeoFlowTemplate:
 
     def instantiate(self, question, slots):
         """slot을 채워 typed ``GeoFlowPlan``을 만든다."""
-        filled = self._validate_slots(slots)
+        filled = self._validate_slots(slots, question)
         concepts = [
             self._build_concept(spec, filled) for spec in self.concepts
         ]
@@ -117,7 +119,7 @@ class GeoFlowTemplate:
 
     # -- slot -------------------------------------------------------------
 
-    def _validate_slots(self, slots):
+    def _validate_slots(self, slots, question=""):
         if not isinstance(slots, dict):
             raise TemplateError(
                 f"{self.name}: slots는 object여야 합니다. (받은 형식: "
@@ -142,10 +144,10 @@ class GeoFlowTemplate:
                         context={"template": self.name, "missing_slot": name},
                     )
                 continue
-            filled[name] = self._coerce_slot(spec, slots[name])
+            filled[name] = self._coerce_slot(spec, slots[name], question)
         return filled
 
-    def _coerce_slot(self, spec, value):
+    def _coerce_slot(self, spec, value, question=""):
         where = f"{self.name}.{spec.name}"
         enum_values = spec.enum_values
         if enum_values:
@@ -182,11 +184,30 @@ class GeoFlowTemplate:
         text = value.strip()
         pattern = _SLOT_PATTERNS.get(spec.type)
         if pattern is not None and not pattern.fullmatch(text):
+            if spec.type == SLOT_TYPE_SCOPE:
+                return self._restore_scope_prefix(where, spec, text, question)
             raise TemplateError(
                 f"{where}: {spec.type} 형식이 아닙니다: {text!r}",
                 context={"template": self.name, "slot": spec.name},
             )
         return text
+
+    def _restore_scope_prefix(self, where, spec, text, question):
+        """Planner가 "scope:" 접두어를 빠뜨린 경우에만 복원한다.
+
+        복원 결과가 사용자 발화에 토큰 단위로 실재할 때만 인정하므로 scope를
+        새로 만들어내는 경로가 되지 않는다. 복원 여부와 무관하게 Validator의
+        G6 provenance 검사는 그대로 다시 수행된다.
+        """
+        candidate = f"scope:{text}"
+        if candidate in extract_scopes(question):
+            return candidate
+        raise TemplateError(
+            f"{where}: scope 형식이 아닙니다: {text!r}. scope 값은 "
+            '"scope:"로 시작하며 사용자 발화에 있는 값을 그대로 사용해야 '
+            "합니다.",
+            context={"template": self.name, "slot": spec.name},
+        )
 
     def _coerce_place(self, where, value, spec):
         if isinstance(value, str):

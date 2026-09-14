@@ -162,6 +162,33 @@ class TemplateLoadingTest(unittest.TestCase):
                 {"place": {"region": "대구"}, "metric": "speed"},
             )
 
+    def test_missing_scope_prefix_is_restored_from_question(self):
+        """Planner가 "scope:" 접두어를 빠뜨려도 발화에 있는 값이면 복원한다."""
+        template = self.registry.require("DIRECT_SCOPE_METRIC")
+        plan = template.instantiate(
+            DIRECT_QUESTION, {"scope": "edge:1742", "metric": "speed"},
+        )
+        self.assertEqual(plan.slots["scope"], "scope:edge:1742")
+        self.assertTrue(
+            validate(plan, available_tools=new_tool_executor().tool_names).ok
+        )
+
+    def test_scope_prefix_restore_requires_exact_token(self):
+        """발화 scope의 앞부분만 일치하는 값은 복원하지 않는다."""
+        template = self.registry.require("DIRECT_SCOPE_METRIC")
+        with self.assertRaises(TemplateError):
+            template.instantiate(
+                DIRECT_QUESTION, {"scope": "edge:17", "metric": "speed"},
+            )
+
+    def test_scope_prefix_restore_rejects_invented_value(self):
+        template = self.registry.require("DIRECT_SCOPE_METRIC")
+        with self.assertRaises(TemplateError):
+            template.instantiate(
+                DIRECT_QUESTION,
+                {"scope": "district:999999999", "metric": "speed"},
+            )
+
     def test_optional_slot_is_omitted_when_absent(self):
         template = self.registry.require("OD_TRIP_COUNT")
         plan = template.instantiate(OD_QUESTION, OD_SLOTS)
