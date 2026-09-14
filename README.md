@@ -80,10 +80,14 @@ geoflow/
 
 geoflow_templates/
 ├─ direct_scope_metric.yaml
-├─ place_scope_metric.yaml
-├─ vicinity_scope_metric.yaml
+├─ direct_scope_passage_count.yaml
+├─ drive_ratio_metric.yaml
+├─ grouped_aggregate.yaml
 ├─ od_trip_count.yaml
-└─ grouped_aggregate.yaml
+├─ place_scope_metric.yaml
+├─ trip_fare_metric.yaml
+├─ vicinity_passage_count.yaml
+└─ vicinity_scope_metric.yaml
 
 tests/
 └─ test_geoflow.py
@@ -669,15 +673,42 @@ Planner 출력은 모두 untrusted input으로 취급하며, JSON 파싱 실패�
 `geoflow_templates/*.yaml`은 Prompt용 설명문이 아니라 프로그램이 읽어 GeoFlow Plan을
 생성하는 구조화 데이터임.
 
-| Template                | 용도                                  |
-| ----------------------- | ----------------------------------- |
-| `DIRECT_SCOPE_METRIC`   | 사용자가 scope를 직접 제시한 통행 통계          |
-| `PLACE_SCOPE_METRIC`    | 장소/지역 내부의 통행 통계                    |
-| `VICINITY_SCOPE_METRIC` | 장소 주변(근처/부근) 포함 통행 통계              |
-| `OD_TRIP_COUNT`         | 출발지/도착지 실차 구간(trip) 건수             |
-| `GROUPED_AGGREGATE`     | 일 단위 영업(operation) 통계의 dimension 분포 |
+| Template                     | 개체        | 용도                          |
+| ---------------------------- | --------- | --------------------------- |
+| `DIRECT_SCOPE_METRIC`        | passage   | 사용자가 scope를 직접 제시한 통행 통계    |
+| `PLACE_SCOPE_METRIC`         | passage   | 장소/지역 내부의 통행 통계             |
+| `VICINITY_SCOPE_METRIC`      | passage   | 장소 주변(근처/부근) 포함 통행 통계       |
+| `DIRECT_SCOPE_PASSAGE_COUNT` | passage   | 사용자 scope 지점의 통행량           |
+| `VICINITY_PASSAGE_COUNT`     | passage   | 장소 주변 통행량                   |
+| `OD_TRIP_COUNT`              | trip      | 출발지/도착지 실차 구간 건수            |
+| `TRIP_FARE_METRIC`           | trip      | 택시 요금(fare) 통계              |
+| `DRIVE_RATIO_METRIC`         | drive     | 공차율(vacant_ratio)           |
+| `GROUPED_AGGREGATE`          | operation | 영업 통계의 dimension 분포         |
 
 Planner Prompt의 template 목록은 이 YAML 정의에서 자동 생성되므로 별도 동기화가 필요 없음.
+
+metric은 소속 개체가 다르면 다른 개념임. 이름이 비슷해도 서로 바꿔 쓰지 않도록
+Planner Prompt에 개체별 metric 어휘와 혼동 쌍을 명시함.
+
+```text
+요금   = fare(trip)            ≠ 수입   = revenue(operation)
+공차율 = vacant_ratio(drive)   ≠ 운행률 = operating_ratio(operation)
+```
+
+지원하지 않는 개념은 비슷한 값으로 치환하지 않고 `NONE`을 반환하도록 규정함.
+
+### optional concept
+
+concept에 `optional: true`를 두면 질문에 해당 slot이 없을 때 그 node와 이에
+의존하는 transformation이 함께 사라짐.
+
+```text
+"평균 택시 요금은?"      → get_trip_metrics(metric=fare)
+"대구 평균 택시 요금은?"  → get_place_scope(대구) → get_trip_metrics(metric=fare, scope=...)
+```
+
+질문에 없는 조건을 임의로 채우지 않으면서 하나의 template으로 두 경우를 모두
+처리하기 위한 장치임.
 
 ### Semantic Operator
 
@@ -722,6 +753,30 @@ G6 SCOPE_PROVENANCE   scope는 source=user 또는 source=tool만 허용
 사용자 발화에 포함된 값이어야 하며, template이나 Planner가 만든 scope literal은 거부됨.
 
 실행 단계에서도 `agent_graph.py`와 동일한 known scope 검사를 한 번 더 수행함.
+
+### 장소 조회 실패 시 재계획
+
+`get_place_scope`가 `retryable=true`인 오류를 반환한 경우에 한해 Planner에게
+slot 수정을 1회 요청함. 그 밖의 오류는 구조화된 실행 실패로 그대로 반환함.
+
+```text
+get_place_scope(name="대구시") → NOT_FOUND
+    ↓ Planner에 slot 수정 요청 (같은 template 유지)
+get_place_scope(name="대구")   → scope:district:2700000000
+    ↓
+get_trip_metrics(metric=fare, scope=...)
+```
+
+재계획에는 다음 제약이 적용됨.
+
+* 최대 1회. 무한 재시도하지 않음
+* `RESOLVE_PLACE_SCOPE` 단계의 retryable 오류에만 적용
+* template 변경 불가. slot만 수정 가능
+* 이전과 동일한 slot을 반복하면 거부
+* 수정된 slot도 template → validator → compiler 전 경로를 다시 통과함
+
+마지막 항목이 핵심임. 재계획은 어떤 guard도 우회하지 않으며, 실패한 시도의
+Tool 호출도 실행 trace에 그대로 남음.
 
 ### 실행 결과 저장
 
@@ -768,12 +823,34 @@ Tool Result
 python -m unittest discover -s tests -t .
 ```
 
+### 실측 결과
+
+`stub_query.yaml` 13건, 모델 `qwen3:8b`, Mock Provider 기준.
+
+| | react | geoflow |
+| --- | ---: | ---: |
+| 정상 실행 | 13/13 | 13/13 |
+| LLM 호출 | 42회 | **16회** |
+| Tool 호출 | 29회 | 27회 |
+| 총 소요 시간 | 125.2초 | **37.1초** |
+| scope 환각으로 차단된 호출 | 1회 | 0회 |
+
+react가 차단당한 1회는 `get_trip_count`를 호출하면서 승차 지점 scope를
+지어낸 경우임. GeoFlow에서는 scope가 Tool 결과로만 채워지므로 이 경로 자체가
+존재하지 않음.
+
+LLM 호출 감소는 model hop마다 다음 Tool을 묻지 않기 때문임. GeoFlow의 16회는
+질의당 Planner 1회에 장소 조회 재계획 3회를 더한 값임.
+
 ### 현재 제한
 
-* v1 template은 5개이며 그 밖의 질의 유형(`get_trip_metrics`, `get_drive_metrics`,
-  `get_passage_count` 단독 질의 등)은 아직 template이 없음.
-* 실행 중 Tool 오류가 발생하면 재시도 없이 구조화된 실행 실패를 반환함.
-  ReAct 모드의 재시도 동작은 기존과 동일하게 유지됨.
+* template 9개로 `stub_query.yaml`은 모두 처리되지만, 그 밖의 질의 유형
+  (다중 조건 결합, 시계열 bucket/rollup, 순위 질의 등)은 아직 template이 없음.
+  지원하지 않는 질의는 오답 대신 `NO_MATCHING_TEMPLATE`으로 거부함.
+* 재계획은 장소 조회 실패에만, 최대 1회 적용됨. 그 밖의 Tool 오류는 재시도 없이
+  구조화된 실행 실패를 반환함. ReAct 모드의 재시도 동작은 기존과 동일하게 유지됨.
 * 최종 응답은 코드 기반 format을 사용함. Tool 결과에 없는 수치가 생성되지 않도록
-  LLM 문장 생성 단계를 두지 않음.
+  LLM 문장 생성 단계를 두지 않음. 대신 문장이 react 모드보다 기계적임.
 * GeoFlow 모드는 turn 간 대화 맥락을 참조하지 않고 질문 단위로 독립 실행함.
+* 검증은 `qwen3:8b` 단일 모델 기준임. 다른 모델의 template 선택 정확도는
+  별도 측정이 필요함.

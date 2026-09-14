@@ -453,6 +453,13 @@ def _make_graph_event_handler():
                 print(f"[Validation] ERROR | {', '.join(report['failed_rules'])}")
                 for item in report["errors"]:
                     print(f"     {item['message']}")
+        elif event == "geoflow_repair":
+            failure = payload["failure"]
+            print(
+                f"\n[Repair {payload['attempt']}] "
+                f"slot={failure['slot']} name={failure['name']} "
+                f"조회 실패 → Planner에 slot 수정 요청"
+            )
         elif event == "geoflow_execution_plan":
             steps = payload["execution_plan"]["steps"]
             names = " → ".join(step["tool_name"] for step in steps)

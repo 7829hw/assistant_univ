@@ -7,6 +7,30 @@
 # 사용 가능한 template 목록은 geoflow_templates/*.yaml 정의에서 자동으로
 # 생성해 이 Prompt 뒤에 덧붙이므로 여기에 중복 기재하지 않는다.
 
+# repair_instruction은 sections가 아니라 최상위 key다. build_prompt는 order와
+# sections만 사용하므로 System Prompt에 포함되지 않고, Tool 오류 후 재계획
+# 요청에서만 user message로 전달된다.
+repair_instruction: |-
+  방금 고른 slot으로 조회했으나 아래 Tool 오류가 발생했습니다.
+
+  실패한 slot: {slot}
+  전달한 장소명: {name}
+  전달한 상위 지역: {region}
+  오류: {message}
+
+  같은 template을 유지한 채 slot만 고쳐서 다시 출력하세요.
+
+  - 해당 장소명이 조회되지 않았습니다. 사용자 발화에 있는 표현 안에서
+    명칭을 다시 나눠 보세요.
+  - 행정구역 접미사("시", "군", "구")나 도로 접미사("길", "로")가 붙어 조회에
+    실패했을 수 있습니다. 발화에 그 표현이 있다면 접미사를 뺀 명칭을 시도하세요.
+    - 예: "대구시" → "대구", "동성로길" → "동성로"
+  - 상위 지역을 name에 합쳐 넣지 마세요. region으로 분리합니다.
+  - 사용자 발화에 없는 장소를 새로 만들지 마세요.
+  - 고칠 방법이 없으면 template에 "NONE"을 넣으세요.
+  - 이전과 같은 값을 그대로 반복하지 마세요.
+  - 반드시 template과 slots만 있는 JSON 객체 하나로 답하세요.
+
 order:
   - role
   - task

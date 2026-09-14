@@ -833,6 +833,101 @@ class PipelineScenarioTest(unittest.TestCase):
         self.assertIn("월", run.final_answer)
 
 
+class RepairTest(unittest.TestCase):
+    """장소 조회 실패에 한정한 1회 재계획."""
+
+    FARE_QUESTION = "대구시의 평균 택시 요금은?"
+
+    def test_not_found_triggers_one_repair(self):
+        """대구시(NOT_FOUND) → 재계획 → 대구(성공)."""
+        pipeline, client = new_pipeline([
+            {"template": "TRIP_FARE_METRIC",
+             "slots": {"place": {"name": "대구시", "region": ""}}},
+            {"template": "TRIP_FARE_METRIC",
+             "slots": {"place": {"name": "대구", "region": ""}}},
+        ])
+        run = pipeline.run(self.FARE_QUESTION)
+        self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
+        self.assertEqual(run.repair_count, 1)
+        self.assertEqual(len(client.calls), 2)
+        # 실패한 시도의 Tool 호출도 trace에 남는다.
+        self.assertEqual(
+            [entry["tool"] for entry in run.hop_log],
+            ["get_place_scope", "get_place_scope", "get_trip_metrics"],
+        )
+        self.assertEqual(
+            [item["status"] for item in run.attempts], ["TOOL_ERROR", "OK"],
+        )
+        self.assertIsNotNone(run.final_answer)
+
+    def test_repair_is_capped_at_one_attempt(self):
+        pipeline, client = new_pipeline([
+            {"template": "TRIP_FARE_METRIC",
+             "slots": {"place": {"name": "대구시", "region": ""}}},
+            {"template": "TRIP_FARE_METRIC",
+             "slots": {"place": {"name": "없는장소", "region": ""}}},
+        ])
+        run = pipeline.run(self.FARE_QUESTION)
+        self.assertEqual(run.repair_count, 1)
+        self.assertEqual(len(client.calls), 2)
+        self.assertIsNotNone(run.runtime_error)
+
+    def test_repair_output_still_passes_every_guard(self):
+        """재계획이 지어낸 scope를 넣어도 validation이 막는다."""
+        pipeline, _client = new_pipeline([
+            {"template": "TRIP_FARE_METRIC",
+             "slots": {"place": {"name": "대구시", "region": ""}}},
+            {"template": "TRIP_FARE_METRIC",
+             "slots": {"place": {"name": "대구", "region": "",
+                                 "code": "scope:district:999999999"}}},
+        ])
+        run = pipeline.run(self.FARE_QUESTION)
+        # 두 번째 시도가 template 검증에서 막혀 원래 실행 실패가 유지된다.
+        self.assertIsNotNone(run.runtime_error)
+        self.assertEqual(run.attempts[-1]["status"], "template")
+
+    def test_repair_rejects_template_switch(self):
+        pipeline, _client = new_pipeline([
+            {"template": "TRIP_FARE_METRIC",
+             "slots": {"place": {"name": "대구시", "region": ""}}},
+            {"template": "GROUPED_AGGREGATE",
+             "slots": {"metric": "revenue", "dimension": "dayofweek"}},
+        ])
+        run = pipeline.run(self.FARE_QUESTION)
+        self.assertEqual(run.repair_count, 0)
+        self.assertIn("NOT_FOUND", json.dumps(run.error, ensure_ascii=False))
+
+    def test_repair_rejects_identical_slots(self):
+        pipeline, _client = new_pipeline([
+            {"template": "TRIP_FARE_METRIC",
+             "slots": {"place": {"name": "대구시", "region": ""}}},
+            {"template": "TRIP_FARE_METRIC",
+             "slots": {"place": {"name": "대구시", "region": ""}}},
+        ])
+        run = pipeline.run(self.FARE_QUESTION)
+        self.assertEqual(run.repair_count, 0)
+        self.assertIsNotNone(run.runtime_error)
+
+    def test_non_place_failure_is_not_repaired(self):
+        """scope provenance 차단은 재계획 대상이 아니다."""
+        pipeline, client = new_pipeline([
+            {"template": "DIRECT_SCOPE_METRIC",
+             "slots": {"scope": "scope:edge:1742", "metric": "speed"}},
+        ])
+        run = pipeline.run(DIRECT_QUESTION)
+        self.assertEqual(run.stage, Stage.DONE)
+        self.assertEqual(len(client.calls), 1)
+
+    def test_successful_run_does_not_call_planner_twice(self):
+        pipeline, client = new_pipeline([
+            {"template": "OD_TRIP_COUNT", "slots": OD_SLOTS},
+        ])
+        run = pipeline.run(OD_QUESTION)
+        self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
+        self.assertEqual(len(client.calls), 1)
+        self.assertEqual(run.repair_count, 0)
+
+
 class RuntimeIntegrationTest(unittest.TestCase):
     """AssistantRuntime의 agent mode 분기와 react 회귀."""
 

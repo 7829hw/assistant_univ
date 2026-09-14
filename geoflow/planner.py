@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from build import BuildError, build_prompt
 
 from geoflow.errors import PlannerError
@@ -62,14 +64,49 @@ def load_planner_prompt(path=DEFAULT_PLANNER_PROMPT):
         ) from error
 
 
+def load_repair_instruction(path=DEFAULT_PLANNER_PROMPT):
+    """재계획 요청문을 YAML 최상위 key에서 읽는다.
+
+    ``sections``가 아니므로 System Prompt에는 포함되지 않는다.
+    """
+    try:
+        document = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError) as error:
+        raise PlannerError(
+            f"Planner prompt YAML을 읽을 수 없습니다: {path}\n{error}",
+            code="PROMPT_BUILD_FAILED",
+            context={"path": str(path)},
+        ) from error
+    instruction = document.get("repair_instruction")
+    if not isinstance(instruction, str) or not instruction.strip():
+        raise PlannerError(
+            f"{Path(path).name}: repair_instruction이 비어 있습니다.",
+            code="PROMPT_BUILD_FAILED",
+            context={"path": str(path)},
+        )
+    return instruction.strip()
+
+
 class GeoFlowPlanner:
     """질문을 template + slots로 바꾸는 단일 LLM 호출 단계."""
 
-    def __init__(self, *, client, templates, prompt=None, model=None):
+    def __init__(
+        self,
+        *,
+        client,
+        templates,
+        prompt=None,
+        model=None,
+        repair_instruction=None,
+    ):
         self.client = client
         self.templates = templates
         self.base_prompt = (
             load_planner_prompt() if prompt is None else prompt.strip()
+        )
+        self.repair_instruction = (
+            load_repair_instruction() if repair_instruction is None
+            else repair_instruction.strip()
         )
         self.model = model if model is not None else getattr(client, "model", None)
 
@@ -88,10 +125,51 @@ class GeoFlowPlanner:
 
     def plan(self, question):
         """Planner를 1회 호출하고 검증된 ``PlannerOutput``을 반환한다."""
+        return self._ask(self.messages(question))
+
+    def repair(self, question, previous, failure):
+        """Tool 오류를 알려주고 같은 template의 slot만 고쳐 받는다.
+
+        재계획 결과도 template/validator/compiler 전 경로를 다시 통과하므로
+        어떤 guard도 우회하지 않는다.
+        """
+        instruction = self.repair_instruction.format(
+            slot=failure.get("slot", "(알 수 없음)"),
+            name=failure.get("name", ""),
+            region=failure.get("region", ""),
+            message=failure.get("message", "Tool 오류"),
+        )
+        output = self._ask([
+            *self.messages(question),
+            {
+                "role": "assistant",
+                "content": json.dumps(
+                    {"template": previous.template, "slots": previous.slots},
+                    ensure_ascii=False,
+                ),
+            },
+            {"role": "user", "content": instruction},
+        ])
+        if output.template != previous.template:
+            raise PlannerError(
+                f"재계획이 template을 {previous.template}에서 "
+                f"{output.template}으로 바꿨습니다. slot만 수정해야 합니다.",
+                code="REPAIR_CHANGED_TEMPLATE",
+                context={"raw_text": output.raw_text},
+            )
+        if output.slots == previous.slots:
+            raise PlannerError(
+                "재계획이 같은 slot을 그대로 반복했습니다.",
+                code="REPAIR_NO_CHANGE",
+                context={"raw_text": output.raw_text},
+            )
+        return output
+
+    def _ask(self, messages):
         started_at = time.perf_counter()
         try:
             # tools를 전달하지 않아 Tool Calling 자체를 불가능하게 만든다.
-            body = self.client.chat(self.messages(question))
+            body = self.client.chat(messages)
         except Exception as error:  # noqa: BLE001 - client 오류를 단계 오류로 변환
             raise PlannerError(
                 f"Planner 모델 호출에 실패했습니다: {type(error).__name__}: {error}",
