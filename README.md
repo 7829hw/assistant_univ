@@ -790,6 +790,35 @@ get_trip_metrics(metric=fare, scope=...)
 마지막 항목이 핵심임. 재계획은 어떤 guard도 우회하지 않으며, 실패한 시도의
 Tool 호출도 실행 trace에 그대로 남음.
 
+### 결과 scope의 장소명 변환
+
+집계 결과에 포함된 scope는 `get_scope_name`으로 장소명을 조회해 보여줌.
+
+```text
+대구 시군구별 상위 3개 통행량
+- 수성구: 3,794건
+- 중구: 3,590건
+- 서구: 3,503건
+```
+
+호출 횟수가 실행 결과의 행 수에 의존하므로 정적 `ExecutionPlan`으로는 표현할 수
+없음. 따라서 실행이 성공한 뒤 별도의 bounded 단계로 수행함(`geoflow/labeling.py`).
+
+* 한 답변당 최대 20개까지만 조회함
+* 조회에 실패해도 원본 scope를 그대로 보여주고 답변 생성을 계속함.
+  표시용 보강이지 분석 결과의 일부가 아니기 때문임
+* 이 호출도 실행 trace에 남으며 `phase: labeling`으로 구분됨
+
+사용자가 질문에 직접 적은 scope는 변환하지 않고 그대로 되돌려줌. 사용자가 지정한
+식별자를 그대로 보여주는 편이 추적에 유리하기 때문임.
+
+상대 날짜와 metric도 원시값 대신 이름으로 표시함.
+
+```text
+last_month → 지난달       weekend → 주말
+operating_count → 영업 횟수   operating_ratio → 영업 운행률
+```
+
 ### 실행 결과 저장
 
 `geoflow` 모드로 실행하면 `query_raw.json`의 각 record에 `geoflow` 항목이 추가됨.

@@ -100,6 +100,21 @@ def planner_response(payload):
     return {"message": {"content": json.dumps(payload, ensure_ascii=False)}}
 
 
+def analysis_tools(hop_log):
+    """표시용 scope 라벨링 호출을 제외한 분석 단계 Tool만 추린다."""
+    return [
+        entry["tool"] for entry in hop_log
+        if entry.get("phase") != "labeling"
+    ]
+
+
+def labeling_tools(hop_log):
+    return [
+        entry["tool"] for entry in hop_log
+        if entry.get("phase") == "labeling"
+    ]
+
+
 def new_pipeline(planner_payloads):
     client = ScriptedClient([
         planner_response(payload) for payload in planner_payloads
@@ -802,10 +817,13 @@ class PipelineScenarioTest(unittest.TestCase):
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
         self.assertEqual(run.template, "OD_TRIP_COUNT")
         self.assertEqual(
-            [entry["tool"] for entry in run.hop_log],
+            analysis_tools(run.hop_log),
             ["get_place_scope", "get_place_scope", "get_trip_count"],
         )
-        trip_arguments = run.hop_log[-1]["arguments"]
+        trip_arguments = next(
+            entry for entry in run.hop_log
+            if entry["tool"] == "get_trip_count"
+        )["arguments"]
         self.assertEqual(
             trip_arguments["scope_pickup"], run.hop_log[0]["result"],
         )
@@ -813,6 +831,69 @@ class PipelineScenarioTest(unittest.TestCase):
             trip_arguments["scope_dropoff"], run.hop_log[1]["result"],
         )
         self.assertIsNotNone(run.final_answer)
+
+    def test_result_scopes_are_labeled_with_place_names(self):
+        """집계 결과의 scope는 장소명으로 바꿔 보여준다."""
+        pipeline, _client = new_pipeline([
+            {"template": "OD_TRIP_COUNT", "slots": OD_SLOTS},
+        ])
+        run = pipeline.run(OD_QUESTION)
+        self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
+        self.assertEqual(
+            labeling_tools(run.hop_log),
+            ["get_scope_name", "get_scope_name"],
+        )
+        self.assertTrue(run.scope_labels)
+        # 답변에는 원본 scope 대신 장소명이 나와야 한다.
+        self.assertNotIn("scope:", run.final_answer)
+        for name in run.scope_labels.values():
+            self.assertIn(name, run.final_answer)
+
+    def test_relative_date_and_metric_are_named_in_answer(self):
+        """상대 날짜와 metric은 원시값 대신 사람이 읽을 이름으로 보인다."""
+        registry = TemplateRegistry.from_directory()
+        tool_executor = new_tool_executor()
+
+        template = registry.require("PLACE_SCOPE_METRIC")
+        plan = template.instantiate(
+            "지난달 대구 지역 평균 속도는?",
+            {
+                "place": {"name": "대구", "region": ""},
+                "metric": "speed",
+                "date": "last_month",
+            },
+        )
+        result = execute_plan(compile_plan(plan), tool_executor)
+        answer = format_answer(plan, result, answer=template.answer)
+        self.assertIn("지난달", answer)
+        self.assertNotIn("last_month", answer)
+        self.assertIn("속도", answer)
+
+        operation = registry.require("OPERATION_METRIC")
+        plan2 = operation.instantiate(
+            "부산 개인택시의 영업 횟수는?",
+            {"metric": "operating_count", "taxi_type": "private"},
+        )
+        result2 = execute_plan(compile_plan(plan2), tool_executor)
+        answer2 = format_answer(plan2, result2, answer=operation.answer)
+        self.assertIn("영업 횟수", answer2)
+
+    def test_labeling_failure_keeps_raw_scope(self):
+        """장소명 조회가 실패해도 답변 생성은 계속한다."""
+        from geoflow.labeling import resolve_scope_labels
+
+        class FailingExecutor:
+            tool_names = ("get_scope_name",)
+
+            def execute(self, tool_name, arguments):
+                raise RuntimeError("provider down")
+
+        labels, trace = resolve_scope_labels(
+            [{"scope": "scope:edge:1742", "count": 1}], FailingExecutor(),
+        )
+        self.assertEqual(labels, {})
+        self.assertEqual(len(trace), 1)
+        self.assertEqual(trace[0]["result"]["status"], "ERROR")
 
     def test_case2_vicinity_scope_metric(self):
         pipeline, _client = new_pipeline([{
@@ -1151,7 +1232,7 @@ class RuntimeIntegrationTest(unittest.TestCase):
         result = runtime.run_question(OD_QUESTION)
         self.assertIsNone(result["runtime_error"])
         self.assertEqual(result["agent_mode"], AGENT_MODE_GEOFLOW)
-        self.assertEqual(len(result["hop_log"]), 3)
+        self.assertEqual(len(analysis_tools(result["hop_log"])), 3)
         self.assertEqual(result["geoflow"]["template"], "OD_TRIP_COUNT")
         self.assertEqual(result["geoflow"]["validation"]["status"], "OK")
         self.assertIn("planner_ms", result["geoflow"]["durations"])

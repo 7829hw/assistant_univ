@@ -24,6 +24,7 @@ from geoflow.answer import format_answer
 from geoflow.compiler import compile_plan
 from geoflow.errors import GeoFlowError
 from geoflow.executor import STATUS_CANCELLED, STATUS_OK, execute_plan
+from geoflow.labeling import resolve_scope_labels
 from geoflow.operator_registry import Operator
 from geoflow.planner import GeoFlowPlanner
 from geoflow.templates import TemplateRegistry
@@ -64,6 +65,7 @@ class GeoFlowRun:
     execution_plan: dict[str, Any] | None = None
     execution: dict[str, Any] | None = None
     hop_log: list[dict[str, Any]] = field(default_factory=list)
+    scope_labels: dict[str, str] = field(default_factory=dict)
     attempts: list[dict[str, Any]] = field(default_factory=list)
     repair_count: int = 0
     final_answer: str | None = None
@@ -77,6 +79,7 @@ class GeoFlowRun:
             "agent_mode": self.agent_mode,
             "stage": self.stage,
             "repair_count": self.repair_count,
+            "scope_labels": dict(self.scope_labels),
             "attempts": [dict(item) for item in self.attempts],
             "planner": self.planner,
             "template": self.template,
@@ -190,7 +193,10 @@ class GeoFlowPipeline:
             })
 
             if result.status == STATUS_OK:
-                return self._finish(run, plan, template, result, started_at)
+                return self._finish(
+                    run, plan, template, result, started_at,
+                    event_handler=event_handler,
+                )
 
             if result.status == STATUS_CANCELLED:
                 run.cancelled = True
@@ -253,11 +259,23 @@ class GeoFlowPipeline:
         emit("geoflow_execution_plan", execution_plan=run.execution_plan)
         return template, plan, execution_plan
 
-    def _finish(self, run, plan, template, result, started_at):
+    def _finish(self, run, plan, template, result, started_at,
+                *, event_handler=None):
+        # 결과 scope를 장소명으로 바꾼다. 실패해도 답변 생성은 계속한다.
+        labels, label_trace = resolve_scope_labels(
+            result.final_value,
+            self.tool_executor,
+            event_handler=event_handler,
+            start_index=len(run.hop_log) + 1,
+        )
+        if label_trace:
+            run.hop_log.extend(label_trace)
+            run.scope_labels = dict(labels)
+
         try:
             run.stage = Stage.ANSWER
             run.final_answer = format_answer(
-                plan, result, answer=template.answer,
+                plan, result, answer=template.answer, labels=labels,
             )
         except GeoFlowError as error:
             return _fail(run, error, started_at)

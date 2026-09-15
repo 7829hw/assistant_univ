@@ -35,16 +35,44 @@ _DIMENSION_LABEL = {
 
 _ORDER_LABEL = {"top": "상위", "bottom": "하위"}
 
+_DATE_LABEL = {
+    "last_week": "지난주",
+    "last_month": "지난달",
+    "last_year": "작년",
+    "weekday": "주중",
+    "weekend": "주말",
+    "holiday": "휴일",
+}
+
+#: metric slot이 있는 template은 template의 일반 label 대신 이 이름을 쓴다.
+_METRIC_LABEL = {
+    "speed": "속도",
+    "rpm": "RPM",
+    "fare": "택시 요금",
+    "vacant_ratio": "공차율",
+    "revenue": "영업 수익",
+    "operating_count": "영업 횟수",
+    "operating_ratio": "영업 운행률",
+    "hours": "영업 시간",
+}
+
 _COUNT_KEYS = ("count",)
 _MAX_LISTED_ROWS = 24
 
 
-def format_answer(plan: GeoFlowPlan, execution_result, *, answer=None):
-    """실행 결과만 근거로 사용자 답변 문자열을 만든다."""
+def format_answer(plan: GeoFlowPlan, execution_result, *, answer=None,
+                  labels=None):
+    """실행 결과만 근거로 사용자 답변 문자열을 만든다.
+
+    ``labels``는 scope → 장소명 매핑이며, 없으면 scope를 그대로 보여준다.
+    """
     settings = dict(answer or {})
-    subject = _subject(plan, settings)
+    labels = dict(labels or {})
+    subject = _subject(plan, settings, labels)
     value = execution_result.final_value
-    label = settings.get("label") or "결과"
+    label = _METRIC_LABEL.get(
+        plan.slots.get("metric"), settings.get("label") or "결과",
+    )
     unit = settings.get("unit") or ""
 
     rows = _rows(value)
@@ -58,14 +86,15 @@ def format_answer(plan: GeoFlowPlan, execution_result, *, answer=None):
 
     lines = [f"{subject} {label}".strip()]
     for row in rows[:_MAX_LISTED_ROWS]:
-        lines.append(f"- {_row_text(row, unit)}")
+        lines.append(f"- {_row_text(row, unit, labels)}")
     if len(rows) > _MAX_LISTED_ROWS:
         lines.append(f"- (총 {len(rows)}건 중 {_MAX_LISTED_ROWS}건 표시)")
     return "\n".join(lines)
 
 
-def _subject(plan, settings):
+def _subject(plan, settings, labels=None):
     """slot에 실제로 들어 있는 조건만 모아 답변 앞머리를 만든다."""
+    labels = labels or {}
     slots = plan.slots
     parts = []
 
@@ -83,10 +112,12 @@ def _subject(plan, settings):
             suffix = "주변" if settings.get("vicinity") else ""
             parts.append(f"{place}{(' ' + suffix) if suffix else ''}")
         elif slots.get("scope"):
-            parts.append(str(slots["scope"]))
+            scope = str(slots["scope"])
+            parts.append(labels.get(scope, scope))
 
-    if slots.get("date"):
-        parts.append(str(slots["date"]))
+    date = slots.get("date")
+    if date:
+        parts.append(_DATE_LABEL.get(date, str(date)))
     if slots.get("time"):
         parts.append(str(slots["time"]))
     taxi_type = slots.get("taxi_type")
@@ -140,18 +171,24 @@ def _row_value(row):
     return row
 
 
-def _row_text(row, unit):
+def _row_text(row, unit, labels=None):
     label_keys = (
         "dayofweek", "day_of_week", "place_name", "district_name",
         "sido", "sigungu", "emd", "h3", "scope", "date", "month",
     )
+    labels = labels or {}
+
+    def shown(value):
+        text = str(value)
+        return labels.get(text, text)
+
     label = None
     for key in label_keys:
         if key in row:
-            label = str(row[key])
+            label = shown(row[key])
             break
     if "scope_pickup" in row and "scope_dropoff" in row:
-        label = f"{row['scope_pickup']} → {row['scope_dropoff']}"
+        label = f"{shown(row['scope_pickup'])} → {shown(row['scope_dropoff'])}"
     value = _row_value(row)
     if isinstance(value, dict):
         return ", ".join(f"{key}={item}" for key, item in value.items())
