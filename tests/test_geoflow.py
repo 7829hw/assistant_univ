@@ -27,6 +27,7 @@ from query_loader import load_queries  # noqa: E402
 from tool_executor import ToolExecutor  # noqa: E402
 from tool_handlers import get_tool_handlers  # noqa: E402
 
+from geoflow.answer import format_answer  # noqa: E402
 from geoflow.compiler import compile_plan, topological_order  # noqa: E402
 from geoflow.errors import (  # noqa: E402
     ExecutionError,
@@ -379,6 +380,43 @@ class OptionalConceptTest(unittest.TestCase):
         self.assertEqual([step.tool_name for step in steps],
                          ["get_drive_metrics"])
         self.assertEqual(steps[0].arguments["metric"], "vacant_ratio")
+
+    def test_passage_count_dimension_and_ranking(self):
+        """dimension/order/limit은 있을 때만 전달하고 답변에 드러낸다."""
+        template = self.registry.require("PLACE_PASSAGE_COUNT")
+        plain = template.instantiate(
+            "대구 지역 전체 통행량은?",
+            {"place": {"name": "대구", "region": ""}},
+        )
+        plain_step = compile_plan(plain).steps[-1]
+        for name in ("dimension", "order", "limit"):
+            self.assertNotIn(name, plain_step.arguments)
+
+        ranked = template.instantiate(
+            "대구에서 통행량이 가장 많은 시군구 3곳은?",
+            {
+                "place": {"name": "대구", "region": ""},
+                "dimension": "sigungu",
+                "order": "top",
+                "limit": 3,
+            },
+        )
+        report = validate(
+            ranked, available_tools=self.tool_executor.tool_names,
+        )
+        self.assertTrue(report.ok, report.errors)
+        ranked_step = compile_plan(ranked).steps[-1]
+        self.assertEqual(ranked_step.arguments["dimension"], "sigungu")
+        self.assertEqual(ranked_step.arguments["order"], "top")
+        self.assertEqual(ranked_step.arguments["limit"], 3)
+
+        result = execute_plan(compile_plan(ranked), self.tool_executor)
+        self.assertEqual(result.status, STATUS_OK, result.error)
+        self.assertEqual(len(result.final_value), 3)
+        answer = format_answer(ranked, result, answer=template.answer)
+        self.assertIn("시군구별", answer)
+        self.assertIn("상위", answer)
+        self.assertIn("3개", answer)
 
     def test_optional_drop_still_executes(self):
         _plan, steps = self._steps(

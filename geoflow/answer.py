@@ -33,6 +33,8 @@ _DIMENSION_LABEL = {
     "h3": "H3 셀별",
 }
 
+_ORDER_LABEL = {"top": "상위", "bottom": "하위"}
+
 _COUNT_KEYS = ("count",)
 _MAX_LISTED_ROWS = 24
 
@@ -93,6 +95,13 @@ def _subject(plan, settings):
     dimension = slots.get("dimension")
     if dimension:
         parts.append(_DIMENSION_LABEL.get(dimension, f"{dimension}별"))
+    # 순위·개수 제한이 적용되었다면 답변에 드러낸다.
+    order = slots.get("order")
+    if order:
+        parts.append(_ORDER_LABEL.get(order, order))
+    limit = slots.get("limit")
+    if limit:
+        parts.append(f"{limit}개")
     aggregation = slots.get("aggregation")
     if aggregation:
         parts.append(_AGGREGATION_LABEL.get(aggregation, aggregation))
