@@ -44,7 +44,11 @@ from geoflow.executor import (  # noqa: E402
 )
 from geoflow.operator_registry import Operator  # noqa: E402
 from geoflow.pipeline import GeoFlowPipeline, Stage  # noqa: E402
-from geoflow.planner import NO_TEMPLATE, GeoFlowPlanner  # noqa: E402
+from geoflow.planner import (  # noqa: E402
+    NO_TEMPLATE,
+    GeoFlowPlanner,
+    drop_invented_regions,
+)
 from geoflow.templates import TemplateRegistry  # noqa: E402
 from geoflow.types import (  # noqa: E402
     ConceptNode,
@@ -1131,6 +1135,44 @@ class RepairTest(unittest.TestCase):
         run = pipeline.run(self.FARE_QUESTION)
         self.assertEqual(run.repair_count, 0)
         self.assertIsNotNone(run.runtime_error)
+
+    def test_repair_cannot_invent_a_region(self):
+        """업체 지적: 재계획이 발화에 없는 상위 지역을 만들어 붙이는 문제."""
+        for invented in ("경상북도", "시", "대구광역시"):
+            with self.subTest(region=invented):
+                sanitized = drop_invented_regions(
+                    {"place": {"name": "대구시", "region": ""}},
+                    {"place": {"name": "대구", "region": invented}},
+                )
+                self.assertEqual(
+                    sanitized, {"place": {"name": "대구", "region": ""}},
+                )
+
+    def test_repair_keeps_region_the_user_actually_said(self):
+        """처음부터 region이 있었다면 재계획이 다듬는 것은 허용한다."""
+        sanitized = drop_invented_regions(
+            {"place": {"name": "어린이대공원", "region": "부산 초읍동"}},
+            {"place": {"name": "어린이대공원", "region": "부산"}},
+        )
+        self.assertEqual(sanitized["place"]["region"], "부산")
+
+    def test_repair_drops_invented_region_end_to_end(self):
+        """대구시 → 대구/시 로 고쳐 와도 region 없이 조회해 성공해야 한다."""
+        pipeline, _client = new_pipeline([
+            {"template": "TRIP_FARE_METRIC",
+             "slots": {"place": {"name": "대구시", "region": ""}}},
+            {"template": "TRIP_FARE_METRIC",
+             "slots": {"place": {"name": "대구", "region": "시"}}},
+        ])
+        run = pipeline.run("대구시의 평균 택시 요금은?")
+        self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
+        self.assertEqual(run.repair_count, 1)
+        resolved = [
+            entry for entry in run.hop_log
+            if entry["tool"] == "get_place_scope"
+        ]
+        self.assertEqual(resolved[-1]["arguments"]["name"], "대구")
+        self.assertNotIn("region", resolved[-1]["arguments"])
 
     def test_non_place_failure_is_not_repaired(self):
         """scope provenance 차단은 재계획 대상이 아니다."""

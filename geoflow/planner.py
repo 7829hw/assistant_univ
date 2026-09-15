@@ -133,12 +133,12 @@ class GeoFlowPlanner:
         재계획 결과도 template/validator/compiler 전 경로를 다시 통과하므로
         어떤 guard도 우회하지 않는다.
         """
-        instruction = self.repair_instruction.format(
-            slot=failure.get("slot", "(알 수 없음)"),
-            name=failure.get("name", ""),
-            region=failure.get("region", ""),
-            message=failure.get("message", "Tool 오류"),
-        )
+        instruction = _fill_instruction(self.repair_instruction, {
+            "slot": failure.get("slot", "(알 수 없음)"),
+            "name": failure.get("name", ""),
+            "region": failure.get("region", ""),
+            "message": failure.get("message", "Tool 오류"),
+        })
         output = self._ask([
             *self.messages(question),
             {
@@ -157,6 +157,7 @@ class GeoFlowPlanner:
                 code="REPAIR_CHANGED_TEMPLATE",
                 context={"raw_text": output.raw_text},
             )
+        output.slots = drop_invented_regions(previous.slots, output.slots)
         if output.slots == previous.slots:
             raise PlannerError(
                 "재계획이 같은 slot을 그대로 반복했습니다.",
@@ -241,6 +242,54 @@ class GeoFlowPlanner:
                 context={"raw_text": text},
             )
         return template_name, slots
+
+
+#: 재계획 요청문에서 치환할 자리표시자. 그 밖의 중괄호는 그대로 둔다.
+_INSTRUCTION_FIELDS = ("slot", "name", "region", "message")
+
+
+def _fill_instruction(template, values):
+    """지정한 자리표시자만 치환한다.
+
+    ``str.format``을 쓰면 요청문에 넣은 JSON 예시의 중괄호까지 자리표시자로
+    해석된다. 요청문에 JSON을 보여 주는 편이 모델에게 더 분명하므로,
+    치환 쪽을 제한한다.
+    """
+    filled = template
+    for field_name in _INSTRUCTION_FIELDS:
+        filled = filled.replace(
+            "{" + field_name + "}", str(values.get(field_name, "")),
+        )
+    return filled
+
+
+def drop_invented_regions(previous_slots, repaired_slots):
+    """재계획이 새로 만들어낸 상위 지역을 제거한다.
+
+    최초 Planner 호출이 이미 질문에서 region을 추출했으므로, 장소 조회가
+    실패한 뒤에야 처음 나타난 region은 정의상 사용자가 말한 값이 아니라
+    모델의 추측이다. 실제로 관측된 사례가 두 가지다.
+
+        "대구시의 평균 택시 요금은?"  → name=대구, region=경상북도
+        "대구시의 평균 택시 요금은?"  → name=대구, region=시
+
+    앞의 것은 존재하지 않는 상위 지역을 지어낸 것이고, 뒤의 것은 행정구역
+    접미사를 지역으로 승격시킨 것이다. 둘 다 조회를 더 어긋나게 만든다.
+
+    거부가 아니라 제거로 처리한다. 이름 수정 자체는 정당한 복구이므로
+    살리고, 근거 없는 정보만 덜어 내는 편이 낫다.
+    """
+    sanitized = {}
+    for name, value in repaired_slots.items():
+        previous = previous_slots.get(name)
+        if (
+            isinstance(value, dict)
+            and value.get("region")
+            and not (isinstance(previous, dict) and previous.get("region"))
+        ):
+            value = {**value, "region": ""}
+        sanitized[name] = value
+    return sanitized
 
 
 def _response_text(body):

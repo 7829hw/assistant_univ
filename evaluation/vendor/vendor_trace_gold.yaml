@@ -1,0 +1,278 @@
+# evaluation/vendor/vendor_trace_gold.yaml
+#
+# 업체 13개 질문의 Tool trace acceptance contract.
+#
+# 업체 자료의 "정답 Tool" 열은 사람이 읽기 위한 설명이지 모든 default argument를
+# 나열한 strict JSON이 아니다. 예를 들어 Q02의 실제 호출에는 taxi_type=all,
+# taxi_status=all이 있었지만 업체는 정상으로 판정했다. 따라서 exact equality가
+# 아니라 아래의 semantic contract로 판정한다.
+#
+# 표기 규칙
+#   required_args        반드시 있어야 하고 값이 일치해야 하는 argument
+#                        값 표기: 스칼라 | {any_of: [...]} | {user_literal: "..."}
+#   optional_args        있어도 되는 argument (default 성격)
+#   forbidden_args       step 단위로 있으면 실패
+#   required_bindings    값이 앞선 step의 결과와 같아야 함 (문자열 우연 일치 불가)
+#   must_succeed         해당 step 결과가 ERROR가 아니어야 함 (기본 true)
+#   allow_retry          같은 tool의 선행 실패 호출을 허용 (장소 복구)
+#
+# case 단위
+#   forbidden_args       모든 step에서 금지 (실패한 호출 포함)
+#   grounded_args        값이 질문 문장에 실제로 등장해야 하는 argument
+#                        업체가 지적한 "경상북도" 같은 날조를 잡는다
+#   max_failed_calls     허용하는 실패 Tool 호출 수 상한
+#
+# 이 파일은 향후 fine-tuning/preference data 생성의 source로 재사용할 수 있도록
+# 질문 ID 단위로 기계가 읽을 수 있게 구조화한다.
+
+version: 1
+
+# 질문에 기간 표현이 없는 경우 금지할 argument. 업체가 가장 많이 지적한 오류다.
+_period_args: &period_args [date, time]
+
+cases:
+
+  # ------------------------------------------------------------------
+  - id: q01_edge_average_speed
+    vendor_verdict: 정상
+    note: 질문의 공간·날짜·시간·metric을 그대로 반영해야 한다.
+    steps:
+      - tool: get_passage_metrics
+        required_args:
+          metric: speed
+          scope: {user_literal: "scope:edge:1742"}
+          date: "20260530"
+          # 업체 표기 12:00~13:00 의 canonical 형식
+          time: "120000-130000"
+          aggregation: avg
+
+  # ------------------------------------------------------------------
+  - id: q02_edge_passage_count
+    vendor_verdict: 정상
+    note: 단순 통과 대수 조회. taxi_type/taxi_status default는 허용한다.
+    steps:
+      - tool: get_passage_count
+        required_args:
+          scope: {user_literal: "scope:edge:19384"}
+          date: "20260530"
+          time: "120000-130000"
+        optional_args: [taxi_type, taxi_status]
+        forbidden_args: [dimension, order, limit]
+
+  # ------------------------------------------------------------------
+  - id: q03_station_vicinity_speed
+    vendor_verdict: Tool은 맞음 / 인자 오류
+    note: '"근처"가 include_vicinity=true로 반영되어야 한다.'
+    steps:
+      - id: vicinity
+        tool: get_place_scope
+        required_args:
+          name: 동대구역
+          include_vicinity: true
+        optional_args: [region]
+      - tool: get_passage_metrics
+        required_args:
+          metric: speed
+          aggregation: avg
+        required_bindings:
+          scope: {from_step: vicinity}
+        # 질문에 날짜·시간이 있으므로 전달은 허용한다.
+        optional_args: *period_args
+
+  # ------------------------------------------------------------------
+  - id: q04_daegu_average_speed
+    vendor_verdict: Tool은 맞음 / 인자 오류
+    note: 질문에 기간이 없다. last_week 같은 조건을 만들면 실패다.
+    forbidden_args: *period_args
+    steps:
+      - id: place
+        tool: get_place_scope
+        required_args:
+          name: 대구
+        optional_args: [region, include_vicinity]
+      - tool: get_passage_metrics
+        required_args:
+          metric: speed
+          aggregation: avg
+        required_bindings:
+          scope: {from_step: place}
+
+  # ------------------------------------------------------------------
+  - id: q05_dongseongro_average_speed
+    vendor_verdict: Tool은 맞음 / 인자 오류
+    note: 장소 복구는 허용하되 질문에 없는 기간은 금지한다.
+    forbidden_args: *period_args
+    grounded_args: [name, region]
+    max_failed_calls: 2
+    steps:
+      - id: place
+        tool: get_place_scope
+        required_args:
+          name: {any_of: [동성로길, 동성로]}
+        optional_args: [region, include_vicinity]
+        allow_retry: true
+      - tool: get_passage_metrics
+        required_args:
+          metric: speed
+        optional_args: [aggregation]
+        required_bindings:
+          scope: {from_step: place}
+
+  # ------------------------------------------------------------------
+  - id: q14_vacant_drive_ratio
+    vendor_verdict: 정상
+    steps:
+      - tool: get_drive_metrics
+        required_args:
+          metric: vacant_ratio
+        optional_args: [aggregation, taxi_type]
+    forbidden_args: *period_args
+
+  # ------------------------------------------------------------------
+  - id: q18_private_revenue_by_day
+    vendor_verdict: 정상
+    note: fare(trip)와 revenue(operation)를 혼동하면 안 된다.
+    forbidden_args: *period_args
+    steps:
+      - tool: get_operation_metrics
+        required_args:
+          metric: revenue
+          dimension: dayofweek
+          taxi_type: private
+        optional_args: [aggregation]
+        forbidden_args: [order, limit, bucket, rollup]
+
+  # ------------------------------------------------------------------
+  - id: q22_daegu_origin_destination_count
+    vendor_verdict: Tool은 맞음 / 인자 오류
+    note: O/D 역할 보존 + 질문에 없는 기간 금지.
+    forbidden_args: *period_args
+    grounded_args: [name, region]
+    max_failed_calls: 2
+    steps:
+      - id: origin
+        tool: get_place_scope
+        required_args:
+          name: {any_of: [동성로동, 동성로]}
+        optional_args: [region, include_vicinity]
+        allow_retry: true
+      - id: destination
+        tool: get_place_scope
+        required_args:
+          name: 신천동
+        optional_args: [region, include_vicinity]
+        allow_retry: true
+      - tool: get_trip_count
+        required_bindings:
+          scope_pickup: {from_step: origin}
+          scope_dropoff: {from_step: destination}
+        forbidden_args: [dimension, order, limit]
+
+  # ------------------------------------------------------------------
+  - id: q24_daegu_average_fare
+    vendor_verdict: 최종 성공 / 복구 개선
+    note: >-
+      사용자가 말하지 않은 "경상북도" 같은 상위 지역을 만들면 안 된다.
+      대구시 → 대구 한 번의 복구만 허용한다.
+    forbidden_args: *period_args
+    grounded_args: [name, region]
+    max_failed_calls: 1
+    steps:
+      - id: place
+        tool: get_place_scope
+        required_args:
+          name: {any_of: [대구시, 대구]}
+        optional_args: [region, include_vicinity]
+        allow_retry: true
+      - tool: get_trip_metrics
+        required_args:
+          metric: fare
+        optional_args: [aggregation]
+        required_bindings:
+          scope: {from_step: place}
+
+  # ------------------------------------------------------------------
+  - id: q25_busan_park_vicinity_count
+    vendor_verdict: 잘못된 조회 방식
+    note: >-
+      "주변의 통행량"은 주변 scope 전체의 count이지 "주변 지역 중 통행량이
+      가장 많은 곳"이 아니다. dimension/order/limit은 오해의 증거다.
+    forbidden_args: *period_args
+    grounded_args: [name, region]
+    steps:
+      - id: vicinity
+        tool: get_place_scope
+        required_args:
+          name: 어린이대공원
+          region: {any_of: ["부산 초읍동", "초읍동", "부산"]}
+          include_vicinity: true
+      - tool: get_passage_count
+        required_bindings:
+          scope: {from_step: vicinity}
+        optional_args: [taxi_type, taxi_status]
+        forbidden_args: [dimension, order, limit]
+
+  # ------------------------------------------------------------------
+  - id: q26_busan_park_vicinity_speed
+    vendor_verdict: 정상
+    forbidden_args: *period_args
+    grounded_args: [name, region]
+    steps:
+      - id: vicinity
+        tool: get_place_scope
+        required_args:
+          name: 어린이대공원
+          region: {any_of: ["부산 초읍동", "초읍동", "부산"]}
+          include_vicinity: true
+      - tool: get_passage_metrics
+        required_args:
+          metric: speed
+          aggregation: avg
+        required_bindings:
+          scope: {from_step: vicinity}
+
+  # ------------------------------------------------------------------
+  - id: q27_busan_origin_destination_count
+    vendor_verdict: Tool은 맞음 / 인자 오류
+    forbidden_args: *period_args
+    grounded_args: [name, region]
+    max_failed_calls: 1
+    steps:
+      - id: origin
+        tool: get_place_scope
+        required_args:
+          name: 초읍동
+        optional_args: [region, include_vicinity]
+        allow_retry: true
+      - id: destination
+        tool: get_place_scope
+        required_args:
+          name: 초량동
+        optional_args: [region, include_vicinity]
+        allow_retry: true
+      - tool: get_trip_count
+        required_bindings:
+          scope_pickup: {from_step: origin}
+          scope_dropoff: {from_step: destination}
+        forbidden_args: [dimension, order, limit]
+
+  # ------------------------------------------------------------------
+  - id: q29_busan_average_fare
+    vendor_verdict: Tool은 맞음 / 인자 오류
+    note: 장소 복구는 허용하되 last_month 같은 기간 생성은 금지한다.
+    forbidden_args: *period_args
+    grounded_args: [name, region]
+    max_failed_calls: 1
+    steps:
+      - id: place
+        tool: get_place_scope
+        required_args:
+          name: {any_of: [부산시, 부산]}
+        optional_args: [region, include_vicinity]
+        allow_retry: true
+      - tool: get_trip_metrics
+        required_args:
+          metric: fare
+        optional_args: [aggregation]
+        required_bindings:
+          scope: {from_step: place}
