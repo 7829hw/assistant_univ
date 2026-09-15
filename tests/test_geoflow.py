@@ -22,6 +22,8 @@ from assistant_runtime import (  # noqa: E402
     AssistantRuntime,
 )
 from build import build  # noqa: E402
+from evaluate_planner import check_slot_roles  # noqa: E402
+from query_loader import load_queries  # noqa: E402
 from tool_executor import ToolExecutor  # noqa: E402
 from tool_handlers import get_tool_handlers  # noqa: E402
 
@@ -926,6 +928,43 @@ class RepairTest(unittest.TestCase):
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
         self.assertEqual(len(client.calls), 1)
         self.assertEqual(run.repair_count, 0)
+
+
+class PlannerAccuracyHarnessTest(unittest.TestCase):
+    """template 선택 정확도 측정 harness의 판정 로직."""
+
+    def test_correct_origin_destination_order(self):
+        self.assertTrue(check_slot_roles(OD_QUESTION, OD_SLOTS))
+
+    def test_swapped_origin_destination_is_detected(self):
+        swapped = {
+            "origin": {"name": "신천동", "region": ""},
+            "destination": {"name": "동성로", "region": "대구"},
+        }
+        self.assertFalse(check_slot_roles(OD_QUESTION, swapped))
+
+    def test_unjudgeable_slots_return_none(self):
+        self.assertIsNone(check_slot_roles(OD_QUESTION, {"place": "대구"}))
+        self.assertIsNone(check_slot_roles(
+            OD_QUESTION,
+            {
+                "origin": {"name": "없는곳", "region": ""},
+                "destination": {"name": "신천동", "region": ""},
+            },
+        ))
+
+    def test_every_stub_query_label_is_a_known_template(self):
+        """stub_query.yaml의 expected_template이 registry와 어긋나지 않아야 한다."""
+        registry = TemplateRegistry.from_directory()
+        queries = load_queries(ROOT / "stub_query.yaml")
+        self.assertTrue(queries)
+        for item in queries:
+            with self.subTest(query=item["id"]):
+                expected = item.get("expected_template")
+                self.assertIsNotNone(
+                    expected, f"{item['id']}에 expected_template이 없습니다.",
+                )
+                self.assertIn(expected, registry)
 
 
 class RuntimeIntegrationTest(unittest.TestCase):

@@ -92,6 +92,8 @@ geoflow_templates/
 tests/
 └─ test_geoflow.py
 
+evaluate_planner.py
+
 requirements.txt
 README.md
 ```
@@ -114,6 +116,7 @@ README.md
 | `geoflow/`               | GeoFlow IR, template, validator, compiler, executor |
 | `geoflow_templates/`     | GeoFlow template 정의 YAML                |
 | `tests/`                 | GeoFlow 및 react mode 회귀 테스트             |
+| `evaluate_planner.py`    | 모델별 template 선택 정확도 측정               |
 | `schemas/_common.yaml`   | Tool Schema 공통 정의                       |
 | `schemas/gazetteer.yaml` | Gazetteer Tool 정의                       |
 | `schemas/tims.yaml`      | TIMS Tool 정의                            |
@@ -289,12 +292,17 @@ python assistant_cli.py \
 ```yaml
 - id: q01_edge_average_speed
   question: "2026년 5월 30일 오후 12시에서 1시사이에 scope:edge:1742상의 택시들의 평균 속도는?"
+  expected_template: DIRECT_SCOPE_METRIC
 
 - id: q02_edge_passage_count
   question: "2026년 5월 30일 오후 12시에서 1시사이에 scope:edge:19384 지점을 통과하는 차량 대수는 몇대?"
+  expected_template: DIRECT_SCOPE_PASSAGE_COUNT
 ```
 
 각 Query에는 중복되지 않는 `id`와 `question`이 필요함.
+
+`expected_template`은 `evaluate_planner.py`의 정답 라벨로만 사용하는 선택 항목임.
+`react` 모드와 `query_loader`는 이 key를 읽지 않음.
 
 ## 11. 특정 Query 실행
 
@@ -823,6 +831,79 @@ Tool Result
 python -m unittest discover -s tests -t .
 ```
 
+### Template 선택 정확도 측정
+
+Planner만 호출하고 Tool은 실행하지 않으므로, gazetteer의 `NOT_FOUND` 같은 실행
+단계 잡음을 섞지 않고 semantic parsing 품질만 측정할 수 있음.
+
+```bash
+python evaluate_planner.py --model qwen3:8b --model gemma4:12b
+python evaluate_planner.py --all-models --repeat 3
+```
+
+정답 라벨은 Query YAML의 `expected_template`에서 읽음.
+
+```yaml
+- id: q22_daegu_origin_destination_count
+  question: "대구 동성로동에서 출발하여 신천동에 도착한 실차 구간 건수는?"
+  expected_template: OD_TRIP_COUNT
+```
+
+`expected_template`은 geoflow 모드 측정용이며 `react` 모드와 `query_loader`는
+이 key를 사용하지 않음.
+
+측정 항목은 다음과 같음.
+
+| 항목 | 의미 |
+| --- | --- |
+| 정확도 | `expected_template`과 일치한 비율 |
+| Planner 오류 | JSON 파싱 실패, 미등록 template 등 계약 위반 |
+| 역할 순서 | origin/destination이 발화 순서와 일치하는지 |
+| 평균 지연 | Planner 호출 1회 소요 시간 |
+
+결과는 `evaluation/planner_accuracy/<run_id>/planner_accuracy.json`에 저장됨.
+
+모델마다 지연 특성이 달라 한 번에 측정하기 어려우므로, 따로 실행한 결과를 하나의
+표로 다시 합칠 수 있음.
+
+```bash
+python evaluate_planner.py --aggregate
+```
+
+`temperature=0`으로 고정하므로 같은 입력에는 같은 출력이 반복됨. `--repeat`은
+변동성 측정이 필요한 경우에만 사용함.
+
+### 모델별 template 선택 정확도
+
+`stub_query.yaml` 13건 기준. Tool은 실행하지 않음.
+
+| 모델 | 크기 | 정확도 | Planner 오류 | 역할 순서 | 평균 지연 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `qwen3.8:27b`  | 17.7 GB | 13/13 (100%) | 0  | 2/2 | 3.4초 |
+| `gemma4:e4b`   |  9.6 GB | 13/13 (100%) | 0  | 2/2 | 2.5초 |
+| `qwen3.5:9b`   |  6.6 GB | 13/13 (100%) | 0  | 2/2 | 14.0초 |
+| `qwen3:8b`     |  5.2 GB | 13/13 (100%) | 0  | 2/2 | 1.9초 |
+| `gemma4:12b`   |  7.6 GB | 12/13 (92%)  | 1  | 2/2 | 31.0초 |
+
+**template을 잘못 고른 사례는 전 모델에서 한 건도 없음.** 실패는 모두
+`PLANNER_CALL_FAILED`, 즉 모델이 JSON 응답 자체를 만들지 못한 경우임.
+
+`gemma4:12b`의 1건은 출력을 `thinking`에만 쓰고 `content`를 비운 채 추론을
+끝내지 않아 timeout에 걸린 경우임. 실패한 질의의 thinking을 보면 template을
+고르는 대신 실제 택시 요금을 답하려 하고 있음. chat timeout을 300초로 늘려도
+동일하게 실패함.
+
+`qwen3:8b`(5.2 GB)가 3배 큰 `qwen3.8:27b`와 같은 13/13을 기록함. template 선택이
+모델 규모에 민감하지 않다는 뜻이며, 자유 형식 Tool Calling 대신 "정해진 template
+중 택1 + slot 채우기"로 문제를 좁힌 설계 의도와 일치함.
+
+지연은 규모와 상관관계가 약함. `qwen3:8b`(1.9초)가 `qwen3.5:9b`(14.0초)보다 7배
+빠름. thinking 분량 차이로 보임.
+
+측정 한계: 13개 질의는 각각 정확히 하나의 template에 대응하도록 라벨링되어 있음.
+template 경계에 걸친 모호한 질의는 아직 포함되어 있지 않으므로, 이 결과는 현재
+커버 범위 안에서의 안정성만 보여줌.
+
 ### 실측 결과
 
 `stub_query.yaml` 13건, 모델 `qwen3:8b`, Mock Provider 기준.
@@ -852,5 +933,8 @@ LLM 호출 감소는 model hop마다 다음 Tool을 묻지 않기 때문임. Geo
 * 최종 응답은 코드 기반 format을 사용함. Tool 결과에 없는 수치가 생성되지 않도록
   LLM 문장 생성 단계를 두지 않음. 대신 문장이 react 모드보다 기계적임.
 * GeoFlow 모드는 turn 간 대화 맥락을 참조하지 않고 질문 단위로 독립 실행함.
-* 검증은 `qwen3:8b` 단일 모델 기준임. 다른 모델의 template 선택 정확도는
-  별도 측정이 필요함.
+* end-to-end 실행 검증은 `qwen3:8b` 기준임. template 선택 정확도는 6개 모델에서
+  측정했으나(위 표), 실행까지 포함한 전체 경로는 모델별로 측정하지 않음.
+* Planner는 `content`에 JSON을 쓰는 모델을 전제함. 출력을 `thinking`에만 쓰고
+  `content`를 비우는 모델은 사용할 수 없음. 이 경우 오답을 내는 대신
+  `PLANNER_CALL_FAILED`로 멈추므로 Tool은 호출되지 않음.
