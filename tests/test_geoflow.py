@@ -142,6 +142,7 @@ class TemplateLoadingTest(unittest.TestCase):
                 "OD_TRIP_COUNT",
                 "GROUPED_AGGREGATE",
                 "OPERATION_METRIC",
+                "SCOPE_PLACE_NAME",
                 "DIRECT_SCOPE_PASSAGE_COUNT",
                 "PLACE_PASSAGE_COUNT",
                 "VICINITY_PASSAGE_COUNT",
@@ -848,6 +849,71 @@ class PipelineScenarioTest(unittest.TestCase):
         self.assertNotIn("scope:", run.final_answer)
         for name in run.scope_labels.values():
             self.assertIn(name, run.final_answer)
+
+    def test_scope_to_place_name(self):
+        """사용자가 제시한 scope의 장소명을 찾는다."""
+        registry = TemplateRegistry.from_directory()
+        template = registry.require("SCOPE_PLACE_NAME")
+        question = "scope:district:2700000000은 어디인가요?"
+        plan = template.instantiate(
+            question, {"scope": "scope:district:2700000000"},
+        )
+        report = validate(
+            plan, available_tools=new_tool_executor().tool_names,
+        )
+        self.assertTrue(report.ok, report.errors)
+        steps = compile_plan(plan).steps
+        self.assertEqual([step.tool_name for step in steps],
+                         ["get_scope_name"])
+        result = execute_plan(
+            compile_plan(plan),
+            new_tool_executor(),
+            known_scopes={"scope:district:2700000000"},
+        )
+        self.assertEqual(result.status, STATUS_OK, result.error)
+        self.assertIn("대구", format_answer(
+            plan, result, answer=template.answer,
+        ))
+
+    def test_bucket_requires_rollup(self):
+        """혼자 쓸 수 없는 slot은 실행 전에 거부한다."""
+        template = TemplateRegistry.from_directory().require(
+            "OPERATION_METRIC",
+        )
+        for slots in (
+            {"metric": "revenue", "bucket": "week"},
+            {"metric": "revenue", "rollup": "avg"},
+        ):
+            with self.subTest(slots=slots):
+                with self.assertRaises(TemplateError) as caught:
+                    template.instantiate("주 단위 수입은?", slots)
+                self.assertIn("함께", caught.exception.detail)
+
+    def test_bucket_rollup_is_passed_and_shown(self):
+        template = TemplateRegistry.from_directory().require(
+            "OPERATION_METRIC",
+        )
+        plan = template.instantiate(
+            "주 단위로 집계한 택시 수입의 평균은?",
+            {"metric": "revenue", "bucket": "week", "rollup": "avg"},
+        )
+        step = compile_plan(plan).steps[-1]
+        self.assertEqual(step.arguments["bucket"], "week")
+        self.assertEqual(step.arguments["rollup"], "avg")
+        result = execute_plan(compile_plan(plan), new_tool_executor())
+        answer = format_answer(plan, result, answer=template.answer)
+        self.assertIn("주 단위", answer)
+        self.assertIn("영업 수익", answer)
+
+    def test_order_requires_dimension(self):
+        template = TemplateRegistry.from_directory().require(
+            "PLACE_PASSAGE_COUNT",
+        )
+        with self.assertRaises(TemplateError):
+            template.instantiate(
+                "대구에서 통행량이 가장 많은 곳은?",
+                {"place": {"name": "대구", "region": ""}, "order": "top"},
+            )
 
     def test_relative_date_and_metric_are_named_in_answer(self):
         """상대 날짜와 metric은 원시값 대신 사람이 읽을 이름으로 보인다."""

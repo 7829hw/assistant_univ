@@ -84,6 +84,8 @@ class GeoFlowTemplate:
     final_node: str
     answer: dict[str, Any] = field(default_factory=dict)
     question_examples: list[str] = field(default_factory=list)
+    #: slot 사이의 동반 제약. {slot: [함께 있어야 하는 slot, ...]}
+    slot_requires: dict[str, tuple[str, ...]] = field(default_factory=dict)
     source_path: str = ""
 
     @property
@@ -214,7 +216,25 @@ class GeoFlowTemplate:
                     )
                 continue
             filled[name] = self._coerce_slot(spec, slots[name], question)
+        self._check_slot_requirements(filled)
         return filled
+
+    def _check_slot_requirements(self, filled):
+        """혼자 쓰일 수 없는 slot이 짝 없이 들어온 경우를 막는다.
+
+        Tool이 INVALID_ARGUMENT로 거절할 조합을 실행 전에 걸러 낸다.
+        """
+        for name, companions in self.slot_requires.items():
+            if name not in filled:
+                continue
+            missing = [item for item in companions if item not in filled]
+            if missing:
+                raise TemplateError(
+                    f"{self.name}: slot {name!r}을 쓰려면 "
+                    f"{', '.join(repr(item) for item in missing)}도 함께 "
+                    "필요합니다.",
+                    context={"template": self.name, "slot": name},
+                )
 
     def _coerce_slot(self, spec, value, question=""):
         where = f"{self.name}.{spec.name}"
@@ -467,6 +487,29 @@ def load_template(path):
             context={"path": str(path)},
         )
 
+    slot_requires_raw = dict(document.get("slot_requires") or {})
+    slot_names = set(required_slots) | set(optional_slots)
+    slot_requires = {}
+    for name, companions in slot_requires_raw.items():
+        if name not in slot_names:
+            raise TemplateError(
+                f"{path.name}: slot_requires에 정의되지 않은 slot이 "
+                f"있습니다: {name}",
+                context={"path": str(path)},
+            )
+        if isinstance(companions, str):
+            companions = [companions]
+        unknown_companions = [
+            item for item in companions if item not in slot_names
+        ]
+        if unknown_companions:
+            raise TemplateError(
+                f"{path.name}: slot_requires[{name!r}]가 정의되지 않은 "
+                f"slot을 참조합니다: {', '.join(unknown_companions)}",
+                context={"path": str(path)},
+            )
+        slot_requires[name] = tuple(companions)
+
     slots = {}
     for name in [*required_slots, *optional_slots]:
         slots[name] = SlotSpec(
@@ -535,6 +578,7 @@ def load_template(path):
         transformations=transformations,
         final_node=final_node,
         answer=dict(document.get("answer") or {}),
+        slot_requires=slot_requires,
         question_examples=[
             str(item) for item in (document.get("question_examples") or [])
         ],

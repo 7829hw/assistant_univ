@@ -694,8 +694,9 @@ Planner 출력은 모두 untrusted input으로 취급하며, JSON 파싱 실패�
 | `OD_TRIP_COUNT`              | trip      | 실차 구간 건수(출발지 필수, 도착지 선택)    |
 | `TRIP_FARE_METRIC`           | trip      | 택시 요금(fare) 통계              |
 | `DRIVE_RATIO_METRIC`         | drive     | 공차율(vacant_ratio)           |
-| `OPERATION_METRIC`           | operation | 영업 통계 단일 값                  |
+| `OPERATION_METRIC`           | operation | 영업 통계 단일 값(주·월 bucket 포함)  |
 | `GROUPED_AGGREGATE`          | operation | 영업 통계의 dimension 분포         |
+| `SCOPE_PLACE_NAME`           | location  | scope → 장소명 역변환             |
 
 Planner Prompt의 template 목록은 이 YAML 정의에서 자동 생성되므로 별도 동기화가 필요 없음.
 
@@ -789,6 +790,23 @@ get_trip_metrics(metric=fare, scope=...)
 
 마지막 항목이 핵심임. 재계획은 어떤 guard도 우회하지 않으며, 실패한 시도의
 Tool 호출도 실행 trace에 그대로 남음.
+
+### slot 동반 제약
+
+혼자 쓰일 수 없는 slot은 template에 `slot_requires`로 선언함. Tool이
+`INVALID_ARGUMENT`로 거절할 조합을 실행 전에 걸러 냄.
+
+```yaml
+slot_requires:
+  bucket: [rollup]      # 2단계 집계는 두 값이 모두 필요함
+  rollup: [bucket]
+  order: [dimension]    # 순위는 그룹화 기준이 있어야 의미가 있음
+  limit: [dimension]
+```
+
+```text
+OPERATION_METRIC: slot 'bucket'을 쓰려면 'rollup'도 함께 필요합니다.
+```
 
 ### 결과 scope의 장소명 변환
 
@@ -1014,8 +1032,30 @@ template 선택 정확도는 slot 값의 정확성을 보지 않으므로 end-to
 출발지만  → scope_pickup만 전달, scope_dropoff 없음
 ```
 
+### 커버리지 부채 해소
+
+거부 기대 질의 중 Tool은 지원하지만 template이 없던 2건을 해소함.
+
+* `SCOPE_PLACE_NAME` 추가 — `SCOPE_NAME` operator가 registry에 등록만 되어 있고
+  어떤 template에서도 쓰이지 않던 것을 연결함. 집계 결과에 이름을 붙이는
+  labeling 단계와는 목적이 다름. 이쪽은 사용자가 scope를 들고 와 묻는 경우임
+* `OPERATION_METRIC`에 `bucket`/`rollup` 추가 — 주·월 단위 2단계 집계.
+  새 template을 만들지 않고 기존 template을 확장해 Planner의 선택지를
+  늘리지 않음
+
+남은 거부 기대 4건은 설계상의 경계임.
+
+```text
+b12  도메인 밖 질문
+b17  도착지만 지정한 trip 집계   OD_TRIP_COUNT는 출발지가 필수
+b18  지역 없는 순위 질의        get_passage_count는 scope가 필수
+b20  두 지역 비교              단일 template으로 표현 불가
+```
+
+`b20`만 구조적 한계임. 두 plan을 합성해야 하므로 v1 범위를 벗어남.
+
 측정 한계: 두 평가 셋 모두 정답 template이 하나로 정해지는 질의로 구성됨. 사람도
-판단이 갈리는 질의는 포함되어 있지 않음. 또한 `qwen3.8:27b`가 35건 전체에서
+판단이 갈리는 질의는 포함되어 있지 않음. 또한 `qwen3.8:27b`가 37건 전체에서
 결함을 보이지 않아, 이 셋만으로는 더 이상 변별이 되지 않음.
 
 ### 실측 결과

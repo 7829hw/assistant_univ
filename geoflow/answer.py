@@ -35,6 +35,8 @@ _DIMENSION_LABEL = {
 
 _ORDER_LABEL = {"top": "상위", "bottom": "하위"}
 
+_BUCKET_LABEL = {"week": "주 단위", "month": "월 단위"}
+
 _DATE_LABEL = {
     "last_week": "지난주",
     "last_month": "지난달",
@@ -133,9 +135,16 @@ def _subject(plan, settings, labels=None):
     limit = slots.get("limit")
     if limit:
         parts.append(f"{limit}개")
+    # bucket/rollup 2단계 집계는 "주 단위 평균"처럼 순서대로 보여준다.
+    bucket = slots.get("bucket")
+    if bucket:
+        parts.append(_BUCKET_LABEL.get(bucket, bucket))
     aggregation = slots.get("aggregation")
     if aggregation:
         parts.append(_AGGREGATION_LABEL.get(aggregation, aggregation))
+    rollup = slots.get("rollup")
+    if rollup:
+        parts.append(_AGGREGATION_LABEL.get(rollup, rollup))
 
     return " ".join(parts)
 

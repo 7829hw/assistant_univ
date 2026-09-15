@@ -5,13 +5,22 @@
 # 없는 dimension을 발명하게 된다.
 
 name: OPERATION_METRIC
-description: 일 단위 택시 영업(operation) 통계값 하나를 구한다. 요일별·지역별 분포가 아니다.
+description: >-
+  일 단위 택시 영업(operation) 통계값 하나를 구한다. 요일별·지역별 분포가 아니다.
+  bucket을 지정하면 주·월 단위로 1차 집계한 뒤 rollup으로 하나의 값으로 합친다.
 question_examples:
   - "개인택시의 평균 수입은?"
   - "대구 택시의 평균 영업시간은?"
+  - "주 단위로 집계한 택시 수입의 평균은?"
 
 required_slots: [metric]
-optional_slots: [place, taxi_type, date, aggregation]
+optional_slots: [place, taxi_type, date, aggregation, bucket, rollup]
+
+# bucket과 rollup은 반드시 함께 쓰인다. Tool이 INVALID_ARGUMENT로 거절할
+# 조합을 실행 전에 걸러 낸다.
+slot_requires:
+  bucket: [rollup]
+  rollup: [bucket]
 slot_types:
   place: place
   metric:
@@ -20,6 +29,10 @@ slot_types:
     enum: [private, corporate, all]
   date: date
   aggregation:
+    enum: [max, min, sum, avg, med]
+  bucket:
+    enum: [week, month]
+  rollup:
     enum: [max, min, sum, avg, med]
 
 concepts:
@@ -68,6 +81,8 @@ transformations:
       taxi_type: {slot: taxi_type}
       date: {slot: date}
       aggregation: {slot: aggregation}
+      bucket: {slot: bucket}
+      rollup: {slot: rollup}
     outputs: [measure]
 
 final_node: measure
