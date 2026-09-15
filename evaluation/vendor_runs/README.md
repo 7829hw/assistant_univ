@@ -16,6 +16,20 @@ python evaluate_vendor_trace.py --model qwen3.8:27b --agent-mode geoflow
 | `20260915_153242` | `qwen3.8:27b` | react | 13/13 | 동일 모델 react 대조 |
 | `20260915_154431` | `qwen3:8b` | geoflow | **13/13** | 모델을 낮춘 경우 |
 | `20260915_154631` | `qwen3:8b` | react | **7/13** | 업체 보고 오류 재현 |
+| `20260915_160216` | `qwen3:8b` | geoflow | **39/39** | 최종 검증 (3회 반복) |
+
+## 최종 검증
+
+`20260915_160216`이 미팅 기준 결과다. 13문항 × 3회 = 39/39이며, Tool 호출 84회
+전체에서 다음이 0건이다.
+
+```text
+질문에 없는 기간(date/time) 생성   scope hallucination
+발화에 없는 region 생성            include_vicinity 누락
+통행량을 ranking으로 오해          origin/destination binding 오류
+```
+
+Q03·Q22·Q24·Q25는 3회 모두 동일한 trace를 생성했다.
 
 ## 읽는 순서
 
