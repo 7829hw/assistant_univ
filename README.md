@@ -954,8 +954,40 @@ optional로 두어 정직하게 비울 수 있게 함.
 
 수정 후 `qwen3:8b`, `gemma4:e4b`, `qwen3.8:27b` 모두 12/12이며 기존 셋도 회귀 없음.
 
+### 경계 평가 셋 확장
+
+위 수정으로 거부 기대 질의가 1건만 남아 거부 능력의 측정력이 사라졌으므로, 지원
+범위 경계에 걸친 질의를 추가해 22건(거부 기대 7건)으로 늘림.
+
+거부 기대 7건 중 6건은 **Tool은 지원하지만 이를 노출하는 template이 아직 없는**
+경우임. 설계상의 경계가 아니라 커버리지 부채임을 구분해 기록함.
+
+```text
+b17  도착지만 지정한 trip 집계     OD_TRIP_COUNT는 출발지가 필수
+b18  통행량 순위 질의             통행량 template이 order/limit을 노출하지 않음
+b19  scope → 장소명 역변환        SCOPE_NAME operator는 있으나 template이 없음
+b20  두 지역 비교                단일 template으로 표현 불가
+b21  bucket/rollup 2단계 집계     GROUPED_AGGREGATE에 해당 slot이 없음
+b22  통행량의 공간 dimension 분포  통행량 template에 dimension이 없음
+```
+
+`qwen3.8:27b` 기준 22/22이며 거부 7건 모두 정확함. b17에서 도착지를 `origin`에
+밀어넣지 않고 거부한 것이 특히 중요함.
+
+template 선택 정확도는 slot 값의 정확성을 보지 않으므로 end-to-end로도 확인함.
+지원 범위 안 15건 모두 slot과 Tool argument가 정확했음.
+
+```text
+공차     → taxi_status=vacant
+중간값    → aggregation=med
+주말     → date=weekend
+지난달    → date=last_month
+출발지만  → scope_pickup만 전달, scope_dropoff 없음
+```
+
 측정 한계: 두 평가 셋 모두 정답 template이 하나로 정해지는 질의로 구성됨. 사람도
-판단이 갈리는 질의는 포함되어 있지 않음.
+판단이 갈리는 질의는 포함되어 있지 않음. 또한 `qwen3.8:27b`가 35건 전체에서
+결함을 보이지 않아, 이 셋만으로는 더 이상 변별이 되지 않음.
 
 ### 실측 결과
 

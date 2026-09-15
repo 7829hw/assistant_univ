@@ -60,3 +60,60 @@
 - id: b12_out_of_domain
   question: "오늘 서울 날씨 알려줘"
   expected_template: NONE
+
+# ============================================================
+# 지원 범위 안이지만 slot 조합이 까다로운 질의
+# ============================================================
+
+- id: b13_vicinity_vacant_count
+  question: "동대구역 근처 공차 택시의 통행량은?"
+  expected_template: VICINITY_PASSAGE_COUNT
+
+- id: b14_operating_count_private
+  question: "부산 개인택시의 영업 횟수는?"
+  expected_template: OPERATION_METRIC
+
+- id: b15_fare_median
+  question: "대구 택시 요금의 중간값은?"
+  expected_template: TRIP_FARE_METRIC
+
+- id: b16_weekend_speed
+  question: "주말 대구 지역의 평균 속도는?"
+  expected_template: PLACE_SCOPE_METRIC
+
+# ============================================================
+# 지원 범위 밖: 거부해야 함
+# Tool은 지원하지만 이를 노출하는 template이 아직 없는 경우를 포함한다.
+# 틀린 template을 고르는 것보다 거부가 낫다는 주장을 측정한다.
+# ============================================================
+
+# 도착지만 주어짐. OD_TRIP_COUNT는 출발지가 필수다.
+# 도착지를 origin에 넣어버리는지 확인한다.
+- id: b17_destination_only
+  question: "신천동에 도착한 실차 구간 건수는?"
+  expected_template: NONE
+
+# 순위 질의. 어떤 통행량 template도 order/limit을 노출하지 않는다.
+- id: b18_passage_count_ranking
+  question: "통행량이 가장 많은 시군구 3곳은?"
+  expected_template: NONE
+
+# scope → 장소명 역변환. SCOPE_NAME operator는 있으나 template이 없다.
+- id: b19_scope_to_name
+  question: "scope:district:2700000000은 어디인가요?"
+  expected_template: NONE
+
+# 두 지역 비교. 단일 template으로 표현할 수 없다.
+- id: b20_region_comparison
+  question: "대구와 부산 중 어디가 택시 평균 속도가 더 빠른가요?"
+  expected_template: NONE
+
+# 2단계 집계(bucket/rollup). GROUPED_AGGREGATE에 해당 slot이 없다.
+- id: b21_bucket_rollup
+  question: "주별 택시 수입을 월 단위로 합치면 얼마인가요?"
+  expected_template: NONE
+
+# 공간 dimension 분포. 통행량 template에 dimension이 없다.
+- id: b22_passage_count_by_sigungu
+  question: "대구 시군구별 통행량은?"
+  expected_template: NONE
