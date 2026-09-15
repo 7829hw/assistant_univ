@@ -4,7 +4,18 @@
 - 대상: 업체 제공 13개 질문
 - 기준: `evaluation/vendor/vendor_trace_gold.yaml`
 - 재현: `python evaluate_vendor_trace.py --model qwen3:8b --agent-mode geoflow --repeat 3`
+- Git commit: `8d080b3d86a9a97e16fb3fc8c953f968b1513bb8`
+- 최종 검증 run: `evaluation/vendor_runs/20260915_160216`
 - Tool Provider: Mock
+
+## Executive Summary
+
+- 업체 제공 13개 질문을 실제 Tool execution trace 기준으로 평가했다.
+- qwen3:8b에서 ReAct 7/13 → GeoFlow 13/13.
+- GeoFlow 3회 반복 39/39 PASS.
+- 이 13문항은 시스템 개선에 사용한 사례와 동일하므로, 결과는 **acceptance /
+  regression**이며 held-out 일반화 성능이 아니다.
+- fine-tuning은 수행하지 않았다. 1차에서는 orchestration 구조를 먼저 개선했다.
 
 ## 1. 업체 요청
 
@@ -22,15 +33,20 @@ Before — 매 hop마다 LLM이 다음 Tool과 argument를 결정한다.
 자연어 질의 → LLM → Tool → LLM → Tool → … → 답변
 ```
 
-After — LLM은 한 번만 호출하고, 이후는 프로그램이 결정한다.
+After — LLM은 최초 planning에서 template과 slots만 결정한다. 정상 경로에서는
+이후 Tool 호출 순서와 argument binding을 프로그램이 결정한다. 장소 조회가
+실패한 경우에 한해 slot repair를 위해 LLM을 최대 1회 추가 호출할 수 있다.
 
 ```text
 자연어 질의
-  → Planner (template + slots)      LLM 1회. Tool 이름을 다루지 않는다
+  → Planner (template + slots)      기본 LLM 1회. Tool 이름을 다루지 않는다
   → Typed GeoFlow Plan
   → Validation (G1~G6)
   → Compiler
   → Deterministic Tool Execution    기존 ToolExecutor 재사용
+       ↓
+     장소 조회 실패 시에만
+     Planner slot repair 최대 1회   재계획 결과도 같은 검증 경로를 다시 통과
   → 답변
 ```
 
@@ -97,8 +113,9 @@ get_place_scope(name=대구)   → scope:district:2700000000
 get_trip_metrics(scope=scope:district:2700000000, metric=fare, aggregation=avg)
 ```
 
-최초 Planner가 이미 질문에서 region을 추출하므로, 조회 실패 후에야 처음 나타난
-region은 정의상 사용자가 말한 값이 아니다. 재계획 결과에서 제거한다.
+현재 repair 정책에서는 최초 plan에 없던 region이 장소 조회 실패 이후 새로
+추가되면 보수적으로 제거한다. 업체 사례에서 관찰된 "경상북도" 같은 상위 지역
+hallucination을 차단하기 위한 v1 guard다.
 
 ### Q25 — 어린이대공원 주변 통행량
 
@@ -147,13 +164,17 @@ O/D 뒤바뀜                     → DEPENDENCY_BINDING_MISMATCH
 
 **결과를 과장하지 않기 위해 반드시 함께 설명한다.**
 
-- 업체 제공 **13개 질문에 대한 acceptance 결과**다. 일반적인 모든 자연어 질의의
-  정확도 100%를 뜻하지 않는다.
-- **qwen3.8:27b에서는 ReAct도 13/13**이었다. 업체 사례에서 관찰된 오류는 ReAct
-  구조에서 모델 성능에 따라 발생할 수 있었던 것이며, ReAct가 이 13문항을 처리하지
-  못한다는 뜻이 아니다. GeoFlow는 Tool 선택·인자·scope provenance·dependency
-  binding의 일부를 LLM 판단이 아니라 구조로 제약해 **작은 모델에서도 안정성을
-  높였다**는 것이 정확한 표현이다.
+- 업체 제공 **13개 질문에 대한 acceptance / regression 결과**다. 이 13문항은
+  시스템 개선에 사용한 업체 제공 사례와 동일하므로, 39/39는 held-out 일반화
+  성능이 아니다. 새로운 표현과 unseen 질의에 대한 일반화 성능은 별도 held-out
+  평가가 필요하다.
+- **qwen3.8:27b에서는 ReAct도 13/13**이었으므로 ReAct 자체가 이 문제를 항상
+  일으킨다는 의미는 아니다. 다만 qwen3:8b에서는 동일 질문과 판정 기준에서
+  ReAct 7/13, GeoFlow 13/13이었고, GeoFlow가 일부 의사결정을 LLM에서
+  deterministic runtime으로 옮기면서 **모델 선택에 따른 변동성을 줄인 사례**를
+  확인했다.
+- repair의 region guard는 보수적 정책이다. 최초 Planner가 사용자 발화의 region을
+  누락한 경우, repair에서 추가된 정당한 region도 제거될 수 있다.
 - Mock Provider 기준이다. 실제 TIMS/Gazetteer는 연결하지 않았다.
 - **fine-tuning은 수행하지 않았다.** 업체가 제공한 실패 사례를 먼저 기계가 읽는
   gold trace로 정형화하고, 실행 trace 기준 acceptance 체계를 구축했다. 문제가
