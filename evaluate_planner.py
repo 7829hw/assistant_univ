@@ -21,7 +21,7 @@ from zoneinfo import ZoneInfo
 
 from build import build
 from geoflow.errors import GeoFlowError
-from geoflow.planner import GeoFlowPlanner
+from geoflow.planner import NO_TEMPLATE, GeoFlowPlanner
 from geoflow.templates import TemplateRegistry
 from ollama_client import OllamaClient, resolve_chat_timeout
 from query_loader import QueryValidationError, load_queries
@@ -32,6 +32,10 @@ BASE_DIR = Path(__file__).resolve().parent
 RESULT_DIR = BASE_DIR / "evaluation" / "planner_accuracy"
 DEFAULT_OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_OPTIONS = {"temperature": 0}
+
+#: 지원 범위 밖이라 Planner가 거부해야 하는 질의의 정답 라벨.
+#: 틀린 template을 고르는 것보다 거부가 낫다는 설계 주장을 측정한다.
+NO_TEMPLATE_LABEL = NO_TEMPLATE
 
 #: 역할이 뒤바뀌면 안 되는 slot 쌍. 논문이 지적한 대표적 실패 모드다.
 ORDERED_SLOT_PAIRS = (("origin", "destination"),)
@@ -102,6 +106,9 @@ def evaluate_model(model, queries, *, host, chat_timeout, repeat, verbose):
             except GeoFlowError as error:
                 record["status"] = error.code
                 record["error"] = error.detail
+                if error.code == "NO_MATCHING_TEMPLATE":
+                    # 지원 범위 밖임을 스스로 인정한 경우도 하나의 판정 결과다.
+                    record["template"] = NO_TEMPLATE_LABEL
             except Exception as error:  # noqa: BLE001 - 모델 오류도 기록 대상
                 record["status"] = "CLIENT_ERROR"
                 record["error"] = f"{type(error).__name__}: {error}"
@@ -126,7 +133,14 @@ def evaluate_model(model, queries, *, host, chat_timeout, repeat, verbose):
 def summarize(records):
     total = len(records)
     correct = sum(1 for item in records if item["correct"])
-    failed = sum(1 for item in records if item["status"] != "OK")
+    # 지원 범위 밖임을 인정한 거부는 오류가 아니라 정상 판정 결과다.
+    refused = sum(
+        1 for item in records if item["status"] == "NO_MATCHING_TEMPLATE"
+    )
+    failed = sum(
+        1 for item in records
+        if item["status"] not in ("OK", "NO_MATCHING_TEMPLATE")
+    )
     roles = [
         item["role_order_ok"] for item in records
         if item["role_order_ok"] is not None
@@ -135,6 +149,7 @@ def summarize(records):
         "total": total,
         "correct": correct,
         "accuracy": round(correct / total, 4) if total else 0.0,
+        "refused": refused,
         "planner_error": failed,
         "role_order_checked": len(roles),
         "role_order_ok": sum(1 for item in roles if item),
@@ -176,9 +191,9 @@ def print_report(results, query_ids):
         print(row)
 
     print("-" * len(header))
-    print("\n" + "모델".ljust(20) + "정확도".ljust(14) + "Planner 오류".ljust(14)
-          + "역할 순서".ljust(12) + "평균 지연")
-    print("-" * 74)
+    print("\n" + "모델".ljust(20) + "정확도".ljust(14) + "거부".ljust(8)
+          + "응답 실패".ljust(12) + "역할 순서".ljust(12) + "평균 지연")
+    print("-" * 78)
     for model in models:
         summary = results[model]["summary"]
         roles = (
@@ -189,7 +204,8 @@ def print_report(results, query_ids):
             model.ljust(20)
             + f"{summary['correct']}/{summary['total']} "
               f"({summary['accuracy'] * 100:.0f}%)".ljust(14)
-            + str(summary["planner_error"]).ljust(14)
+            + str(summary.get("refused", 0)).ljust(8)
+            + str(summary["planner_error"]).ljust(12)
             + roles.ljust(12)
             + f"{summary['mean_duration_ms']:.0f} ms"
         )
@@ -284,6 +300,7 @@ def main(argv=None):
     unknown = sorted({
         item["expected_template"] for item in queries
         if item["expected_template"] not in registry
+        and item["expected_template"] != NO_TEMPLATE_LABEL
     })
     if unknown:
         raise SystemExit(

@@ -1,0 +1,66 @@
+# geoflow_templates/place_passage_count.yaml
+# 장소/지역 내부의 통행량(passage 건수). 주변 영역은 포함하지 않는다.
+# DIRECT_SCOPE_PASSAGE_COUNT / VICINITY_PASSAGE_COUNT와 함께 scope 확보 경로의
+# 세 갈래를 이룬다.
+
+name: PLACE_PASSAGE_COUNT
+description: 장소 또는 지역 범위 내부의 통행량(통과 차량 대수)을 센다. 주변 영역은 포함하지 않는다.
+question_examples:
+  - "대구 지역 전체 통행량은?"
+
+required_slots: [place]
+optional_slots: [date, time, taxi_type, taxi_status]
+slot_types:
+  place: place
+  date: date
+  time: time
+  taxi_type:
+    enum: [private, corporate, all]
+  taxi_status:
+    enum: [occupied, vacant, stationary, all]
+
+concepts:
+  - id: place
+    concept: LOCATION
+    subtype: place
+    role: SUBCOND
+    source: user
+    from_slot: place
+  - id: place_scope
+    concept: LOCATION
+    subtype: scope
+    role: COND
+    source: tool
+  - id: passage_count
+    concept: AMOUNT
+    subtype: passage_count
+    role: MEASURE
+    source: tool
+
+transformations:
+  - id: resolve_place
+    operator: RESOLVE_PLACE_SCOPE
+    inputs:
+      place_name: {node: place, field: name}
+      place_region: {node: place, field: region}
+    params:
+      include_vicinity: false
+    outputs: [place_scope]
+
+  - id: count_passages
+    operator: PASSAGE_COUNT
+    inputs:
+      area: {node: place_scope}
+    params:
+      date: {slot: date}
+      time: {slot: time}
+      taxi_type: {slot: taxi_type}
+      taxi_status: {slot: taxi_status}
+    outputs: [passage_count]
+
+final_node: passage_count
+
+answer:
+  kind: count
+  label: 통행량
+  unit: 건

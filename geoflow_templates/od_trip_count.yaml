@@ -8,8 +8,11 @@ description: 출발지와 도착지가 모두 주어진 실차 구간(trip) 건�
 question_examples:
   - "대구 동성로동에서 출발하여 신천동에 도착한 실차 구간 건수는?"
 
-required_slots: [origin, destination]
-optional_slots: [date, time]
+# destination을 필수로 두면 "A에서 출발한 건수" 같은 질문에서 Planner가 빈
+# 문자열이나 "모든 지역" 같은 가짜 장소를 지어내 필수 slot을 채우려 한다.
+# get_trip_count는 승차 위치만으로도 집계할 수 있으므로 optional로 둔다.
+required_slots: [origin]
+optional_slots: [destination, date, time]
 slot_types:
   origin: place
   destination: place
@@ -29,6 +32,7 @@ concepts:
     role: SUBCOND
     source: user
     from_slot: destination
+    optional: true
   - id: origin_scope
     concept: LOCATION
     subtype: scope
@@ -39,6 +43,7 @@ concepts:
     subtype: scope
     role: COND
     source: tool
+    optional: true
   - id: trip_count
     concept: AMOUNT
     subtype: trip_count

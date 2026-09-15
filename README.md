@@ -93,6 +93,7 @@ tests/
 └─ test_geoflow.py
 
 evaluate_planner.py
+stub_query_boundary.yaml
 
 requirements.txt
 README.md
@@ -121,6 +122,7 @@ README.md
 | `schemas/gazetteer.yaml` | Gazetteer Tool 정의                       |
 | `schemas/tims.yaml`      | TIMS Tool 정의                            |
 | `stub_query.yaml`        | 일괄 실행할 자연어 질의 목록                        |
+| `stub_query_boundary.yaml` | template 경계 평가 셋                       |
 
 ## 3. Prompt 및 Tool Schema
 
@@ -687,10 +689,12 @@ Planner 출력은 모두 untrusted input으로 취급하며, JSON 파싱 실패�
 | `PLACE_SCOPE_METRIC`         | passage   | 장소/지역 내부의 통행 통계             |
 | `VICINITY_SCOPE_METRIC`      | passage   | 장소 주변(근처/부근) 포함 통행 통계       |
 | `DIRECT_SCOPE_PASSAGE_COUNT` | passage   | 사용자 scope 지점의 통행량           |
+| `PLACE_PASSAGE_COUNT`        | passage   | 장소/지역 내부의 통행량              |
 | `VICINITY_PASSAGE_COUNT`     | passage   | 장소 주변 통행량                   |
-| `OD_TRIP_COUNT`              | trip      | 출발지/도착지 실차 구간 건수            |
+| `OD_TRIP_COUNT`              | trip      | 실차 구간 건수(출발지 필수, 도착지 선택)    |
 | `TRIP_FARE_METRIC`           | trip      | 택시 요금(fare) 통계              |
 | `DRIVE_RATIO_METRIC`         | drive     | 공차율(vacant_ratio)           |
+| `OPERATION_METRIC`           | operation | 영업 통계 단일 값                  |
 | `GROUPED_AGGREGATE`          | operation | 영업 통계의 dimension 분포         |
 
 Planner Prompt의 template 목록은 이 YAML 정의에서 자동 생성되므로 별도 동기화가 필요 없음.
@@ -900,9 +904,58 @@ python evaluate_planner.py --aggregate
 지연은 규모와 상관관계가 약함. `qwen3:8b`(1.9초)가 `qwen3.5:9b`(14.0초)보다 7배
 빠름. thinking 분량 차이로 보임.
 
-측정 한계: 13개 질의는 각각 정확히 하나의 template에 대응하도록 라벨링되어 있음.
-template 경계에 걸친 모호한 질의는 아직 포함되어 있지 않으므로, 이 결과는 현재
-커버 범위 안에서의 안정성만 보여줌.
+### 경계 평가 셋
+
+`stub_query.yaml`은 각 질의가 정확히 하나의 template에 대응하도록 구성되어 있어
+모델 간 변별력이 없음. `stub_query_boundary.yaml`은 구분이 어려운 쌍과 지원 범위
+밖 질의를 모아 이를 보완함.
+
+```bash
+python evaluate_planner.py --model qwen3:8b --query-file stub_query_boundary.yaml
+```
+
+`expected_template: NONE`은 "지원하는 template이 없으므로 거부해야 함"을 뜻함.
+틀린 template을 고르는 것보다 거부가 낫다는 설계 주장을 측정하기 위한 것이며,
+요약표에서 정상적인 거부(`거부`)와 JSON 응답 실패(`응답 실패`)를 구분해 집계함.
+
+이 평가 셋으로 다음 결함을 발견해 수정함.
+
+**1. 주변 포함 여부 혼동** — "동대구역의 평균 속도"(주변 아님)를 주변 포함
+template으로 선택함. Prompt가 "근처=vicinity"만 규정하고 역방향 규칙이 없었음.
+
+**2. 필수 slot 날조** — 질문이 답하지 않는 필수 slot을 채우려고 가짜 값을
+지어내는 현상이 세 번 관측됨.
+
+```text
+gemma4:e4b   place       = {"name": "",       "region": "대구"}
+qwen3:8b     destination = {"name": " ",      "region": ""}
+qwen3:8b     destination = {"name": "모든 지역", "region": ""}
+```
+
+마지막 사례가 특히 중요함. `모든 지역`은 gazetteer에 없어 `NOT_FOUND`로 막혔지만,
+실재하는 지명을 넣었다면 확신에 찬 오답이 나왔을 것임. 즉 이 보호는 구조적인 것이
+아니라 우연에 기댄 것이었음.
+
+Prompt로 타이르는 대신 날조 압력 자체를 제거함. 질문이 답하지 않는 조건은
+optional로 두어 정직하게 비울 수 있게 함.
+
+* `OD_TRIP_COUNT`의 `destination`을 optional로 변경.
+  `get_trip_count`는 승차 위치만으로도 집계할 수 있음
+* 장소 내부 통행량(`PLACE_PASSAGE_COUNT`)과 그룹화 없는 영업 통계
+  (`OPERATION_METRIC`) template 추가. 후자가 없어 Planner가 단일 값 질문에도
+  그룹화 template을 고르면서 `dimension: "taxi_type"` 같은 없는 값을 발명했음
+
+도착지가 없는 경우 답변에 그 사실이 드러나도록 함.
+
+```text
+대구 동성로 → 신천동 실차 구간 건수: 2,676건
+대구 동성로 출발 실차 구간 건수: 1,158건
+```
+
+수정 후 `qwen3:8b`, `gemma4:e4b`, `qwen3.8:27b` 모두 12/12이며 기존 셋도 회귀 없음.
+
+측정 한계: 두 평가 셋 모두 정답 template이 하나로 정해지는 질의로 구성됨. 사람도
+판단이 갈리는 질의는 포함되어 있지 않음.
 
 ### 실측 결과
 
@@ -925,9 +978,10 @@ LLM 호출 감소는 model hop마다 다음 Tool을 묻지 않기 때문임. Geo
 
 ### 현재 제한
 
-* template 9개로 `stub_query.yaml`은 모두 처리되지만, 그 밖의 질의 유형
-  (다중 조건 결합, 시계열 bucket/rollup, 순위 질의 등)은 아직 template이 없음.
-  지원하지 않는 질의는 오답 대신 `NO_MATCHING_TEMPLATE`으로 거부함.
+* template 11개로 `stub_query.yaml`과 `stub_query_boundary.yaml`은 모두
+  처리되지만, 그 밖의 질의 유형(다중 조건 결합, 시계열 bucket/rollup, 순위 질의,
+  도착지만 지정한 trip 집계 등)은 아직 template이 없음. 지원하지 않는 질의는
+  오답 대신 `NO_MATCHING_TEMPLATE`으로 거부함.
 * 재계획은 장소 조회 실패에만, 최대 1회 적용됨. 그 밖의 Tool 오류는 재시도 없이
   구조화된 실행 실패를 반환함. ReAct 모드의 재시도 동작은 기존과 동일하게 유지됨.
 * 최종 응답은 코드 기반 format을 사용함. Tool 결과에 없는 수치가 생성되지 않도록

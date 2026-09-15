@@ -43,7 +43,7 @@ from geoflow.executor import (  # noqa: E402
 )
 from geoflow.operator_registry import Operator  # noqa: E402
 from geoflow.pipeline import GeoFlowPipeline, Stage  # noqa: E402
-from geoflow.planner import GeoFlowPlanner  # noqa: E402
+from geoflow.planner import NO_TEMPLATE, GeoFlowPlanner  # noqa: E402
 from geoflow.templates import TemplateRegistry  # noqa: E402
 from geoflow.types import (  # noqa: E402
     ConceptNode,
@@ -125,7 +125,9 @@ class TemplateLoadingTest(unittest.TestCase):
                 "VICINITY_SCOPE_METRIC",
                 "OD_TRIP_COUNT",
                 "GROUPED_AGGREGATE",
+                "OPERATION_METRIC",
                 "DIRECT_SCOPE_PASSAGE_COUNT",
+                "PLACE_PASSAGE_COUNT",
                 "VICINITY_PASSAGE_COUNT",
                 "TRIP_FARE_METRIC",
                 "DRIVE_RATIO_METRIC",
@@ -164,8 +166,43 @@ class TemplateLoadingTest(unittest.TestCase):
     def test_required_slot_is_enforced(self):
         template = self.registry.require("OD_TRIP_COUNT")
         with self.assertRaises(TemplateError) as caught:
-            template.instantiate(OD_QUESTION, {"origin": {"name": "동성로"}})
-        self.assertIn("필수 slot이 없습니다: destination", caught.exception.detail)
+            template.instantiate(
+                OD_QUESTION, {"destination": {"name": "신천동"}},
+            )
+        self.assertIn("필수 slot이 없습니다: origin", caught.exception.detail)
+
+    def test_od_without_destination_drops_dropoff(self):
+        """도착지가 없는 질문은 승차 위치만으로 집계한다.
+
+        destination을 필수로 두면 Planner가 가짜 장소를 지어내 채우려 한다.
+        """
+        template = self.registry.require("OD_TRIP_COUNT")
+        plan = template.instantiate(
+            "동성로동에서 출발한 실차 구간 건수는?",
+            {"origin": {"name": "동성로", "region": "대구"}},
+        )
+        report = validate(
+            plan, available_tools=new_tool_executor().tool_names,
+        )
+        self.assertTrue(report.ok, report.errors)
+        steps = compile_plan(plan).steps
+        self.assertEqual(
+            [step.tool_name for step in steps],
+            ["get_place_scope", "get_trip_count"],
+        )
+        self.assertIn("scope_pickup", steps[-1].arguments)
+        self.assertNotIn("scope_dropoff", steps[-1].arguments)
+        self.assertNotIn("destination_scope", plan.node_ids)
+
+    def test_blank_place_name_is_rejected(self):
+        """Planner가 필수 slot을 공백으로 채우는 경우를 막는다."""
+        template = self.registry.require("OD_TRIP_COUNT")
+        for blank in ("", " ", "\t"):
+            with self.subTest(value=blank):
+                with self.assertRaises(TemplateError):
+                    template.instantiate(
+                        OD_QUESTION, {"origin": {"name": blank}},
+                    )
 
     def test_unknown_slot_is_rejected(self):
         template = self.registry.require("OD_TRIP_COUNT")
@@ -953,18 +990,22 @@ class PlannerAccuracyHarnessTest(unittest.TestCase):
             },
         ))
 
-    def test_every_stub_query_label_is_a_known_template(self):
-        """stub_query.yaml의 expected_template이 registry와 어긋나지 않아야 한다."""
+    def test_every_query_label_is_a_known_template(self):
+        """평가 셋의 expected_template이 registry와 어긋나지 않아야 한다."""
         registry = TemplateRegistry.from_directory()
-        queries = load_queries(ROOT / "stub_query.yaml")
-        self.assertTrue(queries)
-        for item in queries:
-            with self.subTest(query=item["id"]):
-                expected = item.get("expected_template")
-                self.assertIsNotNone(
-                    expected, f"{item['id']}에 expected_template이 없습니다.",
-                )
-                self.assertIn(expected, registry)
+        for name in ("stub_query.yaml", "stub_query_boundary.yaml"):
+            queries = load_queries(ROOT / name)
+            self.assertTrue(queries)
+            for item in queries:
+                with self.subTest(query_file=name, query=item["id"]):
+                    expected = item.get("expected_template")
+                    self.assertIsNotNone(
+                        expected,
+                        f"{item['id']}에 expected_template이 없습니다.",
+                    )
+                    if expected == NO_TEMPLATE:
+                        continue
+                    self.assertIn(expected, registry)
 
 
 class RuntimeIntegrationTest(unittest.TestCase):

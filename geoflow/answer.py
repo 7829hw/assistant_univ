@@ -71,6 +71,10 @@ def _subject(plan, settings):
     destination = _place_text(slots.get("destination"))
     if origin and destination:
         parts.append(f"{origin} → {destination}")
+    elif origin:
+        parts.append(f"{origin} 출발")
+    elif destination:
+        parts.append(f"{destination} 도착")
     else:
         place = _place_text(slots.get("place"))
         if place:
