@@ -11,8 +11,9 @@
 ## Executive Summary
 
 - 업체 제공 13개 질문을 실제 Tool execution trace 기준으로 평가했다.
-- qwen3:8b에서 ReAct 7/13 → GeoFlow 13/13.
-- GeoFlow 3회 반복 39/39 PASS.
+- 모델 5종에서 측정했고, 모든 모델에서 GeoFlow ≥ ReAct였다.
+  예: qwen3:8b는 ReAct 7/13 → GeoFlow 13/13, gemma4:12b는 4/13 → 10/13.
+- qwen3:8b + GeoFlow 3회 반복 39/39 PASS.
 - 이 13문항은 시스템 개선에 사용한 사례와 동일하므로, 결과는 **acceptance /
   regression**이며 held-out 일반화 성능이 아니다.
 - fine-tuning은 수행하지 않았다. 1차에서는 orchestration 구조를 먼저 개선했다.
@@ -52,14 +53,52 @@ After — LLM은 최초 planning에서 template과 slots만 결정한다. 정상
 
 ## 3. 결과
 
-| Model | Mode | Result |
-| --- | --- | --- |
-| qwen3:8b | react | 7 / 13 |
-| qwen3:8b | geoflow | **13 / 13** |
-| qwen3.8:27b | react | 13 / 13 |
-| qwen3.8:27b | geoflow | **13 / 13** |
+모델 5종을 동일 질문·동일 기준으로 측정했다.
 
-반복 재현성 — qwen3:8b + geoflow, 3회 반복
+| Model | 크기 | react | geoflow |
+| --- | ---: | ---: | ---: |
+| qwen3.8:27b | 17.7 GB | 13 / 13 | **13 / 13** |
+| qwen3.5:9b | 6.6 GB | 9 / 13 | 11 / 13 |
+| gemma4:12b | 7.6 GB | 4 / 13 | 10 / 13 |
+| gemma4:e4b | 9.6 GB | 6 / 13 | **13 / 13** |
+| qwen3:8b | 5.2 GB | 7 / 13 | **13 / 13** |
+
+측정한 모든 모델에서 geoflow ≥ react이며, 격차는 react 점수가 낮은 모델일수록
+크다(gemma4:12b 4→10, qwen3:8b 7→13).
+
+### geoflow 실패의 성격
+
+qwen3.5:9b 2건과 gemma4:12b 3건은 **모두 Planner LLM 호출이 응답을 반환하지
+못한 경우**다. 모델이 구조화 출력을 끝내지 못하는 문제다.
+
+```text
+gemma4:12b  q24, q29   Planner 호출이 응답 없음
+gemma4:12b  q22        장소 조회 실패 후 재계획 호출이 응답 없음
+qwen3.5:9b  q26        Planner 호출이 응답 없음
+qwen3.5:9b  q22        장소 조회 실패 후 재계획 호출이 응답 없음
+```
+
+이 실패가 timeout 설정 탓인지 확인하기 위해 chat timeout을 **120초에서 1800초로
+15배 늘려 재실행**했다. 결과는 동일했다.
+
+| Model | chat timeout 120초 | chat timeout 1800초 |
+| --- | ---: | ---: |
+| qwen3.5:9b | 11 / 13 | 11 / 13 |
+| gemma4:12b | 10 / 13 (300초) | 10 / 13 |
+
+같은 질문이 같은 이유로 실패했고, 재실행 내내 GPU는 85~93%로 가동 중이었다.
+즉 연산이 멈춘 것도, 시간이 모자란 것도 아니다. **30분을 기다려도 이 모델들은
+해당 prompt에서 응답을 완성하지 못한다.** 설정을 조정해 해결할 수 있는 문제가
+아니라 모델 특성이다.
+
+즉 geoflow 실패 전체에서 **잘못된 Tool 선택, argument hallucination,
+scope provenance 위반, dependency binding 오류는 0건**이다. 실패 원인은 orchestration 로직이 아니라
+모델이 응답을 생성하지 못한 것이다. 다만 결과 표에는 실패로 그대로 집계했다.
+
+react 실패는 성격이 다르다. 대부분 Tool 순서 오류, 필수 인자 누락,
+dependency binding 오류처럼 **판단 자체가 어긋난 경우**다.
+
+반복 재현성 — qwen3:8b + geoflow, 3회 반복 (최종 검증 run)
 
 ```text
 39 / 39 PASS       (13문항 × 3회, Tool 호출 84회)
@@ -169,9 +208,15 @@ O/D 뒤바뀜                     → DEPENDENCY_BINDING_MISMATCH
   성능이 아니다. 새로운 표현과 unseen 질의에 대한 일반화 성능은 별도 held-out
   평가가 필요하다.
 - **qwen3.8:27b에서는 ReAct도 13/13**이었으므로 ReAct 자체가 이 문제를 항상
-  일으킨다는 의미는 아니다. 다만 qwen3:8b에서는 동일 질문과 판정 기준에서
-  ReAct 7/13, GeoFlow 13/13이었고, GeoFlow가 일부 의사결정을 LLM에서
-  deterministic runtime으로 옮기면서 **모델 선택에 따른 변동성을 줄인 사례**를
+  일으킨다는 의미는 아니다. 다만 그보다 작은 모델 4종에서는 동일 질문과 판정
+  기준에서 ReAct가 4~9/13에 그친 반면 GeoFlow는 10~13/13이었고, GeoFlow가 일부
+  의사결정을 LLM에서 deterministic runtime으로 옮기면서 **모델 선택에 따른
+  변동성을 줄인 사례**를 확인했다.
+- GeoFlow에도 모델 의존성은 남아 있다. qwen3.5:9b와 gemma4:12b에서 발생한 실패
+  5건은 모두 Planner LLM이 응답을 반환하지 못한 경우이며, chat timeout을 15배로
+  늘려 재실행해도 동일했다. Planner가 구조화 JSON을 안정적으로 생성할 수 있는
+  모델이어야 한다는 전제는 그대로다.
+- 모델별 측정은 각 1회 실행 기준이다. 반복 재현성은 qwen3:8b에서만 3회
   확인했다.
 - repair의 region guard는 보수적 정책이다. 최초 Planner가 사용자 발화의 region을
   누락한 경우, repair에서 추가된 정당한 region도 제거될 수 있다.

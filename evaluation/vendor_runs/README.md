@@ -17,6 +17,16 @@ python evaluate_vendor_trace.py --model qwen3.8:27b --agent-mode geoflow
 | `20260915_154431` | `qwen3:8b` | geoflow | **13/13** | 모델을 낮춘 경우 |
 | `20260915_154631` | `qwen3:8b` | react | **7/13** | 업체 보고 오류 재현 |
 | `20260915_160216` | `qwen3:8b` | geoflow | **39/39** | 최종 검증 (3회 반복) |
+| `20260916_162945` | `gemma4:e4b` | geoflow | 13/13 | 모델 비교 |
+| `20260916_163049` | `gemma4:e4b` | react | 6/13 | 모델 비교 |
+| `20260916_163840` | `qwen3.5:9b` | geoflow | 11/13 | 모델 비교 |
+| `20260916_163931` | `qwen3.5:9b` | react | 9/13 | 모델 비교 |
+| `20260916_165615` | `gemma4:12b` | geoflow | 10/13 | 모델 비교 (chat-timeout 300) |
+| `20260916_165747` | `gemma4:12b` | react | 4/13 | 모델 비교 (chat-timeout 300) |
+| `20260916_180034` | `qwen3.8:27b` | react | 13/13 | 독립 재확인 |
+| `20260916_180129` | `qwen3.8:27b` | geoflow | 13/13 | 독립 재확인 |
+| `20260916_191739` | `qwen3.5:9b` | geoflow | 11/13 | timeout 1800초 재실행 |
+| `20260916_204918` | `gemma4:12b` | geoflow | 10/13 | timeout 1800초 재실행 |
 
 ## 최종 검증
 
@@ -66,6 +76,20 @@ GeoFlow는 이 조건들을 프롬프트로 당부하는 대신 구조로 차단
 * 발화에 없는 장소 → 재계획이 새로 만든 상위 지역을 제거
 * 출처 불명 scope → Validator G6와 executor의 known scope 검사
 * `include_vicinity` → template이 고정
+
+## 모델 비교 (2026-09-16 추가)
+
+5종 모두에서 geoflow ≥ react다. geoflow 실패는 모두 Planner LLM이 응답을
+반환하지 못한 경우(`ReadTimeout` 또는 `content` 없음)이며, 잘못된 Tool 선택이나
+argument hallucination은 한 건도 없었다. react 실패는 Tool 순서 오류, 필수 인자
+누락, dependency binding 오류처럼 판단이 어긋난 경우가 대부분이다.
+
+## timeout 재검증
+
+geoflow 실패가 timeout 설정 탓인지 확인하기 위해 chat timeout을 120초에서
+1800초로 15배 늘려 재실행했다(`20260916_191739`, `20260916_204918`).
+점수와 실패 질문이 모두 동일했고 재실행 내내 GPU는 85~93%로 가동 중이었다.
+설정 조정으로 해결되는 문제가 아니라 모델이 생성을 끝내지 못하는 특성이다.
 
 ## 주의
 
