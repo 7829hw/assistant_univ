@@ -1,0 +1,56 @@
+question: 개인용 택시의 요일별 택시 수입 분포는?
+template: GROUPED_AGGREGATE
+geoflow_plan:
+  version: '1.0'
+  question: 개인용 택시의 요일별 택시 수입 분포는?
+  template: GROUPED_AGGREGATE
+  slots:
+    metric: revenue
+    dimension: dayofweek
+    taxi_type: private
+  concepts:
+  - id: measure
+    concept: AMOUNT
+    subtype: revenue
+    role: MEASURE
+    source: tool
+    value: null
+    attributes: {}
+  transformations:
+  - id: operation_metric
+    operator: OPERATION_METRIC
+    inputs: {}
+    outputs:
+    - measure
+    params:
+      metric: revenue
+      dimension: dayofweek
+      taxi_type: private
+  final_node: measure
+validation:
+  status: OK
+  template: GROUPED_AGGREGATE
+  checked_rules:
+  - G1_ACYCLICITY
+  - G2_ROLE_ORDERING
+  - G3_TYPE_COMPATIBILITY
+  - G4_EXECUTABILITY
+  - G5_CONNECTIVITY
+  - G6_SCOPE_PROVENANCE
+  failed_rules: []
+  errors: []
+  topological_order:
+  - operation_metric
+execution_plan:
+  template: GROUPED_AGGREGATE
+  final_node: measure
+  steps:
+  - id: operation_metric
+    operator: OPERATION_METRIC
+    tool_name: get_operation_metrics
+    arguments:
+      metric: revenue
+      dimension: dayofweek
+      taxi_type: private
+    output_bindings:
+      $: measure

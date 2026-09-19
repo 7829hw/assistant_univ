@@ -1,0 +1,65 @@
+# geoflow_templates/vicinity_passage_count.yaml
+# 장소 주변(근처/부근) 영역의 통행량(passage 건수).
+
+name: VICINITY_PASSAGE_COUNT
+description: 장소 주변(근처/부근) 영역을 포함한 통행량(통과 차량 대수)을 센다.
+question_examples:
+  - "부산 초읍동의 어린이대공원 주변의 통행량은?"
+
+required_slots: [place]
+optional_slots: [date, time, taxi_type, taxi_status]
+slot_types:
+  place: place
+  date: date
+  time: time
+  taxi_type:
+    enum: [private, corporate, all]
+  taxi_status:
+    enum: [occupied, vacant, stationary, all]
+
+concepts:
+  - id: place
+    concept: LOCATION
+    subtype: place
+    role: SUBCOND
+    source: user
+    from_slot: place
+  - id: vicinity_scope
+    concept: LOCATION
+    subtype: vicinity_scope
+    role: COND
+    source: tool
+  - id: passage_count
+    concept: AMOUNT
+    subtype: passage_count
+    role: MEASURE
+    source: tool
+
+transformations:
+  - id: resolve_vicinity
+    operator: RESOLVE_PLACE_SCOPE
+    inputs:
+      place_name: {node: place, field: name}
+      place_region: {node: place, field: region}
+    params:
+      include_vicinity: true
+    outputs: [vicinity_scope]
+
+  - id: count_passages
+    operator: PASSAGE_COUNT
+    inputs:
+      area: {node: vicinity_scope}
+    params:
+      date: {slot: date}
+      time: {slot: time}
+      taxi_type: {slot: taxi_type}
+      taxi_status: {slot: taxi_status}
+    outputs: [passage_count]
+
+final_node: passage_count
+
+answer:
+  kind: count
+  label: 통행량
+  unit: 건
+  vicinity: true

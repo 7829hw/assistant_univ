@@ -1,0 +1,92 @@
+# geoflow_templates/operation_metric.yaml
+# 일 단위 영업(operation) 통계의 단일 값. 그룹화하지 않는다.
+# GROUPED_AGGREGATE는 같은 metric의 dimension 분포를 구하는 변형이다.
+# 이 template이 없으면 Planner가 단일 값 질문에도 그룹화 template을 고르면서
+# 없는 dimension을 발명하게 된다.
+
+name: OPERATION_METRIC
+description: >-
+  일 단위 택시 영업(operation) 통계값 하나를 구한다. 요일별·지역별 분포가 아니다.
+  bucket을 지정하면 주·월 단위로 1차 집계한 뒤 rollup으로 하나의 값으로 합친다.
+question_examples:
+  - "개인택시의 평균 수입은?"
+  - "대구 택시의 평균 영업시간은?"
+  - "주 단위로 집계한 택시 수입의 평균은?"
+
+required_slots: [metric]
+optional_slots: [place, taxi_type, date, aggregation, bucket, rollup]
+
+# bucket과 rollup은 반드시 함께 쓰인다. Tool이 INVALID_ARGUMENT로 거절할
+# 조합을 실행 전에 걸러 낸다.
+slot_requires:
+  bucket: [rollup]
+  rollup: [bucket]
+slot_types:
+  place: place
+  metric:
+    enum: [revenue, operating_count, operating_ratio, hours]
+  taxi_type:
+    enum: [private, corporate, all]
+  date: date
+  aggregation:
+    enum: [max, min, sum, avg, med]
+  bucket:
+    enum: [week, month]
+  rollup:
+    enum: [max, min, sum, avg, med]
+
+concepts:
+  - id: place
+    concept: LOCATION
+    subtype: place
+    role: SUBCOND
+    source: user
+    from_slot: place
+    optional: true
+  - id: place_scope
+    concept: LOCATION
+    subtype: scope
+    role: COND
+    source: tool
+    optional: true
+  - id: measure
+    concept: AMOUNT
+    subtype: revenue
+    by_slot:
+      slot: metric
+      cases:
+        revenue: {concept: AMOUNT, subtype: revenue}
+        operating_count: {concept: AMOUNT, subtype: operating_count}
+        hours: {concept: AMOUNT, subtype: hours}
+        operating_ratio: {concept: PROPORTION, subtype: operating_ratio}
+    role: MEASURE
+    source: tool
+
+transformations:
+  - id: resolve_place
+    operator: RESOLVE_PLACE_SCOPE
+    inputs:
+      place_name: {node: place, field: name}
+      place_region: {node: place, field: region}
+    params:
+      include_vicinity: false
+    outputs: [place_scope]
+
+  - id: operation_metric
+    operator: OPERATION_METRIC
+    inputs:
+      area: {node: place_scope}
+    params:
+      metric: {slot: metric}
+      taxi_type: {slot: taxi_type}
+      date: {slot: date}
+      aggregation: {slot: aggregation}
+      bucket: {slot: bucket}
+      rollup: {slot: rollup}
+    outputs: [measure]
+
+final_node: measure
+
+answer:
+  kind: metric
+  label: 영업 통계값

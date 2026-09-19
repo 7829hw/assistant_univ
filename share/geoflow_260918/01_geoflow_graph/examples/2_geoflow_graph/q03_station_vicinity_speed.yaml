@@ -1,0 +1,106 @@
+question: 2026년 5월 30일 오후 12시~1시 동대구역 근처 차량의 평균 운행 속도는?
+template: VICINITY_SCOPE_METRIC
+geoflow_plan:
+  version: '1.0'
+  question: 2026년 5월 30일 오후 12시~1시 동대구역 근처 차량의 평균 운행 속도는?
+  template: VICINITY_SCOPE_METRIC
+  slots:
+    place:
+      name: 동대구역
+      region: ''
+    metric: speed
+    aggregation: avg
+    date: '20260530'
+    time: 120000-130000
+  concepts:
+  - id: place
+    concept: LOCATION
+    subtype: place
+    role: SUBCOND
+    source: user
+    value:
+      name: 동대구역
+      region: ''
+    attributes: {}
+  - id: vicinity_scope
+    concept: LOCATION
+    subtype: vicinity_scope
+    role: COND
+    source: tool
+    value: null
+    attributes: {}
+  - id: measure
+    concept: AMOUNT
+    subtype: speed
+    role: MEASURE
+    source: tool
+    value: null
+    attributes: {}
+  transformations:
+  - id: resolve_vicinity
+    operator: RESOLVE_PLACE_SCOPE
+    inputs:
+      place_name:
+        $ref: place
+        field: name
+      place_region:
+        $ref: place
+        field: region
+    outputs:
+    - vicinity_scope
+    params:
+      include_vicinity: true
+  - id: passage_metric
+    operator: PASSAGE_METRIC
+    inputs:
+      area:
+        $ref: vicinity_scope
+        field: null
+    outputs:
+    - measure
+    params:
+      metric: speed
+      aggregation: avg
+      date: '20260530'
+      time: 120000-130000
+  final_node: measure
+validation:
+  status: OK
+  template: VICINITY_SCOPE_METRIC
+  checked_rules:
+  - G1_ACYCLICITY
+  - G2_ROLE_ORDERING
+  - G3_TYPE_COMPATIBILITY
+  - G4_EXECUTABILITY
+  - G5_CONNECTIVITY
+  - G6_SCOPE_PROVENANCE
+  failed_rules: []
+  errors: []
+  topological_order:
+  - resolve_vicinity
+  - passage_metric
+execution_plan:
+  template: VICINITY_SCOPE_METRIC
+  final_node: measure
+  steps:
+  - id: resolve_vicinity
+    operator: RESOLVE_PLACE_SCOPE
+    tool_name: get_place_scope
+    arguments:
+      name: 동대구역
+      include_vicinity: true
+    output_bindings:
+      scope: vicinity_scope
+  - id: passage_metric
+    operator: PASSAGE_METRIC
+    tool_name: get_passage_metrics
+    arguments:
+      scope:
+        $ref: vicinity_scope
+        field: null
+      metric: speed
+      aggregation: avg
+      date: '20260530'
+      time: 120000-130000
+    output_bindings:
+      $: measure

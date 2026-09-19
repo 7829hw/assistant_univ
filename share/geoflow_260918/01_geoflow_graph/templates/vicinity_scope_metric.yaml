@@ -1,0 +1,69 @@
+# geoflow_templates/vicinity_scope_metric.yaml
+# "근처 / 주변 / 부근" 질문. include_vicinity=true는 template이 고정한다.
+
+name: VICINITY_SCOPE_METRIC
+description: 장소 주변(근처/부근) 영역을 포함한 통행(passage) 통계값을 구한다.
+question_examples:
+  - "2026년 5월 30일 오후 12시에서 1시사이에 동대구역 근처 차량의 평균 운행 속도는?"
+
+required_slots: [place, metric]
+optional_slots: [aggregation, date, time]
+slot_types:
+  place: place
+  metric:
+    enum: [speed, rpm]
+  aggregation:
+    enum: [max, min, sum, avg, med]
+  date: date
+  time: time
+
+concepts:
+  - id: place
+    concept: LOCATION
+    subtype: place
+    role: SUBCOND
+    source: user
+    from_slot: place
+  - id: vicinity_scope
+    concept: LOCATION
+    subtype: vicinity_scope
+    role: COND
+    source: tool
+  - id: measure
+    concept: AMOUNT
+    subtype: speed
+    by_slot:
+      slot: metric
+      cases:
+        speed: {concept: AMOUNT, subtype: speed}
+        rpm: {concept: AMOUNT, subtype: rpm}
+    role: MEASURE
+    source: tool
+
+transformations:
+  - id: resolve_vicinity
+    operator: RESOLVE_PLACE_SCOPE
+    inputs:
+      place_name: {node: place, field: name}
+      place_region: {node: place, field: region}
+    params:
+      include_vicinity: true
+    outputs: [vicinity_scope]
+
+  - id: passage_metric
+    operator: PASSAGE_METRIC
+    inputs:
+      area: {node: vicinity_scope}
+    params:
+      metric: {slot: metric}
+      aggregation: {slot: aggregation}
+      date: {slot: date}
+      time: {slot: time}
+    outputs: [measure]
+
+final_node: measure
+
+answer:
+  kind: metric
+  label: 통행 통계값
+  vicinity: true

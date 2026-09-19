@@ -1,0 +1,117 @@
+question: 대구시의 평균 택시 요금은?
+template: TRIP_FARE_METRIC
+geoflow_plan:
+  version: '1.0'
+  question: 대구시의 평균 택시 요금은?
+  template: TRIP_FARE_METRIC
+  slots:
+    place:
+      name: 대구
+      region: ''
+    aggregation: avg
+  concepts:
+  - id: place
+    concept: LOCATION
+    subtype: place
+    role: SUBCOND
+    source: user
+    value:
+      name: 대구
+      region: ''
+    attributes: {}
+  - id: place_scope
+    concept: LOCATION
+    subtype: scope
+    role: COND
+    source: tool
+    value: null
+    attributes: {}
+  - id: measure
+    concept: AMOUNT
+    subtype: fare
+    role: MEASURE
+    source: tool
+    value: null
+    attributes: {}
+  transformations:
+  - id: resolve_place
+    operator: RESOLVE_PLACE_SCOPE
+    inputs:
+      place_name:
+        $ref: place
+        field: name
+      place_region:
+        $ref: place
+        field: region
+    outputs:
+    - place_scope
+    params:
+      include_vicinity: false
+  - id: trip_metric
+    operator: TRIP_METRIC
+    inputs:
+      area:
+        $ref: place_scope
+        field: null
+    outputs:
+    - measure
+    params:
+      metric: fare
+      aggregation: avg
+  final_node: measure
+validation:
+  status: OK
+  template: TRIP_FARE_METRIC
+  checked_rules:
+  - G1_ACYCLICITY
+  - G2_ROLE_ORDERING
+  - G3_TYPE_COMPATIBILITY
+  - G4_EXECUTABILITY
+  - G5_CONNECTIVITY
+  - G6_SCOPE_PROVENANCE
+  failed_rules: []
+  errors: []
+  topological_order:
+  - resolve_place
+  - trip_metric
+execution_plan:
+  template: TRIP_FARE_METRIC
+  final_node: measure
+  steps:
+  - id: resolve_place
+    operator: RESOLVE_PLACE_SCOPE
+    tool_name: get_place_scope
+    arguments:
+      name: 대구
+      include_vicinity: false
+    output_bindings:
+      scope: place_scope
+  - id: trip_metric
+    operator: TRIP_METRIC
+    tool_name: get_trip_metrics
+    arguments:
+      scope:
+        $ref: place_scope
+        field: null
+      metric: fare
+      aggregation: avg
+    output_bindings:
+      $: measure
+repair:
+  repair_count: 1
+  attempts:
+  - index: 0
+    status: TOOL_ERROR
+    slots:
+      place:
+        name: 대구시
+        region: ''
+      aggregation: avg
+    error: 'Tool 오류(get_place_scope/NOT_FOUND): 일치하는 장소 또는 행정구역을 찾을 수 없습니다.'
+  - index: 1
+    status: OK
+    slots:
+      place:
+        name: 대구
+        region: ''
+      aggregation: avg

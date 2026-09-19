@@ -1,0 +1,68 @@
+# geoflow_templates/place_scope_metric.yaml
+# 장소/지역 내부의 통행 통계값. 주변 영역은 포함하지 않는다.
+
+name: PLACE_SCOPE_METRIC
+description: 장소 또는 지역 범위 내부의 통행(passage) 통계값을 구한다. 주변 영역은 포함하지 않는다.
+question_examples:
+  - "대구 지역내 택시들의 평균 속도는?"
+
+required_slots: [place, metric]
+optional_slots: [aggregation, date, time]
+slot_types:
+  place: place
+  metric:
+    enum: [speed, rpm]
+  aggregation:
+    enum: [max, min, sum, avg, med]
+  date: date
+  time: time
+
+concepts:
+  - id: place
+    concept: LOCATION
+    subtype: place
+    role: SUBCOND
+    source: user
+    from_slot: place
+  - id: place_scope
+    concept: LOCATION
+    subtype: scope
+    role: COND
+    source: tool
+  - id: measure
+    concept: AMOUNT
+    subtype: speed
+    by_slot:
+      slot: metric
+      cases:
+        speed: {concept: AMOUNT, subtype: speed}
+        rpm: {concept: AMOUNT, subtype: rpm}
+    role: MEASURE
+    source: tool
+
+transformations:
+  - id: resolve_place
+    operator: RESOLVE_PLACE_SCOPE
+    inputs:
+      place_name: {node: place, field: name}
+      place_region: {node: place, field: region}
+    params:
+      include_vicinity: false
+    outputs: [place_scope]
+
+  - id: passage_metric
+    operator: PASSAGE_METRIC
+    inputs:
+      area: {node: place_scope}
+    params:
+      metric: {slot: metric}
+      aggregation: {slot: aggregation}
+      date: {slot: date}
+      time: {slot: time}
+    outputs: [measure]
+
+final_node: measure
+
+answer:
+  kind: metric
+  label: 통행 통계값

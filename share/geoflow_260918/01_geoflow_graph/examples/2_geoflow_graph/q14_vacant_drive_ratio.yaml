@@ -1,0 +1,49 @@
+question: 공차로 운행되는 택시 비율은?
+template: DRIVE_RATIO_METRIC
+geoflow_plan:
+  version: '1.0'
+  question: 공차로 운행되는 택시 비율은?
+  template: DRIVE_RATIO_METRIC
+  slots: {}
+  concepts:
+  - id: measure
+    concept: PROPORTION
+    subtype: vacant_ratio
+    role: MEASURE
+    source: tool
+    value: null
+    attributes: {}
+  transformations:
+  - id: drive_metric
+    operator: DRIVE_METRIC
+    inputs: {}
+    outputs:
+    - measure
+    params:
+      metric: vacant_ratio
+  final_node: measure
+validation:
+  status: OK
+  template: DRIVE_RATIO_METRIC
+  checked_rules:
+  - G1_ACYCLICITY
+  - G2_ROLE_ORDERING
+  - G3_TYPE_COMPATIBILITY
+  - G4_EXECUTABILITY
+  - G5_CONNECTIVITY
+  - G6_SCOPE_PROVENANCE
+  failed_rules: []
+  errors: []
+  topological_order:
+  - drive_metric
+execution_plan:
+  template: DRIVE_RATIO_METRIC
+  final_node: measure
+  steps:
+  - id: drive_metric
+    operator: DRIVE_METRIC
+    tool_name: get_drive_metrics
+    arguments:
+      metric: vacant_ratio
+    output_bindings:
+      $: measure
