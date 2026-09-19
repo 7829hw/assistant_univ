@@ -24,6 +24,19 @@ DEFAULT_PLANNER_PROMPT = (
 #: 어떤 template으로도 표현할 수 없을 때 Planner가 쓰는 값.
 NO_TEMPLATE = "NONE"
 
+#: Planner 호출 1회당 총 시도 횟수(최초 호출 + 재시도).
+DEFAULT_MAX_ATTEMPTS = 2
+
+#: 재시도 대상 오류. 생성이 끝나지 않았거나 읽을 수 없는 응답만 해당한다.
+#: 같은 입력이라도 다시 부르면 끝나는 경우가 관측되어 재시도가 의미를 갖는다.
+#: 반대로 template/slot 판단이 어긋난 출력은 다시 불러도 같은 결과이므로
+#: 재시도하지 않고 그대로 올린다.
+RETRYABLE_CODES = frozenset({
+    "PLANNER_CALL_FAILED",
+    "EMPTY_RESPONSE",
+    "OUTPUT_TRUNCATED",
+})
+
 #: 계약에 없지만 모델이 습관적으로 덧붙이는 설명 key. 값은 사용하지 않는다.
 IGNORABLE_KEYS = frozenset({
     "reason", "reasoning", "explanation", "note", "notes", "thought",
@@ -41,6 +54,7 @@ class PlannerOutput:
     raw_text: str = ""
     duration_ms: float = 0.0
     model: str | None = None
+    attempts: int = 1
 
     def to_dict(self):
         return {
@@ -49,6 +63,7 @@ class PlannerOutput:
             "raw_text": self.raw_text,
             "duration_ms": self.duration_ms,
             "model": self.model,
+            "attempts": self.attempts,
         }
 
 
@@ -98,7 +113,11 @@ class GeoFlowPlanner:
         prompt=None,
         model=None,
         repair_instruction=None,
+        max_attempts=DEFAULT_MAX_ATTEMPTS,
     ):
+        if max_attempts < 1:
+            raise ValueError(f"max_attempts는 1 이상이어야 합니다: {max_attempts}")
+        self.max_attempts = max_attempts
         self.client = client
         self.templates = templates
         self.base_prompt = (
@@ -157,6 +176,9 @@ class GeoFlowPlanner:
                 code="REPAIR_CHANGED_TEMPLATE",
                 context={"raw_text": output.raw_text},
             )
+        output.slots = keep_untouched_slots(
+            previous.slots, output.slots, failure.get("slot"),
+        )
         output.slots = drop_invented_regions(previous.slots, output.slots)
         if output.slots == previous.slots:
             raise PlannerError(
@@ -167,7 +189,30 @@ class GeoFlowPlanner:
         return output
 
     def _ask(self, messages):
+        """호출이 응답을 반환하지 못하면 정해진 횟수까지 다시 부른다.
+
+        작은 모델이 thinking 안에서 같은 문장을 반복하다 생성을 끝내지 못하는
+        경우가 관측되었고, 같은 입력이라도 다시 부르면 끝나는 경우가 있다.
+        재시도 대상은 ``RETRYABLE_CODES``로 한정한다.
+        """
         started_at = time.perf_counter()
+        last_error = None
+        for attempt in range(1, self.max_attempts + 1):
+            try:
+                output = self._ask_once(messages)
+            except PlannerError as error:
+                if error.code not in RETRYABLE_CODES:
+                    raise
+                last_error = error
+                continue
+            output.duration_ms = _elapsed_ms(started_at)
+            output.attempts = attempt
+            return output
+        last_error.context["attempts"] = self.max_attempts
+        last_error.context["duration_ms"] = _elapsed_ms(started_at)
+        raise last_error
+
+    def _ask_once(self, messages):
         try:
             # tools를 전달하지 않아 Tool Calling 자체를 불가능하게 만든다.
             body = self.client.chat(messages)
@@ -177,8 +222,8 @@ class GeoFlowPlanner:
                 code="PLANNER_CALL_FAILED",
                 context={"model": self.model},
             ) from error
-        duration_ms = round((time.perf_counter() - started_at) * 1000, 3)
 
+        _reject_truncated(body, self.model)
         text = _response_text(body)
         payload = parse_planner_json(text)
         template_name, slots = self._validate_payload(payload, text)
@@ -186,7 +231,6 @@ class GeoFlowPlanner:
             template=template_name,
             slots=slots,
             raw_text=text,
-            duration_ms=duration_ms,
             model=self.model,
         )
 
@@ -263,6 +307,27 @@ def _fill_instruction(template, values):
     return filled
 
 
+def keep_untouched_slots(previous_slots, repaired_slots, failed_slot):
+    """조회에 실패한 slot 외에는 재계획 결과를 받아들이지 않는다.
+
+    재계획 요청은 접미사를 뗀 이름을 시도하라고 알려 주는데, 모델이 그 규칙을
+    다른 slot에까지 적용해 이미 조회에 성공한 이름을 망가뜨리는 경우가 있다.
+
+        origin "동성로동" → "동성로"   (고쳐야 할 slot. 올바른 수정)
+        destination "신천동" → "신천"  (건드리면 안 되는 slot. 조회가 깨진다)
+
+    고칠 대상은 오류가 난 slot 하나뿐이므로 나머지는 직전 값을 그대로 둔다.
+    어느 slot이 실패했는지 알 수 없을 때만 재계획 결과를 그대로 받는다.
+    """
+    if failed_slot not in previous_slots:
+        return dict(repaired_slots)
+    kept = dict(previous_slots)
+    kept[failed_slot] = repaired_slots.get(
+        failed_slot, previous_slots[failed_slot],
+    )
+    return kept
+
+
 def drop_invented_regions(previous_slots, repaired_slots):
     """재계획이 새로 만들어낸 상위 지역을 제거한다.
 
@@ -290,6 +355,26 @@ def drop_invented_regions(previous_slots, repaired_slots):
             value = {**value, "region": ""}
         sanitized[name] = value
     return sanitized
+
+
+def _elapsed_ms(started_at):
+    return round((time.perf_counter() - started_at) * 1000, 3)
+
+
+def _reject_truncated(body, model):
+    """생성 상한(num_predict)에 걸려 잘린 응답을 재시도 대상으로 올린다.
+
+    잘린 본문은 JSON으로 읽히더라도 계획으로 신뢰할 수 없다.
+    """
+    if not isinstance(body, dict):
+        return
+    if body.get("done_reason") != "length":
+        return
+    raise PlannerError(
+        "Planner 응답이 생성 상한에서 잘렸습니다.",
+        code="OUTPUT_TRUNCATED",
+        context={"model": model, "eval_count": body.get("eval_count")},
+    )
 
 
 def _response_text(body):

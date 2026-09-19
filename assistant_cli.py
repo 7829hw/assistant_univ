@@ -25,7 +25,14 @@ from query_loader import (
     load_queries,
     select_queries,
 )
-from ollama_client import DEFAULT_CHAT_TIMEOUT, OllamaClient, resolve_chat_timeout
+from ollama_client import (
+    DEFAULT_CHAT_TIMEOUT,
+    THINK_CHOICES,
+    OllamaClient,
+    chat_options,
+    resolve_chat_timeout,
+    resolve_think,
+)
 from tool_executor import ToolExecutor
 from tool_handlers import (
     DEFAULT_TOOL_PROVIDER,
@@ -57,7 +64,8 @@ RESULT_METADATA_KEYS = {
 
 verbose = None
 
-def configure_ollama_client(host, model, chat_timeout=None):
+def configure_ollama_client(host, model, chat_timeout=None, think=None,
+                           num_predict=None):
     """CLI/환경변수로 확정된 설정을 모든 실행 경로에 적용한다."""
     global OLLAMA_HOST, MODEL_NAME, CHAT_TIMEOUT, OLLAMA_CLIENT
     OLLAMA_HOST = host.rstrip("/")
@@ -66,8 +74,9 @@ def configure_ollama_client(host, model, chat_timeout=None):
     OLLAMA_CLIENT = OllamaClient(
         OLLAMA_HOST,
         MODEL_NAME,
-        dict(OLLAMA_OPTIONS),
+        chat_options(OLLAMA_OPTIONS, num_predict),
         chat_timeout=CHAT_TIMEOUT,
+        think=think,
     )
     return OLLAMA_CLIENT
 
@@ -931,6 +940,20 @@ def parse_args(argv=None):
         choices=("full", "short"),
         help="model thinking 출력 수준",
     )
+    parser.add_argument(
+        "--model-think",
+        choices=THINK_CHOICES,
+        default="auto",
+        help=(
+            "모델 thinking 사용 여부. auto=모델 기본값, on/off=명시 지정"
+            "(기본: auto). --verbose는 출력 수준이고 이것은 모델 동작이다."
+        ),
+    )
+    parser.add_argument(
+        "--num-predict",
+        type=positive_int,
+        help="model 응답 1회의 생성 토큰 상한(기본: 모델 기본값)",
+    )
     args = parser.parse_args(argv)
     if not args.list_models and args.query is None and args.query_file is None:
         parser.error("--query 또는 --query-file 중 하나가 필요합니다.")
@@ -977,10 +1000,14 @@ def main(argv=None):
         args.ollama_host,
         args.model,
         args.chat_timeout,
+        think=resolve_think(args.model_think),
+        num_predict=args.num_predict,
     )
     print(
         f"설정 — 모델: {MODEL_NAME} / 주소: {OLLAMA_HOST} "
-        f"/ chat timeout: {CHAT_TIMEOUT:g}초 / agent mode: {AGENT_MODE}"
+        f"/ chat timeout: {CHAT_TIMEOUT:g}초 / agent mode: {AGENT_MODE} "
+        f"/ think: {args.model_think} "
+        f"/ num_predict: {args.num_predict or '모델 기본값'}"
     )
     check_ollama_connection()
     try:

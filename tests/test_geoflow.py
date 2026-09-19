@@ -25,6 +25,8 @@ from build import build  # noqa: E402
 from evaluate_planner import check_slot_roles  # noqa: E402
 from query_loader import load_queries  # noqa: E402
 from tool_executor import ToolExecutor  # noqa: E402
+from mock_responses import mock_get_place_scope  # noqa: E402
+from ollama_client import OllamaClient, chat_options, resolve_think  # noqa: E402
 from tool_handlers import get_tool_handlers  # noqa: E402
 
 from geoflow.answer import format_answer  # noqa: E402
@@ -50,6 +52,8 @@ from geoflow.pipeline import (  # noqa: E402
     Stage,
 )
 from geoflow.planner import (  # noqa: E402
+    DEFAULT_MAX_ATTEMPTS,
+    DEFAULT_PLANNER_PROMPT,
     NO_TEMPLATE,
     GeoFlowPlanner,
     drop_invented_regions,
@@ -102,7 +106,11 @@ class ScriptedClient:
         self.calls.append({"messages": messages, "tools": tools})
         if not self.responses:
             raise AssertionError("준비된 응답보다 많은 chat 호출이 발생했습니다.")
-        return self.responses.pop(0)
+        response = self.responses.pop(0)
+        # 각본에 예외를 넣으면 무응답·연결 실패를 그대로 재현할 수 있다.
+        if isinstance(response, Exception):
+            raise response
+        return response
 
 
 def planner_response(payload):
@@ -816,6 +824,184 @@ class PlannerTest(unittest.TestCase):
         self.assertEqual(caught.exception.code, "NO_MATCHING_TEMPLATE")
 
 
+class PlannerRetryTest(unittest.TestCase):
+    """응답을 반환하지 못한 호출만 다시 부른다.
+
+    작은 모델이 thinking 안에서 같은 문장을 반복하다 생성을 끝내지 못하는
+    경우가 있고, 같은 입력이라도 다시 부르면 끝나는 경우가 관측되었다.
+    반대로 template/slot 판단이 어긋난 출력은 다시 불러도 같으므로 재시도
+    대상이 아니다.
+    """
+
+    def setUp(self):
+        self.registry = TemplateRegistry.from_directory()
+
+    def _planner(self, responses, **kwargs):
+        return GeoFlowPlanner(
+            client=ScriptedClient(responses),
+            templates=self.registry,
+            **kwargs,
+        )
+
+    def _valid_response(self):
+        return planner_response({"template": "OD_TRIP_COUNT", "slots": OD_SLOTS})
+
+    def test_unanswered_call_is_retried(self):
+        planner = self._planner([
+            TimeoutError("timed out"),
+            self._valid_response(),
+        ])
+        output = planner.plan(OD_QUESTION)
+        self.assertEqual(output.template, "OD_TRIP_COUNT")
+        self.assertEqual(output.attempts, 2)
+        self.assertEqual(len(planner.client.calls), 2)
+
+    def test_retry_count_is_bounded(self):
+        planner = self._planner(
+            [TimeoutError("timed out")] * DEFAULT_MAX_ATTEMPTS,
+        )
+        with self.assertRaises(PlannerError) as caught:
+            planner.plan(OD_QUESTION)
+        self.assertEqual(caught.exception.code, "PLANNER_CALL_FAILED")
+        self.assertEqual(len(planner.client.calls), DEFAULT_MAX_ATTEMPTS)
+        self.assertEqual(
+            caught.exception.context["attempts"], DEFAULT_MAX_ATTEMPTS,
+        )
+
+    def test_empty_response_is_retried(self):
+        planner = self._planner([{"message": {}}, self._valid_response()])
+        self.assertEqual(planner.plan(OD_QUESTION).attempts, 2)
+
+    def test_truncated_response_is_retried(self):
+        """생성 상한에 걸려 잘린 응답은 읽히더라도 계획으로 쓰지 않는다."""
+        planner = self._planner([
+            {"message": {"content": '{"template": "OD_TRIP_COUNT", "slots"'},
+             "done_reason": "length"},
+            self._valid_response(),
+        ])
+        self.assertEqual(planner.plan(OD_QUESTION).attempts, 2)
+
+    def test_truncation_without_retry_is_reported(self):
+        planner = self._planner(
+            [{"message": {"content": "{}"}, "done_reason": "length"}],
+            max_attempts=1,
+        )
+        with self.assertRaises(PlannerError) as caught:
+            planner.plan(OD_QUESTION)
+        self.assertEqual(caught.exception.code, "OUTPUT_TRUNCATED")
+
+    def test_judgment_error_is_not_retried(self):
+        planner = self._planner([
+            {"message": {"content": "답을 모르겠습니다."}},
+            self._valid_response(),
+        ])
+        with self.assertRaises(PlannerError) as caught:
+            planner.plan(OD_QUESTION)
+        self.assertEqual(caught.exception.code, "JSON_NOT_FOUND")
+        self.assertEqual(len(planner.client.calls), 1)
+
+    def test_retry_is_configurable(self):
+        with self.assertRaises(ValueError):
+            self._planner([], max_attempts=0)
+
+
+class FakeResponse:
+    status_code = 200
+
+    def __init__(self, body):
+        self._body = body
+
+    def json(self):
+        return self._body
+
+
+class FakeHttp:
+    """payload만 받아 두는 httpx 대역."""
+
+    def __init__(self):
+        self.payloads = []
+
+    def post(self, url, json=None, timeout=None):
+        self.payloads.append(json)
+        return FakeResponse({"message": {"content": "{}"}})
+
+
+class ChatPayloadTest(unittest.TestCase):
+    """think/num_predict는 지정했을 때만 요청에 들어간다."""
+
+    def _client(self, **kwargs):
+        http = FakeHttp()
+        client = OllamaClient(
+            "http://localhost:11434", "test-model", {"temperature": 0},
+            http_client=http, **kwargs,
+        )
+        return client, http
+
+    def test_think_is_absent_by_default(self):
+        client, http = self._client()
+        client.chat([{"role": "user", "content": "안녕"}])
+        self.assertNotIn("think", http.payloads[0])
+
+    def test_think_off_is_sent(self):
+        client, http = self._client(think=False)
+        client.chat([{"role": "user", "content": "안녕"}])
+        self.assertIs(http.payloads[0]["think"], False)
+
+    def test_num_predict_is_sent_as_option(self):
+        client, http = self._client()
+        client.options = chat_options({"temperature": 0}, 2048)
+        client.chat([{"role": "user", "content": "안녕"}])
+        self.assertEqual(http.payloads[0]["options"]["num_predict"], 2048)
+
+    def test_chat_options_keeps_base_when_unset(self):
+        self.assertEqual(chat_options({"temperature": 0}), {"temperature": 0})
+        with self.assertRaises(ValueError):
+            chat_options({}, 0)
+
+    def test_resolve_think_choices(self):
+        self.assertIsNone(resolve_think("auto"))
+        self.assertIs(resolve_think("on"), True)
+        self.assertIs(resolve_think("off"), False)
+
+
+class PlannerPromptExampleTest(unittest.TestCase):
+    """출력 예시의 장소명은 실제로 조회되는 이름이어야 한다.
+
+    조회에 실패하는 이름을 정답 예시로 보여 주면, 그 값으로 조회가 깨졌을 때
+    재계획 요청과 예시가 충돌해 Planner가 결론을 내지 못한다.
+    """
+
+    def test_output_format_example_places_resolve(self):
+        import re
+
+        import yaml
+
+        document = yaml.safe_load(
+            Path(DEFAULT_PLANNER_PROMPT).read_text(encoding="utf-8")
+        )
+        examples = document["sections"]["output_format"]
+        places = re.findall(
+            r'\{"name": "([^"]+)", "region": "([^"]*)"\}', examples,
+        )
+        self.assertTrue(places, "출력 예시에서 장소 slot을 찾지 못했습니다.")
+        for name, region in places:
+            with self.subTest(name=name, region=region):
+                result = mock_get_place_scope({"name": name, "region": region})
+                self.assertNotIsInstance(
+                    result, dict,
+                    f"예시 장소가 조회되지 않습니다: {name} / {region}",
+                )
+
+    def test_repair_instruction_covers_dong_suffix(self):
+        """"동"이 접미사 목록에 없으면 재계획이 결론을 내지 못한다."""
+        planner = GeoFlowPlanner(
+            client=ScriptedClient([]),
+            templates=TemplateRegistry.from_directory(),
+        )
+        for suffix in ("시", "군", "구", "동", "길", "로"):
+            self.assertIn(f'"{suffix}"', planner.repair_instruction)
+
+
 class PipelineScenarioTest(unittest.TestCase):
     """stub_query.yaml 기준 필수 시나리오."""
 
@@ -1132,7 +1318,8 @@ class RepairTest(unittest.TestCase):
                 "template": "TRIP_FARE_METRIC",
                 "slots": {"place": {"name": "대구시", "region": ""}},
             }),
-            {"message": {}},  # content 없음 → 재계획 호출 실패
+            # content 없음. 재시도 횟수만큼 반복되고 나서야 실패로 확정된다.
+            *[{"message": {}}] * DEFAULT_MAX_ATTEMPTS,
         ])
         pipeline = GeoFlowPipeline.create(
             client=client, tool_executor=new_tool_executor(),
@@ -1144,6 +1331,33 @@ class RepairTest(unittest.TestCase):
             ["TOOL_ERROR", STATUS_REPAIR_FAILED],
         )
         self.assertIn("content", run.attempts[-1]["error"]["detail"])
+        self.assertEqual(
+            run.attempts[-1]["error"]["context"]["attempts"],
+            DEFAULT_MAX_ATTEMPTS,
+        )
+
+    def test_repair_keeps_slots_other_than_the_failed_one(self):
+        """접미사 제거 규칙이 성공한 slot까지 망가뜨리지 못하게 한다.
+
+        재계획이 origin을 고치면서 destination "신천동"을 "신천"으로 함께
+        줄이는 경우가 관측되었다. 고칠 대상은 오류가 난 slot 하나뿐이다.
+        """
+        pipeline, _client = new_pipeline([
+            {"template": "OD_TRIP_COUNT",
+             "slots": {"origin": {"name": "동성로동", "region": "대구"},
+                       "destination": {"name": "신천동", "region": ""}}},
+            {"template": "OD_TRIP_COUNT",
+             "slots": {"origin": {"name": "동성로", "region": "대구"},
+                       "destination": {"name": "신천", "region": ""}}},
+        ])
+        run = pipeline.run(OD_QUESTION)
+        self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
+        self.assertEqual(run.slots["origin"]["name"], "동성로")
+        self.assertEqual(run.slots["destination"]["name"], "신천동")
+        self.assertEqual(
+            analysis_tools(run.hop_log)[-3:],
+            ["get_place_scope", "get_place_scope", "get_trip_count"],
+        )
 
     def test_repair_rejects_template_switch(self):
         pipeline, _client = new_pipeline([

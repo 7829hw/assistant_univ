@@ -23,7 +23,13 @@ from build import build
 from geoflow.errors import GeoFlowError
 from geoflow.planner import NO_TEMPLATE, GeoFlowPlanner
 from geoflow.templates import TemplateRegistry
-from ollama_client import OllamaClient, resolve_chat_timeout
+from ollama_client import (
+    THINK_CHOICES,
+    OllamaClient,
+    chat_options,
+    resolve_chat_timeout,
+    resolve_think,
+)
 from query_loader import QueryValidationError, load_queries
 from tool_executor import ToolExecutor
 from tool_handlers import get_tool_handlers
@@ -71,10 +77,15 @@ def check_slot_roles(question, slots):
     return None
 
 
-def evaluate_model(model, queries, *, host, chat_timeout, repeat, verbose):
+def evaluate_model(model, queries, *, host, chat_timeout, repeat, verbose,
+                   think=None, num_predict=None):
     """모델 하나로 전체 Query의 template 선택을 측정한다."""
     client = OllamaClient(
-        host, model, dict(OLLAMA_OPTIONS), chat_timeout=chat_timeout,
+        host,
+        model,
+        chat_options(OLLAMA_OPTIONS, num_predict),
+        chat_timeout=chat_timeout,
+        think=think,
     )
     planner = GeoFlowPlanner(
         client=client, templates=TemplateRegistry.from_directory(),
@@ -252,6 +263,18 @@ def parse_args(argv=None):
     parser.add_argument("--query-file", default=str(BASE_DIR / "stub_query.yaml"))
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--chat-timeout", type=float, default=None)
+    parser.add_argument(
+        "--model-think",
+        choices=THINK_CHOICES,
+        default="auto",
+        help="모델 thinking 사용 여부(기본: auto=모델 기본값)",
+    )
+    parser.add_argument(
+        "--num-predict",
+        type=int,
+        default=None,
+        help="Planner 응답 1회의 생성 토큰 상한(기본: 모델 기본값)",
+    )
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument(
         "--aggregate",
@@ -322,6 +345,8 @@ def main(argv=None):
             chat_timeout=chat_timeout,
             repeat=args.repeat,
             verbose=not args.quiet,
+            think=resolve_think(args.model_think),
+            num_predict=args.num_predict,
         )
         results[model] = {
             "records": records,

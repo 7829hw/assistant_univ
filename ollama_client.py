@@ -61,6 +61,32 @@ def resolve_chat_timeout(explicit=None, environ=None):
     return timeout
 
 
+#: ``--model-think`` 선택지. auto는 payload에 think를 넣지 않는다는 뜻이다.
+THINK_CHOICES = ("auto", "on", "off")
+
+_THINK_BY_CHOICE = {"auto": None, "on": True, "off": False}
+
+
+def resolve_think(choice):
+    """CLI 선택값을 ``/api/chat``의 ``think`` 값으로 바꾼다."""
+    if choice is None:
+        return None
+    try:
+        return _THINK_BY_CHOICE[choice]
+    except KeyError as error:
+        raise ValueError(f"Invalid think: {choice}") from error
+
+
+def chat_options(base, num_predict=None):
+    """기본 options에 생성 상한을 얹는다. 지정하지 않으면 그대로 둔다."""
+    options = dict(base or {})
+    if num_predict is not None:
+        if num_predict < 1:
+            raise ValueError(f"num_predict는 1 이상이어야 합니다: {num_predict}")
+        options["num_predict"] = num_predict
+    return options
+
+
 def _redact_sensitive(value):
     """오류 body에 혹시 포함된 인증정보성 필드를 출력 전에 가린다."""
     if isinstance(value, dict):
@@ -104,12 +130,15 @@ class OllamaClient:
         options=None,
         http_client=None,
         chat_timeout=None,
+        think=None,
     ):
         self.host = host.rstrip("/")
         self.model = model
         self.options = dict(options or {})
         self._http = http_client or httpx
         self.chat_timeout = resolve_chat_timeout(chat_timeout)
+        #: None이면 payload에 넣지 않고 모델 기본 동작을 따른다.
+        self.think = think
         self._model_info = None
 
     def _check_response(self, response):
@@ -154,6 +183,7 @@ class OllamaClient:
 
         ``tools=None``이면 payload에 ``tools`` key 자체를 넣지 않는다. 따라서
         native Tool Calling 미지원 모델도 일반 chat 요청을 받을 수 있다.
+        ``think``도 같은 방식으로, 지정한 경우에만 payload에 넣는다.
         """
         payload = {
             "model": self.model,
@@ -163,6 +193,8 @@ class OllamaClient:
         }
         if tools is not None:
             payload["tools"] = tools
+        if self.think is not None:
+            payload["think"] = self.think
 
         response = self._http.post(
             f"{self.host}/api/chat",
