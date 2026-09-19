@@ -27,6 +27,9 @@ python evaluate_vendor_trace.py --model qwen3.8:27b --agent-mode geoflow
 | `20260916_180129` | `qwen3.8:27b` | geoflow | 13/13 | 독립 재확인 |
 | `20260916_191739` | `qwen3.5:9b` | geoflow | 11/13 | timeout 1800초 재실행 |
 | `20260916_204918` | `gemma4:12b` | geoflow | 10/13 | timeout 1800초 재실행 |
+| `20260918_231241` | `qwen3.5:9b` | geoflow | 11/13 | 실패 원인 확정 (attempt 기록 추가 후) |
+| `20260918_232957` | `gemma4:12b` | geoflow | 10/13 | 실패 원인 확정 (attempt 기록 추가 후) |
+| `20260919_001526` | `qwen3.8:27b` | geoflow | 13/13 | 업체 공유용 GeoFlow Graph 확보 |
 
 ## 최종 검증
 
@@ -83,6 +86,49 @@ GeoFlow는 이 조건들을 프롬프트로 당부하는 대신 구조로 차단
 반환하지 못한 경우(`ReadTimeout` 또는 `content` 없음)이며, 잘못된 Tool 선택이나
 argument hallucination은 한 건도 없었다. react 실패는 Tool 순서 오류, 필수 인자
 누락, dependency binding 오류처럼 판단이 어긋난 경우가 대부분이다.
+
+## geoflow 실패 원인 확정 (2026-09-18 추가)
+
+geoflow 실패 5건 중 q22 2건은 `runtime_error`가 `get_place_scope/NOT_FOUND`로
+남아, 기록만 보면 Planner 무응답인지 장소 조회가 잘못된 것인지 구분되지 않았다.
+첫 조회 실패 뒤의 재계획 경과가 저장되지 않았기 때문이다.
+
+`GeoFlowPipeline`이 재계획 실패를 `run.attempts`에 남기도록 고치고
+(`repair_failed` / `repair_skipped`), `evaluate_vendor_trace.py`가 이를 저장·
+출력하도록 한 뒤 두 모델을 재실행했다. 점수와 실패 질문은 이전과 동일하다.
+
+```text
+qwen3.5:9b  q22   attempt 0  Tool 오류로 실행 실패  (동성로동 NOT_FOUND)
+                  attempt 1  재계획 호출 실패       PLANNER_CALL_FAILED / ReadTimeout
+gemma4:12b  q22   attempt 0  Tool 오류로 실행 실패  (동성로동 NOT_FOUND)
+                  attempt 1  재계획 호출 실패       PLANNER_CALL_FAILED / ReadTimeout
+```
+
+나머지 3건(`qwen3.5:9b` q26, `gemma4:12b` q24·q29)은 최초 Planner 호출이 실패해
+attempt 자체가 없다.
+
+즉 geoflow 실패 5건은 전부 Planner LLM 호출이 응답을 반환하지 못한 경우이며,
+q22는 그 호출이 최초 계획이 아니라 **재계획**이었을 뿐이다. 재계획이 잘못된
+장소로 재조회를 시도한 경우는 한 건도 없다.
+
+세 경우는 `attempts`의 `status`로 구분된다.
+
+| status | 의미 |
+| --- | --- |
+| `repair_failed` | 재계획 호출 자체가 실패 (무응답, template 변경, slot 동일 등) |
+| `template` / `validation` / `compile` | 재계획 **결과**가 해당 단계에서 탈락 |
+| `repair_skipped` | 재계획을 시도하지 않음 (대상 아님 / 횟수 소진) |
+
+## GeoFlow Graph 기록 (2026-09-18 추가)
+
+`evaluate_vendor_trace.py`가 질문마다 실제로 만들어진 Graph를 record의
+`geoflow_graph`에 남긴다(`planner_output` / `geoflow_plan` / `validation` /
+`execution_plan`). 판정에는 쓰지 않는다.
+
+`20260919_001526`(`qwen3.8:27b`, 13/13)이 이 기록을 가진 첫 실행이며, 업체
+공유용 Graph 파일(`share/geoflow_260918/01_geoflow_graph/examples/`)의 출처다.
+재계획이 일어난 질문은 **끝까지 실행된 Graph**가 남으므로, q22의 origin slot은
+`동성로동`이 아니라 재계획 후의 `동성로`다.
 
 ## timeout 재검증
 

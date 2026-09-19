@@ -78,6 +78,13 @@ qwen3.5:9b  q26        Planner 호출이 응답 없음
 qwen3.5:9b  q22        장소 조회 실패 후 재계획 호출이 응답 없음
 ```
 
+q22 2건은 실행 기록의 `runtime_error`가 `get_place_scope/NOT_FOUND`로만 남아
+있어, 재계획 호출이 실패한 것인지 재계획 결과가 검증에서 탈락한 것인지 구분되지
+않았다. 재계획 경과를 `run.attempts`에 남기도록 고친 뒤 두 모델을 재실행해
+원인을 확정했다(`20260918_231241`, `20260918_232957`). 점수와 실패 질문은
+동일했고, 두 모델 모두 `repair_failed / PLANNER_CALL_FAILED: ReadTimeout`이다.
+재계획이 잘못된 장소로 재조회를 시도한 경우는 없다.
+
 이 실패가 timeout 설정 탓인지 확인하기 위해 chat timeout을 **120초에서 1800초로
 15배 늘려 재실행**했다. 결과는 동일했다.
 
@@ -213,9 +220,9 @@ O/D 뒤바뀜                     → DEPENDENCY_BINDING_MISMATCH
   의사결정을 LLM에서 deterministic runtime으로 옮기면서 **모델 선택에 따른
   변동성을 줄인 사례**를 확인했다.
 - GeoFlow에도 모델 의존성은 남아 있다. qwen3.5:9b와 gemma4:12b에서 발생한 실패
-  5건은 모두 Planner LLM이 응답을 반환하지 못한 경우이며, chat timeout을 15배로
-  늘려 재실행해도 동일했다. Planner가 구조화 JSON을 안정적으로 생성할 수 있는
-  모델이어야 한다는 전제는 그대로다.
+  5건은 모두 Planner LLM이 응답을 반환하지 못한 경우이며(2026-09-18 재실행에서
+  attempt 단위로 확인), chat timeout을 15배로 늘려 재실행해도 동일했다. Planner가
+  구조화 JSON을 안정적으로 생성할 수 있는 모델이어야 한다는 전제는 그대로다.
 - 모델별 측정은 각 1회 실행 기준이다. 반복 재현성은 qwen3:8b에서만 3회
   확인했다.
 - repair의 region guard는 보수적 정책이다. 최초 Planner가 사용자 발화의 region을
