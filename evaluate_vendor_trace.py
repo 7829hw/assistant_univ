@@ -24,7 +24,11 @@ from assistant_runtime import (
 )
 from build import build
 from geoflow.errors import GeoFlowError
-from geoflow.pipeline import GeoFlowPipeline
+from geoflow.pipeline import (
+    STATUS_REPAIR_FAILED,
+    STATUS_REPAIR_SKIPPED,
+    GeoFlowPipeline,
+)
 from ollama_client import OllamaClient, resolve_chat_timeout
 from query_loader import QueryValidationError, load_queries
 from tool_executor import ToolExecutor
@@ -43,6 +47,16 @@ DEFAULT_QUERY_FILE = VENDOR_DIR / "vendor_queries.yaml"
 DEFAULT_OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_OPTIONS = {"temperature": 0}
 MAX_TOOL_HOPS = 10
+
+#: attempt status를 리포트 문구로 옮긴다. 그 밖의 값은 실패 단계 이름이며,
+#: 재계획 결과가 template/validation/compile에서 탈락한 경우에 해당한다.
+ATTEMPT_STATUS_LABEL = {
+    "OK": "실행 성공",
+    "TOOL_ERROR": "Tool 오류로 실행 실패",
+    "EXECUTOR_ERROR": "실행기 오류로 실행 실패",
+    STATUS_REPAIR_FAILED: "재계획 호출 실패",
+    STATUS_REPAIR_SKIPPED: "재계획 미시도",
+}
 
 
 def _now_local():
@@ -134,6 +148,14 @@ def evaluate(queries, gold, *, model, host, chat_timeout, agent_mode,
                 "final_answer": result.get("final_answer"),
                 "runtime_error": result.get("runtime_error"),
                 "template": (result.get("geoflow") or {}).get("template"),
+                # 재계획이 없었던 이유(호출 실패 / 검증 탈락 / 미시도)는 Tool
+                # trace만으로는 구분되지 않으므로 attempt 기록을 함께 남긴다.
+                "repair_count": (result.get("geoflow") or {}).get(
+                    "repair_count",
+                ),
+                "attempts": (result.get("geoflow") or {}).get("attempts") or [],
+                # 판정에는 쓰지 않지만, 어떤 Graph가 만들어졌는지 남긴다.
+                "geoflow_graph": _geoflow_graph(result.get("geoflow")),
             }
             records.append(record)
             mark = "PASS" if record["passed"] else "FAIL"
@@ -144,6 +166,26 @@ def evaluate(queries, gold, *, model, host, chat_timeout, agent_mode,
                 for problem in problems:
                     print(f"     !  [{problem['category']}] {problem['message']}")
     return records
+
+
+def _geoflow_graph(geoflow):
+    """실행에 실제로 쓰인 GeoFlow Graph를 판정 기록과 함께 남긴다.
+
+    Planner 출력 → Plan → 검증 → 실행 계획 순서로 둔다. geoflow mode가 아니거나
+    Planner 단계에서 중단된 질문은 남길 Graph가 없다.
+    """
+    if not geoflow or not geoflow.get("plan"):
+        return None
+    planner = geoflow.get("planner") or {}
+    return {
+        "planner_output": {
+            "template": geoflow.get("template"),
+            "slots": planner.get("slots", geoflow.get("slots")),
+        },
+        "geoflow_plan": geoflow["plan"],
+        "validation": geoflow.get("validation"),
+        "execution_plan": geoflow.get("execution_plan"),
+    }
 
 
 def write_report(path, records, *, model, agent_mode, timestamp):
@@ -204,7 +246,36 @@ def write_report(path, records, *, model, agent_mode, timestamp):
         ])
         if record["runtime_error"]:
             lines.extend([f"**Runtime error**: {record['runtime_error']}", ""])
+        lines.extend(_attempt_lines(record))
     Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _attempt_lines(record):
+    """재계획 경과를 리포트에 남긴다. 실패 원인 구분의 근거가 된다."""
+    attempts = record.get("attempts") or []
+    if len(attempts) < 2 and not record.get("repair_count"):
+        return []
+    lines = [
+        f"**재계획**: {record.get('repair_count') or 0}회",
+        "",
+        "```text",
+    ]
+    for attempt in attempts:
+        label = ATTEMPT_STATUS_LABEL.get(
+            attempt.get("status"), attempt.get("status") or "?",
+        )
+        detail = attempt.get("reason") or (
+            (attempt.get("error") or {}).get("detail") or ""
+        )
+        slots = attempt.get("slots")
+        parts = [f"attempt {attempt.get('index')}", label]
+        if slots is not None:
+            parts.append(f"slots={slots}")
+        if detail:
+            parts.append(detail)
+        lines.append("  ".join(str(part) for part in parts))
+    lines.extend(["```", ""])
+    return lines
 
 
 def parse_args(argv=None):

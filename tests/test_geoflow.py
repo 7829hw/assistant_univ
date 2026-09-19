@@ -43,7 +43,12 @@ from geoflow.executor import (  # noqa: E402
     resolve_refs,
 )
 from geoflow.operator_registry import Operator  # noqa: E402
-from geoflow.pipeline import GeoFlowPipeline, Stage  # noqa: E402
+from geoflow.pipeline import (  # noqa: E402
+    STATUS_REPAIR_FAILED,
+    STATUS_REPAIR_SKIPPED,
+    GeoFlowPipeline,
+    Stage,
+)
 from geoflow.planner import (  # noqa: E402
     NO_TEMPLATE,
     GeoFlowPlanner,
@@ -1099,6 +1104,8 @@ class RepairTest(unittest.TestCase):
         self.assertEqual(run.repair_count, 1)
         self.assertEqual(len(client.calls), 2)
         self.assertIsNotNone(run.runtime_error)
+        # 재계획을 이미 한 번 썼으므로 두 번째 실패는 '미시도'로 끝난다.
+        self.assertEqual(run.attempts[-1]["status"], STATUS_REPAIR_SKIPPED)
 
     def test_repair_output_still_passes_every_guard(self):
         """재계획이 지어낸 scope를 넣어도 validation이 막는다."""
@@ -1114,6 +1121,30 @@ class RepairTest(unittest.TestCase):
         self.assertIsNotNone(run.runtime_error)
         self.assertEqual(run.attempts[-1]["status"], "template")
 
+    def test_repair_call_failure_is_distinguishable(self):
+        """재계획 호출 실패와 재계획 결과 탈락을 기록에서 구분한다.
+
+        Tool trace만 보면 둘 다 "첫 조회 실패 후 아무 호출도 없음"으로 같아
+        보인다. 모델별 실패 원인을 나중에 판별하려면 attempt 기록이 필요하다.
+        """
+        client = ScriptedClient([
+            planner_response({
+                "template": "TRIP_FARE_METRIC",
+                "slots": {"place": {"name": "대구시", "region": ""}},
+            }),
+            {"message": {}},  # content 없음 → 재계획 호출 실패
+        ])
+        pipeline = GeoFlowPipeline.create(
+            client=client, tool_executor=new_tool_executor(),
+        )
+        run = pipeline.run(self.FARE_QUESTION)
+        self.assertEqual(run.repair_count, 0)
+        self.assertEqual(
+            [item["status"] for item in run.attempts],
+            ["TOOL_ERROR", STATUS_REPAIR_FAILED],
+        )
+        self.assertIn("content", run.attempts[-1]["error"]["detail"])
+
     def test_repair_rejects_template_switch(self):
         pipeline, _client = new_pipeline([
             {"template": "TRIP_FARE_METRIC",
@@ -1123,6 +1154,7 @@ class RepairTest(unittest.TestCase):
         ])
         run = pipeline.run(self.FARE_QUESTION)
         self.assertEqual(run.repair_count, 0)
+        self.assertEqual(run.attempts[-1]["status"], STATUS_REPAIR_FAILED)
         self.assertIn("NOT_FOUND", json.dumps(run.error, ensure_ascii=False))
 
     def test_repair_rejects_identical_slots(self):

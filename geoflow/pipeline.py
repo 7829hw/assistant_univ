@@ -37,6 +37,12 @@ MAX_REPAIR_ATTEMPTS = 1
 #: 재계획을 시도할 operator. 그 밖의 오류는 구조화된 실패로 그대로 반환한다.
 REPAIRABLE_OPERATORS = frozenset({Operator.RESOLVE_PLACE_SCOPE})
 
+#: 재계획 호출(planner.repair) 자체가 실패한 attempt.
+STATUS_REPAIR_FAILED = "repair_failed"
+
+#: 재계획을 시도하지 않고 끝난 attempt.
+STATUS_REPAIR_SKIPPED = "repair_skipped"
+
 
 class Stage:
     """실패 지점을 로그에서 바로 알 수 있도록 단계 이름을 고정한다."""
@@ -205,6 +211,16 @@ class GeoFlowPipeline:
 
             failure = _repairable_failure(plan, execution_plan, result)
             if failure is None or attempt_index >= MAX_REPAIR_ATTEMPTS:
+                # 재계획을 아예 시도하지 않은 이유를 기록에 남긴다. 나중에
+                # 로그만 보고 "재계획이 실패했다"와 구분할 수 있어야 한다.
+                run.attempts.append({
+                    "index": attempt_index + 1,
+                    "status": STATUS_REPAIR_SKIPPED,
+                    "reason": (
+                        "재계획 대상이 아닌 실패"
+                        if failure is None else "재계획 시도 횟수 소진"
+                    ),
+                })
                 break
 
             emit("geoflow_repair", attempt=attempt_index + 1, failure=failure)
@@ -212,8 +228,15 @@ class GeoFlowPipeline:
                 planner_output = self.planner.repair(
                     question, planner_output, failure,
                 )
-            except GeoFlowError:
-                # 재계획 자체가 실패하면 원래의 실행 실패를 그대로 보고한다.
+            except GeoFlowError as error:
+                # 재계획 자체가 실패하면 원래의 실행 실패를 그대로 보고하되,
+                # 재계획이 없었던 이유는 기록에 남긴다. 재계획 결과가 검증에서
+                # 탈락한 경우(status=validation 등)와 구분하기 위한 것이다.
+                run.attempts.append({
+                    "index": attempt_index + 1,
+                    "status": STATUS_REPAIR_FAILED,
+                    "error": error.to_dict(),
+                })
                 break
             run.repair_count += 1
             run.durations["planner_ms"] += planner_output.duration_ms
