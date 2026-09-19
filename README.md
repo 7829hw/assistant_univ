@@ -1,1095 +1,185 @@
-# GBTA Assistant
+# GBTA Assistant — GeoFlow Planner
 
-자연어 교통 질의를 입력받아 LLM이 제공된 Tool을 선택하고 필요한 parameter를 구성하여 순차적으로 호출하는 Assistant 프로그램임.
+자연어 교통 질의를 Ollama 모델로 해석하고, Gazetteer·TIMS 도구를 조합해 답변하는 Python CLI 프로젝트입니다. `feature/geoflow-planner` 기반의 소스 공유본이며, 과거 실행 결과와 중복 배포 자료는 포함하지 않습니다.
 
-System Prompt와 Tool 정의는 YAML 파일로 관리하며, Ollama의 native Tool Calling 기능을 사용함.
+**현재 제공하는 도구 구현은 Mock입니다.** LLM 호출은 실제 Ollama 서버를 사용하지만, 장소 조회와 교통 통계는 `mock_responses.py`의 테스트 데이터입니다. 실제 교통 데이터 조회 서비스나 웹 UI는 포함되어 있지 않습니다.
 
-현재 Tool 실행은 Mock Provider를 사용하며, Gazetteer 및 TIMS Tool 호출 과정과 LLM의 순차 Tool Calling 동작을 확인할 수 있음.
+## 실행 방식
 
-## 1. 실행 구조
+두 가지 모드를 지원합니다. CLI 기본값은 기존 호환성을 위한 `react`이므로, GeoFlow를 실행할 때는 **`--agent-mode geoflow`를 지정**합니다.
 
-Assistant의 기본 실행 흐름은 다음과 같음.
+- `geoflow`: LLM이 템플릿과 슬롯을 JSON으로 선택합니다. 프로그램이 그래프를 구성·검증·컴파일한 뒤 정해진 순서로 도구를 실행하고 답변을 만듭니다. 모델의 native Tool Calling 기능은 필요하지 않습니다.
+- `react`: LLM이 도구 호출과 인자를 순차적으로 생성합니다. Ollama 모델의 `tools` capability가 필요합니다.
 
-```text
-자연어 질의
-    ↓
-Ollama LLM
-    ↓
-AssistantRuntime
-    ↓
-AgentGraph
-    ↓
-Tool 선택 및 Arguments 생성
-    ↓
-ToolExecutor
-    ↓
-Tool Handler
-    ↓
-Mock Tool Result
-    ↓
-필요 시 다음 Tool 호출
-    ↓
-최종 응답
-```
-
-LLM은 한 번의 질의를 처리하면서 필요한 Tool을 순차적으로 호출할 수 있음.
-
-장소에 대한 scope가 필요한 경우 Gazetteer Tool을 먼저 호출하고, 반환된 scope를 TIMS Tool의 argument로 전달하는 방식으로 동작함.
-
-Tool 실행 결과가 오류인 경우 오류 내용을 LLM에 다시 전달하며, 수정 가능한 오류인 경우 다음 model hop에서 arguments를 변경하여 Tool을 다시 호출할 수 있음.
-
-위 흐름이 기본 실행 모드인 `react`임. 질문을 바로 Tool Calling으로 보내지 않고 명시적인
-planning 단계를 먼저 거치는 `geoflow` 모드도 선택할 수 있음. 자세한 내용은
-[21. Agent Mode — GeoFlow Planner](#21-agent-mode--geoflow-planner)를 참고함.
-
-## 2. 주요 파일
+GeoFlow 처리 흐름:
 
 ```text
-assistant_cli.py
-assistant_runtime.py
-agent_graph.py
-build.py
-mock_responses.py
-ollama_client.py
-query_loader.py
-tool_executor.py
-tool_handlers.py
-
-stub_query.yaml
-
-prompts/
-├─ system.yaml
-└─ geoflow_planner.yaml
-
-schemas/
-├─ _common.yaml
-├─ gazetteer.yaml
-└─ tims.yaml
-
-geoflow/
-├─ types.py
-├─ errors.py
-├─ templates.py
-├─ operator_registry.py
-├─ validator.py
-├─ compiler.py
-├─ executor.py
-├─ planner.py
-├─ answer.py
-└─ pipeline.py
-
-geoflow_templates/
-├─ direct_scope_metric.yaml
-├─ direct_scope_passage_count.yaml
-├─ drive_ratio_metric.yaml
-├─ grouped_aggregate.yaml
-├─ od_trip_count.yaml
-├─ place_scope_metric.yaml
-├─ trip_fare_metric.yaml
-├─ vicinity_passage_count.yaml
-└─ vicinity_scope_metric.yaml
-
-tests/
-└─ test_geoflow.py
-
-evaluate_planner.py
-stub_query_boundary.yaml
-
-requirements.txt
-README.md
+질문 → Planner(template + slots) → 템플릿으로 그래프 구성
+     → 구조·타입·역할·scope 출처 검증 → 실행 계획 컴파일
+     → ToolExecutor → Mock 도구 → 장소명 보완 및 최종 답변
 ```
 
-각 파일의 역할은 다음과 같음.
+Planner의 호출 실패·빈 응답·출력 잘림에는 최대 2회 시도합니다. 실행 중 재시도 가능한 장소 조회 오류에는 슬롯을 수정하는 재계획을 최대 1회 수행합니다. 지원하지 않는 질문은 `NONE` 또는 구조화된 오류로 처리됩니다.
 
-| 파일                       | 역할                                      |
-| ------------------------ | --------------------------------------- |
-| `assistant_cli.py`       | Assistant CLI 실행, 질의 실행 및 Tool 호출 결과 출력 |
-| `assistant_runtime.py`   | Assistant 실행 Runtime 구성                 |
-| `agent_graph.py`         | LLM과 Tool 간 순차 호출 및 ReAct 흐름 처리         |
-| `build.py`               | YAML System Prompt와 Tool Schema 로드 및 구성 |
-| `ollama_client.py`       | Ollama API 연동 및 모델 capability 확인        |
-| `tool_executor.py`       | Tool arguments Schema 검증 및 Tool 실행      |
-| `tool_handlers.py`       | Tool Provider에 따른 handler 연결            |
-| `mock_responses.py`      | Gazetteer/TIMS Mock Tool 응답 제공          |
-| `query_loader.py`        | YAML 질의 파일 로드 및 Query ID 선택             |
-| `prompts/system.yaml`    | LLM에 전달하는 System Prompt                 |
-| `prompts/geoflow_planner.yaml` | GeoFlow Planner 전용 System Prompt  |
-| `geoflow/`               | GeoFlow IR, template, validator, compiler, executor |
-| `geoflow_templates/`     | GeoFlow template 정의 YAML                |
-| `tests/`                 | GeoFlow 및 react mode 회귀 테스트             |
-| `evaluate_planner.py`    | 모델별 template 선택 정확도 측정               |
-| `schemas/_common.yaml`   | Tool Schema 공통 정의                       |
-| `schemas/gazetteer.yaml` | Gazetteer Tool 정의                       |
-| `schemas/tims.yaml`      | TIMS Tool 정의                            |
-| `stub_query.yaml`        | 일괄 실행할 자연어 질의 목록                        |
-| `stub_query_boundary.yaml` | template 경계 평가 셋                       |
+## 설치
 
-## 3. Prompt 및 Tool Schema
-
-LLM에 전달되는 System Prompt와 Tool 계약은 다음 YAML 파일을 기준으로 구성함.
-
-```text
-prompts/system.yaml
-schemas/_common.yaml
-schemas/gazetteer.yaml
-schemas/tims.yaml
-```
-
-`build.py`는 YAML 파일을 읽어 System Prompt와 Ollama에 전달할 Tool 정의를 생성함.
-
-Tool의 이름, 설명, parameter, required field, enum, default 등의 계약은 `schemas/*.yaml`에서 관리함.
-
-따라서 Tool 정의를 확인하거나 변경할 경우 Python 코드보다 YAML 파일을 우선 확인해야 함.
-
-## 4. Tool Provider
-
-현재 지원하는 Tool Provider는 `mock`임.
-
-별도의 환경변수를 지정하지 않아도 기본적으로 Mock Provider가 사용됨.
-
-필요한 경우 명시적으로 다음과 같이 지정할 수 있음.
+Python 3.12 환경에서 검증했습니다. 아래 명령은 저장소 루트에서 실행합니다.
 
 ```bash
-export ASSISTANT_TOOL_PROVIDER=mock
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 ```
 
-Mock Provider는 실제 Gazetteer 또는 TIMS 시스템에 연결하지 않고 프로그램 내부에서 Tool 결과를 반환함.
-
-동일한 Tool과 arguments에 대해 재현 가능한 결과를 반환하도록 구성되어 있음.
-
-일부 Gazetteer 입력은 LLM의 재호출 흐름을 확인할 수 있도록 의도적으로 `NOT_FOUND`를 반환함.
-
-예시는 다음과 같음.
-
-```text
-대구시    → NOT_FOUND
-대구      → SUCCESS
-
-부산시    → NOT_FOUND
-부산      → SUCCESS
-
-동성로길  → NOT_FOUND
-동성로    → SUCCESS
-
-동성로동  → NOT_FOUND
-동성로    → SUCCESS
-```
-
-이 경우 LLM은 Tool Result를 확인한 뒤 장소명을 수정하여 다시 `get_place_scope`를 호출할 수 있음.
-
-## 5. Tool Calling 기본 정책
-
-Assistant 실행에는 Ollama 모델의 native `tools` capability가 필요함.
-
-Tool Calling을 지원하지 않는 모델은 Agent 실행 전에 확인하여 종료함.
-
-Agent는 model hop마다 실행할 Tool을 결정하고 Tool Result를 다시 LLM history에 전달함.
-
-다음 Tool 호출이 필요한 경우 이전 Tool Result를 확인한 후 다음 model hop에서 호출함.
-
-### Scope 사용
-
-Tool의 `scope` argument는 다음과 같은 값만 사용함.
-
-* 사용자 질문에 직접 포함된 `scope:*`
-* 이전 Tool 호출 결과에서 반환된 `scope:*`
-
-LLM이 임의로 생성한 scope는 사용하지 않도록 구성되어 있음.
-
-### Tool 오류
-
-주요 Tool 오류 코드는 다음과 같음.
-
-```text
-INVALID_ARGUMENT
-NOT_FOUND
-UNSUPPORTED_COMBINATION
-TOOL_ERROR
-```
-
-수정 가능한 오류는 `retryable=true`와 함께 반환될 수 있음.
-
-이 경우 LLM은 오류 message를 확인한 뒤 arguments를 수정하여 Tool을 다시 호출할 수 있음.
-
-### 주변 영역
-
-장소의 주변 또는 근처 영역은 별도 Tool이 아니라 `get_place_scope`의 `include_vicinity` parameter를 사용함.
-
-```text
-get_place_scope(
-    name=...,
-    region=...,
-    include_vicinity=true
-)
-```
-
-## 6. 설치
-
-Python 환경에서 dependency를 설치함.
+별도로 Ollama를 설치하고 서버를 실행해야 합니다. 서버 기본 주소는 `http://localhost:11434`입니다. 사용할 모델을 미리 내려받습니다. 다음은 CLI 기본 모델을 사용하는 예시입니다. 모델 실행에 필요한 메모리는 모델과 양자화 설정에 따라 다릅니다.
 
 ```bash
-pip install -r requirements.txt
-```
-
-Ollama가 실행 중이어야 하며 사용할 모델이 Ollama에 설치되어 있어야 함.
-
-Ollama 기본 주소는 다음과 같음.
-
-```text
-http://localhost:11434
-```
-
-## 7. Tool 및 Prompt Build 확인
-
-YAML Prompt와 Tool Schema 구성이 정상인지 확인하려면 다음 명령을 실행함.
-
-```bash
-python build.py --strict-enum
-```
-
-Schema 또는 Prompt YAML에 문제가 있는 경우 Build 단계에서 오류를 확인할 수 있음.
-
-## 8. Ollama 모델 확인
-
-현재 Ollama에 설치된 모델과 native Tool Calling 지원 여부를 확인할 수 있음.
-
-```bash
+ollama serve                       # 서버가 이미 실행 중이면 생략
+# 별도 터미널에서 실행
+ollama pull qwen3-coder:30b
 python assistant_cli.py --list-models
 ```
 
-Assistant를 실행하려면 사용할 모델이 Tool Calling을 지원해야 함.
+다른 설치 모델은 `--model 모델명`으로 지정할 수 있습니다.
 
-## 9. 단일 질의 실행
+## 빠른 실행
 
-자연어 질문 한 건을 직접 입력하여 실행할 수 있음.
-
-```bash
-python assistant_cli.py \
-  --model qwen3:8b \
-  --query "대구 지역내 택시들의 평균 속도는?"
-```
-
-모델명은 Ollama에 설치된 모델명으로 지정함.
-
-예:
+단일 GeoFlow 질의:
 
 ```bash
 python assistant_cli.py \
+  --agent-mode geoflow \
   --model qwen3-coder:30b \
   --query "대구 지역내 택시들의 평균 속도는?"
 ```
 
-## 10. YAML 질의 목록 실행
-
-`stub_query.yaml`에 정의된 질문을 순서대로 실행할 수 있음.
+예제 질의 전체 또는 특정 질의만 실행:
 
 ```bash
-python assistant_cli.py \
-  --model qwen3:8b \
-  --query-file stub_query.yaml
+python assistant_cli.py --agent-mode geoflow --query-file stub_query.yaml
+python assistant_cli.py --agent-mode geoflow \
+  --query-file stub_query.yaml --query-id q01 --query-id q03 --repeat 3
 ```
 
-`stub_query.yaml`은 다음 형식으로 구성됨.
-
-```yaml
-- id: q01_edge_average_speed
-  question: "2026년 5월 30일 오후 12시에서 1시사이에 scope:edge:1742상의 택시들의 평균 속도는?"
-  expected_template: DIRECT_SCOPE_METRIC
-
-- id: q02_edge_passage_count
-  question: "2026년 5월 30일 오후 12시에서 1시사이에 scope:edge:19384 지점을 통과하는 차량 대수는 몇대?"
-  expected_template: DIRECT_SCOPE_PASSAGE_COUNT
-```
-
-각 Query에는 중복되지 않는 `id`와 `question`이 필요함.
-
-`expected_template`은 `evaluate_planner.py`의 정답 라벨로만 사용하는 선택 항목임.
-`react` 모드와 `query_loader`는 이 key를 읽지 않음.
-
-## 11. 특정 Query 실행
-
-`stub_query.yaml`에서 필요한 질문만 선택하여 실행할 수 있음.
-
-전체 ID 또는 `qNN` 형태의 단축 ID를 사용할 수 있음.
+기존 순차 Tool Calling과 비교:
 
 ```bash
-python assistant_cli.py \
-  --model qwen3:8b \
-  --query-file stub_query.yaml \
-  --query-id q22
+python assistant_cli.py --agent-mode react --query-file stub_query.yaml
 ```
 
-여러 Query를 선택할 경우 `--query-id`를 반복해서 사용함.
+실행마다 `evaluation/runs/<실행 ID>/`에 `query_raw.json`, `query_report.md`, 설정 스냅샷과 YAML 입력 사본을 저장합니다. 결과 폴더는 자동 생성되며 Git에서는 제외됩니다.
 
-```bash
-python assistant_cli.py \
-  --model qwen3:8b \
-  --query-file stub_query.yaml \
-  --query-id q01 \
-  --query-id q05 \
-  --query-id q22
-```
+### 주요 설정
 
-지정한 Query는 입력한 순서대로 실행함.
-
-## 12. 반복 실행
-
-동일한 Query를 여러 번 독립적으로 실행할 수 있음.
-
-```bash
-python assistant_cli.py \
-  --model qwen3:8b \
-  --query-file stub_query.yaml \
-  --query-id q22 \
-  --repeat 3
-```
-
-기본값은 다음과 같음.
-
-```text
-repeat = 1
-```
-
-각 Query와 repeat는 새로운 `AssistantRuntime`으로 실행되므로 이전 실행의 message, scope, Tool Result를 공유하지 않음.
-
-## 13. Tool 호출 결과 확인
-
-Assistant 실행 시 질문과 함께 각 Tool 호출 과정이 순서대로 출력됨.
-
-예:
-
-```text
-==================================================
-q22_daegu_origin_destination_count / Repeat 1
-대구 동성로동에서 출발하여 신천동에 도착한 실차 구간 건수는?
-==================================================
-
-[Hop 1] get_place_scope
-  → name=동성로동
-  → region=대구
-  ← ERROR | NOT_FOUND
-
-[Hop 2] get_place_scope
-  → name=동성로
-  → region=대구
-  ← SUCCESS | scope=...
-
-[Hop 3] get_place_scope
-  → name=신천동
-  → region=대구
-  ← SUCCESS | scope=...
-
-[Hop 4] get_trip_count
-  → scope_pickup=...
-  → scope_dropoff=...
-  ← SUCCESS
-
-[Final Answer]
-...
-```
-
-Tool Calling을 확인할 때는 다음 내용을 확인할 수 있음.
-
-* 질문에 적절한 Tool을 선택했는지
-* 질문에 포함된 조건이 Tool arguments에 반영되었는지
-* 질문에 없는 조건을 임의로 추가했는지
-* 앞선 Tool Result를 다음 Tool arguments에 사용했는지
-* 출발/도착 등 역할이 유지되었는지
-* Tool 오류 발생 후 arguments를 수정하여 재호출했는지
-* 불필요한 Tool을 반복 호출했는지
-
-## 14. Model Thinking 출력
-
-모델 thinking 출력 수준은 `--verbose` 옵션으로 지정할 수 있음.
-
-```bash
-python assistant_cli.py \
-  --model qwen3:8b \
-  --query-file stub_query.yaml \
-  --query-id q22 \
-  --verbose full
-```
-
-또는:
-
-```bash
-python assistant_cli.py \
-  --model qwen3:8b \
-  --query-file stub_query.yaml \
-  --query-id q22 \
-  --verbose short
-```
-
-## 15. Chat Timeout
-
-Ollama `/api/chat` 요청별 timeout을 설정할 수 있음.
-
-```bash
-python assistant_cli.py \
-  --model qwen3:8b \
-  --query-file stub_query.yaml \
-  --chat-timeout 300
-```
-
-환경변수로도 설정 가능함.
-
-```bash
-export OLLAMA_CHAT_TIMEOUT=300
-```
-
-CLI `--chat-timeout`이 지정된 경우 해당 값이 우선 적용됨.
-
-기본 timeout은 120초임.
-
-## 16. Ollama 주소 변경
-
-기본 Ollama 주소가 아닌 다른 주소를 사용하는 경우 `--ollama-host`를 지정함.
-
-```bash
-python assistant_cli.py \
-  --ollama-host http://192.168.0.10:11434 \
-  --model qwen3:8b \
-  --query-file stub_query.yaml
-```
-
-환경변수 `OLLAMA_HOST`로도 설정할 수 있음.
-
-## 17. 실행 결과 저장
-
-YAML Query 또는 단일 Query 실행 결과는 다음 경로에 저장됨.
-
-```text
-evaluation/
-└─ runs/
-   └─ <run_id>/
-      ├─ query_raw.json
-      ├─ query_report.md
-      ├─ config/
-      │  ├─ prompts/
-      │  └─ schemas/
-      └─ input/
-         └─ stub_query.yaml
-```
-
-`evaluation/runs`는 현재 Assistant CLI에서 실행 결과를 저장하는 디렉터리명임.
-
-### query_raw.json
-
-실행 정보를 JSON 형태로 저장함.
-
-주요 내용은 다음과 같음.
-
-* 실행 모델
-* Chat timeout
-* Query ID 및 질문
-* Repeat 번호
-* Tool 호출 순서
-* Tool arguments
-* Tool Result
-* 최종 응답
-* Runtime error
-* 실행 시 사용한 Prompt/Schema 정보
-
-### query_report.md
-
-질문별 Tool 호출 흐름을 사람이 확인하기 쉬운 Markdown 형태로 저장함.
-
-예:
-
-```text
-질문
-↓
-Tool Call
-↓
-Arguments
-↓
-Tool Result
-↓
-다음 Tool Call
-↓
-최종 응답
-```
-
-`query_report.md`는 Tool 호출 흐름을 확인할 때 우선적으로 사용할 수 있음.
-
-## 18. 실행 시 Config 보존
-
-Query 실행 시 사용한 Prompt와 Tool Schema는 실행 결과 디렉터리의 `config/` 아래에 함께 저장됨.
-
-```text
-config/
-├─ prompts/
-│  └─ system.yaml
-└─ schemas/
-   ├─ _common.yaml
-   ├─ gazetteer.yaml
-   └─ tims.yaml
-```
-
-YAML Query 파일로 실행한 경우 해당 Query 파일도 `input/stub_query.yaml`로 저장됨.
-
-이를 통해 특정 실행에서 어떤 Prompt, Tool Schema, Query를 사용했는지 확인할 수 있음.
-
-## 19. 주요 실행 예시
-
-### 전체 Query 실행
-
-```bash
-python assistant_cli.py \
-  --model qwen3:8b \
-  --query-file stub_query.yaml
-```
-
-### 특정 Query 실행
-
-```bash
-python assistant_cli.py \
-  --model qwen3:8b \
-  --query-file stub_query.yaml \
-  --query-id q05
-```
-
-### 여러 Query 선택
-
-```bash
-python assistant_cli.py \
-  --model qwen3:8b \
-  --query-file stub_query.yaml \
-  --query-id q01 \
-  --query-id q03 \
-  --query-id q22
-```
-
-### 직접 질문 입력
-
-```bash
-python assistant_cli.py \
-  --model qwen3:8b \
-  --query "부산시의 평균 택시 요금은?"
-```
-
-### 반복 실행
-
-```bash
-python assistant_cli.py \
-  --model qwen3:8b \
-  --query-file stub_query.yaml \
-  --query-id q22 \
-  --repeat 3
-```
-
-### Timeout 변경
-
-```bash
-python assistant_cli.py \
-  --model qwen3:8b \
-  --query-file stub_query.yaml \
-  --chat-timeout 300
-```
-
-## 20. 요약
-
-Assistant는 자연어 질문을 LLM에 전달하고, LLM이 질문에 필요한 Tool과 arguments를 결정하여 순차적으로 Tool을 호출하는 구조임.
-
-주요 설정은 다음 파일에서 관리함.
-
-```text
-System Prompt
-→ prompts/system.yaml
-
-Tool Schema
-→ schemas/*.yaml
-
-실행 Query
-→ stub_query.yaml
-
-Tool Provider
-→ tool_handlers.py / mock_responses.py
-```
-
-기본 실행은 `assistant_cli.py`를 사용함.
-
-```bash
-python assistant_cli.py \
-  --model <ollama-model-name> \
-  --query-file stub_query.yaml
-```
-
-실행 과정에서 Tool 이름, arguments, Tool Result 및 최종 응답을 콘솔과 결과 파일에서 확인할 수 있음.
-
-## 21. Agent Mode — GeoFlow Planner
-
-기존 ReAct 방식과 별개로 GeoFlow planning 기반 실행 모드를 제공함.
-
-`--agent-mode`로 선택하며 기본값은 기존 동작을 보존하는 `react`임.
-
-```bash
-# 기존 동작 (기본값)
-python assistant_cli.py \
-  --model qwen3:8b \
-  --query-file stub_query.yaml
-
-# GeoFlow planning 모드
-python assistant_cli.py \
-  --agent-mode geoflow \
-  --model qwen3:8b \
-  --query-file stub_query.yaml
-```
-
-### 실행 흐름
-
-```text
-자연어 질의
-    ↓
-GeoFlow Planner (LLM 1회, Tool 미제공)
-    ↓
-Template 선택 + Slot 채우기
-    ↓
-Typed GeoFlow Plan
-    ↓
-GeoFlow Validator (G1~G6)
-    ↓
-Execution Plan Compiler
-    ↓
-Deterministic Tool Execution (기존 ToolExecutor 재사용)
-    ↓
-최종 응답
-```
-
-`react` 모드가 model hop마다 다음 Tool을 LLM에게 묻는 것과 달리, `geoflow` 모드는
-LLM을 1회만 호출하고 이후 Tool 선택·호출 순서·argument binding을 프로그램이 결정함.
-
-### Planner의 역할 제한
-
-Planner는 Tool Call을 생성하지 않으며 Tool 이름도 출력하지 않음.
-
-Planner가 반환하는 값은 template과 slots뿐임.
-
-```json
-{
-  "template": "OD_TRIP_COUNT",
-  "slots": {
-    "origin": {"name": "동성로동", "region": "대구"},
-    "destination": {"name": "신천동", "region": ""}
-  }
-}
-```
-
-Planner 출력은 모두 untrusted input으로 취급하며, JSON 파싱 실패·미등록 template·
-미정의 slot·형식 불일치는 모두 planner 오류로 처리함.
-
-### Template
-
-`geoflow_templates/*.yaml`은 Prompt용 설명문이 아니라 프로그램이 읽어 GeoFlow Plan을
-생성하는 구조화 데이터임.
-
-| Template                     | 개체        | 용도                          |
-| ---------------------------- | --------- | --------------------------- |
-| `DIRECT_SCOPE_METRIC`        | passage   | 사용자가 scope를 직접 제시한 통행 통계    |
-| `PLACE_SCOPE_METRIC`         | passage   | 장소/지역 내부의 통행 통계             |
-| `VICINITY_SCOPE_METRIC`      | passage   | 장소 주변(근처/부근) 포함 통행 통계       |
-| `DIRECT_SCOPE_PASSAGE_COUNT` | passage   | 사용자 scope 지점의 통행량           |
-| `PLACE_PASSAGE_COUNT`        | passage   | 장소/지역 내부의 통행량              |
-| `VICINITY_PASSAGE_COUNT`     | passage   | 장소 주변 통행량                   |
-| `OD_TRIP_COUNT`              | trip      | 실차 구간 건수(출발지 필수, 도착지 선택)    |
-| `TRIP_FARE_METRIC`           | trip      | 택시 요금(fare) 통계              |
-| `DRIVE_RATIO_METRIC`         | drive     | 공차율(vacant_ratio)           |
-| `OPERATION_METRIC`           | operation | 영업 통계 단일 값(주·월 bucket 포함)  |
-| `GROUPED_AGGREGATE`          | operation | 영업 통계의 dimension 분포         |
-| `SCOPE_PLACE_NAME`           | location  | scope → 장소명 역변환             |
-
-Planner Prompt의 template 목록은 이 YAML 정의에서 자동 생성되므로 별도 동기화가 필요 없음.
-
-metric은 소속 개체가 다르면 다른 개념임. 이름이 비슷해도 서로 바꿔 쓰지 않도록
-Planner Prompt에 개체별 metric 어휘와 혼동 쌍을 명시함.
-
-```text
-요금   = fare(trip)            ≠ 수입   = revenue(operation)
-공차율 = vacant_ratio(drive)   ≠ 운행률 = operating_ratio(operation)
-```
-
-지원하지 않는 개념은 비슷한 값으로 치환하지 않고 `NONE`을 반환하도록 규정함.
-
-### optional concept
-
-concept에 `optional: true`를 두면 질문에 해당 slot이 없을 때 그 node와 이에
-의존하는 transformation이 함께 사라짐.
-
-```text
-"평균 택시 요금은?"      → get_trip_metrics(metric=fare)
-"대구 평균 택시 요금은?"  → get_place_scope(대구) → get_trip_metrics(metric=fare, scope=...)
-```
-
-질문에 없는 조건을 임의로 채우지 않으면서 하나의 template으로 두 경우를 모두
-처리하기 위한 장치임.
-
-### Semantic Operator
-
-Template은 실제 Tool 이름을 지정하지 않고 semantic operator만 지정함.
-
-실제 Tool 이름과 argument 이름 binding은 `geoflow/operator_registry.py`에서만 결정함.
-
-```text
-RESOLVE_PLACE_SCOPE → get_place_scope
-PASSAGE_METRIC      → get_passage_metrics
-PASSAGE_COUNT       → get_passage_count
-TRIP_COUNT          → get_trip_count
-TRIP_METRIC         → get_trip_metrics
-DRIVE_METRIC        → get_drive_metrics
-OPERATION_METRIC    → get_operation_metrics
-SCOPE_NAME          → get_scope_name
-```
-
-출발지/도착지 역할 뒤바뀜을 막기 위해 `TRIP_COUNT`의 port binding은 registry에 고정되어 있음.
-
-```text
-origin_scope      → scope_pickup
-destination_scope → scope_dropoff
-```
-
-이 mapping은 LLM이 결정하지 않음.
-
-### Validator
-
-Tool을 호출하기 전에 다음 규칙을 검사함.
-
-```text
-G1 ACYCLICITY         dependency graph에 cycle이 없을 것
-G2 ROLE_ORDERING      명백한 procedural role 역행이 없을 것
-G3 TYPE_COMPATIBILITY operator input/output의 semantic type이 맞을 것
-G4 EXECUTABILITY      operator가 registry에 있고 Tool도 사용 가능할 것
-G5 CONNECTIVITY       final_node까지 입력이 모두 연결되어 있을 것
-G6 SCOPE_PROVENANCE   scope는 source=user 또는 source=tool만 허용
-```
-
-`G6`는 기존 scope 정책을 IR 수준에서 다시 강제함. `source=user`인 scope는 실제
-사용자 발화에 포함된 값이어야 하며, template이나 Planner가 만든 scope literal은 거부됨.
-
-실행 단계에서도 `agent_graph.py`와 동일한 known scope 검사를 한 번 더 수행함.
-
-### 장소 조회 실패 시 재계획
-
-`get_place_scope`가 `retryable=true`인 오류를 반환한 경우에 한해 Planner에게
-slot 수정을 1회 요청함. 그 밖의 오류는 구조화된 실행 실패로 그대로 반환함.
-
-```text
-get_place_scope(name="대구시") → NOT_FOUND
-    ↓ Planner에 slot 수정 요청 (같은 template 유지)
-get_place_scope(name="대구")   → scope:district:2700000000
-    ↓
-get_trip_metrics(metric=fare, scope=...)
-```
-
-재계획에는 다음 제약이 적용됨.
-
-* 최대 1회. 무한 재시도하지 않음
-* `RESOLVE_PLACE_SCOPE` 단계의 retryable 오류에만 적용
-* template 변경 불가. slot만 수정 가능
-* 이전과 동일한 slot을 반복하면 거부
-* 수정된 slot도 template → validator → compiler 전 경로를 다시 통과함
-
-마지막 항목이 핵심임. 재계획은 어떤 guard도 우회하지 않으며, 실패한 시도의
-Tool 호출도 실행 trace에 그대로 남음.
-
-### slot 동반 제약
-
-혼자 쓰일 수 없는 slot은 template에 `slot_requires`로 선언함. Tool이
-`INVALID_ARGUMENT`로 거절할 조합을 실행 전에 걸러 냄.
-
-```yaml
-slot_requires:
-  bucket: [rollup]      # 2단계 집계는 두 값이 모두 필요함
-  rollup: [bucket]
-  order: [dimension]    # 순위는 그룹화 기준이 있어야 의미가 있음
-  limit: [dimension]
-```
-
-```text
-OPERATION_METRIC: slot 'bucket'을 쓰려면 'rollup'도 함께 필요합니다.
-```
-
-### 결과 scope의 장소명 변환
-
-집계 결과에 포함된 scope는 `get_scope_name`으로 장소명을 조회해 보여줌.
-
-```text
-대구 시군구별 상위 3개 통행량
-- 수성구: 3,794건
-- 중구: 3,590건
-- 서구: 3,503건
-```
-
-호출 횟수가 실행 결과의 행 수에 의존하므로 정적 `ExecutionPlan`으로는 표현할 수
-없음. 따라서 실행이 성공한 뒤 별도의 bounded 단계로 수행함(`geoflow/labeling.py`).
-
-* 한 답변당 최대 20개까지만 조회함
-* 조회에 실패해도 원본 scope를 그대로 보여주고 답변 생성을 계속함.
-  표시용 보강이지 분석 결과의 일부가 아니기 때문임
-* 이 호출도 실행 trace에 남으며 `phase: labeling`으로 구분됨
-
-사용자가 질문에 직접 적은 scope는 변환하지 않고 그대로 되돌려줌. 사용자가 지정한
-식별자를 그대로 보여주는 편이 추적에 유리하기 때문임.
-
-상대 날짜와 metric도 원시값 대신 이름으로 표시함.
-
-```text
-last_month → 지난달       weekend → 주말
-operating_count → 영업 횟수   operating_ratio → 영업 운행률
-```
-
-### 실행 결과 저장
-
-`geoflow` 모드로 실행하면 `query_raw.json`의 각 record에 `geoflow` 항목이 추가됨.
-
-```text
-agent_mode
-planner (출력 원문 포함)
-template / slots
-plan (concepts / transformations / final_node)
-validation (검사한 규칙, 실패 규칙, 오류 목록)
-execution_plan (ToolStep 목록)
-execution (state / trace)
-final_answer
-error
-durations (planner_ms / execution_ms / total_ms)
-```
-
-`query_report.md`에는 다음 순서로 기록됨.
-
-```text
-질문
-↓
-Planner (template / slots)
-↓
-GeoFlow (concepts / transformations)
-↓
-Validation
-↓
-Tool Steps
-↓
-Tool Result
-↓
-최종 응답
-```
-
-`react` 모드의 기존 report 형식은 그대로 유지됨.
-
-### 테스트
-
-새 dependency 없이 표준 라이브러리 `unittest`로 실행함.
-
-```bash
-python -m unittest discover -s tests -t .
-```
-
-### Template 선택 정확도 측정
-
-Planner만 호출하고 Tool은 실행하지 않으므로, gazetteer의 `NOT_FOUND` 같은 실행
-단계 잡음을 섞지 않고 semantic parsing 품질만 측정할 수 있음.
-
-```bash
-python evaluate_planner.py --model qwen3:8b --model gemma4:12b
-python evaluate_planner.py --all-models --repeat 3
-```
-
-정답 라벨은 Query YAML의 `expected_template`에서 읽음.
-
-```yaml
-- id: q22_daegu_origin_destination_count
-  question: "대구 동성로동에서 출발하여 신천동에 도착한 실차 구간 건수는?"
-  expected_template: OD_TRIP_COUNT
-```
-
-`expected_template`은 geoflow 모드 측정용이며 `react` 모드와 `query_loader`는
-이 key를 사용하지 않음.
-
-측정 항목은 다음과 같음.
-
-| 항목 | 의미 |
+| 옵션 / 환경변수 | 설명 |
 | --- | --- |
-| 정확도 | `expected_template`과 일치한 비율 |
-| Planner 오류 | JSON 파싱 실패, 미등록 template 등 계약 위반 |
-| 역할 순서 | origin/destination이 발화 순서와 일치하는지 |
-| 평균 지연 | Planner 호출 1회 소요 시간 |
+| `--model` / `OLLAMA_MODEL` | 모델명. CLI 기본값 `qwen3-coder:30b` |
+| `--ollama-host` / `OLLAMA_HOST` | Ollama 주소. CLI 기본값 `http://localhost:11434` |
+| `--chat-timeout` / `OLLAMA_CHAT_TIMEOUT` | 요청별 제한 시간(초). 기본값 120 |
+| `--agent-mode geoflow\|react` | 실행 방식. 기본값 `react` |
+| `--model-think auto\|on\|off` | 모델 thinking 설정. 기본값 `auto`는 모델 기본 동작 사용 |
+| `--num-predict` | 응답 1회당 생성 토큰 상한. 생략하면 모델 기본값 사용 |
+| `--verbose full\|short` | thinking 출력 수준. 모델 동작 설정과 별개 |
+| `--repeat` | 각 질의의 독립 반복 횟수. 기본값 1 |
+| `ASSISTANT_TOOL_PROVIDER` | 현재 `mock`만 지원하며 기본값도 `mock` |
 
-결과는 `evaluation/planner_accuracy/<run_id>/planner_accuracy.json`에 저장됨.
+CLI에 지정한 모델·주소·제한 시간이 환경변수보다 우선합니다. thinking 설정 지원 여부는 모델에 따라 다릅니다. 전체 옵션은 각 실행 파일의 `--help`로 확인합니다.
 
-모델마다 지연 특성이 달라 한 번에 측정하기 어려우므로, 따로 실행한 결과를 하나의
-표로 다시 합칠 수 있음.
+### 질의 YAML
+
+최상위는 비어 있지 않은 목록이며, `id`와 `question`은 필수입니다. ID와 질문은 각각 중복될 수 없습니다. `expected_template`은 Planner 평가용 정답입니다.
+
+```yaml
+- id: q01_example
+  question: "대구 지역내 택시들의 평균 속도는?"
+  expected_template: PLACE_SCOPE_METRIC
+```
+
+`--query-id`에는 전체 ID 또는 유일하게 대응하는 `q01` 형태의 단축 ID를 사용할 수 있습니다.
+
+## 프로젝트 구성
+
+```text
+assistant_cli.py          단일 질의·YAML 배치 실행, 로그 및 보고서 저장
+assistant_runtime.py      실행 런타임 및 모드 선택
+agent_graph.py            ReAct 그래프, 두 모드가 공유하는 scope 처리
+ollama_client.py          Ollama HTTP 클라이언트
+build.py                  도구 스키마 검증 및 프롬프트 조립
+query_loader.py           질의 YAML 검증 및 선택
+tool_executor.py          도구 인자 검증 및 실행
+tool_handlers.py          도구 Provider 선택
+mock_responses.py         Gazetteer·TIMS Mock 구현
+geoflow/                  Planner, 그래프 타입, 검증, 컴파일, 실행, 답변 처리
+geoflow_templates/        12종의 실행 그래프 템플릿
+prompts/                  ReAct 및 GeoFlow 프롬프트
+schemas/                  공통 타입, Gazetteer·TIMS 도구 스키마
+stub_query.yaml           기본 예제 및 템플릿 정답
+stub_query_boundary.yaml  지원 범위 경계 질의 및 정답
+evaluate_planner.py       템플릿 선택·슬롯 역할 평가
+evaluate_vendor_trace.py  도구 호출 trace 평가
+vendor_trace_contract.py  trace 판정 규칙
+evaluation/vendor/        평가 입력 질의 및 정답 계약
+tests/                    모델 서버 없이 실행하는 회귀 테스트
+requirements.txt          직접 사용하는 Python 의존성
+```
+
+`evaluation/vendor/`의 YAML은 테스트와 평가 스크립트의 입력이므로 유지합니다. 과거 보고서·모델 응답, 회의 메모, `share/`의 중복 템플릿·예제는 제거했습니다. `agent_graph.py`와 ReAct 설정은 현재 런타임 및 GeoFlow의 공통 코드 의존성으로 필요합니다.
+
+### GeoFlow 템플릿
+
+| 템플릿 | 용도 |
+| --- | --- |
+| `DIRECT_SCOPE_METRIC` | 사용자가 지정한 scope의 통행 통계 |
+| `DIRECT_SCOPE_PASSAGE_COUNT` | 사용자가 지정한 scope의 통과 차량 수 |
+| `PLACE_SCOPE_METRIC` | 장소·지역 내부의 통행 통계 |
+| `PLACE_PASSAGE_COUNT` | 장소·지역 내부의 통과 차량 수 |
+| `VICINITY_SCOPE_METRIC` | 장소 주변의 통행 통계 |
+| `VICINITY_PASSAGE_COUNT` | 장소 주변의 통과 차량 수 |
+| `DRIVE_RATIO_METRIC` | 공차 운행 비율 |
+| `GROUPED_AGGREGATE` | 요일·지역 등으로 그룹화한 영업 통계 |
+| `OD_TRIP_COUNT` | 출발지·도착지 간 실차 구간 건수 |
+| `TRIP_FARE_METRIC` | 실차 구간의 요금 통계 |
+| `OPERATION_METRIC` | 영업 단위 통계 |
+| `SCOPE_PLACE_NAME` | scope에 해당하는 장소명 |
+
+세부 슬롯과 허용 값은 `geoflow_templates/` 및 `schemas/`가 기준입니다.
+
+## 검증 및 평가
+
+Ollama 없이 설정 검증과 회귀 테스트를 실행할 수 있습니다. 테스트는 스크립트로 지정한 모델 응답과 Mock 도구를 사용합니다.
 
 ```bash
+python build.py --strict-enum
+python -m unittest discover -s tests -v
+```
+
+`python build.py --dump`를 실행하면 조립된 설정을 `build/`에 저장합니다.
+
+실제 모델의 Planner 평가에는 Ollama 서버가 필요합니다.
+
+```bash
+python evaluate_planner.py --model qwen3-coder:30b --repeat 3
+python evaluate_planner.py --model qwen3-coder:30b \
+  --query-file stub_query_boundary.yaml
 python evaluate_planner.py --aggregate
 ```
 
-`temperature=0`으로 고정하므로 같은 입력에는 같은 출력이 반복됨. `--repeat`은
-변동성 측정이 필요한 경우에만 사용함.
+결과는 `evaluation/planner_accuracy/`에 저장됩니다. `--aggregate`는 저장된 모델별 최신 결과를 집계합니다. 템플릿 선택 정확도는 실제 교통 데이터의 정확도를 의미하지 않습니다.
 
-### 모델별 template 선택 정확도
-
-`stub_query.yaml` 13건 기준. Tool은 실행하지 않음.
-
-| 모델 | 크기 | 정확도 | Planner 오류 | 역할 순서 | 평균 지연 |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| `qwen3.8:27b`  | 17.7 GB | 13/13 (100%) | 0  | 2/2 | 3.4초 |
-| `gemma4:e4b`   |  9.6 GB | 13/13 (100%) | 0  | 2/2 | 2.5초 |
-| `qwen3.5:9b`   |  6.6 GB | 13/13 (100%) | 0  | 2/2 | 14.0초 |
-| `qwen3:8b`     |  5.2 GB | 13/13 (100%) | 0  | 2/2 | 1.9초 |
-| `gemma4:12b`   |  7.6 GB | 12/13 (92%)  | 1  | 2/2 | 31.0초 |
-
-**template을 잘못 고른 사례는 전 모델에서 한 건도 없음.** 실패는 모두
-`PLANNER_CALL_FAILED`, 즉 모델이 JSON 응답 자체를 만들지 못한 경우임.
-
-`gemma4:12b`의 1건은 출력을 `thinking`에만 쓰고 `content`를 비운 채 추론을
-끝내지 않아 timeout에 걸린 경우임. 실패한 질의의 thinking을 보면 template을
-고르는 대신 실제 택시 요금을 답하려 하고 있음. chat timeout을 300초로 늘려도
-동일하게 실패함.
-
-`qwen3:8b`(5.2 GB)가 3배 큰 `qwen3.8:27b`와 같은 13/13을 기록함. template 선택이
-모델 규모에 민감하지 않다는 뜻이며, 자유 형식 Tool Calling 대신 "정해진 template
-중 택1 + slot 채우기"로 문제를 좁힌 설계 의도와 일치함.
-
-지연은 규모와 상관관계가 약함. `qwen3:8b`(1.9초)가 `qwen3.5:9b`(14.0초)보다 7배
-빠름. thinking 분량 차이로 보임.
-
-### 경계 평가 셋
-
-`stub_query.yaml`은 각 질의가 정확히 하나의 template에 대응하도록 구성되어 있어
-모델 간 변별력이 없음. `stub_query_boundary.yaml`은 구분이 어려운 쌍과 지원 범위
-밖 질의를 모아 이를 보완함.
+도구 호출 순서와 인자를 정답 계약과 비교:
 
 ```bash
-python evaluate_planner.py --model qwen3:8b --query-file stub_query_boundary.yaml
+python evaluate_vendor_trace.py --agent-mode geoflow --model qwen3-coder:30b
 ```
 
-`expected_template: NONE`은 "지원하는 template이 없으므로 거부해야 함"을 뜻함.
-틀린 template을 고르는 것보다 거부가 낫다는 설계 주장을 측정하기 위한 것이며,
-요약표에서 정상적인 거부(`거부`)와 JSON 응답 실패(`응답 실패`)를 구분해 집계함.
+기본 입력은 `evaluation/vendor/vendor_queries.yaml`과 `vendor_trace_gold.yaml`입니다. 결과는 `evaluation/vendor_runs/`에 저장하며, `--no-save`로 저장을 생략할 수 있습니다.
 
-이 평가 셋으로 다음 결함을 발견해 수정함.
+## 수정·확장 지점
 
-**1. 주변 포함 여부 혼동** — "동대구역의 평균 속도"(주변 아님)를 주변 포함
-template으로 선택함. Prompt가 "근처=vicinity"만 규정하고 역방향 규칙이 없었음.
+- 모델의 템플릿·슬롯 선택 지침: `prompts/geoflow_planner.yaml`
+- 실행 그래프와 슬롯 정의: `geoflow_templates/`
+- 연산자와 도구 연결: `geoflow/operator_registry.py`
+- 도구 인자 계약: `schemas/`
+- 실제 서비스 연동: `tool_handlers.py`에 Provider 및 핸들러를 구현하고, 스키마와 반환값 계약을 맞춥니다. 현재 `mock` 외의 Provider를 지정하면 오류가 발생합니다.
 
-**2. 필수 slot 날조** — 질문이 답하지 않는 필수 slot을 채우려고 가짜 값을
-지어내는 현상이 세 번 관측됨.
-
-```text
-gemma4:e4b   place       = {"name": "",       "region": "대구"}
-qwen3:8b     destination = {"name": " ",      "region": ""}
-qwen3:8b     destination = {"name": "모든 지역", "region": ""}
-```
-
-마지막 사례가 특히 중요함. `모든 지역`은 gazetteer에 없어 `NOT_FOUND`로 막혔지만,
-실재하는 지명을 넣었다면 확신에 찬 오답이 나왔을 것임. 즉 이 보호는 구조적인 것이
-아니라 우연에 기댄 것이었음.
-
-Prompt로 타이르는 대신 날조 압력 자체를 제거함. 질문이 답하지 않는 조건은
-optional로 두어 정직하게 비울 수 있게 함.
-
-* `OD_TRIP_COUNT`의 `destination`을 optional로 변경.
-  `get_trip_count`는 승차 위치만으로도 집계할 수 있음
-* 장소 내부 통행량(`PLACE_PASSAGE_COUNT`)과 그룹화 없는 영업 통계
-  (`OPERATION_METRIC`) template 추가. 후자가 없어 Planner가 단일 값 질문에도
-  그룹화 template을 고르면서 `dimension: "taxi_type"` 같은 없는 값을 발명했음
-
-도착지가 없는 경우 답변에 그 사실이 드러나도록 함.
-
-```text
-대구 동성로 → 신천동 실차 구간 건수: 2,676건
-대구 동성로 출발 실차 구간 건수: 1,158건
-```
-
-수정 후 `qwen3:8b`, `gemma4:e4b`, `qwen3.8:27b` 모두 12/12이며 기존 셋도 회귀 없음.
-
-### 경계 평가 셋 확장
-
-위 수정으로 거부 기대 질의가 1건만 남아 거부 능력의 측정력이 사라졌으므로, 지원
-범위 경계에 걸친 질의를 추가해 22건(거부 기대 7건)으로 늘림.
-
-거부 기대 7건 중 6건은 **Tool은 지원하지만 이를 노출하는 template이 아직 없는**
-경우임. 설계상의 경계가 아니라 커버리지 부채임을 구분해 기록함.
-
-```text
-b17  도착지만 지정한 trip 집계     OD_TRIP_COUNT는 출발지가 필수
-b18  통행량 순위 질의             통행량 template이 order/limit을 노출하지 않음
-b19  scope → 장소명 역변환        SCOPE_NAME operator는 있으나 template이 없음
-b20  두 지역 비교                단일 template으로 표현 불가
-b21  bucket/rollup 2단계 집계     GROUPED_AGGREGATE에 해당 slot이 없음
-b22  통행량의 공간 dimension 분포  통행량 template에 dimension이 없음
-```
-
-`qwen3.8:27b` 기준 22/22이며 거부 7건 모두 정확함. b17에서 도착지를 `origin`에
-밀어넣지 않고 거부한 것이 특히 중요함.
-
-template 선택 정확도는 slot 값의 정확성을 보지 않으므로 end-to-end로도 확인함.
-지원 범위 안 15건 모두 slot과 Tool argument가 정확했음.
-
-```text
-공차     → taxi_status=vacant
-중간값    → aggregation=med
-주말     → date=weekend
-지난달    → date=last_month
-출발지만  → scope_pickup만 전달, scope_dropoff 없음
-```
-
-### 커버리지 부채 해소
-
-거부 기대 질의 중 Tool은 지원하지만 template이 없던 2건을 해소함.
-
-* `SCOPE_PLACE_NAME` 추가 — `SCOPE_NAME` operator가 registry에 등록만 되어 있고
-  어떤 template에서도 쓰이지 않던 것을 연결함. 집계 결과에 이름을 붙이는
-  labeling 단계와는 목적이 다름. 이쪽은 사용자가 scope를 들고 와 묻는 경우임
-* `OPERATION_METRIC`에 `bucket`/`rollup` 추가 — 주·월 단위 2단계 집계.
-  새 template을 만들지 않고 기존 template을 확장해 Planner의 선택지를
-  늘리지 않음
-
-남은 거부 기대 4건은 설계상의 경계임.
-
-```text
-b12  도메인 밖 질문
-b17  도착지만 지정한 trip 집계   OD_TRIP_COUNT는 출발지가 필수
-b18  지역 없는 순위 질의        get_passage_count는 scope가 필수
-b20  두 지역 비교              단일 template으로 표현 불가
-```
-
-`b20`만 구조적 한계임. 두 plan을 합성해야 하므로 v1 범위를 벗어남.
-
-측정 한계: 두 평가 셋 모두 정답 template이 하나로 정해지는 질의로 구성됨. 사람도
-판단이 갈리는 질의는 포함되어 있지 않음. 또한 `qwen3.8:27b`가 37건 전체에서
-결함을 보이지 않아, 이 셋만으로는 더 이상 변별이 되지 않음.
-
-### 실측 결과
-
-`stub_query.yaml` 13건, 모델 `qwen3:8b`, Mock Provider 기준.
-
-| | react | geoflow |
-| --- | ---: | ---: |
-| 정상 실행 | 13/13 | 13/13 |
-| LLM 호출 | 42회 | **16회** |
-| Tool 호출 | 29회 | 27회 |
-| 총 소요 시간 | 125.2초 | **37.1초** |
-| scope 환각으로 차단된 호출 | 1회 | 0회 |
-
-react가 차단당한 1회는 `get_trip_count`를 호출하면서 승차 지점 scope를
-지어낸 경우임. GeoFlow에서는 scope가 Tool 결과로만 채워지므로 이 경로 자체가
-존재하지 않음.
-
-LLM 호출 감소는 model hop마다 다음 Tool을 묻지 않기 때문임. GeoFlow의 16회는
-질의당 Planner 1회에 장소 조회 재계획 3회를 더한 값임.
-
-### 현재 제한
-
-* template 11개로 `stub_query.yaml`과 `stub_query_boundary.yaml`은 모두
-  처리되지만, 그 밖의 질의 유형(다중 조건 결합, 시계열 bucket/rollup, 순위 질의,
-  도착지만 지정한 trip 집계 등)은 아직 template이 없음. 지원하지 않는 질의는
-  오답 대신 `NO_MATCHING_TEMPLATE`으로 거부함.
-* 재계획은 장소 조회 실패에만, 최대 1회 적용됨. 그 밖의 Tool 오류는 재시도 없이
-  구조화된 실행 실패를 반환함. ReAct 모드의 재시도 동작은 기존과 동일하게 유지됨.
-* 최종 응답은 코드 기반 format을 사용함. Tool 결과에 없는 수치가 생성되지 않도록
-  LLM 문장 생성 단계를 두지 않음. 대신 문장이 react 모드보다 기계적임.
-* GeoFlow 모드는 turn 간 대화 맥락을 참조하지 않고 질문 단위로 독립 실행함.
-* end-to-end 실행 검증은 `qwen3:8b` 기준임. template 선택 정확도는 6개 모델에서
-  측정했으나(위 표), 실행까지 포함한 전체 경로는 모델별로 측정하지 않음.
-* Planner는 `content`에 JSON을 쓰는 모델을 전제함. 출력을 `thinking`에만 쓰고
-  `content`를 비우는 모델은 사용할 수 없음. 이 경우 오답을 내는 대신
-  `PLANNER_CALL_FAILED`로 멈추므로 Tool은 호출되지 않음.
+생성 결과, 가상환경, 캐시, 로컬 환경설정과 원본 엑셀 문서는 `.gitignore`로 제외합니다. 공유할 때는 이 브랜치의 소스를 사용하면 됩니다. 이전 커밋의 결과물까지 삭제하는 Git 이력 재작성은 수행하지 않습니다.
