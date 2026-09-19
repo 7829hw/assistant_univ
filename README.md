@@ -605,19 +605,3 @@ evaluation/vendor/vendor_trace_gold.yaml
 ```
 
 결과는 `evaluation/vendor_runs/`에 저장됨. `--no-save`를 지정하면 결과 저장을 생략함.
-
-## 21. 소스 공유 구성
-
-공유본에는 실행 코드, YAML 설정, 예제 질의, 테스트 및 평가 입력을 포함함.
-
-과거 실행 결과, 중복 배포 자료 및 회의 메모는 포함하지 않음. `evaluation/vendor/`의 YAML은 테스트와 평가에 필요한 입력이므로 유지함.
-
-다음 항목은 `.gitignore`로 제외함.
-
-* 실행 결과 및 평가 보고서
-* Build 산출물
-* Python 가상환경 및 캐시
-* 로컬 환경설정
-* 원본 엑셀 문서
-
-공유본은 CLI 프로젝트이며, 실제 Gazetteer/TIMS 서비스 연동 및 웹 UI는 포함되어 있지 않음.
