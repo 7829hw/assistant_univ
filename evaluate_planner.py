@@ -179,6 +179,7 @@ def evaluate_model(model, queries, *, host, chat_timeout, repeat, verbose,
         think=think,
     )
     planner = GeoFlowPlanner(client=client)
+    system_prompt_chars = len(planner.system_prompt())
     composer = MacroComposer(MacroLibrary.from_directory())
     available_tools = None if tool_executor is None else tool_executor.tool_names
 
@@ -221,10 +222,19 @@ def evaluate_model(model, queries, *, host, chat_timeout, repeat, verbose,
                 "repair_succeeded": False,
                 "repair_error": None,
                 "unsupported_relation": False,
+                # 지연을 단계별로 나눠 본다. 총합만 보면 한 건의 이상치가
+                # 전체 평균을 지배하는 것을 알 수 없다.
+                "initial_planner_ms": 0.0,
+                "repair_planner_ms": 0.0,
+                "planner_calls": 0,
+                "output_chars": 0,
                 "duration_ms": 0.0,
             }
             try:
                 output = planner.plan(item["question"])
+                record["initial_planner_ms"] = output.duration_ms
+                record["planner_calls"] = 1
+                record["output_chars"] = len(output.raw_text)
                 grounding = output.grounding
                 record["concepts"] = concept_keys(grounding)
                 record["factors"] = dict(grounding.factors)
@@ -312,6 +322,7 @@ def evaluate_model(model, queries, *, host, chat_timeout, repeat, verbose,
                 # 라벨이 NONE이면 "실행 가능한 계획이 만들어지지 않는 것"이
                 # 정답이다. Planner가 거부했든 합성이 포기했든 같다.
                 record["correct"] = not record["validated"]
+            record["system_prompt_chars"] = system_prompt_chars
             records.append(record)
             if verbose:
                 mark = "O" if record["correct"] else "X"
@@ -361,6 +372,9 @@ def _compose_with_repair(composer, planner, question, output, record):
             repaired = planner.repair_planning_error(
                 question, output, error=error, decision=decision,
             )
+            record["repair_planner_ms"] = repaired.duration_ms
+            record["planner_calls"] += 1
+            record["output_chars"] += len(repaired.raw_text)
         except GeoFlowError as repair_error:
             record["repair_error"] = repair_error.code
             raise error from repair_error
@@ -369,6 +383,16 @@ def _compose_with_repair(composer, planner, question, output, record):
         record["concepts_after_repair"] = concept_keys(repaired.grounding)
         record["factors_after_repair"] = dict(repaired.grounding.factors)
         return plan
+
+
+def _median(values):
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[middle]
+    return (ordered[middle - 1] + ordered[middle]) / 2
 
 
 def _ratio(matched, expected):
@@ -462,6 +486,22 @@ def summarize(records):
         "mean_duration_ms": round(
             sum(item["duration_ms"] for item in records) / total, 1
         ) if total else 0.0,
+        "median_initial_planner_ms": round(_median(
+            [item["initial_planner_ms"] for item in records]
+        ), 1),
+        "mean_initial_planner_ms": round(
+            sum(item["initial_planner_ms"] for item in records) / total, 1
+        ) if total else 0.0,
+        "total_repair_planner_ms": round(
+            sum(item["repair_planner_ms"] for item in records), 1
+        ),
+        "planner_calls": sum(item["planner_calls"] for item in records),
+        "mean_output_chars": round(
+            sum(item["output_chars"] for item in records) / total, 1
+        ) if total else 0.0,
+        "system_prompt_chars": (
+            records[0].get("system_prompt_chars", 0) if records else 0
+        ),
     }
 
 
