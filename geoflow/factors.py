@@ -127,7 +127,18 @@ FACTOR_SPECS: dict[str, FactorSpec] = {
         ),
         FactorSpec(
             "taxi_type", values=frozenset({"private", "corporate", "all"}),
-            meaning="택시 유형 조건.",
+            # 실측에서 가장 잦은 실패가 "개인택시"를 조건이 아니라 개념으로
+            # 적는 것이었다. 개념 목록에 OBJECT가 있고 택시는 개별 사물이므로
+            # 모델이 OBJECT/taxi_type을 만든다. 조건임을 여기서 못박는다.
+            meaning=(
+                '택시 영업 유형을 제한하는 조건이며 개념이 아니다. "개인택시", '
+                '"법인택시"는\n'
+                "    별도 개념 node로 만들지 않고 이 조건으로만 적는다.\n"
+                '    예: "법인택시의 평균 운행시간" → EVENT/operation + '
+                "AMOUNT/hours +\n"
+                "    taxi_type=corporate (OBJECT/corporate, OBJECT/taxi_type으로 "
+                "적지 않는다)"
+            ),
         ),
         FactorSpec(
             "taxi_status",
