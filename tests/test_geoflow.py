@@ -169,6 +169,11 @@ def fare_grounding(name, region=""):
 OD_GROUNDING = od_grounding()
 
 
+def place_patch(concept_id, name, region=""):
+    """장소 값 수정안. 재질의는 고친 grounding 전체가 아니라 수정안만 낸다."""
+    return {"concept_id": concept_id, "name": name, "region": region}
+
+
 def new_tool_executor():
     return ToolExecutor(tools=TOOLS, handlers=get_tool_handlers())
 
@@ -1412,7 +1417,7 @@ class RepairTest(unittest.TestCase):
         """대구시(NOT_FOUND) → 재계획 → 대구(성공)."""
         pipeline, client = new_pipeline([
             fare_grounding("대구시"),
-            fare_grounding("대구"),
+            place_patch("place_1", "대구"),
         ])
         run = pipeline.run(self.FARE_QUESTION)
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
@@ -1431,7 +1436,7 @@ class RepairTest(unittest.TestCase):
     def test_repair_is_capped_at_one_attempt(self):
         pipeline, client = new_pipeline([
             fare_grounding("대구시"),
-            fare_grounding("없는장소"),
+            place_patch("place_1", "없는장소"),
         ])
         run = pipeline.run(self.FARE_QUESTION)
         self.assertEqual(run.repair_count, 1)
@@ -1442,17 +1447,17 @@ class RepairTest(unittest.TestCase):
 
     def test_repair_output_still_passes_every_guard(self):
         """재계획이 지어낸 scope를 끼워 넣어도 계획이 만들어지지 않는다."""
-        smuggled = fare_grounding("대구")
-        smuggled["concepts"].append(
-            scope_concept("smuggled", "scope:district:999999999"),
-        )
+        # 수정안 schema 밖의 내용을 끼워 넣으면 patch 단계에서 걸린다.
+        smuggled = {
+            "concept_id": "place_1", "name": "대구", "region": "",
+            "concepts": [scope_concept("smuggled", "scope:district:999999999")],
+        }
         pipeline, _client = new_pipeline([fare_grounding("대구시"), smuggled])
         run = pipeline.run(self.FARE_QUESTION)
-        # 재계획 결과가 grounding 계약에서 탈락해 원래 실행 실패가 유지된다.
         self.assertIsNotNone(run.runtime_error)
         self.assertEqual(run.attempts[-1]["status"], STATUS_REPAIR_FAILED)
         self.assertEqual(
-            run.attempts[-1]["error"]["code"], "UNGROUNDED_SCOPE",
+            run.attempts[-1]["error"]["code"], "REPAIR_OUT_OF_SCOPE",
         )
         self.assertIn("NOT_FOUND", json.dumps(run.error, ensure_ascii=False))
 
@@ -1488,9 +1493,11 @@ class RepairTest(unittest.TestCase):
         재계획이 origin을 고치면서 destination "신천동"을 "신천"으로 함께
         줄이는 경우가 관측되었다. 고칠 대상은 오류가 난 개념 하나뿐이다.
         """
+        # 수정안은 실패한 개념 하나만 가리킨다. 다른 개념은 구조적으로
+        # 손댈 수 없다.
         pipeline, _client = new_pipeline([
             od_grounding("동성로동", "신천동"),
-            od_grounding("동성로", "신천"),
+            place_patch("origin", "동성로"),
         ])
         run = pipeline.run(OD_QUESTION)
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
@@ -1502,7 +1509,8 @@ class RepairTest(unittest.TestCase):
         )
 
     def test_repair_rejects_structure_change(self):
-        """재계획이 측정 대상이나 개념 구성을 바꾸면 받지 않는다."""
+        """수정안이 개념을 바꾸려 하면 받지 않는다."""
+        # 개념을 바꾸려는 수정안은 schema 자체가 받지 않는다.
         pipeline, _client = new_pipeline([
             fare_grounding("대구시"),
             grounding_payload([
@@ -1514,14 +1522,14 @@ class RepairTest(unittest.TestCase):
         self.assertEqual(run.repair_count, 0)
         self.assertEqual(run.attempts[-1]["status"], STATUS_REPAIR_FAILED)
         self.assertEqual(
-            run.attempts[-1]["error"]["code"], "REPAIR_CHANGED_STRUCTURE",
+            run.attempts[-1]["error"]["code"], "REPAIR_OUT_OF_SCOPE",
         )
         self.assertIn("NOT_FOUND", json.dumps(run.error, ensure_ascii=False))
 
     def test_repair_rejects_identical_values(self):
         pipeline, _client = new_pipeline([
             fare_grounding("대구시"),
-            fare_grounding("대구시"),
+            place_patch("place_1", "대구시"),
         ])
         run = pipeline.run(self.FARE_QUESTION)
         self.assertEqual(run.repair_count, 0)
@@ -1576,7 +1584,7 @@ class RepairTest(unittest.TestCase):
         """대구시 → 대구/시 로 고쳐 와도 region 없이 조회해 성공해야 한다."""
         pipeline, _client = new_pipeline([
             fare_grounding("대구시"),
-            fare_grounding("대구", "시"),
+            place_patch("place_1", "대구", "시"),
         ])
         run = pipeline.run("대구시의 평균 택시 요금은?")
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)

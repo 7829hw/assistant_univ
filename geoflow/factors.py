@@ -158,6 +158,26 @@ FACTOR_CONSTRAINTS: dict[str, FactorConstraint] = {
 }
 
 
+def describe_factor(name):
+    """factor 하나가 받는 값을 사람이 읽을 수 있게 설명한다.
+
+    재질의 요청문이 허용값을 알려 줄 때 쓴다. 같은 목록을 Prompt에 손으로
+    적어 두면 어휘가 바뀔 때 어긋나므로 정의에서 만든다.
+    """
+    spec = FACTOR_SPECS.get(name)
+    if spec is None:
+        return name
+    if spec.values:
+        return f"{name}: {' | '.join(sorted(spec.values))} 중 하나"
+    if spec.kind == "boolean":
+        return f"{name}: true | false"
+    if spec.kind == "integer":
+        return f"{name}: 정수"
+    if spec.pattern is not None:
+        return f"{name}: {spec.pattern.pattern} 형식"
+    return f"{name}: 문자열"
+
+
 def describe_constraints():
     """factor 공기 규칙을 Prompt에 넣을 문장으로 만든다.
 

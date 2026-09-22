@@ -21,10 +21,17 @@ import yaml
 from build import BuildError, build_prompt
 
 from geoflow.errors import PlannerError
-from geoflow.factors import FACTOR_SPECS, describe_constraints
+from geoflow.factors import FACTOR_SPECS, describe_constraints, describe_factor
 from geoflow.grounding import drop_unsupported_regions, parse_grounding
 from geoflow.operator_registry import OPERATORS
-from geoflow.repair import RepairKind, RepairViolation, validate_repair_delta
+from geoflow.repair import (
+    RepairDecision,
+    RepairKind,
+    RepairViolation,
+    apply_patch,
+    parse_patch,
+    validate_repair_delta,
+)
 
 DEFAULT_PLANNER_PROMPT = (
     Path(__file__).resolve().parent.parent / "prompts" / "geoflow_planner.yaml"
@@ -229,42 +236,27 @@ class GeoFlowPlanner:
         return self.repair_instructions[RepairKind.PLACE_VALUE]
 
     def repair(self, question, previous, failure):
-        """Tool 오류를 알려주고 실패한 개념의 값만 고쳐 받는다.
+        """Tool 오류를 알려주고 실패한 장소의 값만 고쳐 받는다.
 
-        재계획 결과도 grounding/composer/validator/compiler 전 경로를 다시
-        통과하므로 어떤 guard도 우회하지 않는다.
+        계획 단계 재질의와 같은 protocol을 쓴다. 모델은 고칠 값만 제안하고
+        코드가 적용한다. 재질의 결과도 grounding/composer/validator/compiler
+        전 경로를 다시 통과하므로 어떤 guard도 우회하지 않는다.
         """
-        instruction = _fill_instruction(
-            self.repair_instructions[RepairKind.PLACE_VALUE], {
-            "concept": failure.get("concept", "(알 수 없음)"),
-            "name": failure.get("name", ""),
-            "region": failure.get("region", ""),
-            "message": failure.get("message", "Tool 오류"),
+        concept_id = failure.get("concept")
+        decision = RepairDecision(
+            repairable=True,
+            kind=RepairKind.PLACE_VALUE,
+            reason="장소 조회에 실패했습니다.",
+            targets=(concept_id,) if concept_id else (),
+        )
+        output = self._ask_patch(
+            question, previous, decision,
+            message=failure.get("message", "Tool 오류"),
+            extra={
+                "concept": concept_id or "(알 수 없음)",
+                "name": failure.get("name", ""),
+                "region": failure.get("region", ""),
             },
-        )
-        output = self._ask(
-            [
-                *self.messages(question),
-                {
-                    "role": "assistant",
-                    "content": json.dumps(
-                        previous.grounding.to_dict(), ensure_ascii=False,
-                    ),
-                },
-                {"role": "user", "content": instruction},
-            ],
-            question,
-        )
-        changed = _changed_structure(previous.grounding, output.grounding)
-        if changed:
-            raise PlannerError(
-                f"재계획이 개념 구조를 바꿨습니다: {changed}. "
-                "값만 수정해야 합니다.",
-                code="REPAIR_CHANGED_STRUCTURE",
-                context={"raw_text": output.raw_text},
-            )
-        keep_untouched_values(
-            previous.grounding, output.grounding, failure.get("concept"),
         )
         drop_invented_regions(previous.grounding, output.grounding)
         if _same_values(previous.grounding, output.grounding):
@@ -276,25 +268,23 @@ class GeoFlowPlanner:
         return output
 
     def repair_planning_error(self, question, previous, *, error, decision):
-        """계획을 만들지 못한 이유를 알려 주고 빠진 정보만 채워 받는다.
+        """계획을 만들지 못한 이유를 알려 주고 빠진 부분만 받아 채운다.
 
-        무엇을 채워도 되는지는 ``decision``이 정하고, 실제로 그 범위만 바뀌
-        었는지는 ``validate_repair_delta``가 코드로 확인한다. 요청문만 믿지
-        않는 이유는 모델이 요청받지 않은 부분까지 손대는 경우가 관측되기
-        때문이다.
+        모델은 고친 grounding 전체를 다시 내놓지 않는다. "무엇을 더할지"만
+        제안하고, 실제 수정은 코드가 한다. 손댈 수 있는 표면을 줄이면 손대면
+        안 되는 곳이 바뀌는 실패가 아예 생기지 않는다.
         """
+        return self._ask_patch(question, previous, decision, message=(
+            error.user_message or error.detail
+        ))
+
+    def _ask_patch(self, question, previous, decision, *, message, extra=None):
+        """수정안을 받아 검증하고 코드가 적용한다."""
         instruction = _fill_instruction(
-            self.repair_instructions[decision.kind], {
-                "concepts": ", ".join(decision.targets) or "(없음)",
-                "concept": ", ".join(decision.targets) or "(없음)",
-                "qualifier": ", ".join(decision.allowed_additions),
-                "qualifiers": ", ".join(decision.allowed_additions),
-                "factor": ", ".join(decision.targets),
-                "missing": ", ".join(decision.allowed_additions),
-                "message": error.user_message or error.detail,
-            },
+            self.repair_instructions[decision.kind],
+            {**_instruction_values(decision, message), **(extra or {})},
         )
-        output = self._ask(
+        text, _attempts = self._call(
             [
                 *self.messages(question),
                 {
@@ -304,68 +294,85 @@ class GeoFlowPlanner:
                     ),
                 },
                 {"role": "user", "content": instruction},
-            ],
-            question,
+            ]
         )
-        try:
-            validate_repair_delta(
-                previous.grounding, output.grounding, decision,
+        payload = parse_planner_json(text)
+        if payload.get(UNSUPPORTED_KEY):
+            raise PlannerError(
+                "질문만으로는 빠진 정보를 정할 수 없다고 응답했습니다.",
+                user_message=(
+                    "질문에서 필요한 조건을 확정할 수 없습니다."
+                ),
+                code="REPAIR_UNSUPPORTED",
+                context={"raw_text": text, "repair_kind": decision.kind},
             )
+        try:
+            patch = parse_patch(payload, previous.grounding, decision)
+            repaired = apply_patch(previous.grounding, patch)
+            validate_repair_delta(previous.grounding, repaired, decision)
         except RepairViolation as violation:
             raise PlannerError(
                 f"재계획이 허용된 범위를 벗어났습니다: {violation}",
                 code="REPAIR_OUT_OF_SCOPE",
                 context={
-                    "raw_text": output.raw_text,
+                    "raw_text": text,
                     "repair_kind": decision.kind,
                 },
             ) from violation
-        return output
+        return PlannerOutput(
+            grounding=repaired,
+            raw_text=text,
+            model=self.model,
+            duration_ms=0.0,
+        )
 
     def _ask(self, messages, question):
-        """호출이 응답을 반환하지 못하면 정해진 횟수까지 다시 부른다.
-
-        작은 모델이 thinking 안에서 같은 문장을 반복하다 생성을 끝내지 못하는
-        경우가 관측되었고, 같은 입력이라도 다시 부르면 끝나는 경우가 있다.
-        재시도 대상은 ``RETRYABLE_CODES``로 한정한다.
-        """
+        """계획 요청 한 번. 재시도는 ``_call``이 맡는다."""
         started_at = time.perf_counter()
-        last_error = None
-        for attempt in range(1, self.max_attempts + 1):
-            try:
-                output = self._ask_once(messages, question)
-            except PlannerError as error:
-                if error.code not in RETRYABLE_CODES:
-                    raise
-                last_error = error
-                continue
-            output.duration_ms = _elapsed_ms(started_at)
-            output.attempts = attempt
-            return output
-        last_error.context["attempts"] = self.max_attempts
-        last_error.context["duration_ms"] = _elapsed_ms(started_at)
-        raise last_error
-
-    def _ask_once(self, messages, question):
         try:
-            # tools를 전달하지 않아 Tool Calling 자체를 불가능하게 만든다.
-            body = self.client.chat(messages)
-        except Exception as error:  # noqa: BLE001 - client 오류를 단계 오류로 변환
-            raise PlannerError(
-                f"Planner 모델 호출에 실패했습니다: {type(error).__name__}: {error}",
-                code="PLANNER_CALL_FAILED",
-                context={"model": self.model},
-            ) from error
-
-        _reject_truncated(body, self.model)
-        text = _response_text(body)
+            text, attempts = self._call(messages)
+        except PlannerError as error:
+            error.context.setdefault("duration_ms", _elapsed_ms(started_at))
+            raise
         payload = parse_planner_json(text)
         grounding = self._validate_payload(payload, text, question)
         return PlannerOutput(
             grounding=grounding,
             raw_text=text,
             model=self.model,
+            duration_ms=_elapsed_ms(started_at),
+            attempts=attempts,
         )
+
+    def _call(self, messages):
+        """응답 본문과 시도 횟수를 돌려준다.
+
+        생성이 끝나지 않은 호출만 다시 부른다. 재시도 규칙은 계획 요청과
+        수정 요청이 같다. 재시도는 여기 한 곳에만 둔다.
+        """
+        last_error = None
+        for attempt in range(1, self.max_attempts + 1):
+            try:
+                try:
+                    # tools를 전달하지 않아 Tool Calling을 불가능하게 만든다.
+                    body = self.client.chat(messages)
+                except Exception as error:  # noqa: BLE001 - 단계 오류로 변환
+                    raise PlannerError(
+                        "Planner 모델 호출에 실패했습니다: "
+                        f"{type(error).__name__}: {error}",
+                        code="PLANNER_CALL_FAILED",
+                        context={"model": self.model},
+                    ) from error
+                _reject_truncated(body, self.model)
+                # 본문이 비어 있는 것도 "응답을 받지 못한" 경우이므로 여기서
+                # 확인해야 재시도 대상이 된다.
+                return _response_text(body), attempt
+            except PlannerError as error:
+                if error.code not in RETRYABLE_CODES:
+                    raise
+                last_error = error
+        last_error.context["attempts"] = self.max_attempts
+        raise last_error
 
     def _validate_payload(self, payload, text, question):
         """Planner 출력이 grounding 계약을 만족하는지 확인한다."""
@@ -402,8 +409,26 @@ class GeoFlowPlanner:
 #: 재계획 요청문에서 치환할 자리표시자. 그 밖의 중괄호는 그대로 둔다.
 _INSTRUCTION_FIELDS = (
     "concept", "name", "region", "message",
-    "concepts", "qualifier", "qualifiers", "factor", "missing",
+    "concepts", "qualifier", "qualifiers", "factor", "missing", "allowed",
 )
+
+
+def _instruction_values(decision, message):
+    """요청문 자리표시자 값. 허용값 목록은 factor 정의에서 만든다."""
+    return {
+        "concepts": ", ".join(decision.targets) or "(없음)",
+        "concept": ", ".join(decision.targets) or "(없음)",
+        "qualifier": ", ".join(decision.allowed_additions),
+        "qualifiers": ", ".join(decision.allowed_additions),
+        "factor": ", ".join(decision.targets),
+        "missing": ", ".join(decision.allowed_additions),
+        "allowed": "\n  ".join(
+            describe_factor(name) for name in decision.allowed_additions
+        ),
+        "name": "",
+        "region": "",
+        "message": message,
+    }
 
 
 def _fill_instruction(template, values):

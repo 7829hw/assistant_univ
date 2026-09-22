@@ -217,9 +217,44 @@ def validate_repair_delta(before, after, decision):
         _validate_relation_delta(before, after, decision)
     elif decision.kind == RepairKind.FACTOR_COMPLETION:
         _validate_factor_delta(before, after, decision)
+    elif decision.kind == RepairKind.PLACE_VALUE:
+        _validate_place_delta(before, after, decision)
     else:
         raise RepairViolation(f"알 수 없는 재질의 종류입니다: {decision.kind}")
     return after
+
+
+def _validate_place_delta(before, after, decision):
+    """장소 값 수정. 고칠 대상은 조회에 실패한 개념 하나뿐이다."""
+    previous = {item.id: item for item in before.concepts}
+    current = {item.id: item for item in after.concepts}
+    if set(previous) != set(current):
+        raise RepairViolation("개념을 더하거나 뺄 수 없습니다.")
+    if before.factors != after.factors:
+        raise RepairViolation("조건(factor)은 그대로 두어야 합니다.")
+
+    targets = set(decision.targets)
+    for node_id, node in current.items():
+        old = previous[node_id]
+        if old.attributes != node.attributes:
+            raise RepairViolation(f"{node_id}: 속성은 바꿀 수 없습니다.")
+        if (old.concept, old.subtype, old.role, old.source) != (
+            node.concept, node.subtype, node.role, node.source
+        ):
+            raise RepairViolation(
+                f"{node_id}: 개념·subtype·role·출처는 바꿀 수 없습니다."
+            )
+        if _freeze(old.value) == _freeze(node.value):
+            continue
+        if node_id not in targets:
+            raise RepairViolation(
+                f"{node_id}: 조회에 실패한 개념이 아니므로 값을 바꿀 수 "
+                "없습니다."
+            )
+        if not isinstance(node.value, dict) or sorted(node.value) != [
+            "name", "region",
+        ]:
+            raise RepairViolation(f"{node_id}: 장소 값 형식이 아닙니다.")
 
 
 def _validate_relation_delta(before, after, decision):
@@ -288,3 +323,235 @@ def _validate_factor_delta(before, after, decision):
         raise RepairViolation(
             "빠진 조건이 그대로입니다: " + ", ".join(still_missing)
         )
+
+
+# -- typed patch ------------------------------------------------------------
+#
+# 재질의는 생성 작업이 아니라 제한된 편집 작업이다. 예전에는 모델에게 고친
+# grounding 전체를 다시 내놓으라고 했는데, 그러면 손대면 안 되는 부분까지
+# 다시 쓰게 되어 실패 표면이 넓어진다. 지금은 "무엇을 더하거나 바꿀지"만
+# 받고, 실제 수정은 아래 코드가 수행한다.
+
+
+@dataclass(frozen=True)
+class QualifierUpdate:
+    concept_id: str
+    attribute: str
+    value: Any
+
+
+@dataclass(frozen=True)
+class RelationQualifierPatch:
+    """장소 개념에 역할 속성만 덧붙인다."""
+
+    updates: tuple[QualifierUpdate, ...]
+
+    def to_dict(self):
+        return {
+            "kind": RepairKind.RELATION_QUALIFIER,
+            "updates": [
+                {
+                    "concept_id": item.concept_id,
+                    "attribute": item.attribute,
+                    "value": item.value,
+                }
+                for item in self.updates
+            ],
+        }
+
+
+@dataclass(frozen=True)
+class FactorCompletionPatch:
+    """짝이 빠진 조건만 덧붙인다."""
+
+    factors: dict[str, Any]
+
+    def to_dict(self):
+        return {
+            "kind": RepairKind.FACTOR_COMPLETION,
+            "factors": dict(self.factors),
+        }
+
+
+@dataclass(frozen=True)
+class PlaceValuePatch:
+    """장소 하나의 이름과 상위 지역만 고친다."""
+
+    concept_id: str
+    name: str
+    region: str = ""
+
+    def to_dict(self):
+        return {
+            "kind": RepairKind.PLACE_VALUE,
+            "concept_id": self.concept_id,
+            "name": self.name,
+            "region": self.region,
+        }
+
+
+PATCH_KEYS = {
+    RepairKind.RELATION_QUALIFIER: ("updates",),
+    RepairKind.FACTOR_COMPLETION: ("factors",),
+    RepairKind.PLACE_VALUE: ("concept_id", "name", "region"),
+}
+
+
+def parse_patch(payload, grounding, decision):
+    """모델이 제안한 수정안을 검증된 patch로 바꾼다.
+
+    patch schema 자체가 첫 번째 방어선이다. 여기서 통과한 것만 코드가
+    적용하고, 적용 결과는 ``validate_repair_delta``가 다시 확인한다.
+    """
+    if not isinstance(payload, dict):
+        raise RepairViolation(
+            f"수정안은 object여야 합니다. (받은 형식: {type(payload).__name__})"
+        )
+    allowed_keys = set(PATCH_KEYS.get(decision.kind) or ())
+    unknown = sorted(set(payload) - allowed_keys - {"kind"})
+    if unknown:
+        raise RepairViolation(
+            f"허용되지 않은 key가 있습니다: {', '.join(unknown)}. "
+            f"허용: {', '.join(sorted(allowed_keys))}"
+        )
+    if decision.kind == RepairKind.RELATION_QUALIFIER:
+        return _parse_relation_patch(payload, grounding, decision)
+    if decision.kind == RepairKind.FACTOR_COMPLETION:
+        return _parse_factor_patch(payload, grounding, decision)
+    if decision.kind == RepairKind.PLACE_VALUE:
+        return _parse_place_patch(payload, grounding, decision)
+    raise RepairViolation(f"알 수 없는 재질의 종류입니다: {decision.kind}")
+
+
+def _concepts_by_id(grounding):
+    return {concept.id: concept for concept in grounding.concepts}
+
+
+def _parse_relation_patch(payload, grounding, decision):
+    from geoflow.types import CoreConcept
+
+    raw = payload.get("updates")
+    if not isinstance(raw, list) or not raw:
+        raise RepairViolation("updates는 비어 있지 않은 list여야 합니다.")
+
+    concepts = _concepts_by_id(grounding)
+    allowed_attributes = set(decision.allowed_additions) & registry_qualifiers()
+    targets = set(decision.targets)
+    seen = set()
+    updates = []
+    for index, item in enumerate(raw):
+        where = f"updates[{index}]"
+        if not isinstance(item, dict):
+            raise RepairViolation(f"{where}: object여야 합니다.")
+        unknown = sorted(set(item) - {"concept_id", "attribute", "value"})
+        if unknown:
+            raise RepairViolation(
+                f"{where}: 허용되지 않은 key입니다: {', '.join(unknown)}"
+            )
+        concept_id = item.get("concept_id")
+        attribute = item.get("attribute")
+        value = item.get("value")
+        concept = concepts.get(concept_id)
+        if concept is None:
+            raise RepairViolation(
+                f"{where}: 없는 개념입니다: {concept_id!r}. "
+                f"있는 개념: {', '.join(sorted(concepts))}"
+            )
+        if concept_id not in targets:
+            raise RepairViolation(
+                f"{where}: 이 개념은 수정 대상이 아닙니다: {concept_id}"
+            )
+        if concept.concept != CoreConcept.LOCATION:
+            raise RepairViolation(
+                f"{where}: 장소 개념에만 속성을 덧붙일 수 있습니다: {concept_id}"
+            )
+        if attribute not in allowed_attributes:
+            raise RepairViolation(
+                f"{where}: 덧붙일 수 없는 속성입니다: {attribute!r}. "
+                f"허용: {', '.join(sorted(allowed_attributes))}"
+            )
+        if attribute in concept.attributes:
+            raise RepairViolation(
+                f"{where}: 이미 있는 속성을 덮어쓸 수 없습니다: {attribute}"
+            )
+        if (concept_id, attribute) in seen:
+            raise RepairViolation(f"{where}: 같은 속성을 두 번 지정했습니다.")
+        seen.add((concept_id, attribute))
+        updates.append(QualifierUpdate(concept_id, attribute, value))
+    return RelationQualifierPatch(tuple(updates))
+
+
+def _parse_factor_patch(payload, grounding, decision):
+    raw = payload.get("factors")
+    if not isinstance(raw, dict) or not raw:
+        raise RepairViolation("factors는 비어 있지 않은 object여야 합니다.")
+    allowed = set(decision.allowed_additions)
+    unknown = sorted(set(raw) - allowed)
+    if unknown:
+        raise RepairViolation(
+            f"덧붙일 수 없는 조건입니다: {', '.join(unknown)}. "
+            f"허용: {', '.join(sorted(allowed))}"
+        )
+    existing = sorted(set(raw) & set(grounding.factors))
+    if existing:
+        raise RepairViolation(
+            f"이미 있는 조건을 덮어쓸 수 없습니다: {', '.join(existing)}"
+        )
+    missing = sorted(allowed - set(raw))
+    if missing:
+        raise RepairViolation(
+            f"빠진 조건을 모두 채워야 합니다: {', '.join(missing)}"
+        )
+    return FactorCompletionPatch(dict(raw))
+
+
+def _parse_place_patch(payload, grounding, decision):
+    concepts = _concepts_by_id(grounding)
+    concept_id = payload.get("concept_id")
+    concept = concepts.get(concept_id)
+    if concept is None:
+        raise RepairViolation(
+            f"없는 개념입니다: {concept_id!r}. "
+            f"있는 개념: {', '.join(sorted(concepts))}"
+        )
+    if decision.targets and concept_id not in set(decision.targets):
+        raise RepairViolation(
+            f"이 개념은 수정 대상이 아닙니다: {concept_id}"
+        )
+    name = payload.get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise RepairViolation("name이 비어 있습니다.")
+    region = payload.get("region") or ""
+    if not isinstance(region, str):
+        raise RepairViolation("region은 문자열이어야 합니다.")
+    return PlaceValuePatch(concept_id, name.strip(), region.strip())
+
+
+def apply_patch(grounding, patch):
+    """검증된 patch를 grounding에 적용해 새 grounding을 만든다.
+
+    직렬화한 표현 위에서 수정하고 다시 읽어 들인다. 결과가 grounding 계약을
+    처음부터 다시 통과하므로, 수정된 값이라고 검증을 건너뛰는 경로가 생기지
+    않는다. 입력 grounding은 바꾸지 않는다.
+    """
+    from geoflow.grounding import parse_grounding
+
+    payload = grounding.to_dict()
+    by_id = {item["id"]: item for item in payload["concepts"]}
+
+    if isinstance(patch, RelationQualifierPatch):
+        for update in patch.updates:
+            concept = by_id[update.concept_id]
+            attributes = dict(concept.get("attributes") or {})
+            attributes[update.attribute] = update.value
+            concept["attributes"] = attributes
+    elif isinstance(patch, FactorCompletionPatch):
+        payload["factors"] = {**payload["factors"], **patch.factors}
+    elif isinstance(patch, PlaceValuePatch):
+        by_id[patch.concept_id]["value"] = {
+            "name": patch.name, "region": patch.region,
+        }
+    else:
+        raise RepairViolation(f"알 수 없는 patch입니다: {type(patch).__name__}")
+
+    return parse_grounding(payload, grounding.question)

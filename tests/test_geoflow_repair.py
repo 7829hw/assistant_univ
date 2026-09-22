@@ -33,9 +33,12 @@ from geoflow.pipeline import (  # noqa: E402
 )
 from geoflow.planner import GeoFlowPlanner  # noqa: E402
 from geoflow.repair import (  # noqa: E402
+    RepairDecision,
     RepairKind,
     RepairViolation,
+    apply_patch,
     decide,
+    parse_patch,
     registry_qualifiers,
     validate_repair_delta,
 )
@@ -73,6 +76,20 @@ def measure(node_id, concept, subtype):
 
 def payload(concepts, factors=None):
     return {"concepts": list(concepts), "factors": dict(factors or {})}
+
+
+def relation_patch(*updates):
+    """관계 속성 수정안. 개념 전체를 다시 내놓지 않는다."""
+    return {
+        "updates": [
+            {"concept_id": cid, "attribute": "od_role", "value": value}
+            for cid, value in updates
+        ]
+    }
+
+
+def factor_patch(**factors):
+    return {"factors": dict(factors)}
 
 
 def ground(concepts, factors=None, question="테스트 질문"):
@@ -332,6 +349,273 @@ class RepairMutationGuardTest(unittest.TestCase):
             validate_repair_delta(before, after, decision)
 
 
+class RepairPatchSchemaTest(unittest.TestCase):
+    """A. 수정안 schema. 손댈 수 있는 표면을 여기서 좁힌다."""
+
+    def setUp(self):
+        self.relation_error = failure_of(
+            [place("a", "동성로"), place("b", "신천동"), *TRIP_CONCEPTS],
+            question=OD_QUESTION,
+        )
+        self.relation_decision = decide(self.relation_error)
+        self.relation_before = ground(
+            [place("a", "동성로"), place("b", "신천동"), *TRIP_CONCEPTS],
+            question=OD_QUESTION,
+        )
+        self.factor_error = failure_of(
+            [event("e", "operation"), measure("m", "AMOUNT", "revenue")],
+            {"bucket": "week"},
+        )
+        self.factor_decision = decide(self.factor_error)
+        self.factor_before = ground(
+            [event("e", "operation"), measure("m", "AMOUNT", "revenue")],
+            {"bucket": "week"},
+        )
+
+    def _relation(self, payload_dict):
+        return parse_patch(
+            payload_dict, self.relation_before, self.relation_decision,
+        )
+
+    def _factor(self, payload_dict):
+        return parse_patch(
+            payload_dict, self.factor_before, self.factor_decision,
+        )
+
+    # -- relation ---------------------------------------------------------
+
+    def test_relation_patch_is_accepted(self):
+        patch = self._relation(relation_patch(("a", "pickup"), ("b", "dropoff")))
+        self.assertEqual(len(patch.updates), 2)
+        self.assertEqual(patch.updates[0].concept_id, "a")
+        self.assertEqual(patch.updates[0].attribute, "od_role")
+
+    def test_unknown_concept_id_is_rejected(self):
+        with self.assertRaises(RepairViolation) as caught:
+            self._relation(relation_patch(("없는개념", "pickup")))
+        self.assertIn("없는 개념", str(caught.exception))
+
+    def test_concept_outside_the_target_is_rejected(self):
+        with self.assertRaises(RepairViolation) as caught:
+            self._relation(relation_patch(("e", "pickup")))
+        self.assertIn("수정 대상이 아닙니다", str(caught.exception))
+
+    def test_unknown_qualifier_is_rejected(self):
+        with self.assertRaises(RepairViolation) as caught:
+            self._relation({"updates": [
+                {"concept_id": "a", "attribute": "made_up", "value": "x"},
+            ]})
+        self.assertIn("덧붙일 수 없는 속성", str(caught.exception))
+
+    def test_overwriting_an_existing_qualifier_is_rejected(self):
+        before = ground(
+            [place("a", "동성로", od_role="pickup"), place("b", "신천동"),
+             *TRIP_CONCEPTS],
+            question=OD_QUESTION,
+        )
+        with self.assertRaises(RepairViolation) as caught:
+            parse_patch(
+                relation_patch(("a", "dropoff")), before,
+                self.relation_decision,
+            )
+        self.assertIn("덮어쓸 수 없습니다", str(caught.exception))
+
+    def test_extra_keys_are_rejected(self):
+        with self.assertRaises(RepairViolation) as caught:
+            self._relation({
+                "updates": [{"concept_id": "a", "attribute": "od_role",
+                             "value": "pickup"}],
+                "factors": {"date": "20260530"},
+            })
+        self.assertIn("허용되지 않은 key", str(caught.exception))
+
+    def test_empty_updates_are_rejected(self):
+        with self.assertRaises(RepairViolation):
+            self._relation({"updates": []})
+
+    # -- factor -----------------------------------------------------------
+
+    def test_factor_patch_is_accepted(self):
+        patch = self._factor(factor_patch(rollup="avg"))
+        self.assertEqual(patch.factors, {"rollup": "avg"})
+
+    def test_factor_outside_the_missing_set_is_rejected(self):
+        with self.assertRaises(RepairViolation) as caught:
+            self._factor(factor_patch(rollup="avg", taxi_type="private"))
+        self.assertIn("덧붙일 수 없는 조건", str(caught.exception))
+
+    def test_overwriting_an_existing_factor_is_rejected(self):
+        with self.assertRaises(RepairViolation) as caught:
+            self._factor({"factors": {"bucket": "month"}})
+        self.assertIn("덧붙일 수 없는 조건", str(caught.exception))
+
+    def test_incomplete_factor_patch_is_rejected(self):
+        with self.assertRaises(RepairViolation) as caught:
+            self._factor({"factors": {}})
+        self.assertIn("비어 있지 않은", str(caught.exception))
+
+    def test_place_patch_is_accepted(self):
+        before = ground([place("p", "대구시"), event("e", "trip"),
+                         measure("m", "AMOUNT", "fare")])
+        decision = RepairDecision(
+            repairable=True, kind=RepairKind.PLACE_VALUE,
+            reason="테스트", targets=("p",),
+        )
+        patch = parse_patch(
+            {"concept_id": "p", "name": "대구", "region": ""},
+            before, decision,
+        )
+        self.assertEqual((patch.name, patch.region), ("대구", ""))
+
+
+class RepairPatchApplyTest(unittest.TestCase):
+    """B. 적용은 코드가 한다. 같은 수정안이면 항상 같은 결과가 나온다."""
+
+    def setUp(self):
+        self.before = ground(
+            [place("a", "동성로"), place("b", "신천동"), *TRIP_CONCEPTS],
+            question=OD_QUESTION,
+        )
+        self.decision = decide(failure_of(
+            [place("a", "동성로"), place("b", "신천동"), *TRIP_CONCEPTS],
+            question=OD_QUESTION,
+        ))
+
+    def test_relation_patch_adds_only_the_attribute(self):
+        patch = parse_patch(
+            relation_patch(("a", "pickup"), ("b", "dropoff")),
+            self.before, self.decision,
+        )
+        after = apply_patch(self.before, patch)
+        self.assertEqual(after.get("a").attributes, {"od_role": "pickup"})
+        self.assertEqual(after.get("b").attributes, {"od_role": "dropoff"})
+        # 나머지는 그대로다.
+        for node_id in ("a", "b", "e", "m"):
+            self.assertEqual(
+                after.get(node_id).value, self.before.get(node_id).value,
+            )
+        self.assertEqual(after.factors, self.before.factors)
+
+    def test_apply_does_not_mutate_the_input(self):
+        patch = parse_patch(
+            relation_patch(("a", "pickup")), self.before, self.decision,
+        )
+        apply_patch(self.before, patch)
+        self.assertEqual(self.before.get("a").attributes, {})
+
+    def test_apply_is_independent_of_key_order(self):
+        """LLM 출력의 field 순서에 결과가 좌우되지 않는다."""
+        first = apply_patch(self.before, parse_patch(
+            {"updates": [
+                {"concept_id": "a", "attribute": "od_role", "value": "pickup"},
+                {"concept_id": "b", "attribute": "od_role", "value": "dropoff"},
+            ]}, self.before, self.decision,
+        ))
+        second = apply_patch(self.before, parse_patch(
+            {"updates": [
+                {"value": "dropoff", "attribute": "od_role", "concept_id": "b"},
+                {"value": "pickup", "concept_id": "a", "attribute": "od_role"},
+            ]}, self.before, self.decision,
+        ))
+        self.assertEqual(first.to_dict(), second.to_dict())
+
+    def test_factor_patch_adds_only_the_factor(self):
+        before = ground(
+            [event("e", "operation"), measure("m", "AMOUNT", "revenue")],
+            {"bucket": "week", "taxi_type": "private"},
+        )
+        decision = decide(failure_of(
+            [event("e", "operation"), measure("m", "AMOUNT", "revenue")],
+            {"bucket": "week", "taxi_type": "private"},
+        ))
+        after = apply_patch(before, parse_patch(
+            factor_patch(rollup="avg"), before, decision,
+        ))
+        self.assertEqual(after.factors, {
+            "bucket": "week", "taxi_type": "private", "rollup": "avg",
+        })
+        self.assertEqual(
+            [item.id for item in after.concepts],
+            [item.id for item in before.concepts],
+        )
+
+    def test_applied_result_passes_the_delta_guard(self):
+        """schema를 통과해 적용된 결과도 두 번째 방어선을 지난다."""
+        patch = parse_patch(
+            relation_patch(("a", "pickup"), ("b", "dropoff")),
+            self.before, self.decision,
+        )
+        after = apply_patch(self.before, patch)
+        validate_repair_delta(self.before, after, self.decision)
+
+    def test_delta_guard_still_rejects_a_bypassing_result(self):
+        """patch 검증을 우회해 만든 결과도 delta guard가 거부한다."""
+        bypassed = ground(
+            [place("a", "다른곳", od_role="pickup"),
+             place("b", "신천동", od_role="dropoff"), *TRIP_CONCEPTS],
+            question=OD_QUESTION,
+        )
+        with self.assertRaises(RepairViolation):
+            validate_repair_delta(self.before, bypassed, self.decision)
+
+
+class FactorCompletionReproducerTest(unittest.TestCase):
+    """E. b24 형태를 LLM 없이 재현한다."""
+
+    QUESTION = "월 단위로 집계한 개인택시 수입의 최대값은?"
+    CONCEPTS = [event("e", "operation"), measure("m", "AMOUNT", "revenue")]
+    FACTORS = {"bucket": "month", "aggregation": "max", "taxi_type": "private"}
+
+    def test_bucket_only_is_repaired_by_a_factor_patch(self):
+        pipeline, client = new_pipeline([
+            payload(self.CONCEPTS, self.FACTORS),
+            factor_patch(rollup="max"),
+        ])
+        run = pipeline.run(self.QUESTION)
+        self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
+        self.assertEqual(len(client.calls), 2)
+        self.assertEqual(
+            run.repairs["factor_completion"],
+            {"attempted": 1, "succeeded": 1},
+        )
+        step = run.execution_plan["steps"][0]
+        self.assertEqual(step["arguments"]["bucket"], "month")
+        self.assertEqual(step["arguments"]["rollup"], "max")
+        # 기존 조건은 그대로 살아 있다.
+        self.assertEqual(step["arguments"]["taxi_type"], "private")
+
+    def test_wrong_rollup_value_is_rejected(self):
+        """bucket 단위를 rollup에 넣는 혼동은 값 검증이 막는다.
+
+        실측에서 모델이 rollup에 "month"를 넣은 적이 있다. 적용 결과를 다시
+        읽어 들이므로 factor 값 검증이 그대로 적용된다.
+        """
+        pipeline, _client = new_pipeline([
+            payload(self.CONCEPTS, self.FACTORS),
+            factor_patch(rollup="month"),
+        ])
+        run = pipeline.run(self.QUESTION)
+        self.assertIsNotNone(run.runtime_error)
+        error = run.attempts[-1]["repair_error"]
+        self.assertEqual(error["code"], "INVALID_FACTOR")
+        self.assertIn("rollup", error["detail"])
+        # 계획은 만들어지지 않았고 Tool도 부르지 않았다.
+        self.assertEqual(run.hop_log, [])
+
+    def test_repair_request_states_the_allowed_values(self):
+        """허용값은 factor 정의에서 만들어 요청문에 넣는다."""
+        from geoflow.factors import describe_factor
+
+        pipeline, client = new_pipeline([
+            payload(self.CONCEPTS, self.FACTORS),
+            factor_patch(rollup="max"),
+        ])
+        pipeline.run(self.QUESTION)
+        instruction = client.calls[-1][-1]["content"]
+        self.assertIn(describe_factor("rollup"), instruction)
+        self.assertNotIn("concepts", instruction)
+
+
 class PlanningRepairPipelineTest(unittest.TestCase):
     """C. 파이프라인에서의 재질의 횟수와 경로."""
 
@@ -339,9 +623,7 @@ class PlanningRepairPipelineTest(unittest.TestCase):
         pipeline, client = new_pipeline([
             payload([place("a", "동성로"), place("b", "신천동"),
                      *TRIP_CONCEPTS]),
-            payload([place("a", "동성로", od_role="pickup"),
-                     place("b", "신천동", od_role="dropoff"),
-                     *TRIP_CONCEPTS]),
+            relation_patch(("a", "pickup"), ("b", "dropoff")),
         ])
         run = pipeline.run(OD_QUESTION)
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
@@ -359,9 +641,7 @@ class PlanningRepairPipelineTest(unittest.TestCase):
         pipeline, client = new_pipeline([
             payload([event("e", "operation"),
                      measure("m", "AMOUNT", "revenue")], {"bucket": "week"}),
-            payload([event("e", "operation"),
-                     measure("m", "AMOUNT", "revenue")],
-                    {"bucket": "week", "rollup": "avg"}),
+            factor_patch(rollup="avg"),
         ])
         run = pipeline.run("주 단위로 집계한 택시 수입의 평균은?")
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
@@ -375,9 +655,7 @@ class PlanningRepairPipelineTest(unittest.TestCase):
         pipeline, _client = new_pipeline([
             payload([place("a", "동성로"), place("b", "신천동"),
                      *TRIP_CONCEPTS]),
-            payload([place("a", "동성로", od_role="pickup"),
-                     place("b", "신천동", od_role="dropoff"),
-                     *TRIP_CONCEPTS]),
+            relation_patch(("a", "pickup"), ("b", "dropoff")),
         ])
         run = pipeline.run(OD_QUESTION)
         self.assertEqual(run.validation["status"], "OK")
@@ -385,21 +663,38 @@ class PlanningRepairPipelineTest(unittest.TestCase):
         self.assertTrue(run.execution_plan["steps"])
 
     def test_second_planning_failure_is_not_repaired_again(self):
-        """재질의 결과가 또 실패해도 다시 묻지 않는다."""
+        """수정안을 받았는데도 또 실패하면 다시 묻지 않는다.
+
+        두 장소 중 하나만 구분을 채워 오면 나머지가 그대로 남아 같은
+        이유로 다시 실패한다. 이때 재질의 예산은 이미 소진되어 있다.
+        """
         pipeline, client = new_pipeline([
             payload([place("a", "동성로"), place("b", "신천동"),
                      *TRIP_CONCEPTS]),
-            payload([place("a", "동성로"), place("b", "신천동"),
-                     *TRIP_CONCEPTS]),
+            relation_patch(("a", "pickup")),
         ])
         run = pipeline.run(OD_QUESTION)
         self.assertEqual(len(client.calls), 2)
         self.assertEqual(run.repair_count, MAX_REPAIR_ATTEMPTS)
         self.assertIsNotNone(run.runtime_error)
+        last = run.attempts[-1]
+        self.assertEqual(last["status"], STATUS_PLANNING_FAILED)
+        self.assertFalse(last["repair_attempted"])
+        self.assertIn("소진", last["reason"])
+
+    def test_malformed_patch_is_rejected_before_it_is_applied(self):
+        """수정안 schema가 첫 번째 방어선이다."""
+        pipeline, client = new_pipeline([
+            payload([place("a", "동성로"), place("b", "신천동"),
+                     *TRIP_CONCEPTS]),
+            {"updates": []},
+        ])
+        run = pipeline.run(OD_QUESTION)
+        self.assertEqual(len(client.calls), 2)
+        self.assertEqual(run.repair_count, 0)
         self.assertEqual(
-            run.attempts[-1]["status"], STATUS_PLANNING_FAILED,
+            run.attempts[-1]["repair_error"]["code"], "REPAIR_OUT_OF_SCOPE",
         )
-        self.assertFalse(run.attempts[-1]["repair_attempted"])
 
     def test_planning_repair_consumes_the_tool_repair_budget(self):
         """계획 재질의를 쓰면 실행 실패에는 재질의가 남지 않는다.
@@ -410,7 +705,7 @@ class PlanningRepairPipelineTest(unittest.TestCase):
             # 1) od_role 누락 → 계획 재질의
             payload([place("a", "대구시"), *TRIP_CONCEPTS]),
             # 2) 속성은 채웠지만 장소가 조회되지 않는다 → 실행 실패
-            payload([place("a", "대구시", od_role="pickup"), *TRIP_CONCEPTS]),
+            relation_patch(("a", "pickup")),
         ])
         run = pipeline.run("대구시에서 출발한 실차 구간 건수는?")
         self.assertEqual(len(client.calls), 2)
@@ -423,7 +718,7 @@ class PlanningRepairPipelineTest(unittest.TestCase):
         """계획이 한 번에 만들어지면 실행 실패에 재질의를 쓸 수 있다."""
         pipeline, client = new_pipeline([
             payload([place("a", "대구시", od_role="pickup"), *TRIP_CONCEPTS]),
-            payload([place("a", "대구", od_role="pickup"), *TRIP_CONCEPTS]),
+            {"concept_id": "a", "name": "대구", "region": ""},
         ])
         run = pipeline.run("대구시에서 출발한 실차 구간 건수는?")
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
@@ -433,9 +728,12 @@ class PlanningRepairPipelineTest(unittest.TestCase):
         )
 
     def test_out_of_scope_repair_keeps_the_original_error(self):
+        # 수정안이 개념 값을 바꾸려 하면 schema가 받지 않는다.
         pipeline, _client = new_pipeline([
             payload([place("a", "동성로"), *TRIP_CONCEPTS]),
-            payload([place("a", "다른곳", od_role="pickup"), *TRIP_CONCEPTS]),
+            {"updates": [{"concept_id": "a", "attribute": "od_role",
+                          "value": "pickup"}],
+             "concepts": [place("a", "다른곳")]},
         ])
         run = pipeline.run("동성로에서 출발한 실차 구간 건수는?")
         self.assertEqual(run.error["code"], "MISSING_RELATION_QUALIFIER")
@@ -451,7 +749,7 @@ class PlanningRepairPipelineTest(unittest.TestCase):
     def test_attempt_record_carries_diagnostics(self):
         pipeline, _client = new_pipeline([
             payload([place("a", "동성로"), *TRIP_CONCEPTS]),
-            payload([place("a", "동성로", od_role="pickup"), *TRIP_CONCEPTS]),
+            relation_patch(("a", "pickup")),
         ])
         run = pipeline.run("동성로에서 출발한 실차 구간 건수는?")
         record = run.attempts[0]
@@ -465,7 +763,7 @@ class PlanningRepairPipelineTest(unittest.TestCase):
     def test_run_record_is_json_serializable(self):
         pipeline, _client = new_pipeline([
             payload([place("a", "동성로"), *TRIP_CONCEPTS]),
-            payload([place("a", "동성로", od_role="pickup"), *TRIP_CONCEPTS]),
+            relation_patch(("a", "pickup")),
         ])
         run = pipeline.run("동성로에서 출발한 실차 구간 건수는?")
         json.dumps(run.to_dict(), ensure_ascii=False)
