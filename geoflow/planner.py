@@ -289,6 +289,7 @@ class GeoFlowPlanner:
 
     def _ask_patch(self, question, previous, decision, *, message, extra=None):
         """수정안을 받아 검증하고 코드가 적용한다."""
+        started_at = time.perf_counter()
         instruction = _fill_instruction(
             self.repair_instructions[decision.kind],
             {**_instruction_values(decision, message), **(extra or {})},
@@ -332,7 +333,7 @@ class GeoFlowPlanner:
             grounding=repaired,
             raw_text=text,
             model=self.model,
-            duration_ms=0.0,
+            duration_ms=_elapsed_ms(started_at),
         )
 
     def _ask(self, messages, question):
