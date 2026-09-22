@@ -1186,7 +1186,7 @@ class PipelineScenarioTest(unittest.TestCase):
         self.assertIn("대구", run.final_answer)
 
     def test_bucket_requires_rollup(self):
-        """혼자 쓸 수 없는 조건은 실행 전에 거부한다."""
+        """혼자 쓸 수 없는 조건은 조각을 고르기 전에 거부한다."""
         for factors in (
             {"bucket": "week"},
             {"rollup": "avg"},
@@ -1197,7 +1197,10 @@ class PipelineScenarioTest(unittest.TestCase):
                     measure_concept("revenue", "AMOUNT", "revenue"),
                 ], factors)])
                 run = pipeline.run("주 단위 수입은?")
-                self.assertEqual(run.stage, Stage.COMPOSITION)
+                self.assertEqual(run.stage, Stage.PLANNER)
+                self.assertEqual(
+                    run.error["code"], "INVALID_FACTOR_COMBINATION",
+                )
                 self.assertIn("함께", run.error["detail"])
 
     def test_bucket_rollup_is_passed_and_shown(self):
@@ -1220,7 +1223,8 @@ class PipelineScenarioTest(unittest.TestCase):
             measure_concept("count", "AMOUNT", "passage_count"),
         ], {"order": "top"})])
         run = pipeline.run("대구에서 통행량이 가장 많은 곳은?")
-        self.assertEqual(run.stage, Stage.COMPOSITION)
+        self.assertEqual(run.stage, Stage.PLANNER)
+        self.assertEqual(run.error["code"], "INVALID_FACTOR_COMBINATION")
         self.assertIn("함께", run.error["detail"])
 
     def test_relative_date_and_metric_are_named_in_answer(self):

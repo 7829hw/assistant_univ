@@ -21,11 +21,8 @@ import yaml
 from build import BuildError, build_prompt
 
 from geoflow.errors import PlannerError
-from geoflow.grounding import (
-    FACTOR_SPECS,
-    drop_unsupported_regions,
-    parse_grounding,
-)
+from geoflow.factors import FACTOR_SPECS
+from geoflow.grounding import drop_unsupported_regions, parse_grounding
 from geoflow.operator_registry import OPERATORS
 
 DEFAULT_PLANNER_PROMPT = (

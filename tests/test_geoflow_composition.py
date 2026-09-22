@@ -32,7 +32,11 @@ from geoflow.errors import CompositionError, PlannerError  # noqa: E402
 from geoflow.executor import STATUS_OK, execute_plan  # noqa: E402
 from geoflow.grounding import parse_grounding  # noqa: E402
 from geoflow.macros import MacroLibrary  # noqa: E402
-from geoflow.operator_registry import Operator, get_operator  # noqa: E402
+from geoflow.operator_registry import (  # noqa: E402
+    Operator,
+    get_operator,
+    operator_names,
+)
 from geoflow.types import (  # noqa: E402
     CONCEPT_SUBTYPES,
     KNOWN_SUBTYPES,
@@ -362,7 +366,9 @@ class CompositionTest(ComposerCase):
                 [place("a", "대구"), place("b", "부산"),
                  measure("m", "AMOUNT", "speed")],
             )
-        self.assertEqual(caught.exception.code, "AMBIGUOUS_PORT")
+        self.assertEqual(
+            caught.exception.code, "AMBIGUOUS_LOCATION_RELATION",
+        )
 
     def test_unusable_condition_fails_instead_of_being_dropped(self):
         """범위를 받지 못하는 측정에 장소가 붙으면 조용히 버리지 않는다."""
@@ -670,14 +676,38 @@ class OperatorMappingTest(ComposerCase):
         )
 
     def test_parameter_contract_is_enforced_before_execution(self):
-        with self.assertRaises(CompositionError) as caught:
+        """factor 공기 제약은 조각을 고르기 전에 걸린다."""
+        with self.assertRaises(PlannerError) as caught:
             self.compose(
                 "주 단위 수입은?",
                 [event("e", "operation"),
                  measure("m", "AMOUNT", "revenue")],
                 {"bucket": "week"},
             )
-        self.assertEqual(caught.exception.code, "MISSING_COMPANION_PARAM")
+        self.assertEqual(
+            caught.exception.code, "INVALID_FACTOR_COMBINATION",
+        )
+
+    def test_operator_level_companion_check_is_the_last_defence(self):
+        """grounding을 우회해도 operator 계약이 같은 조합을 거부한다."""
+        spec = get_operator(Operator.OPERATION_METRIC)
+        self.assertEqual(
+            spec.missing_companions("bucket", {"bucket": "week"}),
+            ("rollup",),
+        )
+        self.assertEqual(
+            spec.missing_companions(
+                "bucket", {"bucket": "week", "rollup": "avg"},
+            ),
+            (),
+        )
+        # 그 Tool이 받지 않는 parameter는 제약 대상이 아니다.
+        self.assertEqual(
+            get_operator(Operator.PASSAGE_METRIC).missing_companions(
+                "bucket", {},
+            ),
+            (),
+        )
 
     def test_parameter_value_outside_the_tool_enum_is_rejected(self):
         with self.assertRaises(CompositionError) as caught:
@@ -1111,6 +1141,263 @@ class MeasuredDefectRegressionTest(ComposerCase):
                         )
                 # compiler까지 실제로 내려가 본다.
                 compile_plan(plan)
+
+
+class LocationRelationInvariantTest(ComposerCase):
+    """A. LOCATION qualification / arity 불변식.
+
+    "출발", "도착" 같은 질문 문자열이 아니라 operator registry의 typed port
+    계약에서만 유도한다. 승차/하차 범위만 받는 Tool에는 구분 없는 장소를
+    넣을 자리가 없고, 그 사실은 port의 match_attributes에 이미 적혀 있다.
+    """
+
+    def _trip_count(self, places, question="실차 구간 건수는?"):
+        return self.compose(
+            question, [*places, event("e", "trip"),
+                       measure("m", "AMOUNT", "trip_count")],
+        )
+
+    def test_pickup_qualified_location_is_valid(self):
+        plan = self._trip_count([place("o", "동성로", od_role="pickup")])
+        self.assertEqual(
+            plan.applied_macros, ["PLACE_TO_SCOPE", "OD_EVENT_TO_MEASURE"],
+        )
+        self.assertIn("pickup", plan.transformations[-1].inputs)
+        self.assertNotIn("dropoff", plan.transformations[-1].inputs)
+        self.assert_valid(plan)
+
+    def test_dropoff_qualified_location_is_valid(self):
+        plan = self._trip_count([place("d", "신천동", od_role="dropoff")])
+        self.assertIn("dropoff", plan.transformations[-1].inputs)
+        self.assertNotIn("pickup", plan.transformations[-1].inputs)
+        self.assert_valid(plan)
+
+    def test_both_qualified_locations_are_valid(self):
+        plan = self._trip_count([
+            place("o", "동성로", od_role="pickup"),
+            place("d", "신천동", od_role="dropoff"),
+        ])
+        count = plan.transformations[-1]
+        self.assertEqual(count.inputs["pickup"].node_id, "o_scope")
+        self.assertEqual(count.inputs["dropoff"].node_id, "d_scope")
+        self.assert_valid(plan)
+
+    def test_single_unqualified_location_reports_missing_relation(self):
+        """b11 / b17. 구분 없는 장소 하나는 어느 port에도 들어갈 수 없다."""
+        with self.assertRaises(CompositionError) as caught:
+            self._trip_count([place("p", "동성로동")])
+        error = caught.exception
+        self.assertEqual(error.code, "MISSING_RELATION_QUALIFIER")
+        self.assertEqual(error.context["unqualified"], ["p"])
+        self.assertEqual(error.context["required_qualifiers"], ["od_role"])
+        self.assertEqual(error.context["unqualified_capacity"], 0)
+        self.assertEqual(
+            sorted(error.context["candidate_ports"]), ["dropoff", "pickup"],
+        )
+        self.assertEqual(
+            error.context["candidate_operators"], [Operator.TRIP_COUNT],
+        )
+
+    def test_two_unqualified_locations_report_ambiguous_relation(self):
+        """q27. 구분이 없으면 어느 쪽이 출발인지 정할 수 없다."""
+        with self.assertRaises(CompositionError) as caught:
+            self._trip_count([place("a", "초읍동"), place("b", "초량동")])
+        error = caught.exception
+        self.assertEqual(error.code, "AMBIGUOUS_LOCATION_RELATION")
+        self.assertEqual(sorted(error.context["unqualified"]), ["a", "b"])
+        self.assertEqual(error.context["location_count"], 2)
+
+    def test_area_operator_with_one_location_is_untouched(self):
+        """일반 area operator는 새 불변식에 걸리지 않는다."""
+        plan = self.compose(
+            "대구 지역내 택시들의 평균 속도는?",
+            [place("p", "대구"), event("e", "passage"),
+             measure("m", "AMOUNT", "speed")],
+        )
+        self.assertEqual(
+            plan.applied_macros, ["PLACE_TO_SCOPE", "EVENT_TO_MEASURE"],
+        )
+        self.assert_valid(plan)
+
+    def test_area_operator_with_two_locations_is_ambiguous(self):
+        """b20. 자리가 하나인데 장소가 둘이면 추측하지 않는다."""
+        with self.assertRaises(CompositionError) as caught:
+            self.compose(
+                "대구와 부산 중 어디가 더 빠른가요?",
+                [place("a", "대구"), place("b", "부산"),
+                 event("e", "passage"), measure("m", "AMOUNT", "speed")],
+            )
+        self.assertEqual(
+            caught.exception.code, "AMBIGUOUS_LOCATION_RELATION",
+        )
+        self.assertEqual(caught.exception.context["unqualified_capacity"], 1)
+
+    def test_no_location_is_untouched(self):
+        plan = self.compose(
+            "평균 택시 요금은?",
+            [event("e", "trip"), measure("m", "AMOUNT", "fare")],
+            {"aggregation": "avg"},
+        )
+        self.assertEqual(plan.applied_macros, ["EVENT_TO_MEASURE"])
+        self.assert_valid(plan)
+
+    def test_scope_to_place_goal_is_untouched(self):
+        """목표가 장소인 질문에서 목표 자신을 조건으로 세지 않는다."""
+        plan = self.compose(
+            "scope:district:2700000000은 어디인가요?",
+            [scope("s", "scope:district:2700000000"),
+             {"id": "p", "concept": "LOCATION", "subtype": "place",
+              "role": "MEASURE", "source": "implicit"}],
+        )
+        self.assertEqual(plan.applied_macros, ["SCOPE_TO_PLACE"])
+        self.assert_valid(plan)
+
+    def test_qualifier_is_never_invented(self):
+        """빠진 구분을 임의로 채우지 않는다. 반대로 답할 수 있기 때문이다."""
+        with self.assertRaises(CompositionError):
+            self._trip_count([place("p", "신천동")])
+        # 실패했을 뿐 어떤 계획도 만들지 않았다.
+        grounding = parse_grounding(
+            payload([place("p", "신천동"), event("e", "trip"),
+                     measure("m", "AMOUNT", "trip_count")]),
+            "신천동에 도착한 실차 구간 건수는?",
+        )
+        self.assertIsNone(grounding.get("p").od_role)
+
+    def test_invariant_is_derived_from_the_registry(self):
+        """규칙이 특정 operator 이름이나 측정값에 하드코딩되지 않았다."""
+        from geoflow.composer import _location_capacity, _location_contract
+
+        self.assertEqual(
+            _location_capacity(get_operator(Operator.TRIP_COUNT)), 0,
+        )
+        self.assertEqual(
+            _location_capacity(get_operator(Operator.PASSAGE_METRIC)), 1,
+        )
+        # place_name/place_region은 같은 node를 보므로 한 자리로 센다.
+        self.assertEqual(
+            _location_capacity(get_operator(Operator.RESOLVE_PLACE_SCOPE)), 1,
+        )
+        capacity, requires, keys, ports = _location_contract(
+            (get_operator(Operator.TRIP_COUNT),),
+        )
+        self.assertEqual((capacity, requires, keys), (0, True, ["od_role"]))
+        self.assertEqual(sorted(ports), ["dropoff", "pickup"])
+
+    def test_user_message_does_not_name_an_operator(self):
+        """사용자에게 보여 줄 문구에 semantic operator 이름을 넣지 않는다."""
+        for places in ([place("p", "동성로동")],
+                       [place("a", "초읍동"), place("b", "초량동")]):
+            with self.assertRaises(CompositionError) as caught:
+                self._trip_count(places)
+            message = caught.exception.user_message
+            for name in operator_names():
+                self.assertNotIn(name, message)
+
+
+class FactorConstraintTest(ComposerCase):
+    """B. factor 공기 불변식.
+
+    특정 Tool이나 질문 유형이 아니라 조건 자체의 성질이므로 grounding 직후에
+    확인한다. 어떤 operator가 그 조건을 소비할지 몰라도 판정할 수 있다.
+    """
+
+    def _ground(self, factors, question="택시 수입은?"):
+        return parse_grounding(
+            payload([event("e", "operation"),
+                     measure("m", "AMOUNT", "revenue")], factors),
+            question,
+        )
+
+    def test_bucket_with_rollup_is_valid(self):
+        grounding = self._ground({"bucket": "week", "rollup": "avg"})
+        self.assertEqual(grounding.factors["bucket"], "week")
+        plan = self.composer.compose(grounding)
+        self.assertEqual(plan.transformations[0].params["rollup"], "avg")
+
+    def test_bucket_alone_is_invalid(self):
+        with self.assertRaises(PlannerError) as caught:
+            self._ground({"bucket": "week"})
+        error = caught.exception
+        self.assertEqual(error.code, "INVALID_FACTOR_COMBINATION")
+        self.assertEqual(error.context["factor"], "bucket")
+        self.assertEqual(error.context["missing"], ["rollup"])
+
+    def test_rollup_alone_is_invalid(self):
+        with self.assertRaises(PlannerError) as caught:
+            self._ground({"rollup": "avg"})
+        self.assertEqual(caught.exception.context["missing"], ["bucket"])
+
+    def test_order_with_dimension_is_valid(self):
+        grounding = self._ground({"order": "top", "dimension": "sido"})
+        self.assertEqual(grounding.factors["order"], "top")
+
+    def test_order_alone_is_invalid(self):
+        with self.assertRaises(PlannerError) as caught:
+            self._ground({"order": "top"})
+        self.assertEqual(caught.exception.context["missing"], ["dimension"])
+
+    def test_limit_with_dimension_is_valid(self):
+        grounding = self._ground({"limit": 3, "dimension": "sido"})
+        self.assertEqual(grounding.factors["limit"], 3)
+
+    def test_limit_alone_is_invalid(self):
+        with self.assertRaises(PlannerError) as caught:
+            self._ground({"limit": 3})
+        self.assertEqual(caught.exception.context["missing"], ["dimension"])
+
+    def test_unrelated_factors_are_untouched(self):
+        grounding = self._ground({
+            "date": "20260530", "taxi_type": "private", "aggregation": "avg",
+        })
+        self.assertEqual(sorted(grounding.factors), [
+            "aggregation", "date", "taxi_type",
+        ])
+
+    def test_dimension_alone_is_valid(self):
+        """그룹화만 있는 것은 정상이다. 순위가 그룹화를 요구할 뿐이다."""
+        grounding = self._ground({"dimension": "dayofweek"})
+        self.assertEqual(grounding.factors["dimension"], "dayofweek")
+
+    def test_constraints_have_a_single_source_of_truth(self):
+        """operator마다 같은 규칙을 다시 적어 두지 않는다."""
+        import inspect
+
+        from geoflow import factors, operator_registry
+
+        source = inspect.getsource(operator_registry)
+        self.assertNotIn("param_requires", source)
+        # operator는 factor 표를 자기가 받는 parameter로 걸러 쓴다.
+        self.assertEqual(factors.companions_for("bucket"), ("rollup",))
+        self.assertEqual(
+            get_operator(Operator.OPERATION_METRIC).missing_companions(
+                "bucket", {},
+            ),
+            ("rollup",),
+        )
+
+    def test_factor_value_range_stays_on_the_operator(self):
+        """값의 범위는 Tool마다 다르므로 registry가 갖는다."""
+        self.assertEqual(
+            sorted(get_operator(Operator.OPERATION_METRIC)
+                   .allowed_values("dimension")),
+            ["dayofweek", "sido"],
+        )
+        self.assertEqual(
+            sorted(get_operator(Operator.PASSAGE_COUNT)
+                   .allowed_values("dimension")),
+            ["emd", "h3", "sido", "sigungu"],
+        )
+
+    def test_g4_still_checks_the_same_contract(self):
+        """마지막 방어선인 G4를 제거하지 않았다."""
+        import inspect
+
+        from geoflow import validator
+
+        source = inspect.getsource(validator._check_param_contract)
+        self.assertIn("missing_companions", source)
+        self.assertIn("allowed_values", source)
 
 
 class LegacyIsolationTest(unittest.TestCase):

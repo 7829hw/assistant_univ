@@ -30,7 +30,7 @@ from typing import Any
 
 from geoflow import operator_mapping
 from geoflow.errors import CompositionError
-from geoflow.grounding import STRUCTURAL_FACTORS
+from geoflow.factors import STRUCTURAL_FACTORS
 from geoflow.macros import MacroLibrary
 from geoflow.types import (
     GEOFLOW_VERSION,
@@ -165,6 +165,11 @@ class MacroComposer:
             attributes=dict(goal.attributes),
         )
         build.add_node(goal_node)
+
+        # 조각을 시도하기 전에, 질문의 장소들이 이 목표에 연결될 수 있는
+        # 형태인지 먼저 본다. 실패하면 "만들 수 있는 operator가 없다" 같은
+        # 먼 원인 대신 관계 정보가 빠졌다는 사실을 그대로 알려 준다.
+        _check_location_relations(grounding, goal, goal_node)
 
         # 목표를 만들 수 있는 조각을 차례로 시도한다. 질문의 조건을 하나라도
         # 반영하지 못하는 합성은 성공으로 보지 않고 다음 후보로 넘어간다.
@@ -454,6 +459,122 @@ class MacroComposer:
                 if name not in build.used_factors
                 and name not in STRUCTURAL_FACTORS
             },
+        )
+
+
+# -- LOCATION 관계 불변식 ----------------------------------------------------
+
+
+def _location_ports(spec):
+    return [
+        (port, port_spec) for port, port_spec in spec.inputs.items()
+        if port_spec.concept == CoreConcept.LOCATION
+    ]
+
+
+def _location_capacity(spec):
+    """이 operator가 받을 수 있는 "구분 없는 장소"의 개수.
+
+    ``place_name``/``place_region``처럼 같은 node의 다른 field를 보는 port는
+    한 자리로 센다. 타입 서명이 같으면 같은 node가 들어가기 때문이다.
+    """
+    return len({
+        (port_spec.concept, port_spec.subtypes, port_spec.match_attributes)
+        for _, port_spec in _location_ports(spec)
+        if not port_spec.match_attributes
+    })
+
+
+def _location_contract(candidates):
+    """후보 operator들의 LOCATION port 계약을 하나로 요약한다.
+
+    질문 문자열을 보지 않고 registry의 typed port 계약만으로 유도한다.
+    """
+    capacity = 0
+    required_keys = set()
+    qualified_ports = []
+    requires_qualifier = bool(candidates)
+    for spec in candidates:
+        free = _location_capacity(spec)
+        capacity = max(capacity, free)
+        if free:
+            requires_qualifier = False
+        for port, port_spec in _location_ports(spec):
+            if port_spec.match_attributes:
+                qualified_ports.append(port)
+                required_keys.update(
+                    key for key, _ in port_spec.match_attributes
+                )
+    return capacity, requires_qualifier, sorted(required_keys), qualified_ports
+
+
+def _check_location_relations(grounding, goal, goal_node):
+    """장소가 목표에 연결될 수 있는 형태인지 확인한다.
+
+    두 가지를 본다. 둘 다 operator registry의 port 계약에서 유도하며, 질문
+    문자열이나 측정값 이름을 보지 않는다.
+
+    1. 후보 operator가 받을 수 있는 "구분 없는 장소" 자리보다 질문의 장소가
+       많으면, 어느 장소를 어디에 쓸지 정할 수 없다.
+    2. 후보 operator의 LOCATION port가 모두 속성 한정 port라면, 장소마다 그
+       한정이 있어야 한다. 예를 들어 승차/하차 범위만 받는 Tool에는 구분
+       없는 장소를 넣을 자리가 없다.
+
+    빠진 한정을 임의로 채우지 않는다. 출발지와 도착지 중 어느 쪽인지는
+    질문만이 가진 정보이고, 추정하면 반대로 답할 수 있다.
+    """
+    candidates = operator_mapping.candidates_for(goal.concept, goal.subtype)
+    if not candidates:
+        return
+    locations = [
+        concept for concept in grounding.concepts
+        if concept.concept == CoreConcept.LOCATION
+        and concept.id != goal_node.id
+    ]
+    if not locations:
+        return
+
+    capacity, requires_qualifier, required_keys, qualified_ports = (
+        _location_contract(candidates)
+    )
+    unqualified = [
+        concept for concept in locations
+        if not (set(required_keys) & set(concept.attributes))
+    ]
+    diagnostics = {
+        "locations": [concept.id for concept in locations],
+        "location_count": len(locations),
+        "unqualified": [concept.id for concept in unqualified],
+        "unqualified_capacity": capacity,
+        "required_qualifiers": required_keys,
+        "candidate_operators": [spec.name for spec in candidates],
+        "candidate_ports": sorted(set(qualified_ports)),
+        "goal": f"{goal.concept.value}/{goal.subtype}",
+    }
+
+    if len(unqualified) >= 2 and len(unqualified) > capacity:
+        raise CompositionError(
+            "구분 없는 장소가 "
+            f"{len(unqualified)}개인데 이 분석은 {capacity}개까지만 받을 수 "
+            "있습니다: " + ", ".join(sorted(diagnostics["unqualified"])),
+            user_message=(
+                "질문에 장소가 여러 개인데 서로 어떤 관계인지 확정할 수 "
+                "없습니다."
+            ),
+            code="AMBIGUOUS_LOCATION_RELATION",
+            context=diagnostics,
+        )
+
+    if requires_qualifier and unqualified:
+        raise CompositionError(
+            "이 분석은 역할이 구분된 장소만 받는데 구분이 없는 장소가 "
+            "있습니다: " + ", ".join(sorted(diagnostics["unqualified"]))
+            + f" (필요한 구분: {', '.join(required_keys)})",
+            user_message=(
+                "질문의 장소가 분석에서 어떤 역할인지 구분되지 않았습니다."
+            ),
+            code="MISSING_RELATION_QUALIFIER",
+            context=diagnostics,
         )
 
 

@@ -20,15 +20,24 @@ Planner LLM의 새 책임은 "질문을 어떤 유형으로 분류할 것인가"
 
 Planner 출력은 전부 untrusted input이다. 여기서 형식을 확인하고, 그 뒤
 composer가 만든 graph를 Validator가 다시 확인한다.
+
+factor의 어휘와 공기(co-occurrence) 불변식은 ``geoflow/factors.py``가 갖는다.
+개념이 아니라 조건에 속하는 규칙이고, 특정 Tool이나 질문 유형과 무관하기
+때문이다. 이 모듈은 그 어휘로 값을 읽고, 읽은 뒤 불변식을 확인한다.
 """
 
-import re
 from dataclasses import dataclass, field
 from typing import Any
 
 from agent_graph import extract_scopes
 
 from geoflow.errors import PlannerError
+from geoflow.factors import (
+    FACTOR_SPECS,
+    STRUCTURAL_FACTORS,
+    FactorSpec,
+    validate_factors,
+)
 from geoflow.operator_mapping import measure_types
 from geoflow.types import (
     CONCEPT_SUBTYPES,
@@ -49,93 +58,7 @@ GROUNDED_SOURCES = frozenset({NodeSource.USER, NodeSource.IMPLICIT})
 OD_ROLE = "od_role"
 OD_ROLES = frozenset({"pickup", "dropoff"})
 
-_AGGREGATIONS = frozenset({"max", "min", "sum", "avg", "med"})
-_DATE_PATTERN = re.compile(
-    r"^(\d{8}(-\d{8})?|last_week|last_month|last_year"
-    r"|weekday|weekend|holiday)$"
-)
-_TIME_PATTERN = re.compile(r"^\d{6}-\d{6}$")
 _PLACE_FIELDS = ("name", "region")
-
-
-@dataclass(frozen=True)
-class FactorSpec:
-    """factor 하나의 형식.
-
-    Tool별로 어떤 factor를 받는지는 operator registry가 정한다. 여기서는
-    "이 값이 그 factor로 말이 되는가"만 본다.
-    """
-
-    name: str
-    kind: str = "text"
-    values: frozenset[str] = frozenset()
-    pattern: Any = None
-
-    def coerce(self, value):
-        if self.kind == "boolean":
-            if not isinstance(value, bool):
-                raise PlannerError(
-                    f"factor {self.name}은 true/false여야 합니다. "
-                    f"(받은 값: {value!r})",
-                    code="INVALID_FACTOR",
-                )
-            return value
-        if self.kind == "integer":
-            if isinstance(value, bool) or not isinstance(value, int):
-                raise PlannerError(
-                    f"factor {self.name}은 정수여야 합니다. (받은 값: {value!r})",
-                    code="INVALID_FACTOR",
-                )
-            return value
-        if not isinstance(value, str) or not value.strip():
-            raise PlannerError(
-                f"factor {self.name}은 비어 있지 않은 문자열이어야 합니다. "
-                f"(받은 값: {value!r})",
-                code="INVALID_FACTOR",
-            )
-        text = value.strip()
-        if self.values and text not in self.values:
-            raise PlannerError(
-                f"factor {self.name}의 허용된 값이 아닙니다: {text!r} "
-                f"(허용: {', '.join(sorted(self.values))})",
-                code="INVALID_FACTOR",
-            )
-        if self.pattern is not None and not self.pattern.fullmatch(text):
-            raise PlannerError(
-                f"factor {self.name}의 형식이 올바르지 않습니다: {text!r}",
-                code="INVALID_FACTOR",
-            )
-        return text
-
-
-#: grounding이 쓸 수 있는 factor 전체. 여기 없는 이름은 거부한다.
-#: "근처/주변"은 질문 유형이 아니라 vicinity factor로 표현한다.
-FACTOR_SPECS: dict[str, FactorSpec] = {
-    spec.name: spec for spec in (
-        FactorSpec("date", pattern=_DATE_PATTERN),
-        FactorSpec("time", pattern=_TIME_PATTERN),
-        FactorSpec("aggregation", values=_AGGREGATIONS),
-        FactorSpec("rollup", values=_AGGREGATIONS),
-        FactorSpec("bucket", values=frozenset({"week", "month"})),
-        FactorSpec(
-            "taxi_type", values=frozenset({"private", "corporate", "all"}),
-        ),
-        FactorSpec(
-            "taxi_status",
-            values=frozenset({"occupied", "vacant", "stationary", "all"}),
-        ),
-        FactorSpec(
-            "dimension",
-            values=frozenset({"h3", "sido", "sigungu", "emd", "dayofweek"}),
-        ),
-        FactorSpec("order", values=frozenset({"top", "bottom"})),
-        FactorSpec("limit", kind="integer"),
-        FactorSpec("vicinity", kind="boolean"),
-    )
-}
-
-#: 구조를 정하는 factor. Tool 인자가 아니라 어떤 subtype을 만들지를 정한다.
-STRUCTURAL_FACTORS = frozenset({"vicinity"})
 
 
 @dataclass
@@ -245,8 +168,11 @@ def parse_grounding(payload, question, *, raw_text=""):
         seen_ids.add(concept.id)
         concepts.append(concept)
 
-    factors = _parse_factors(
-        {**hoisted, **(payload.get("factors") or {})}, raw_text,
+    factors = validate_factors(
+        _parse_factors(
+            {**hoisted, **(payload.get("factors") or {})}, raw_text,
+        ),
+        raw_text=raw_text,
     )
     grounding = Grounding(
         question=question, concepts=concepts, factors=factors,

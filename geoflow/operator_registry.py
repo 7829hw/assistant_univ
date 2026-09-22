@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from geoflow.errors import ExecutionError
+from geoflow.factors import companions_for
 from geoflow.types import CoreConcept, Subtype, WHOLE_RESULT
 
 #: output extraction selector. output_bindings의 key로 사용한다.
@@ -105,10 +106,13 @@ class OperatorOutput:
 class OperatorSpec:
     """semantic operator 하나의 전체 계약.
 
-    ``param_enums``/``param_requires``는 Tool이 INVALID_ARGUMENT로 거절할
-    조합을 실행 전에 걸러 내기 위한 것이다. 예전에는 template YAML마다
-    ``slot_types``/``slot_requires``로 적어 두었지만, 이는 질문 유형이 아니라
-    Tool 계약에 속한 제약이므로 registry가 갖는 편이 맞다.
+    ``param_enums``는 이 Tool이 받는 값의 범위다. dimension에 무엇을 넣을 수
+    있는지는 Tool마다 다르므로 여기에 둔다.
+
+    반면 "bucket을 쓰면 rollup도 필요하다"처럼 factor끼리의 공기 제약은 Tool이
+    아니라 조건 자체의 성질이므로 ``geoflow/factors.py``가 단일 기준으로 갖고,
+    여기서는 이 Tool이 실제로 받는 parameter로 걸러 쓰기만 한다. 같은 규칙을
+    operator마다 적어 두면 한쪽만 고쳐져 조용히 어긋난다.
     """
 
     name: str
@@ -117,16 +121,19 @@ class OperatorSpec:
     output: OperatorOutput | None = None
     params: frozenset[str] = frozenset()
     param_enums: dict[str, frozenset[str]] = field(default_factory=dict)
-    param_requires: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
     def allowed_values(self, param):
         return self.param_enums.get(param)
 
     def missing_companions(self, param, present):
-        """``param``과 함께 있어야 하는데 빠진 parameter 이름."""
+        """``param``과 함께 있어야 하는데 빠진 parameter 이름.
+
+        공기 제약은 factor 어휘가 갖고, 이 Tool이 받지 않는 parameter는
+        제약 대상이 아니므로 걸러 낸다.
+        """
         return tuple(
-            name for name in self.param_requires.get(param, ())
-            if name not in present
+            name for name in companions_for(param)
+            if name in self.params and name not in present
         )
 
     def input(self, port):
@@ -253,8 +260,6 @@ _SPECS: tuple[OperatorSpec, ...] = (
             "taxi_status": frozenset({"occupied", "vacant", "stationary", "all"}),
             "order": frozenset({"top", "bottom"}),
         },
-        # order/limit은 dimension이 있어야 의미를 갖는다.
-        param_requires={"order": ("dimension",), "limit": ("dimension",)},
     ),
     OperatorSpec(
         name=Operator.TRIP_COUNT,
@@ -284,7 +289,6 @@ _SPECS: tuple[OperatorSpec, ...] = (
         ),
         params=frozenset({"date", "time", "dimension", "order", "limit"}),
         param_enums={"order": frozenset({"top", "bottom"})},
-        param_requires={"order": ("dimension",), "limit": ("dimension",)},
     ),
     OperatorSpec(
         name=Operator.TRIP_METRIC,
@@ -356,11 +360,6 @@ _SPECS: tuple[OperatorSpec, ...] = (
             "bucket": frozenset({"week", "month"}),
             "rollup": frozenset({"max", "min", "sum", "avg", "med"}),
         },
-        # bucket/rollup 2단계 집계는 반드시 짝으로 쓰인다.
-        param_requires={
-            "bucket": ("rollup",), "rollup": ("bucket",),
-            "order": ("dimension",), "limit": ("dimension",),
-        },
     ),
     OperatorSpec(
         name=Operator.SCOPE_NAME,
@@ -394,10 +393,7 @@ for _spec in _SPECS:
             f"{_spec.name}: input과 param의 argument 이름이 겹칩니다: "
             f"{sorted(_collision)}"
         )
-    _unknown_params = (
-        set(_spec.param_enums) | set(_spec.param_requires)
-        | {name for names in _spec.param_requires.values() for name in names}
-    ) - set(_spec.params)
+    _unknown_params = set(_spec.param_enums) - set(_spec.params)
     if _unknown_params:
         raise RuntimeError(
             f"{_spec.name}: params에 없는 parameter 제약입니다: "
