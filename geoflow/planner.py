@@ -21,7 +21,7 @@ import yaml
 from build import BuildError, build_prompt
 
 from geoflow.errors import PlannerError
-from geoflow.factors import FACTOR_SPECS
+from geoflow.factors import FACTOR_SPECS, describe_constraints
 from geoflow.grounding import drop_unsupported_regions, parse_grounding
 from geoflow.operator_registry import OPERATORS
 from geoflow.repair import RepairKind, RepairViolation, validate_repair_delta
@@ -56,6 +56,7 @@ IGNORABLE_KEYS = frozenset({
 
 _VOCABULARY_HEADING = "[분석 개체와 측정값]"
 _FACTOR_HEADING = "[사용 가능한 factor]"
+_CONSTRAINT_HEADING = "[짝을 이루는 factor]"
 
 
 @dataclass
@@ -209,6 +210,7 @@ class GeoFlowPlanner:
             self.base_prompt,
             f"{_VOCABULARY_HEADING}\n{describe_vocabulary()}",
             f"{_FACTOR_HEADING}\n{describe_factors()}",
+            f"{_CONSTRAINT_HEADING}\n{describe_constraints()}",
         ])
 
     def messages(self, question):

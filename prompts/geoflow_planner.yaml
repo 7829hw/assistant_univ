@@ -220,6 +220,16 @@ sections:
     - 상위 지역이 발화에 있으면 region에 반드시 보존합니다.
       - 예: "서울 능동의 어린이대공원"
         → {"name": "어린이대공원", "region": "서울 능동"}
+    - **상위 행정구역이 장소를 수식하는 경우 장소 개념을 두 개로 쪼개지
+      않습니다.** 하나의 장소 값 안에서 name과 region으로 나눕니다.
+      - "부산 초읍동에 위치한 어린이대공원"
+        → 개념 1개: {"name": "어린이대공원", "region": "부산 초읍동"}
+        → 개념 2개(초읍동, 어린이대공원)로 나누면 둘의 관계를 알 수 없어
+          분석이 만들어지지 않습니다.
+      - "A에 있는 B", "A의 B", "A에 위치한 B"는 모두 이 경우입니다.
+    - 반대로 서로 독립된 장소는 합치지 않습니다.
+      - "대구와 부산의 평균 속도"는 두 지역을 각각 구하는 질문이며,
+        하나의 장소로 합치면 묻지 않은 답이 됩니다.
     - 상위 지역이 발화에 없으면 region은 ""(빈 문자열)로 둡니다.
       - 예: "강남역 근처" → {"name": "강남역", "region": ""}
     - LOCATION/place의 name은 비워 둘 수 없습니다. 발화에서 장소 명칭을 찾을
@@ -230,14 +240,19 @@ sections:
       지점으로 보인다는 이유만으로 넣지 않습니다.
       - "동대구역의 평균 속도"      → vicinity 없음
       - "동대구역 근처의 평균 속도" → "vicinity": true
-    - 출발지·도착지가 구분되는 질문에서는 장소 개념에 od_role을 붙입니다.
-      - "A에서 출발하여 B에 도착" → A의 od_role은 "pickup",
-        B의 od_role은 "dropoff"
-      - 출발/도착 구분이 없는 질문에는 od_role을 붙이지 않습니다.
+    - **출발·도착이 드러나는 질문에서는 각 장소 개념에 od_role을 반드시
+      붙입니다.** 이것이 빠지면 어느 장소가 출발인지 정할 방법이 없어 분석
+      자체가 만들어지지 않습니다. 장소가 하나뿐이어도 마찬가지입니다.
+      - od_role은 attributes 안에 넣습니다.
+      - "A에서 출발" → A의 od_role은 "pickup"
+      - "B에 도착"   → B의 od_role은 "dropoff"
+      - "A에서 출발하여 B에 도착" → 두 장소 모두에 각각 붙입니다.
+      - "B에 도착한"처럼 한쪽만 있으면 그 장소에만 붙입니다. 나머지 한쪽을
+        지어내지 않습니다.
       - pickup과 dropoff를 바꾸어 넣지 않습니다.
-      - 장소가 둘 이상이면서 출발·도착 관계가 있으면 od_role을 반드시
-        붙입니다. 붙이지 않으면 어느 장소를 어떤 조건으로 쓸지 정할 수 없어
-        분석이 만들어지지 않습니다.
+      - 문맥에서 어느 쪽인지 읽을 수 없다면 임의로 정하지 말고
+        {"unsupported": true}를 반환합니다.
+      - 출발/도착 구분이 없는 질문에는 od_role을 붙이지 않습니다.
 
   value_rules: |-
     [factor 해석 규칙]
@@ -262,8 +277,11 @@ sections:
     - 시간 범위는 구분 기호 없는 HHMMSS-HHMMSS 형식입니다.
       - "오후 12시에서 1시 사이" → "120000-130000"
     - 택시 유형: 개인=private, 법인(회사)=corporate, 조건 없음=all
-    - 주·월 단위로 1차 집계한 뒤 합치는 질문에만 bucket과 rollup을 함께
-      넣습니다. 둘 중 하나만 넣지 않습니다.
+    - 짝을 이루는 factor가 있습니다. 아래 [짝을 이루는 factor] 목록을
+      따릅니다. 한쪽만 넣으면 조건이 성립하지 않아 분석이 만들어지지
+      않습니다.
+      - 질문에서 짝이 되는 값을 읽을 수 없다면 둘 다 넣지 않습니다.
+        한쪽만 넣거나 기본값을 지어내지 않습니다.
     - 질문에 근거가 없는 factor는 아예 넣지 않습니다. 기본값을 임의로
       채우지 않습니다.
 
@@ -411,6 +429,38 @@ sections:
     }
 
     예시 4
+    질문: "초읍동에서 출발하여 초량동에 도착한 실차 구간 건수는?"
+    {
+      "concepts": [
+        {
+          "id": "origin", "text": "초읍동",
+          "concept": "LOCATION", "subtype": "place", "role": "SUBCOND",
+          "source": "user",
+          "value": {"name": "초읍동", "region": ""},
+          "attributes": {"od_role": "pickup"}
+        },
+        {
+          "id": "destination", "text": "초량동",
+          "concept": "LOCATION", "subtype": "place", "role": "SUBCOND",
+          "source": "user",
+          "value": {"name": "초량동", "region": ""},
+          "attributes": {"od_role": "dropoff"}
+        },
+        {
+          "id": "trip",
+          "concept": "EVENT", "subtype": "trip", "role": "SUPPORT",
+          "source": "implicit"
+        },
+        {
+          "id": "trip_count", "text": "실차 구간 건수",
+          "concept": "AMOUNT", "subtype": "trip_count", "role": "MEASURE",
+          "source": "implicit"
+        }
+      ],
+      "factors": {}
+    }
+
+    예시 5
     질문: "scope:district:2700000000은 어디인가요?"
     {
       "concepts": [
@@ -433,7 +483,7 @@ sections:
     주어졌는지(place) 범위로 주어졌는지(scope)뿐입니다. 두 질문을 서로 다른
     분석 유형으로 나누지 마세요.
 
-    예시 4처럼 구하려는 값이 통계값이 아닐 수도 있습니다. "여기가 어디인가"를
+    예시 5처럼 구하려는 값이 통계값이 아닐 수도 있습니다. "여기가 어디인가"를
     묻는 질문의 MEASURE는 LOCATION/place이며, 실행이 채우므로 value가
     없습니다. 측정값(MEASURE)이 없는 출력은 허용되지 않습니다. 질문이 무엇을
     구하는지 반드시 하나 정하세요.

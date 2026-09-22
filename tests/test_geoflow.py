@@ -858,6 +858,25 @@ class PlannerTest(unittest.TestCase):
         planner.plan(OD_QUESTION)
         self.assertIsNone(planner.client.calls[0]["tools"])
 
+    def test_prompt_states_the_factor_pairs_from_one_source(self):
+        """짝 규칙 문구를 Prompt에 손으로 또 적어 두지 않는다."""
+        from geoflow.factors import describe_constraints
+
+        prompt = self._planner("{}").system_prompt()
+        self.assertIn(describe_constraints(), prompt)
+
+    def test_prompt_makes_the_od_qualifier_explicit(self):
+        prompt = self._planner("{}").system_prompt()
+        self.assertIn("od_role", prompt)
+        self.assertIn("pickup", prompt)
+        self.assertIn("dropoff", prompt)
+
+    def test_prompt_separates_region_from_an_independent_place(self):
+        """상위 지역 수식과 독립 장소를 구분해 설명한다."""
+        prompt = self._planner("{}").system_prompt()
+        self.assertIn("어린이대공원", prompt)
+        self.assertIn("대구와 부산", prompt)
+
     def test_prompt_states_the_concept_vocabulary(self):
         """어휘는 registry에서 만들어 붙이므로 prompt가 표류하지 않는다."""
         prompt = self._planner("{}").system_prompt()

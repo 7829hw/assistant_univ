@@ -158,6 +158,21 @@ FACTOR_CONSTRAINTS: dict[str, FactorConstraint] = {
 }
 
 
+def describe_constraints():
+    """factor 공기 규칙을 Prompt에 넣을 문장으로 만든다.
+
+    같은 규칙을 Prompt에 손으로 또 적어 두면 한쪽만 고쳐져 어긋난다.
+    설명 문구까지 이 표에서 만들어 붙인다.
+    """
+    return "\n".join(
+        f"- {item.factor}를 넣으면 {', '.join(item.requires)}도 함께 "
+        f"넣습니다. {item.reason}"
+        for item in sorted(
+            FACTOR_CONSTRAINTS.values(), key=lambda item: item.factor
+        )
+    )
+
+
 def companions_for(factor):
     """``factor``와 함께 있어야 하는 factor 이름."""
     constraint = FACTOR_CONSTRAINTS.get(factor)
