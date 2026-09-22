@@ -1411,6 +1411,152 @@ class FactorConstraintTest(ComposerCase):
         self.assertIn("allowed_values", source)
 
 
+class FactorSemanticsTest(ComposerCase):
+    """A·B·E. 집계 단계 조건의 의미가 한 곳에서 정의되고 Prompt로 흐른다."""
+
+    GROUPED = ("bucket", "aggregation", "rollup")
+
+    def test_every_grouped_factor_has_a_meaning(self):
+        from geoflow.factors import FACTOR_SPECS
+
+        for name in self.GROUPED:
+            with self.subTest(factor=name):
+                self.assertTrue(FACTOR_SPECS[name].meaning, name)
+
+    def test_grouped_factor_meanings_are_distinct(self):
+        from geoflow.factors import FACTOR_SPECS
+
+        meanings = {FACTOR_SPECS[name].meaning for name in self.GROUPED}
+        self.assertEqual(len(meanings), len(self.GROUPED))
+
+    def test_rollup_allowed_values_match_aggregation(self):
+        """2차 집계도 집계 방식이므로 같은 값 집합을 쓴다."""
+        from geoflow.factors import FACTOR_SPECS
+
+        self.assertEqual(
+            FACTOR_SPECS["rollup"].values, FACTOR_SPECS["aggregation"].values,
+        )
+        self.assertNotIn("week", FACTOR_SPECS["rollup"].values)
+        self.assertNotIn("month", FACTOR_SPECS["rollup"].values)
+
+    def test_bucket_values_are_time_units(self):
+        from geoflow.factors import FACTOR_SPECS
+
+        self.assertEqual(
+            FACTOR_SPECS["bucket"].values, frozenset({"week", "month"}),
+        )
+
+    def test_grounding_prompt_carries_the_semantics(self):
+        from geoflow.factors import (
+            FACTOR_STAGE_NOTE,
+            describe_factor_semantics,
+        )
+        from geoflow.planner import GeoFlowPlanner
+
+        class Client:
+            model = "x"
+
+        prompt = GeoFlowPlanner(client=Client()).system_prompt()
+        self.assertIn(describe_factor_semantics(), prompt)
+        self.assertIn(FACTOR_STAGE_NOTE, prompt)
+
+    def test_repair_prompt_carries_the_same_semantics(self):
+        """grounding과 재질의 설명이 어긋날 수 없다."""
+        from geoflow.factors import describe_factor_semantics
+        from geoflow.planner import (
+            GeoFlowPlanner,
+            _fill_instruction,
+            _instruction_values,
+        )
+        from geoflow.repair import RepairDecision, RepairKind
+
+        class Client:
+            model = "x"
+
+        decision = RepairDecision(
+            repairable=True, kind=RepairKind.FACTOR_COMPLETION,
+            reason="테스트", targets=("bucket",), allowed_additions=("rollup",),
+        )
+        planner = GeoFlowPlanner(client=Client())
+        instruction = _fill_instruction(
+            planner.repair_instructions[decision.kind],
+            _instruction_values(decision, "테스트"),
+        )
+        self.assertIn(describe_factor_semantics(("rollup",)), instruction)
+
+    def test_prompt_does_not_hardcode_the_vocabulary(self):
+        """어휘 목록을 Prompt YAML에 손으로 적어 두지 않는다."""
+        from geoflow.planner import DEFAULT_PLANNER_PROMPT
+
+        body = Path(DEFAULT_PLANNER_PROMPT).read_text(encoding="utf-8")
+        # 집계 방식 enum을 나열한 줄이 없어야 한다.
+        self.assertNotIn("avg | max | med | min | sum", body)
+        self.assertNotIn("week, month", body)
+
+    def test_bucket_rollup_constraint_is_unchanged(self):
+        from geoflow.factors import companions_for
+
+        self.assertEqual(companions_for("bucket"), ("rollup",))
+        self.assertEqual(companions_for("rollup"), ("bucket",))
+        self.assertEqual(companions_for("order"), ("dimension",))
+        self.assertEqual(companions_for("limit"), ("dimension",))
+
+    def test_rollup_rejects_a_time_unit(self):
+        """b21 형태. 시간 단위는 2차 집계 방식이 아니다."""
+        for value in ("week", "month"):
+            with self.subTest(value=value):
+                with self.assertRaises(PlannerError) as caught:
+                    parse_grounding(
+                        payload([event("e", "operation"),
+                                 measure("m", "AMOUNT", "revenue")],
+                                {"bucket": "week", "rollup": value}),
+                        "주 단위로 집계한 택시 수입의 평균은?",
+                    )
+                self.assertEqual(caught.exception.code, "INVALID_FACTOR")
+                self.assertIn("rollup", caught.exception.detail)
+
+    def test_rollup_accepts_an_aggregation(self):
+        for value in ("avg", "max", "sum", "min", "med"):
+            with self.subTest(value=value):
+                plan = self.compose(
+                    "주 단위로 나눈 택시 수입은?",
+                    [event("e", "operation"),
+                     measure("m", "AMOUNT", "revenue")],
+                    {"bucket": "week", "rollup": value},
+                )
+                self.assertEqual(
+                    plan.transformations[0].params["rollup"], value,
+                )
+
+    def test_invalid_factor_is_still_not_repairable(self):
+        """값 오류는 아직 재질의 대상이 아니다."""
+        from geoflow.errors import PlannerError as PE
+        from geoflow.repair import decide
+
+        error = PE("테스트", code="INVALID_FACTOR", context={})
+        self.assertFalse(decide(error).repairable)
+
+    def test_correct_two_stage_factors_compose(self):
+        """b21/b24의 올바른 조건 구조가 실제로 합성된다."""
+        for factors, expected in (
+            ({"bucket": "week", "rollup": "avg"}, ("week", "avg")),
+            ({"bucket": "month", "rollup": "max", "taxi_type": "private"},
+             ("month", "max")),
+        ):
+            with self.subTest(factors=factors):
+                plan = self.compose(
+                    "구간을 나눈 수입은?",
+                    [event("e", "operation"),
+                     measure("m", "AMOUNT", "revenue")],
+                    factors,
+                )
+                params = plan.transformations[0].params
+                self.assertEqual(
+                    (params["bucket"], params["rollup"]), expected,
+                )
+                self.assert_valid(plan)
+
+
 class LegacyIsolationTest(unittest.TestCase):
     """예전 question-type template이 실행 경로로 돌아오지 않게 한다."""
 

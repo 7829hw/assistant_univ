@@ -21,7 +21,13 @@ import yaml
 from build import BuildError, build_prompt
 
 from geoflow.errors import PlannerError
-from geoflow.factors import FACTOR_SPECS, describe_constraints, describe_factor
+from geoflow.factors import (
+    FACTOR_SPECS,
+    FACTOR_STAGE_NOTE,
+    describe_constraints,
+    describe_factor,
+    describe_factor_semantics,
+)
 from geoflow.grounding import drop_unsupported_regions, parse_grounding
 from geoflow.operator_registry import OPERATORS
 from geoflow.repair import (
@@ -64,6 +70,7 @@ IGNORABLE_KEYS = frozenset({
 _VOCABULARY_HEADING = "[분석 개체와 측정값]"
 _FACTOR_HEADING = "[사용 가능한 factor]"
 _CONSTRAINT_HEADING = "[짝을 이루는 factor]"
+_SEMANTICS_HEADING = "[조건이 뜻하는 것]"
 
 
 @dataclass
@@ -217,6 +224,8 @@ class GeoFlowPlanner:
             self.base_prompt,
             f"{_VOCABULARY_HEADING}\n{describe_vocabulary()}",
             f"{_FACTOR_HEADING}\n{describe_factors()}",
+            f"{_SEMANTICS_HEADING}\n{describe_factor_semantics()}"
+            f"\n\n{FACTOR_STAGE_NOTE}",
             f"{_CONSTRAINT_HEADING}\n{describe_constraints()}",
         ])
 
@@ -422,9 +431,9 @@ def _instruction_values(decision, message):
         "qualifiers": ", ".join(decision.allowed_additions),
         "factor": ", ".join(decision.targets),
         "missing": ", ".join(decision.allowed_additions),
-        "allowed": "\n  ".join(
-            describe_factor(name) for name in decision.allowed_additions
-        ),
+        # 허용값만으로는 부족했다. 그 조건이 무엇을 정하는지 함께 보여 준다.
+        # grounding prompt와 같은 metadata에서 만들므로 어긋날 수 없다.
+        "allowed": describe_factor_semantics(decision.allowed_additions),
         "name": "",
         "region": "",
         "message": message,

@@ -50,6 +50,9 @@ class FactorSpec:
     kind: str = "text"
     values: frozenset[str] = frozenset()
     pattern: Any = None
+    #: 이 조건이 무엇을 정하는지. Prompt 설명의 단일 기준이다. 같은 설명을
+    #: Prompt에 손으로 적어 두면 어휘가 바뀔 때 조용히 어긋난다.
+    meaning: str = ""
 
     def coerce(self, value):
         if self.kind == "boolean":
@@ -92,30 +95,88 @@ class FactorSpec:
 #: "근처/주변"은 질문 유형이 아니라 vicinity factor로 표현한다.
 FACTOR_SPECS: dict[str, FactorSpec] = {
     spec.name: spec for spec in (
-        FactorSpec("date", pattern=_DATE_PATTERN),
-        FactorSpec("time", pattern=_TIME_PATTERN),
-        FactorSpec("aggregation", values=_AGGREGATIONS),
-        FactorSpec("rollup", values=_AGGREGATIONS),
-        FactorSpec("bucket", values=frozenset({"week", "month"})),
+        FactorSpec(
+            "date", pattern=_DATE_PATTERN,
+            meaning="분석 대상 날짜 또는 기간.",
+        ),
+        FactorSpec(
+            "time", pattern=_TIME_PATTERN,
+            meaning="분석 대상 시간대.",
+        ),
+        FactorSpec(
+            "aggregation", values=_AGGREGATIONS,
+            meaning=(
+                "원시 값을 하나로 모으는 1차 집계 방식. bucket이 있으면 각 "
+                "구간 안에서 적용되고, 없으면 전체에 적용된다. 질문에 집계 "
+                "표현이 없으면 넣지 않는다."
+            ),
+        ),
+        FactorSpec(
+            "rollup", values=_AGGREGATIONS,
+            meaning=(
+                "bucket별로 나온 값들을 하나로 합치는 2차 집계 방식. "
+                "집계 **방식**이지 시간 단위가 아니다. bucket과 짝으로만 쓴다."
+            ),
+        ),
+        FactorSpec(
+            "bucket", values=frozenset({"week", "month"}),
+            meaning=(
+                "분석 기간을 나누는 시간 구간. 지정하면 구간마다 값을 먼저 "
+                "구한 뒤 rollup으로 합친다. 자료가 일 단위이므로 day는 없다."
+            ),
+        ),
         FactorSpec(
             "taxi_type", values=frozenset({"private", "corporate", "all"}),
+            meaning="택시 유형 조건.",
         ),
         FactorSpec(
             "taxi_status",
             values=frozenset({"occupied", "vacant", "stationary", "all"}),
+            meaning="운행 상태 조건.",
         ),
         FactorSpec(
             "dimension",
             values=frozenset({"h3", "sido", "sigungu", "emd", "dayofweek"}),
+            meaning=(
+                "결과를 나눌 그룹 기준. 지정하면 단일 값이 아니라 그룹별 "
+                "분포를 얻는다. bucket과 함께 쓸 수 없다."
+            ),
         ),
-        FactorSpec("order", values=frozenset({"top", "bottom"})),
-        FactorSpec("limit", kind="integer"),
-        FactorSpec("vicinity", kind="boolean"),
+        FactorSpec(
+            "order", values=frozenset({"top", "bottom"}),
+            meaning="그룹별 결과의 정렬 방향.",
+        ),
+        FactorSpec(
+            "limit", kind="integer",
+            meaning="그룹별 결과에서 보여 줄 개수.",
+        ),
+        FactorSpec(
+            "vicinity", kind="boolean",
+            meaning="장소의 주변 영역을 포함할지 여부.",
+        ),
     )
 }
 
 #: 구조를 정하는 factor. Tool 인자가 아니라 어떤 subtype을 만들지를 정한다.
 STRUCTURAL_FACTORS = frozenset({"vicinity"})
+
+#: 시간 구간을 나눌 때 집계가 두 단계로 나뉜다는 사실. 어느 factor 하나에
+#: 속하는 설명이 아니라 셋의 관계이므로 따로 둔다.
+#:
+#: 실측에서 모델이 반복해 틀린 지점이다. 질문의 집계어("평균", "최대값")를
+#: aggregation에 넣어 버리고 rollup에는 시간 단위("week", "month")를 복사했다.
+#: 집계어가 어디에 속하는지는 시간 구간 표현의 유무가 정한다.
+FACTOR_STAGE_NOTE = """구간을 나누는 질문에서는 집계가 두 단계다.
+
+    원시 값 --aggregation--> 구간별 값 --rollup--> 최종 값
+
+- 질문에 "주 단위로", "월 단위로" 같은 구간 표현이 있으면, 함께 나온 집계어는
+  구간별 값들을 합치는 rollup이다.
+  - "월 단위로 나눈 영업시간의 합은?" → bucket=month, rollup=sum
+- 구간 표현이 없으면 집계어는 aggregation이다.
+  - "평균 영업시간은?" → aggregation=avg (bucket과 rollup은 넣지 않는다)
+- rollup에 week나 month 같은 시간 단위를 넣지 않는다. rollup은 합치는
+  방식이다."""
 
 
 @dataclass(frozen=True)
@@ -176,6 +237,23 @@ def describe_factor(name):
     if spec.pattern is not None:
         return f"{name}: {spec.pattern.pattern} 형식"
     return f"{name}: 문자열"
+
+
+def describe_factor_semantics(names=None):
+    """factor가 무엇을 정하는지 설명하는 Prompt 조각을 만든다.
+
+    허용값만 보여 주는 것으로는 부족했다. 실측에서 모델이 rollup의 허용값을
+    보고도 시간 단위를 넣었다. 값의 범위가 아니라 역할을 알려야 한다.
+    """
+    names = sorted(FACTOR_SPECS) if names is None else list(names)
+    lines = []
+    for name in names:
+        spec = FACTOR_SPECS.get(name)
+        if spec is None or not spec.meaning:
+            continue
+        lines.append(f"- {describe_factor(name)}")
+        lines.append(f"    {spec.meaning}")
+    return "\n".join(lines)
 
 
 def describe_constraints():
