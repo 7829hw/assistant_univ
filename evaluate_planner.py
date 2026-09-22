@@ -36,10 +36,12 @@ from geoflow import validator as geoflow_validator
 from geoflow.compiler import compile_plan
 from geoflow.composer import MacroComposer
 from geoflow.errors import GeoFlowError
-from geoflow.executor import STATUS_OK, execute_plan
 from geoflow.grounding import OD_ROLE
+from geoflow.executor import STATUS_OK, execute_plan
 from geoflow.macros import MacroLibrary
 from geoflow.planner import NO_TEMPLATE, GeoFlowPlanner
+from geoflow.repair import decide as decide_repair
+from geoflow.types import CoreConcept
 from ollama_client import (
     THINK_CHOICES,
     OllamaClient,
@@ -212,6 +214,13 @@ def evaluate_model(model, queries, *, host, chat_timeout, repeat, verbose,
                 "execution_retryable": None,
                 "refused": False,
                 "role_order_ok": None,
+                # 계획 단계 재질의. 파이프라인과 같은 1회 규칙을 따른다.
+                "od_qualified_initial": None,
+                "repair_kind": None,
+                "repair_attempted": False,
+                "repair_succeeded": False,
+                "repair_error": None,
+                "unsupported_relation": False,
                 "duration_ms": 0.0,
             }
             try:
@@ -225,9 +234,12 @@ def evaluate_model(model, queries, *, host, chat_timeout, repeat, verbose,
                 record["concept_score"] = score_concepts(
                     record["concepts"], expected_concepts,
                 )
+                record["od_qualified_initial"] = _od_qualified(grounding)
 
                 record["stage"] = "composition"
-                plan = composer.compose(grounding)
+                plan = _compose_with_repair(
+                    composer, planner, item["question"], output, record,
+                )
                 record["macros"] = list(plan.applied_macros)
                 record["operators"] = [
                     item.operator for item in plan.transformations
@@ -312,6 +324,53 @@ def evaluate_model(model, queries, *, host, chat_timeout, repeat, verbose,
     return records
 
 
+def _od_qualified(grounding):
+    """초기 grounding의 장소에 승하차 구분이 붙어 있었는지.
+
+    장소가 없으면 판정 대상이 아니므로 ``None``.
+    """
+    locations = [
+        concept for concept in grounding.concepts
+        if concept.concept == CoreConcept.LOCATION
+        and concept.role.value != "MEASURE"
+    ]
+    if not locations:
+        return None
+    return all(OD_ROLE in concept.attributes for concept in locations)
+
+
+def _compose_with_repair(composer, planner, question, output, record):
+    """합성이 실패하면 파이프라인과 같은 규칙으로 한 번만 다시 묻는다.
+
+    복구 가능 여부 판정과 허용 범위 검사는 런타임과 같은 코드를 쓴다.
+    측정이 실제 동작과 어긋나지 않게 하기 위해서다.
+    """
+    try:
+        return composer.compose(output.grounding)
+    except GeoFlowError as error:
+        decision = decide_repair(error)
+        record["repair_kind"] = decision.kind
+        if error.code == "AMBIGUOUS_LOCATION_RELATION" and not (
+            decision.repairable
+        ):
+            record["unsupported_relation"] = True
+        if not decision.repairable:
+            raise
+        record["repair_attempted"] = True
+        try:
+            repaired = planner.repair_planning_error(
+                question, output, error=error, decision=decision,
+            )
+        except GeoFlowError as repair_error:
+            record["repair_error"] = repair_error.code
+            raise error from repair_error
+        plan = composer.compose(repaired.grounding)
+        record["repair_succeeded"] = True
+        record["concepts_after_repair"] = concept_keys(repaired.grounding)
+        record["factors_after_repair"] = dict(repaired.grounding.factors)
+        return plan
+
+
 def _ratio(matched, expected):
     return round(matched / expected, 4) if expected else 0.0
 
@@ -369,6 +428,35 @@ def summarize(records):
         "execution_retryable_failures": retryable,
         "refused": refused,
         "planner_error": failed,
+        "repair_attempted": sum(
+            1 for item in records if item["repair_attempted"]
+        ),
+        "repair_succeeded": sum(
+            1 for item in records if item["repair_succeeded"]
+        ),
+        "relation_repair_attempted": sum(
+            1 for item in records
+            if item["repair_kind"] == "relation_qualifier"
+            and item["repair_attempted"]
+        ),
+        "relation_repair_succeeded": sum(
+            1 for item in records
+            if item["repair_kind"] == "relation_qualifier"
+            and item["repair_succeeded"]
+        ),
+        "factor_repair_attempted": sum(
+            1 for item in records
+            if item["repair_kind"] == "factor_completion"
+            and item["repair_attempted"]
+        ),
+        "factor_repair_succeeded": sum(
+            1 for item in records
+            if item["repair_kind"] == "factor_completion"
+            and item["repair_succeeded"]
+        ),
+        "unsupported_relations": sum(
+            1 for item in records if item["unsupported_relation"]
+        ),
         "role_order_checked": len(roles),
         "role_order_ok": sum(1 for item in roles if item),
         "mean_duration_ms": round(
