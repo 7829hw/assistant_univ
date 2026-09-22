@@ -256,6 +256,9 @@ def evaluate_once(planner, composer, item, *, attempt=1,
         "repair_planner_ms": 0.0,
         "planner_calls": 0,
         "output_chars": 0,
+        # 초기 grounding 응답 원문과, 재질의 전의 첫 오류 코드.
+        "raw_text": "",
+        "initial_error": None,
         "duration_ms": 0.0,
     }
     try:
@@ -323,6 +326,10 @@ def evaluate_once(planner, composer, item, *, attempt=1,
     except GeoFlowError as error:
         record["status"] = error.code
         record["error"] = error.detail
+        # grounding 단계에서 거부되면 plan()이 값을 돌려주지 않으므로 원문이
+        # 비어 있다. 원인을 사후에 읽으려면 오류가 들고 있는 것을 써야 한다.
+        if not record["raw_text"]:
+            record["raw_text"] = (error.context or {}).get("raw_text", "")
         if error.code in REFUSAL_CODES:
             # 지원 범위 밖임을 스스로 인정한 경우도 하나의 판정 결과다.
             record["refused"] = True
