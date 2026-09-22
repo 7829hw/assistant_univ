@@ -51,6 +51,45 @@ repair_instruction: |-
   - 고칠 방법이 없으면 {"unsupported": true}만 출력하세요.
   - 반드시 concepts와 factors만 있는 JSON 객체 하나로 답하세요.
 
+# 장소의 역할 구분이 빠져 계획을 만들지 못했을 때의 재질의 요청문.
+# 허용 범위는 코드(geoflow/repair.py)가 다시 강제하므로, 여기서는 무엇을
+# 채워야 하는지만 알려 준다.
+relation_repair_instruction: |-
+  방금 보낸 grounding으로는 분석을 구성하지 못했습니다.
+
+  이유: {message}
+  구분이 필요한 개념: {concepts}
+  덧붙여야 하는 속성: {qualifiers}
+
+  개념 구조는 그대로 두고, 위 개념의 attributes에 해당 속성만 덧붙여서
+  다시 출력하세요.
+
+  - od_role은 "pickup"(승차·출발) 또는 "dropoff"(하차·도착)입니다.
+  - 질문에서 어느 쪽인지 읽을 수 없다면 임의로 정하지 마세요. 그 경우
+    {"unsupported": true}만 출력하세요.
+  - 개념을 더하거나 빼지 마세요.
+  - concept, subtype, role, id, value, factors는 바꾸지 마세요.
+  - 장소 이름과 상위 지역도 그대로 두세요.
+  - 반드시 concepts와 factors만 있는 JSON 객체 하나로 답하세요.
+
+# 짝이 빠진 조건 때문에 계획을 만들지 못했을 때의 재질의 요청문.
+factor_repair_instruction: |-
+  방금 보낸 grounding으로는 분석을 구성하지 못했습니다.
+
+  이유: {message}
+  짝이 맞지 않는 조건: {factor}
+  함께 필요한 조건: {missing}
+
+  개념은 그대로 두고, factors에 위 조건만 덧붙여서 다시 출력하세요.
+
+  - 질문에서 그 조건의 값을 읽을 수 있을 때만 채웁니다.
+  - 근거가 없으면 임의의 기본값을 넣지 말고 {"unsupported": true}만
+    출력하세요.
+  - 이미 있는 조건의 값을 바꾸거나 빼지 마세요.
+  - 질문에 없는 다른 조건을 새로 넣지 마세요.
+  - 개념(concepts)은 하나도 바꾸지 마세요.
+  - 반드시 concepts와 factors만 있는 JSON 객체 하나로 답하세요.
+
 order:
   - role
   - task

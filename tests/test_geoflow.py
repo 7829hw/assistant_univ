@@ -1197,7 +1197,7 @@ class PipelineScenarioTest(unittest.TestCase):
                     measure_concept("revenue", "AMOUNT", "revenue"),
                 ], factors)])
                 run = pipeline.run("주 단위 수입은?")
-                self.assertEqual(run.stage, Stage.PLANNER)
+                self.assertEqual(run.stage, Stage.COMPOSITION)
                 self.assertEqual(
                     run.error["code"], "INVALID_FACTOR_COMBINATION",
                 )
@@ -1223,7 +1223,7 @@ class PipelineScenarioTest(unittest.TestCase):
             measure_concept("count", "AMOUNT", "passage_count"),
         ], {"order": "top"})])
         run = pipeline.run("대구에서 통행량이 가장 많은 곳은?")
-        self.assertEqual(run.stage, Stage.PLANNER)
+        self.assertEqual(run.stage, Stage.COMPOSITION)
         self.assertEqual(run.error["code"], "INVALID_FACTOR_COMBINATION")
         self.assertIn("함께", run.error["detail"])
 

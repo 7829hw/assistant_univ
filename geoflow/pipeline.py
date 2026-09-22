@@ -33,6 +33,7 @@ from geoflow.labeling import resolve_scope_labels
 from geoflow.macros import MacroLibrary
 from geoflow.operator_registry import Operator
 from geoflow.planner import GeoFlowPlanner
+from geoflow.repair import decide as decide_repair
 from geoflow.types import CoreConcept, Subtype
 
 AGENT_MODE = "geoflow"
@@ -48,6 +49,9 @@ STATUS_REPAIR_FAILED = "repair_failed"
 
 #: 재계획을 시도하지 않고 끝난 attempt.
 STATUS_REPAIR_SKIPPED = "repair_skipped"
+
+#: 계획을 만들지 못해 끝난 attempt. 실행에 이르지 못했다는 뜻이다.
+STATUS_PLANNING_FAILED = "planning_failed"
 
 
 class Stage:
@@ -85,6 +89,8 @@ class GeoFlowRun:
     scope_labels: dict[str, str] = field(default_factory=dict)
     attempts: list[dict[str, Any]] = field(default_factory=list)
     repair_count: int = 0
+    #: 재계획 종류별 시도/성공 횟수. 계획 단계와 실행 단계를 구분해 센다.
+    repairs: dict[str, Any] = field(default_factory=dict)
     final_answer: str | None = None
     error: dict[str, Any] | None = None
     runtime_error: str | None = None
@@ -96,6 +102,7 @@ class GeoFlowRun:
             "agent_mode": self.agent_mode,
             "stage": self.stage,
             "repair_count": self.repair_count,
+            "repairs": dict(self.repairs),
             "scope_labels": dict(self.scope_labels),
             "attempts": [dict(item) for item in self.attempts],
             "planner": self.planner,
@@ -169,24 +176,62 @@ class GeoFlowPipeline:
 
         run.durations["planner_ms"] = planner_output.duration_ms
         run.durations["execution_ms"] = 0.0
+        # 계획 단계와 실행 단계가 재계획 한 번을 나눠 쓴다. 두 단계가 각각
+        # 한 번씩 쓰면 전체적으로 두 번 다시 묻게 되어, "한 질문에 재계획은
+        # 최대 한 번"이라는 성질이 깨진다.
+        repairs_used = 0
 
-        for attempt_index in range(MAX_REPAIR_ATTEMPTS + 1):
+        attempt_index = 0
+        while True:
             try:
                 plan, execution_plan = self._prepare(
                     question, planner_output, user_scopes, run, emit,
                 )
             except GeoFlowError as error:
-                if attempt_index == 0:
+                decision = decide_repair(error)
+                exhausted = repairs_used >= MAX_REPAIR_ATTEMPTS
+                attempted = bool(decision.repairable) and not exhausted
+                record = _planning_attempt(
+                    attempt_index, error, decision,
+                    attempted=attempted, exhausted=exhausted,
+                )
+                run.attempts.append(record)
+
+                if run.execution is not None:
+                    # 이미 실행한 적이 있으면 직전 실행 실패를 그대로 보고한다.
+                    break
+                if not attempted:
                     return _fail(run, error, started_at)
-                # 재계획이 더 나쁜 계획을 만들었으면 직전 실행 실패를 유지한다.
-                run.attempts.append({
-                    "index": attempt_index,
-                    "template": run.template,
-                    "slots": dict(run.slots),
-                    "status": error.stage,
-                    "error": error.to_dict(),
-                })
-                break
+
+                emit(
+                    "geoflow_repair",
+                    attempt=attempt_index + 1,
+                    failure={
+                        "stage": error.stage,
+                        "code": error.code,
+                        "kind": decision.kind,
+                        "message": error.user_message,
+                    },
+                )
+                # 시도 자체를 먼저 센다. 재질의가 실패해도 시도는 있었다.
+                _count_repair(run, decision.kind, ok=False)
+                try:
+                    planner_output = self.planner.repair_planning_error(
+                        question, planner_output,
+                        error=error, decision=decision,
+                    )
+                except GeoFlowError as repair_error:
+                    record["repair_result"] = STATUS_REPAIR_FAILED
+                    record["repair_error"] = repair_error.to_dict()
+                    return _fail(run, error, started_at)
+
+                record["repair_result"] = STATUS_OK
+                repairs_used += 1
+                run.repair_count += 1
+                _count_repair(run, decision.kind, ok=True, attempted=False)
+                run.durations["planner_ms"] += planner_output.duration_ms
+                attempt_index += 1
+                continue
 
             run.stage = Stage.EXECUTION
             execution_started_at = time.perf_counter()
@@ -223,7 +268,7 @@ class GeoFlowPipeline:
                 return run
 
             failure = _repairable_failure(plan, execution_plan, result)
-            if failure is None or attempt_index >= MAX_REPAIR_ATTEMPTS:
+            if failure is None or repairs_used >= MAX_REPAIR_ATTEMPTS:
                 # 재계획을 아예 시도하지 않은 이유를 기록에 남긴다. 나중에
                 # 로그만 보고 "재계획이 실패했다"와 구분할 수 있어야 한다.
                 run.attempts.append({
@@ -237,6 +282,7 @@ class GeoFlowPipeline:
                 break
 
             emit("geoflow_repair", attempt=attempt_index + 1, failure=failure)
+            _count_repair(run, "place_value", ok=False)
             try:
                 planner_output = self.planner.repair(
                     question, planner_output, failure,
@@ -252,7 +298,10 @@ class GeoFlowPipeline:
                 })
                 break
             run.repair_count += 1
+            repairs_used += 1
+            _count_repair(run, "place_value", ok=True, attempted=False)
             run.durations["planner_ms"] += planner_output.duration_ms
+            attempt_index += 1
 
         run.error = (run.execution or {}).get("error")
         run.runtime_error = (run.error or {}).get(
@@ -318,6 +367,41 @@ class GeoFlowPipeline:
         run.stage = Stage.DONE
         run.durations["total_ms"] = _elapsed(started_at)
         return run
+
+
+def _planning_attempt(index, error, decision, *, attempted, exhausted):
+    """계획을 만들지 못한 시도를 기록으로 남긴다.
+
+    기존 attempt 기록의 key는 그대로 두고 선택 항목만 덧붙인다. 실행에
+    이르지 못했으므로 tools/slots는 비어 있다.
+    """
+    return {
+        "index": index,
+        "stage": error.stage,
+        "status": STATUS_PLANNING_FAILED,
+        "error_code": error.code,
+        "error": error.to_dict(),
+        "repairable": bool(decision.repairable),
+        "repair_kind": decision.kind,
+        "repair_reason": decision.reason,
+        "repair_attempted": attempted,
+        "repair_result": None,
+        "reason": (
+            "재계획 시도 횟수 소진" if exhausted and decision.repairable
+            else None if attempted else decision.reason
+        ),
+    }
+
+
+def _count_repair(run, kind, *, ok, attempted=True):
+    """재계획 종류별 시도/성공 횟수를 센다."""
+    counters = run.repairs.setdefault(
+        kind or "unknown", {"attempted": 0, "succeeded": 0},
+    )
+    if attempted:
+        counters["attempted"] += 1
+    if ok:
+        counters["succeeded"] += 1
 
 
 def _repairable_failure(plan, execution_plan, result):

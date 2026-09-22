@@ -24,6 +24,7 @@ from geoflow.errors import PlannerError
 from geoflow.factors import FACTOR_SPECS
 from geoflow.grounding import drop_unsupported_regions, parse_grounding
 from geoflow.operator_registry import OPERATORS
+from geoflow.repair import RepairKind, RepairViolation, validate_repair_delta
 
 DEFAULT_PLANNER_PROMPT = (
     Path(__file__).resolve().parent.parent / "prompts" / "geoflow_planner.yaml"
@@ -97,7 +98,16 @@ def load_planner_prompt(path=DEFAULT_PLANNER_PROMPT):
         ) from error
 
 
-def load_repair_instruction(path=DEFAULT_PLANNER_PROMPT):
+#: 재질의 종류별 요청문을 담은 YAML key. 종류마다 허용하는 수정이 다르므로
+#: 한 요청문에 조건을 덧붙이지 않고 따로 둔다.
+REPAIR_INSTRUCTION_KEYS = {
+    RepairKind.PLACE_VALUE: "repair_instruction",
+    RepairKind.RELATION_QUALIFIER: "relation_repair_instruction",
+    RepairKind.FACTOR_COMPLETION: "factor_repair_instruction",
+}
+
+
+def load_repair_instructions(path=DEFAULT_PLANNER_PROMPT):
     """재계획 요청문을 YAML 최상위 key에서 읽는다.
 
     ``sections``가 아니므로 System Prompt에는 포함되지 않는다.
@@ -110,14 +120,22 @@ def load_repair_instruction(path=DEFAULT_PLANNER_PROMPT):
             code="PROMPT_BUILD_FAILED",
             context={"path": str(path)},
         ) from error
-    instruction = document.get("repair_instruction")
-    if not isinstance(instruction, str) or not instruction.strip():
-        raise PlannerError(
-            f"{Path(path).name}: repair_instruction이 비어 있습니다.",
-            code="PROMPT_BUILD_FAILED",
-            context={"path": str(path)},
-        )
-    return instruction.strip()
+    instructions = {}
+    for kind, key in REPAIR_INSTRUCTION_KEYS.items():
+        text = document.get(key)
+        if not isinstance(text, str) or not text.strip():
+            raise PlannerError(
+                f"{Path(path).name}: {key}가 비어 있습니다.",
+                code="PROMPT_BUILD_FAILED",
+                context={"path": str(path)},
+            )
+        instructions[kind] = text.strip()
+    return instructions
+
+
+def load_repair_instruction(path=DEFAULT_PLANNER_PROMPT):
+    """장소 값 수정 요청문. 기존 호출부 호환을 위해 남겨 둔다."""
+    return load_repair_instructions(path)[RepairKind.PLACE_VALUE]
 
 
 def describe_vocabulary():
@@ -177,9 +195,11 @@ class GeoFlowPlanner:
         self.base_prompt = (
             load_planner_prompt() if prompt is None else prompt.strip()
         )
-        self.repair_instruction = (
-            load_repair_instruction() if repair_instruction is None
-            else repair_instruction.strip()
+        self.repair_instructions = (
+            load_repair_instructions() if repair_instruction is None
+            else dict.fromkeys(
+                REPAIR_INSTRUCTION_KEYS, repair_instruction.strip(),
+            )
         )
         self.model = model if model is not None else getattr(client, "model", None)
 
@@ -201,18 +221,25 @@ class GeoFlowPlanner:
         """Planner를 1회 호출하고 검증된 ``PlannerOutput``을 반환한다."""
         return self._ask(self.messages(question), question)
 
+    @property
+    def repair_instruction(self):
+        """장소 값 수정 요청문. 기존 테스트/호출부가 쓰는 이름."""
+        return self.repair_instructions[RepairKind.PLACE_VALUE]
+
     def repair(self, question, previous, failure):
         """Tool 오류를 알려주고 실패한 개념의 값만 고쳐 받는다.
 
         재계획 결과도 grounding/composer/validator/compiler 전 경로를 다시
         통과하므로 어떤 guard도 우회하지 않는다.
         """
-        instruction = _fill_instruction(self.repair_instruction, {
+        instruction = _fill_instruction(
+            self.repair_instructions[RepairKind.PLACE_VALUE], {
             "concept": failure.get("concept", "(알 수 없음)"),
             "name": failure.get("name", ""),
             "region": failure.get("region", ""),
             "message": failure.get("message", "Tool 오류"),
-        })
+            },
+        )
         output = self._ask(
             [
                 *self.messages(question),
@@ -244,6 +271,53 @@ class GeoFlowPlanner:
                 code="REPAIR_NO_CHANGE",
                 context={"raw_text": output.raw_text},
             )
+        return output
+
+    def repair_planning_error(self, question, previous, *, error, decision):
+        """계획을 만들지 못한 이유를 알려 주고 빠진 정보만 채워 받는다.
+
+        무엇을 채워도 되는지는 ``decision``이 정하고, 실제로 그 범위만 바뀌
+        었는지는 ``validate_repair_delta``가 코드로 확인한다. 요청문만 믿지
+        않는 이유는 모델이 요청받지 않은 부분까지 손대는 경우가 관측되기
+        때문이다.
+        """
+        instruction = _fill_instruction(
+            self.repair_instructions[decision.kind], {
+                "concepts": ", ".join(decision.targets) or "(없음)",
+                "concept": ", ".join(decision.targets) or "(없음)",
+                "qualifier": ", ".join(decision.allowed_additions),
+                "qualifiers": ", ".join(decision.allowed_additions),
+                "factor": ", ".join(decision.targets),
+                "missing": ", ".join(decision.allowed_additions),
+                "message": error.user_message or error.detail,
+            },
+        )
+        output = self._ask(
+            [
+                *self.messages(question),
+                {
+                    "role": "assistant",
+                    "content": json.dumps(
+                        previous.grounding.to_dict(), ensure_ascii=False,
+                    ),
+                },
+                {"role": "user", "content": instruction},
+            ],
+            question,
+        )
+        try:
+            validate_repair_delta(
+                previous.grounding, output.grounding, decision,
+            )
+        except RepairViolation as violation:
+            raise PlannerError(
+                f"재계획이 허용된 범위를 벗어났습니다: {violation}",
+                code="REPAIR_OUT_OF_SCOPE",
+                context={
+                    "raw_text": output.raw_text,
+                    "repair_kind": decision.kind,
+                },
+            ) from violation
         return output
 
     def _ask(self, messages, question):
@@ -324,7 +398,10 @@ class GeoFlowPlanner:
 
 
 #: 재계획 요청문에서 치환할 자리표시자. 그 밖의 중괄호는 그대로 둔다.
-_INSTRUCTION_FIELDS = ("concept", "name", "region", "message")
+_INSTRUCTION_FIELDS = (
+    "concept", "name", "region", "message",
+    "concepts", "qualifier", "qualifiers", "factor", "missing",
+)
 
 
 def _fill_instruction(template, values):

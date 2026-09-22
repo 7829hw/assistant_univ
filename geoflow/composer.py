@@ -30,7 +30,7 @@ from typing import Any
 
 from geoflow import operator_mapping
 from geoflow.errors import CompositionError
-from geoflow.factors import STRUCTURAL_FACTORS
+from geoflow.factors import STRUCTURAL_FACTORS, validate_factors
 from geoflow.macros import MacroLibrary
 from geoflow.types import (
     GEOFLOW_VERSION,
@@ -140,6 +140,10 @@ class MacroComposer:
 
     def compose(self, grounding):
         """검증된 grounding 하나를 GeoFlow Graph로 합성한다."""
+        # 조건끼리의 공기 불변식을 조각을 고르기 전에 확인한다. 어떤 Tool이
+        # 그 조건을 소비할지 몰라도 판정할 수 있고, 계획을 만들기 전이라
+        # 빠진 조건을 다시 물어 채울 수 있다.
+        validate_factors(grounding.factors)
         goal = grounding.measure
         if goal is None:
             raise CompositionError(

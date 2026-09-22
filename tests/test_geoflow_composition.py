@@ -1303,17 +1303,28 @@ class FactorConstraintTest(ComposerCase):
     """
 
     def _ground(self, factors, question="택시 수입은?"):
-        return parse_grounding(
+        """조건 검증은 합성 진입점에서 일어나므로 전체 경로로 확인한다."""
+        grounding = parse_grounding(
             payload([event("e", "operation"),
                      measure("m", "AMOUNT", "revenue")], factors),
             question,
         )
+        self.composer.compose(grounding)
+        return grounding
 
     def test_bucket_with_rollup_is_valid(self):
         grounding = self._ground({"bucket": "week", "rollup": "avg"})
         self.assertEqual(grounding.factors["bucket"], "week")
         plan = self.composer.compose(grounding)
         self.assertEqual(plan.transformations[0].params["rollup"], "avg")
+
+    def test_validation_runs_before_composition(self):
+        """조각을 고르기 전에 걸린다. 계획이 만들어지지 않는다."""
+        from geoflow.factors import validate_factors
+
+        with self.assertRaises(PlannerError):
+            validate_factors({"bucket": "week"})
+        self.assertEqual(validate_factors({}), {})
 
     def test_bucket_alone_is_invalid(self):
         with self.assertRaises(PlannerError) as caught:

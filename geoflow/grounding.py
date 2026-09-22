@@ -23,7 +23,9 @@ composer가 만든 graph를 Validator가 다시 확인한다.
 
 factor의 어휘와 공기(co-occurrence) 불변식은 ``geoflow/factors.py``가 갖는다.
 개념이 아니라 조건에 속하는 규칙이고, 특정 Tool이나 질문 유형과 무관하기
-때문이다. 이 모듈은 그 어휘로 값을 읽고, 읽은 뒤 불변식을 확인한다.
+때문이다. 이 모듈은 그 어휘로 값의 형식만 읽는다. 조건끼리의 공기 불변식은
+합성 진입점에서 확인한다. 계획을 만들기 전 단계여야 재질의로 복구할 수 있기
+때문이다.
 """
 
 from dataclasses import dataclass, field
@@ -32,12 +34,7 @@ from typing import Any
 from agent_graph import extract_scopes
 
 from geoflow.errors import PlannerError
-from geoflow.factors import (
-    FACTOR_SPECS,
-    STRUCTURAL_FACTORS,
-    FactorSpec,
-    validate_factors,
-)
+from geoflow.factors import FACTOR_SPECS, STRUCTURAL_FACTORS, FactorSpec
 from geoflow.operator_mapping import measure_types
 from geoflow.types import (
     CONCEPT_SUBTYPES,
@@ -168,11 +165,8 @@ def parse_grounding(payload, question, *, raw_text=""):
         seen_ids.add(concept.id)
         concepts.append(concept)
 
-    factors = validate_factors(
-        _parse_factors(
-            {**hoisted, **(payload.get("factors") or {})}, raw_text,
-        ),
-        raw_text=raw_text,
+    factors = _parse_factors(
+        {**hoisted, **(payload.get("factors") or {})}, raw_text,
     )
     grounding = Grounding(
         question=question, concepts=concepts, factors=factors,
