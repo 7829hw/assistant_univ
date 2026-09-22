@@ -1,0 +1,55 @@
+# geoflow_macros/event_to_measure.yaml
+# EVENT (+ 선택적 공간 조건) -> AMOUNT | PROPORTION.
+#
+# fare/speed/revenue/vacant_ratio마다 조각을 따로 두지 않는다. 그 차이는
+# concept subtype이 나타내고, 어떤 Tool을 부를지는 operator mapping 단계가
+# (EVENT subtype, 출력 concept/subtype)으로 결정한다. 그래서 이 조각 하나가
+# 기존 통행 통계/통행량/요금/공차율/영업 통계 template을 모두 대신한다.
+#
+# 집계·그룹화·순위(aggregation, dimension, order, limit, bucket, rollup)는
+# 별도 조각이 아니라 이 변환의 factor다. TIMS Tool이 같은 호출의 인자로
+# 받기 때문에, 조각을 나누면 대응하는 operator가 없는 node가 생긴다.
+
+name: EVENT_TO_MEASURE
+description: 사건(passage/trip/drive/operation)에서 통계값을 구한다. 공간 조건이 있으면 그 범위로 한정한다.
+priority: 10
+
+inputs:
+  event:
+    concept: EVENT
+    subtypes: [passage, trip, drive, operation]
+    roles: [SUPPORT]
+  area:
+    concept: LOCATION
+    subtypes: [scope, vicinity_scope]
+    roles: [COND]
+    required: false
+    # 승하차 구분이 붙은 범위는 OD 변환이 다룬다.
+    attributes:
+      od_role: null
+
+outputs:
+  measure:
+    types:
+      - concept: AMOUNT
+        subtypes:
+          - speed
+          - rpm
+          - passage_count
+          - trip_count
+          - fare
+          - revenue
+          - operating_count
+          - hours
+      - concept: PROPORTION
+        subtypes: [vacant_ratio, operating_ratio]
+
+concepts:
+  - key: measure
+    role: MEASURE
+    source: tool
+
+transformations:
+  - id: measure_event
+    inputs: [event, area]
+    output: measure

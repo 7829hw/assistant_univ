@@ -1,8 +1,19 @@
 # -*- coding: utf-8 -*-
-"""GeoFlow template 정의 로딩과 slot 채우기.
+"""[LEGACY] 질문 유형 template 정의 로딩과 slot 채우기.
 
-template YAML은 Planner에게 보여줄 설명문이 아니라, 프로그램이 읽어
-``GeoFlowPlan``을 deterministic하게 만들어내는 구조화 데이터다.
+이 모듈은 더 이상 실행 경로에 있지 않다. Planner가 완성된 question-type
+template 하나를 고르던 시절의 구현이며, 지금은 다음이 그 자리를 대신한다.
+
+    geoflow/macros.py            재사용 가능한 조각과 IO port 계약
+    geoflow/composer.py          조각 합성
+    geoflow/operator_mapping.py  개념 변환 → semantic operator
+
+남겨 둔 이유는 두 가지다. 첫째, 12개 template이 어떤 조합으로 쓰였는지가
+migration의 근거 자료다. 둘째, 같은 Tool 계약 위에서 예전 계획과 새 계획이
+같은 결과를 내는지 비교할 수 있다.
+
+새 코드에서 이 모듈을 import하지 않는다. 그 규칙은
+``tests/test_geoflow_composition.py``의 LegacyIsolationTest가 확인한다.
 """
 
 import re

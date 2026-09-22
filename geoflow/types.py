@@ -57,6 +57,11 @@ class NodeSource(str, Enum):
     TOOL = "tool"
     DERIVED = "derived"
     TEMPLATE = "template"
+    #: 질문에 드러나지 않았지만 workflow를 완성하기 위해 필요한 개념.
+    #: 예를 들어 "평균 속도"라는 질문에는 speed를 재는 대상인 passage가
+    #: 표현되어 있지 않다. 사용자가 말한 값(USER)과 구분해 두어야 scope
+    #: provenance(G6)가 implicit 개념을 사용자 입력으로 오인하지 않는다.
+    IMPLICIT = "implicit"
 
 
 class Subtype:
@@ -86,6 +91,54 @@ class Subtype:
     # PROPORTION
     VACANT_RATIO = "vacant_ratio"
     OPERATING_RATIO = "operating_ratio"
+
+
+#: CoreConcept별로 허용하는 subtype. IR 어휘의 단일 기준이다.
+#:
+#: macro port 계약, grounding 검증, prompt 어휘가 모두 이 표를 근거로 삼는다.
+#: 목록을 여러 모듈에 복사해 두면 한쪽만 고쳐져 조용히 어긋나기 때문이다.
+#: OBJECT/FIELD는 아직 TIMS subtype이 없으므로 비어 있다. 비어 있다는 것은
+#: "그 concept로는 어떤 개념도 표현할 수 없다"는 뜻이며, 검증은 이를 그대로
+#: 적용해 OBJECT/taxi_type 같은 조합을 거부한다.
+CONCEPT_SUBTYPES: dict[CoreConcept, frozenset[str]] = {
+    CoreConcept.LOCATION: frozenset({
+        Subtype.PLACE, Subtype.SCOPE, Subtype.VICINITY_SCOPE,
+    }),
+    CoreConcept.NETWORK: frozenset({
+        Subtype.ROAD_NETWORK, Subtype.ROAD_EDGE,
+    }),
+    CoreConcept.EVENT: frozenset({
+        Subtype.PASSAGE, Subtype.TRIP, Subtype.DRIVE, Subtype.OPERATION,
+    }),
+    CoreConcept.AMOUNT: frozenset({
+        Subtype.PASSAGE_COUNT, Subtype.TRIP_COUNT, Subtype.SPEED,
+        Subtype.RPM, Subtype.FARE, Subtype.REVENUE,
+        Subtype.OPERATING_COUNT, Subtype.HOURS,
+    }),
+    CoreConcept.PROPORTION: frozenset({
+        Subtype.VACANT_RATIO, Subtype.OPERATING_RATIO,
+    }),
+    CoreConcept.OBJECT: frozenset(),
+    CoreConcept.FIELD: frozenset(),
+}
+
+#: 어떤 concept에든 쓰일 수 있는 subtype 이름 전체.
+KNOWN_SUBTYPES = frozenset().union(*CONCEPT_SUBTYPES.values())
+
+
+def subtype_allowed(concept, subtype):
+    """(concept, subtype) 조합이 IR 어휘에 있는지 본다."""
+    return subtype in CONCEPT_SUBTYPES.get(concept, frozenset())
+
+
+def describe_concept_subtypes():
+    """concept별 subtype 목록을 사람이 읽을 수 있게 만든다."""
+    lines = []
+    for concept in CoreConcept:
+        subtypes = CONCEPT_SUBTYPES.get(concept) or frozenset()
+        shown = ", ".join(sorted(subtypes)) if subtypes else "(없음)"
+        lines.append(f"- {concept.value}: {shown}")
+    return "\n".join(lines)
 
 
 #: scope provenance 규칙이 적용되는 LOCATION subtype.
@@ -158,15 +211,26 @@ class Transformation:
 
 @dataclass
 class GeoFlowPlan:
-    """typed GeoFlow Plan. Planner 출력이 아니라 template + slot의 결과물이다."""
+    """typed GeoFlow Plan.
+
+    Planner 출력이 아니라 macro composition(또는 legacy template + slot)의
+    결과물이다. ``applied_macros``는 이 graph를 만든 macro 조각의 목록이고,
+    ``template``은 그 조각들을 이어 붙인 서명이다. 하나의 질문이 하나의
+    완성 template에 대응하지 않으므로 이름 하나로는 계획을 설명할 수 없다.
+    """
 
     version: str
     question: str
-    template: str
+    template: str = ""
     concepts: list[ConceptNode] = field(default_factory=list)
     transformations: list[Transformation] = field(default_factory=list)
     final_node: str = ""
     slots: dict[str, Any] = field(default_factory=dict)
+    #: 이 graph를 구성한 macro 이름을 적용 순서대로 담는다.
+    applied_macros: list[str] = field(default_factory=list)
+    #: grounding에는 있었지만 어떤 operator도 받지 못한 factor. 조용히
+    #: 사라지는 조건을 실행 기록에서 확인할 수 있게 남긴다.
+    unused_factors: dict[str, Any] = field(default_factory=dict)
 
     def node(self, node_id):
         for node in self.concepts:
@@ -184,6 +248,8 @@ class GeoFlowPlan:
             "question": self.question,
             "template": self.template,
             "slots": dict(self.slots),
+            "applied_macros": list(self.applied_macros),
+            "unused_factors": dict(self.unused_factors),
             "concepts": [node.to_dict() for node in self.concepts],
             "transformations": [
                 transformation.to_dict()

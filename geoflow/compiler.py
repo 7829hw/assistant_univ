@@ -118,6 +118,11 @@ def _compile_step(transformation, nodes, plan):
                 context={"template": plan.template},
             )
 
+        if port_spec.semantic_only:
+            # EVENT처럼 Tool 인자로 나타나지 않는 의미 port. graph와 검증에는
+            # 남지만 호출 인자는 만들지 않는다.
+            continue
+
         if node.source in PRODUCED_SOURCES:
             # Tool이 만들 값이므로 실행 직전에 해소할 참조로 남긴다.
             arguments[port_spec.arg_name] = ValueRef(ref.node_id, ref.field)

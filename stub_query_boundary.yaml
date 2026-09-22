@@ -1,125 +1,236 @@
-# template 경계를 찌르는 평가 셋.
-# stub_query.yaml은 각 질의가 정확히 하나의 template에 대응하도록 구성되어 있어
-# 변별력이 낮다. 이 파일은 구분이 어려운 쌍과 지원 범위 밖 질의를 모아
-# Planner가 틀린 template을 고르는 대신 거부하는지까지 측정한다.
+# 합성 경계를 찌르는 평가 셋.
+# stub_query.yaml은 각 질의가 곧바로 합성되도록 구성되어 있어 변별력이 낮다.
+# 이 파일은 구분이 어려운 쌍과 지원 범위 밖 질의를 모아, 틀린 계획을 만드는
+# 대신 계획 생성을 포기하는지까지 측정한다.
 #
-# expected_template: NONE 은 "지원하는 template이 없으므로 거부해야 함"을 뜻한다.
+# expected_macros: [NONE] 은 "실행 가능한 계획이 만들어지면 안 됨"을 뜻한다.
+
 
 # --- 내부 vs 주변 ---
 - id: b01_place_inside_speed
   question: "동대구역의 평균 속도는?"
-  expected_template: PLACE_SCOPE_METRIC
+  expected_concepts:
+    - LOCATION/place:SUBCOND
+    - EVENT/passage:SUPPORT
+    - AMOUNT/speed:MEASURE
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, PASSAGE_METRIC]
 
 - id: b02_vicinity_count
   question: "동대구역 주변 통행량은?"
-  expected_template: VICINITY_PASSAGE_COUNT
+  # vicinity factor만 다르고 개념 구조는 b01과 같다.
+  expected_concepts:
+    - LOCATION/place:SUBCOND
+    - EVENT/passage:SUPPORT
+    - AMOUNT/passage_count:MEASURE
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, PASSAGE_COUNT]
 
-# --- metric vs count ---
+
+# --- 측정값 종류 ---
 - id: b03_direct_scope_rpm
   question: "scope:edge:1742의 분당 회전 속도는?"
-  expected_template: DIRECT_SCOPE_METRIC
+  expected_concepts:
+    - LOCATION/scope:COND
+    - EVENT/passage:SUPPORT
+    - AMOUNT/rpm:MEASURE
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [PASSAGE_METRIC]
 
-# --- 개체별 metric 혼동 유도 ---
+
+# --- 개체별 측정값 혼동 유도 ---
 - id: b04_operating_ratio_by_day
   question: "요일별 택시 운행률은?"
-  expected_template: GROUPED_AGGREGATE
+  # 운행률은 operation이다. drive의 공차율과 바꿔 쓰면 안 된다.
+  expected_concepts:
+    - EVENT/operation:SUPPORT
+    - PROPORTION/operating_ratio:MEASURE
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
 
 - id: b05_corporate_vacant_ratio
   question: "법인택시의 공차율은?"
-  expected_template: DRIVE_RATIO_METRIC
+  # 공차율은 drive다. operation의 운행률과 바꿔 쓰면 안 된다.
+  expected_concepts:
+    - EVENT/drive:SUPPORT
+    - PROPORTION/vacant_ratio:MEASURE
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [DRIVE_METRIC]
 
 - id: b06_fare_max
   question: "대구 택시 요금의 최대값은?"
-  expected_template: TRIP_FARE_METRIC
+  # 요금은 trip이다. operation의 수입과 바꿔 쓰면 안 된다.
+  expected_concepts:
+    - LOCATION/place:SUBCOND
+    - EVENT/trip:SUPPORT
+    - AMOUNT/fare:MEASURE
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, TRIP_METRIC]
 
 - id: b07_hours_by_sido
   question: "시도별 택시 영업시간은?"
-  expected_template: GROUPED_AGGREGATE
+  expected_concepts:
+    - EVENT/operation:SUPPORT
+    - AMOUNT/hours:MEASURE
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
 
 # --- 상대 날짜 ---
 - id: b08_relative_date_speed
   question: "지난달 대구 지역 평균 속도는?"
-  expected_template: PLACE_SCOPE_METRIC
+  expected_concepts:
+    - LOCATION/place:SUBCOND
+    - EVENT/passage:SUPPORT
+    - AMOUNT/speed:MEASURE
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, PASSAGE_METRIC]
 
-# --- 지원 범위 밖: 거부해야 함 ---
+
+# --- 장소 조건이 선택적인 측정 ---
 - id: b09_place_passage_count
   question: "대구 지역 전체 통행량은?"
-  expected_template: PLACE_PASSAGE_COUNT
+  expected_concepts:
+    - LOCATION/place:SUBCOND
+    - EVENT/passage:SUPPORT
+    - AMOUNT/passage_count:MEASURE
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, PASSAGE_COUNT]
 
 - id: b10_revenue_without_grouping
   question: "개인택시의 평균 수입은?"
-  expected_template: OPERATION_METRIC
+  # 그룹화 표현이 없으므로 dimension을 넣으면 안 된다.
+  expected_concepts:
+    - EVENT/operation:SUPPORT
+    - AMOUNT/revenue:MEASURE
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
 
-# --- 지원 범위 밖: 거부해야 함 ---
 
+# --- 출발지/도착지 ---
 - id: b11_origin_only
   question: "동성로동에서 출발한 실차 구간 건수는?"
-  expected_template: OD_TRIP_COUNT
+  # 승차 범위만 있어도 성립한다.
+  expected_concepts:
+    - LOCATION/place:SUBCOND
+    - EVENT/trip:SUPPORT
+    - AMOUNT/trip_count:MEASURE
+  expected_macros: [PLACE_TO_SCOPE, OD_EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, TRIP_COUNT]
 
-# --- 지원 범위 밖: 거부해야 함 ---
+- id: b17_destination_only
+  question: "신천동에 도착한 실차 구간 건수는?"
+  # 예전에는 출발지가 필수인 template뿐이라 거부해야 했다. 하차 범위만으로도
+  # 합성이 되므로 이제 지원 범위 안이다.
+  expected_concepts:
+    - LOCATION/place:SUBCOND
+    - EVENT/trip:SUPPORT
+    - AMOUNT/trip_count:MEASURE
+  expected_macros: [PLACE_TO_SCOPE, OD_EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, TRIP_COUNT]
+
+
+# --- 지원 범위 밖: 계획을 만들지 않아야 한다 ---
 - id: b12_out_of_domain
   question: "오늘 서울 날씨 알려줘"
-  expected_template: NONE
+  expected_concepts: []
+  expected_macros: [NONE]
+  expected_operators: []
 
-# ============================================================
-# 지원 범위 안이지만 slot 조합이 까다로운 질의
-# ============================================================
+- id: b18_passage_count_ranking
+  question: "통행량이 가장 많은 시군구 3곳은?"
+  # get_passage_count는 범위가 필수인데 질문에 지역이 없다. 범위를 지어내지
+  # 않으므로 계획이 만들어지지 않는다.
+  expected_concepts: []
+  expected_macros: [NONE]
+  expected_operators: []
 
+- id: b20_region_comparison
+  question: "대구와 부산 중 어디가 택시 평균 속도가 더 빠른가요?"
+  # 같은 역할의 장소가 둘이라 어느 쪽을 조건으로 쓸지 정할 수 없다.
+  expected_concepts: []
+  expected_macros: [NONE]
+  expected_operators: []
+
+
+# --- 조건 조합이 까다로운 질의 ---
 - id: b13_vicinity_vacant_count
   question: "동대구역 근처 공차 택시의 통행량은?"
-  expected_template: VICINITY_PASSAGE_COUNT
+  expected_concepts:
+    - LOCATION/place:SUBCOND
+    - EVENT/passage:SUPPORT
+    - AMOUNT/passage_count:MEASURE
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, PASSAGE_COUNT]
 
 - id: b14_operating_count_private
   question: "부산 개인택시의 영업 횟수는?"
-  expected_template: OPERATION_METRIC
+  expected_concepts:
+    - LOCATION/place:SUBCOND
+    - EVENT/operation:SUPPORT
+    - AMOUNT/operating_count:MEASURE
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, OPERATION_METRIC]
 
 - id: b15_fare_median
   question: "대구 택시 요금의 중간값은?"
-  expected_template: TRIP_FARE_METRIC
+  expected_concepts:
+    - LOCATION/place:SUBCOND
+    - EVENT/trip:SUPPORT
+    - AMOUNT/fare:MEASURE
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, TRIP_METRIC]
 
 - id: b16_weekend_speed
   question: "주말 대구 지역의 평균 속도는?"
-  expected_template: PLACE_SCOPE_METRIC
-
-# ============================================================
-# 지원 범위 밖: 거부해야 함
-# Tool은 지원하지만 이를 노출하는 template이 아직 없는 경우를 포함한다.
-# 틀린 template을 고르는 것보다 거부가 낫다는 주장을 측정한다.
-# ============================================================
-
-# 도착지만 주어짐. OD_TRIP_COUNT는 출발지가 필수다.
-# 도착지를 origin에 넣어버리는지 확인한다.
-- id: b17_destination_only
-  question: "신천동에 도착한 실차 구간 건수는?"
-  expected_template: NONE
-
-# 순위 질의이지만 지역이 주어지지 않았다. get_passage_count는 scope가 필수라
-# 어떤 template으로도 scope를 확보할 수 없다. 설계상의 경계다.
-- id: b18_passage_count_ranking
-  question: "통행량이 가장 많은 시군구 3곳은?"
-  expected_template: NONE
+  expected_concepts:
+    - LOCATION/place:SUBCOND
+    - EVENT/passage:SUPPORT
+    - AMOUNT/speed:MEASURE
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, PASSAGE_METRIC]
 
 - id: b19_scope_to_name
   question: "scope:district:2700000000은 어디인가요?"
-  expected_template: SCOPE_PLACE_NAME
-
-# 두 지역 비교. 단일 template으로 표현할 수 없다.
-- id: b20_region_comparison
-  question: "대구와 부산 중 어디가 택시 평균 속도가 더 빠른가요?"
-  expected_template: NONE
+  expected_concepts:
+    - LOCATION/scope:COND
+    - LOCATION/place:MEASURE
+  expected_macros: [SCOPE_TO_PLACE]
+  expected_operators: [SCOPE_NAME]
 
 - id: b21_bucket_rollup
   question: "주 단위로 집계한 택시 수입의 평균은?"
-  expected_template: OPERATION_METRIC
+  # bucket과 rollup은 반드시 함께 쓰인다.
+  expected_concepts:
+    - EVENT/operation:SUPPORT
+    - AMOUNT/revenue:MEASURE
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
 
 - id: b24_bucket_rollup_month
   question: "월 단위로 집계한 개인택시 수입의 최대값은?"
-  expected_template: OPERATION_METRIC
+  expected_concepts:
+    - EVENT/operation:SUPPORT
+    - AMOUNT/revenue:MEASURE
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
 
 - id: b22_passage_count_by_sigungu
   question: "대구 시군구별 통행량은?"
-  expected_template: PLACE_PASSAGE_COUNT
+  expected_concepts:
+    - LOCATION/place:SUBCOND
+    - EVENT/passage:SUPPORT
+    - AMOUNT/passage_count:MEASURE
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, PASSAGE_COUNT]
 
 - id: b23_passage_count_ranking_with_region
   question: "대구에서 통행량이 가장 많은 시군구 3곳은?"
-  expected_template: PLACE_PASSAGE_COUNT
+  # order/limit은 dimension과 함께여야 한다.
+  expected_concepts:
+    - LOCATION/place:SUBCOND
+    - EVENT/passage:SUPPORT
+    - AMOUNT/passage_count:MEASURE
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, PASSAGE_COUNT]
+

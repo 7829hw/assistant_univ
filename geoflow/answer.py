@@ -6,7 +6,7 @@ count, 또는 분포 목록이라 LLM 없이 정확하게 표현할 수 있고, 
 수치가 섞여 들어갈 여지를 아예 없앨 수 있기 때문이다.
 """
 
-from geoflow.types import GeoFlowPlan
+from geoflow.types import CoreConcept, GeoFlowPlan, Subtype
 
 #: template의 answer.kind 값.
 KIND_COUNT = "count"
@@ -61,6 +61,67 @@ _METRIC_LABEL = {
 _COUNT_KEYS = ("count",)
 _MAX_LISTED_ROWS = 24
 
+#: 최종 concept (concept, subtype)별 답변 표현. 예전에는 template YAML의
+#: ``answer:`` 블록이 갖고 있었지만, 이것은 질문 유형이 아니라 측정값 자체의
+#: 성질이므로 concept에 붙이는 편이 맞다. macro 조각은 답변 형식을 모른다.
+ANSWER_SPECS = {
+    (CoreConcept.AMOUNT, Subtype.SPEED): {
+        "kind": KIND_METRIC, "label": "속도",
+    },
+    (CoreConcept.AMOUNT, Subtype.RPM): {
+        "kind": KIND_METRIC, "label": "RPM",
+    },
+    (CoreConcept.AMOUNT, Subtype.PASSAGE_COUNT): {
+        "kind": KIND_COUNT, "label": "통행량", "unit": "건",
+    },
+    (CoreConcept.AMOUNT, Subtype.TRIP_COUNT): {
+        "kind": KIND_COUNT, "label": "실차 구간 건수", "unit": "건",
+    },
+    (CoreConcept.AMOUNT, Subtype.FARE): {
+        "kind": KIND_METRIC, "label": "택시 요금",
+    },
+    (CoreConcept.AMOUNT, Subtype.REVENUE): {
+        "kind": KIND_METRIC, "label": "영업 수익",
+    },
+    (CoreConcept.AMOUNT, Subtype.OPERATING_COUNT): {
+        "kind": KIND_METRIC, "label": "영업 횟수",
+    },
+    (CoreConcept.AMOUNT, Subtype.HOURS): {
+        "kind": KIND_METRIC, "label": "영업 시간",
+    },
+    (CoreConcept.PROPORTION, Subtype.VACANT_RATIO): {
+        "kind": KIND_METRIC, "label": "공차율",
+    },
+    (CoreConcept.PROPORTION, Subtype.OPERATING_RATIO): {
+        "kind": KIND_METRIC, "label": "영업 운행률",
+    },
+    (CoreConcept.LOCATION, Subtype.PLACE): {
+        "kind": KIND_METRIC, "label": "장소명",
+    },
+}
+
+
+def answer_spec_for_plan(plan: GeoFlowPlan):
+    """최종 node의 concept에서 답변 표현을 정한다.
+
+    dimension이 있으면 분포로, 주변 영역을 쓴 계획이면 "주변"을 붙인다.
+    둘 다 계획에 이미 드러나 있는 사실이므로 따로 선언할 필요가 없다.
+    """
+    node = plan.node(plan.final_node)
+    settings = dict(
+        ANSWER_SPECS.get(
+            (node.concept, node.subtype) if node is not None else None,
+            {"kind": KIND_METRIC, "label": "결과"},
+        )
+    )
+    if plan.slots.get("dimension"):
+        settings["kind"] = KIND_DISTRIBUTION
+    if any(
+        item.subtype == Subtype.VICINITY_SCOPE for item in plan.concepts
+    ):
+        settings["vicinity"] = True
+    return settings
+
 
 def format_answer(plan: GeoFlowPlan, execution_result, *, answer=None,
                   labels=None):
@@ -68,7 +129,9 @@ def format_answer(plan: GeoFlowPlan, execution_result, *, answer=None,
 
     ``labels``는 scope → 장소명 매핑이며, 없으면 scope를 그대로 보여준다.
     """
-    settings = dict(answer or {})
+    settings = dict(
+        answer_spec_for_plan(plan) if answer is None else answer
+    )
     labels = dict(labels or {})
     subject = _subject(plan, settings, labels)
     value = execution_result.final_value

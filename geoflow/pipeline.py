@@ -2,15 +2,19 @@
 """GeoFlow 실행 파이프라인.
 
     Question
-        ↓ planner.plan()          (LLM 1회, Tool 없음)
-    template + slots
-        ↓ template.instantiate()  (deterministic)
+        ↓ planner.plan()           (LLM 1회, Tool 없음)
+    Grounding (concepts + factors)
+        ↓ composer.compose()       (macro retrieval + IO-port composition,
+                                    operator mapping 포함, deterministic)
     GeoFlowPlan
-        ↓ validator.validate()
-    ExecutionPlan
+        ↓ validator.validate()     (G1~G6)
         ↓ compiler.compile_plan()
-        ↓ executor.execute_plan() (기존 ToolExecutor 재사용)
+    ExecutionPlan
+        ↓ executor.execute_plan()  (기존 ToolExecutor 재사용)
     Final Answer
+
+질문 유형을 고르는 단계는 없다. Planner는 개념만 밝히고, 어떤 조각을 어떻게
+이어 붙일지는 composer가, 어떤 Tool을 부를지는 operator mapping이 정한다.
 """
 
 import time
@@ -22,12 +26,14 @@ from agent_graph import extract_scopes
 from geoflow import validator as geoflow_validator
 from geoflow.answer import format_answer
 from geoflow.compiler import compile_plan
+from geoflow.composer import MacroComposer
 from geoflow.errors import GeoFlowError
 from geoflow.executor import STATUS_CANCELLED, STATUS_OK, execute_plan
 from geoflow.labeling import resolve_scope_labels
+from geoflow.macros import MacroLibrary
 from geoflow.operator_registry import Operator
 from geoflow.planner import GeoFlowPlanner
-from geoflow.templates import TemplateRegistry
+from geoflow.types import CoreConcept, Subtype
 
 AGENT_MODE = "geoflow"
 
@@ -48,6 +54,8 @@ class Stage:
     """실패 지점을 로그에서 바로 알 수 있도록 단계 이름을 고정한다."""
 
     PLANNER = "planner"
+    COMPOSITION = "composition"
+    #: 하위 호환. 기록을 읽는 쪽이 아직 쓰고 있을 수 있어 남겨 둔다.
     TEMPLATE = "template"
     VALIDATION = "validation"
     COMPILE = "compile"
@@ -64,7 +72,10 @@ class GeoFlowRun:
     agent_mode: str = AGENT_MODE
     stage: str = Stage.PLANNER
     planner: dict[str, Any] | None = None
+    #: 적용된 macro를 이어 붙인 서명. 기존 기록/CLI가 읽던 key를 유지한다.
     template: str | None = None
+    applied_macros: list[str] = field(default_factory=list)
+    grounding: dict[str, Any] | None = None
     slots: dict[str, Any] = field(default_factory=dict)
     plan: dict[str, Any] | None = None
     validation: dict[str, Any] | None = None
@@ -89,6 +100,8 @@ class GeoFlowRun:
             "attempts": [dict(item) for item in self.attempts],
             "planner": self.planner,
             "template": self.template,
+            "applied_macros": list(self.applied_macros),
+            "grounding": self.grounding,
             "slots": dict(self.slots),
             "plan": self.plan,
             "validation": self.validation,
@@ -101,40 +114,39 @@ class GeoFlowRun:
 
 
 class GeoFlowPipeline:
-    """planner/validator/compiler/executor를 하나의 실행 경로로 묶는다."""
+    """planner/composer/validator/compiler/executor를 한 경로로 묶는다."""
 
-    def __init__(self, *, planner, templates, tool_executor):
+    def __init__(self, *, planner, composer, tool_executor):
         self.planner = planner
-        self.templates = templates
+        self.composer = composer
         self.tool_executor = tool_executor
 
     @classmethod
-    def create(cls, *, client, tool_executor, template_directory=None,
+    def create(cls, *, client, tool_executor, macro_directory=None,
                planner_prompt=None, model=None):
         """CLI/Web이 동일하게 사용할 기본 구성으로 파이프라인을 만든다."""
-        templates = (
-            TemplateRegistry.from_directory()
-            if template_directory is None
-            else TemplateRegistry.from_directory(template_directory)
+        library = (
+            MacroLibrary.from_directory()
+            if macro_directory is None
+            else MacroLibrary.from_directory(macro_directory)
         )
         planner = GeoFlowPlanner(
             client=client,
-            templates=templates,
             prompt=planner_prompt,
             model=model,
         )
         return cls(
             planner=planner,
-            templates=templates,
+            composer=MacroComposer(library),
             tool_executor=tool_executor,
         )
 
     def run(self, question, *, event_handler=None, cancel_checker=None):
         """질문 하나를 GeoFlow 경로로 실행한다.
 
-        장소 조회가 retryable 오류로 실패하면 한 번에 한해 Planner에게 slot
-        수정을 요청한다. 수정된 slot도 template → validator → compiler 전 경로를
-        다시 통과하므로 어떤 guard도 우회하지 않는다.
+        장소 조회가 retryable 오류로 실패하면 한 번에 한해 Planner에게 장소
+        개념의 값 수정을 요청한다. 수정된 grounding도 composer → validator →
+        compiler 전 경로를 다시 통과하므로 어떤 guard도 우회하지 않는다.
         """
         run = GeoFlowRun(question=question)
         started_at = time.perf_counter()
@@ -160,7 +172,7 @@ class GeoFlowPipeline:
 
         for attempt_index in range(MAX_REPAIR_ATTEMPTS + 1):
             try:
-                template, plan, execution_plan = self._prepare(
+                plan, execution_plan = self._prepare(
                     question, planner_output, user_scopes, run, emit,
                 )
             except GeoFlowError as error:
@@ -169,8 +181,8 @@ class GeoFlowPipeline:
                 # 재계획이 더 나쁜 계획을 만들었으면 직전 실행 실패를 유지한다.
                 run.attempts.append({
                     "index": attempt_index,
-                    "template": planner_output.template,
-                    "slots": dict(planner_output.slots),
+                    "template": run.template,
+                    "slots": dict(run.slots),
                     "status": error.stage,
                     "error": error.to_dict(),
                 })
@@ -192,6 +204,7 @@ class GeoFlowPipeline:
             run.attempts.append({
                 "index": attempt_index,
                 "template": plan.template,
+                "applied_macros": list(plan.applied_macros),
                 "slots": dict(plan.slots),
                 "status": result.status,
                 "tools": [entry["tool"] for entry in result.trace],
@@ -200,7 +213,7 @@ class GeoFlowPipeline:
 
             if result.status == STATUS_OK:
                 return self._finish(
-                    run, plan, template, result, started_at,
+                    run, plan, result, started_at,
                     event_handler=event_handler,
                 )
 
@@ -251,20 +264,21 @@ class GeoFlowPipeline:
     def _prepare(self, question, planner_output, user_scopes, run, emit):
         """planner 출력을 검증된 실행 계획까지 끌고 간다."""
         run.planner = planner_output.to_dict()
-        run.template = planner_output.template
-        run.slots = dict(planner_output.slots)
+        run.grounding = planner_output.grounding.to_dict()
+
+        run.stage = Stage.COMPOSITION
+        plan = self.composer.compose(planner_output.grounding)
+        run.plan = plan.to_dict()
+        run.template = plan.template
+        run.applied_macros = list(plan.applied_macros)
+        run.slots = dict(plan.slots)
         emit(
             "geoflow_plan",
-            template=planner_output.template,
-            slots=planner_output.slots,
+            template=plan.template,
+            applied_macros=list(plan.applied_macros),
+            slots=plan.slots,
             duration_ms=planner_output.duration_ms,
         )
-
-        run.stage = Stage.TEMPLATE
-        template = self.templates.require(planner_output.template)
-        plan = template.instantiate(question, planner_output.slots)
-        run.plan = plan.to_dict()
-        run.slots = dict(plan.slots)
 
         run.stage = Stage.VALIDATION
         report = geoflow_validator.validate(
@@ -280,9 +294,9 @@ class GeoFlowPipeline:
         execution_plan = compile_plan(plan)
         run.execution_plan = execution_plan.to_dict()
         emit("geoflow_execution_plan", execution_plan=run.execution_plan)
-        return template, plan, execution_plan
+        return plan, execution_plan
 
-    def _finish(self, run, plan, template, result, started_at,
+    def _finish(self, run, plan, result, started_at,
                 *, event_handler=None):
         # 결과 scope를 장소명으로 바꾼다. 실패해도 답변 생성은 계속한다.
         labels, label_trace = resolve_scope_labels(
@@ -297,9 +311,8 @@ class GeoFlowPipeline:
 
         try:
             run.stage = Stage.ANSWER
-            run.final_answer = format_answer(
-                plan, result, answer=template.answer, labels=labels,
-            )
+            # 답변 표현은 최종 concept에서 정해진다(geoflow/answer.py).
+            run.final_answer = format_answer(plan, result, labels=labels)
         except GeoFlowError as error:
             return _fail(run, error, started_at)
         run.stage = Stage.DONE
@@ -321,15 +334,18 @@ def _repairable_failure(plan, execution_plan, result):
         return None
 
     name = step.arguments.get("name")
-    slot = next(
+    concept = next(
         (
-            slot_name for slot_name, value in plan.slots.items()
-            if isinstance(value, dict) and value.get("name") == name
+            node.id for node in plan.concepts
+            if node.concept == CoreConcept.LOCATION
+            and node.subtype == Subtype.PLACE
+            and isinstance(node.value, dict)
+            and node.value.get("name") == name
         ),
         None,
     )
     return {
-        "slot": slot or "(알 수 없음)",
+        "concept": concept or "(알 수 없음)",
         "name": name,
         "region": step.arguments.get("region", ""),
         "message": error.get("user_message") or error.get("detail", ""),

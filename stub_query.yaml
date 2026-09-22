@@ -1,53 +1,132 @@
-# expected_template은 geoflow 모드의 template 선택 정확도 측정용 정답
-# 라벨이다. react 모드와 query_loader는 이 key를 사용하지 않는다.
+# expected_concepts / expected_macros / expected_operators는 geoflow 모드의
+# 정확도 측정용 정답 라벨이다. react 모드와 query_loader는 이 key를 사용하지
+# 않는다.
+#
+# expected_concepts는 "CONCEPT/subtype:ROLE" 형식이다. id는 모델이 정하는
+# 이름이라 정답과 맞출 수 없으므로 의미만 적는다.
+# expected_macros는 하나의 완성 template이 아니라 합성에 쓰이는 조각 목록이다.
+
 - id: q01_edge_average_speed
   question: "2026년 5월 30일 오후 12시에서 1시사이에 scope:edge:1742상의 택시들의 평균 속도는?"
-  expected_template: DIRECT_SCOPE_METRIC
+  expected_concepts:
+    - LOCATION/scope:COND
+    - EVENT/passage:SUPPORT
+    - AMOUNT/speed:MEASURE
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [PASSAGE_METRIC]
 
 - id: q02_edge_passage_count
   question: "2026년 5월 30일 오후 12시에서 1시사이에 scope:edge:19384 지점을 통과하는 차량 대수는 몇대?"
-  expected_template: DIRECT_SCOPE_PASSAGE_COUNT
+  expected_concepts:
+    - LOCATION/scope:COND
+    - EVENT/passage:SUPPORT
+    - AMOUNT/passage_count:MEASURE
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [PASSAGE_COUNT]
 
 - id: q03_station_vicinity_speed
   question: "2026년 5월 30일 오후 12시에서 1시사이에 동대구역 근처 차량의 평균 운행 속도는?"
-  expected_template: VICINITY_SCOPE_METRIC
+  expected_concepts:
+    - LOCATION/place:SUBCOND
+    - EVENT/passage:SUPPORT
+    - AMOUNT/speed:MEASURE
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, PASSAGE_METRIC]
 
 - id: q04_daegu_average_speed
   question: "대구 지역내 택시들의 평균 속도는?"
-  expected_template: PLACE_SCOPE_METRIC
+  expected_concepts:
+    - LOCATION/place:SUBCOND
+    - EVENT/passage:SUPPORT
+    - AMOUNT/speed:MEASURE
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, PASSAGE_METRIC]
 
 - id: q05_dongseongro_average_speed
   question: "대구 동성로길의 평균 속도는?"
-  expected_template: PLACE_SCOPE_METRIC
+  expected_concepts:
+    - LOCATION/place:SUBCOND
+    - EVENT/passage:SUPPORT
+    - AMOUNT/speed:MEASURE
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, PASSAGE_METRIC]
 
 - id: q14_vacant_drive_ratio
   question: "공차로 운행되는 택시 비율은?"
-  expected_template: DRIVE_RATIO_METRIC
+  expected_concepts:
+    - EVENT/drive:SUPPORT
+    - PROPORTION/vacant_ratio:MEASURE
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [DRIVE_METRIC]
 
 - id: q18_private_revenue_by_day
   question: "개인용 택시의 요일별 택시 수입 분포는?"
-  expected_template: GROUPED_AGGREGATE
+  expected_concepts:
+    - EVENT/operation:SUPPORT
+    - AMOUNT/revenue:MEASURE
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
 
 - id: q22_daegu_origin_destination_count
   question: "대구 동성로동에서 출발하여 신천동에 도착한 실차 구간 건수는?"
-  expected_template: OD_TRIP_COUNT
+  expected_concepts:
+    - LOCATION/place:SUBCOND
+    - LOCATION/place:SUBCOND
+    - EVENT/trip:SUPPORT
+    - AMOUNT/trip_count:MEASURE
+  expected_macros: [PLACE_TO_SCOPE, PLACE_TO_SCOPE, OD_EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, RESOLVE_PLACE_SCOPE, TRIP_COUNT]
 
 - id: q24_daegu_average_fare
   question: "대구시의 평균 택시 요금은?"
-  expected_template: TRIP_FARE_METRIC
+  expected_concepts:
+    - LOCATION/place:SUBCOND
+    - EVENT/trip:SUPPORT
+    - AMOUNT/fare:MEASURE
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, TRIP_METRIC]
 
 - id: q25_busan_park_vicinity_count
   question: "부산 초읍동의 어린이대공원 주변의 통행량은?"
-  expected_template: VICINITY_PASSAGE_COUNT
+  expected_concepts:
+    - LOCATION/place:SUBCOND
+    - EVENT/passage:SUPPORT
+    - AMOUNT/passage_count:MEASURE
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, PASSAGE_COUNT]
 
 - id: q26_busan_park_vicinity_speed
   question: "부산 초읍동에 위치한 어린이대공원 근처의 평균 속도는?"
-  expected_template: VICINITY_SCOPE_METRIC
+  expected_concepts:
+    - LOCATION/place:SUBCOND
+    - EVENT/passage:SUPPORT
+    - AMOUNT/speed:MEASURE
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, PASSAGE_METRIC]
 
 - id: q27_busan_origin_destination_count
   question: "부산 초읍동에서 출발하여 초량동에 도착한 실차 구간 건수는?"
-  expected_template: OD_TRIP_COUNT
+  expected_concepts:
+    - LOCATION/place:SUBCOND
+    - LOCATION/place:SUBCOND
+    - EVENT/trip:SUPPORT
+    - AMOUNT/trip_count:MEASURE
+  expected_macros: [PLACE_TO_SCOPE, PLACE_TO_SCOPE, OD_EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, RESOLVE_PLACE_SCOPE, TRIP_COUNT]
 
 - id: q29_busan_average_fare
   question: "부산시의 평균 택시 요금은?"
-  expected_template: TRIP_FARE_METRIC
+  expected_concepts:
+    - LOCATION/place:SUBCOND
+    - EVENT/trip:SUPPORT
+    - AMOUNT/fare:MEASURE
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, TRIP_METRIC]
+
+- id: q30_scope_place_name
+  question: "scope:district:2700000000은 어디인가요?"
+  expected_concepts:
+    - LOCATION/scope:COND
+    - LOCATION/place:MEASURE
+  expected_macros: [SCOPE_TO_PLACE]
+  expected_operators: [SCOPE_NAME]

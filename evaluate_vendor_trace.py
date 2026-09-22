@@ -29,7 +29,13 @@ from geoflow.pipeline import (
     STATUS_REPAIR_SKIPPED,
     GeoFlowPipeline,
 )
-from ollama_client import OllamaClient, resolve_chat_timeout
+from ollama_client import (
+    THINK_CHOICES,
+    OllamaClient,
+    chat_options,
+    resolve_chat_timeout,
+    resolve_think,
+)
 from query_loader import QueryValidationError, load_queries
 from tool_executor import ToolExecutor
 from tool_handlers import get_tool_handlers
@@ -49,7 +55,7 @@ OLLAMA_OPTIONS = {"temperature": 0}
 MAX_TOOL_HOPS = 10
 
 #: attempt status를 리포트 문구로 옮긴다. 그 밖의 값은 실패 단계 이름이며,
-#: 재계획 결과가 template/validation/compile에서 탈락한 경우에 해당한다.
+#: 재계획 결과가 composition/validation/compile에서 탈락한 경우에 해당한다.
 ATTEMPT_STATUS_LABEL = {
     "OK": "실행 성공",
     "TOOL_ERROR": "Tool 오류로 실행 실패",
@@ -78,10 +84,15 @@ def format_call(call):
     return f"{call.get('tool')}({body}) → {shown}"
 
 
-def build_runtime(model, host, chat_timeout, agent_mode):
+def build_runtime(model, host, chat_timeout, agent_mode,
+                  think=None, num_predict=None):
     tools, system_prompt = build()
     client = OllamaClient(
-        host, model, dict(OLLAMA_OPTIONS), chat_timeout=chat_timeout,
+        host,
+        model,
+        chat_options(OLLAMA_OPTIONS, num_predict),
+        chat_timeout=chat_timeout,
+        think=think,
     )
     tool_executor = ToolExecutor(tools=tools, handlers=get_tool_handlers())
     geoflow = None
@@ -101,14 +112,16 @@ def build_runtime(model, host, chat_timeout, agent_mode):
 
 
 def evaluate(queries, gold, *, model, host, chat_timeout, agent_mode,
-             repeat, verbose):
+             repeat, verbose, think=None, num_predict=None):
     records = []
     for item in queries:
         contract = gold.get(item["id"])
         if contract is None:
             raise SystemExit(f"gold contract가 없습니다: {item['id']}")
         for attempt in range(1, repeat + 1):
-            runtime = build_runtime(model, host, chat_timeout, agent_mode)
+            runtime = build_runtime(
+                model, host, chat_timeout, agent_mode, think, num_predict,
+            )
             try:
                 result = runtime.run_question(
                     item["question"], max_hops=MAX_TOOL_HOPS,
@@ -147,7 +160,9 @@ def evaluate(queries, gold, *, model, host, chat_timeout, agent_mode,
                 ],
                 "final_answer": result.get("final_answer"),
                 "runtime_error": result.get("runtime_error"),
-                "template": (result.get("geoflow") or {}).get("template"),
+                "applied_macros": (result.get("geoflow") or {}).get(
+                    "applied_macros",
+                ) or [],
                 # 재계획이 없었던 이유(호출 실패 / 검증 탈락 / 미시도)는 Tool
                 # trace만으로는 구분되지 않으므로 attempt 기록을 함께 남긴다.
                 "repair_count": (result.get("geoflow") or {}).get(
@@ -171,24 +186,22 @@ def evaluate(queries, gold, *, model, host, chat_timeout, agent_mode,
 def _geoflow_graph(geoflow):
     """실행에 실제로 쓰인 GeoFlow Graph를 판정 기록과 함께 남긴다.
 
-    Planner 출력 → Plan → 검증 → 실행 계획 순서로 둔다. geoflow mode가 아니거나
-    Planner 단계에서 중단된 질문은 남길 Graph가 없다.
+    grounding → 합성된 Plan → 검증 → 실행 계획 순서로 둔다. geoflow mode가
+    아니거나 Planner 단계에서 중단된 질문은 남길 Graph가 없다.
     """
     if not geoflow or not geoflow.get("plan"):
         return None
-    planner = geoflow.get("planner") or {}
     return {
-        "planner_output": {
-            "template": geoflow.get("template"),
-            "slots": planner.get("slots", geoflow.get("slots")),
-        },
+        "grounding": geoflow.get("grounding"),
+        "applied_macros": geoflow.get("applied_macros") or [],
         "geoflow_plan": geoflow["plan"],
         "validation": geoflow.get("validation"),
         "execution_plan": geoflow.get("execution_plan"),
     }
 
 
-def write_report(path, records, *, model, agent_mode, timestamp):
+def write_report(path, records, *, model, agent_mode, timestamp,
+                 think="auto", num_predict=None):
     passed = sum(1 for record in records if record["passed"])
     lines = [
         "# Vendor Tool Trace Acceptance",
@@ -196,6 +209,7 @@ def write_report(path, records, *, model, agent_mode, timestamp):
         f"- Model: {model}",
         f"- Agent mode: {agent_mode}",
         f"- Timestamp: {timestamp}",
+        f"- think: {think} / num_predict: {num_predict or '모델 기본값'}",
         "- 판정 기준: evaluation/vendor/vendor_trace_gold.yaml",
         "",
         "## Summary",
@@ -290,6 +304,21 @@ def parse_args(argv=None):
     parser.add_argument("--query-file", default=str(DEFAULT_QUERY_FILE))
     parser.add_argument("--gold-file", default=str(DEFAULT_GOLD_FILE))
     parser.add_argument("--chat-timeout", type=float, default=None)
+    parser.add_argument(
+        "--model-think",
+        choices=THINK_CHOICES,
+        default="auto",
+        help=(
+            "모델 thinking 사용 여부. auto=모델 기본값, on/off=명시 지정"
+            "(기본: auto)"
+        ),
+    )
+    parser.add_argument(
+        "--num-predict",
+        type=int,
+        default=None,
+        help="Planner 응답 1회의 생성 토큰 상한(기본: 모델 기본값)",
+    )
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--query-id", action="append")
     parser.add_argument("--verbose", action="store_true")
@@ -318,12 +347,15 @@ def main(argv=None):
 
     print(
         f"설정 — 모델: {args.model} / agent mode: {args.agent_mode} "
-        f"/ query {len(queries)}건 × repeat {args.repeat}"
+        f"/ query {len(queries)}건 × repeat {args.repeat} "
+        f"/ chat timeout: {chat_timeout:g}초 / think: {args.model_think} "
+        f"/ num_predict: {args.num_predict or '모델 기본값'}"
     )
     records = evaluate(
         queries, gold,
         model=args.model, host=args.ollama_host, chat_timeout=chat_timeout,
         agent_mode=args.agent_mode, repeat=args.repeat, verbose=args.verbose,
+        think=resolve_think(args.model_think), num_predict=args.num_predict,
     )
 
     passed = sum(1 for record in records if record["passed"])
@@ -351,6 +383,9 @@ def main(argv=None):
             "query_file": str(args.query_file),
             "gold_file": str(args.gold_file),
             "repeat": args.repeat,
+            "chat_timeout": chat_timeout,
+            "think": args.model_think,
+            "num_predict": args.num_predict,
             "passed": passed,
             "total": len(records),
             "records": records,
@@ -360,6 +395,7 @@ def main(argv=None):
     write_report(
         run_dir / "vendor_trace_report.md", records,
         model=args.model, agent_mode=args.agent_mode, timestamp=timestamp,
+        think=args.model_think, num_predict=args.num_predict,
     )
     print(f"결과 파일: {run_dir}")
     return records

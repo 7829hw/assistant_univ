@@ -1,29 +1,52 @@
 # -*- coding: utf-8 -*-
-"""GeoFlow Planner의 template 선택 정확도를 모델별로 측정한다.
+"""GeoFlow Planner의 concept grounding 품질을 모델별로 측정한다.
 
-Tool을 실행하지 않고 Planner 호출만 반복하므로, gazetteer의 NOT_FOUND 같은
-실행 단계 잡음을 섞지 않고 semantic parsing 품질만 잰다.
+예전에는 "질문에 맞는 template을 골랐는가" 하나를 쟀다. 지금 Planner는
+template을 고르지 않으므로, 대신 논문의 단계 구분을 따라 나눠서 잰다.
+
+    concept / subtype / role 정확도   grounding 단계
+    macro coverage / recall           macro retrieval + composition 단계
+    graph validation pass rate        G1~G6
+    operator mapping 정확도           factorization 단계
+    execution success                 실제 Tool 실행(--execute)
+
+Tool 실행은 기본적으로 하지 않으므로 gazetteer의 NOT_FOUND 같은 잡음을 섞지
+않고 semantic parsing 품질만 잴 수 있다.
 
 사용법:
     python evaluate_planner.py --model qwen3:8b --model gemma4:12b
-    python evaluate_planner.py --all-models --repeat 3
+    python evaluate_planner.py --all-models --repeat 3 --execute
 
-정답 라벨은 Query YAML의 expected_template에서 읽는다.
+정답 라벨은 Query YAML의 expected_concepts / expected_macros /
+expected_operators에서 읽는다.
 """
 
 import argparse
 import json
 import os
 import time
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from agent_graph import extract_scopes
 from build import build
+from geoflow import validator as geoflow_validator
+from geoflow.compiler import compile_plan
+from geoflow.composer import MacroComposer
 from geoflow.errors import GeoFlowError
+from geoflow.executor import STATUS_OK, execute_plan
+from geoflow.grounding import OD_ROLE
+from geoflow.macros import MacroLibrary
 from geoflow.planner import NO_TEMPLATE, GeoFlowPlanner
-from geoflow.templates import TemplateRegistry
-from ollama_client import OllamaClient, resolve_chat_timeout
+from ollama_client import (
+    THINK_CHOICES,
+    OllamaClient,
+    chat_options,
+    resolve_chat_timeout,
+    resolve_think,
+)
 from query_loader import QueryValidationError, load_queries
 from tool_executor import ToolExecutor
 from tool_handlers import get_tool_handlers
@@ -34,11 +57,22 @@ DEFAULT_OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_OPTIONS = {"temperature": 0}
 
 #: 지원 범위 밖이라 Planner가 거부해야 하는 질의의 정답 라벨.
-#: 틀린 template을 고르는 것보다 거부가 낫다는 설계 주장을 측정한다.
+#: 틀린 계획을 만드는 것보다 거부가 낫다는 설계 주장을 측정한다.
 NO_TEMPLATE_LABEL = NO_TEMPLATE
 
-#: 역할이 뒤바뀌면 안 되는 slot 쌍. 논문이 지적한 대표적 실패 모드다.
-ORDERED_SLOT_PAIRS = (("origin", "destination"),)
+#: 계획을 만들지 않고 물러선 경우의 오류 코드.
+#: Planner가 스스로 밝힌 경우와, 합성 단계에서 근거가 모자라 만들지 못한
+#: 경우를 모두 포함한다. 둘 다 "틀린 계획을 만들지 않았다"는 같은 결과다.
+REFUSAL_CODES = frozenset({
+    "UNSUPPORTED_QUESTION",
+    "UNSUPPORTED_MEASURE",
+    "NO_MEASURE",
+    "NO_MACRO",
+    "NO_OPERATOR",
+    "AMBIGUOUS_PORT",
+    "AMBIGUOUS_OPERATOR",
+    "UNUSED_CONCEPT",
+})
 
 
 def _now_local():
@@ -51,104 +85,288 @@ def _place_name(value):
     return str(value or "").strip()
 
 
-def check_slot_roles(question, slots):
-    """origin/destination이 발화 순서와 뒤바뀌지 않았는지 확인한다.
+def check_concept_roles(question, grounding):
+    """승차/하차 개념이 발화 순서와 뒤바뀌지 않았는지 확인한다.
 
-    판정할 근거가 없으면 ``None``을 반환한다.
+    논문이 지적한 대표적 실패 모드다. 판정할 근거가 없으면 ``None``.
     """
-    for first, second in ORDERED_SLOT_PAIRS:
-        if first not in slots or second not in slots:
-            continue
-        first_name = _place_name(slots[first])
-        second_name = _place_name(slots[second])
-        if not first_name or not second_name:
-            continue
-        first_at = question.find(first_name)
-        second_at = question.find(second_name)
-        if first_at < 0 or second_at < 0 or first_at == second_at:
-            continue
-        return first_at < second_at
-    return None
+    by_role = {}
+    for concept in grounding.concepts:
+        role = concept.attributes.get(OD_ROLE)
+        if role in ("pickup", "dropoff"):
+            by_role.setdefault(role, concept)
+    if len(by_role) < 2:
+        return None
+    pickup = _place_name(by_role["pickup"].value)
+    dropoff = _place_name(by_role["dropoff"].value)
+    if not pickup or not dropoff:
+        return None
+    pickup_at = question.find(pickup)
+    dropoff_at = question.find(dropoff)
+    if pickup_at < 0 or dropoff_at < 0 or pickup_at == dropoff_at:
+        return None
+    return pickup_at < dropoff_at
 
 
-def evaluate_model(model, queries, *, host, chat_timeout, repeat, verbose):
-    """모델 하나로 전체 Query의 template 선택을 측정한다."""
+# -- 채점 -------------------------------------------------------------------
+
+
+def concept_keys(grounding):
+    """grounding 개념을 (concept, subtype, role) 문자열로 편다.
+
+    id는 모델이 정하는 이름이라 정답과 맞출 수 없으므로 의미만 비교한다.
+    """
+    return [
+        f"{item.concept.value}/{item.subtype}:{item.role.value}"
+        for item in grounding.concepts
+    ]
+
+
+def _levels(key):
+    """채점 단계별로 잘라 낸 key. 상위 단계가 맞으면 하위도 비교한다."""
+    types, _, role = key.partition(":")
+    concept, _, subtype = types.partition("/")
+    return concept, f"{concept}/{subtype}", key
+
+
+def score_concepts(predicted, expected):
+    """concept / subtype / role 각각의 일치 개수를 센다.
+
+    같은 개념이 여러 개인 질문(출발지·도착지)이 있으므로 집합이 아니라
+    다중집합으로 비교한다.
+    """
+    result = {}
+    for index, name in enumerate(("concept", "subtype", "role")):
+        predicted_counter = Counter(_levels(key)[index] for key in predicted)
+        expected_counter = Counter(_levels(key)[index] for key in expected)
+        matched = sum((predicted_counter & expected_counter).values())
+        result[name] = {
+            "matched": matched,
+            "expected": sum(expected_counter.values()),
+            "predicted": sum(predicted_counter.values()),
+        }
+    return result
+
+
+def score_sequence(predicted, expected):
+    """macro/operator 목록의 재현율과 완전 일치 여부."""
+    predicted_counter = Counter(predicted)
+    expected_counter = Counter(expected)
+    matched = sum((predicted_counter & expected_counter).values())
+    return {
+        "matched": matched,
+        "expected": sum(expected_counter.values()),
+        "predicted": sum(predicted_counter.values()),
+        "exact": predicted_counter == expected_counter,
+    }
+
+
+def _empty_score():
+    return {"matched": 0, "expected": 0, "predicted": 0}
+
+
+def evaluate_model(model, queries, *, host, chat_timeout, repeat, verbose,
+                   think=None, num_predict=None, execute=False,
+                   tool_executor=None):
+    """모델 하나로 전체 Query의 grounding과 합성을 측정한다."""
     client = OllamaClient(
-        host, model, dict(OLLAMA_OPTIONS), chat_timeout=chat_timeout,
+        host,
+        model,
+        chat_options(OLLAMA_OPTIONS, num_predict),
+        chat_timeout=chat_timeout,
+        think=think,
     )
-    planner = GeoFlowPlanner(
-        client=client, templates=TemplateRegistry.from_directory(),
-    )
+    planner = GeoFlowPlanner(client=client)
+    composer = MacroComposer(MacroLibrary.from_directory())
+    available_tools = None if tool_executor is None else tool_executor.tool_names
 
     records = []
     for item in queries:
-        expected = item.get("expected_template")
+        expected_concepts = list(item.get("expected_concepts") or [])
+        expected_macros = list(item.get("expected_macros") or [])
+        expected_operators = list(item.get("expected_operators") or [])
+        refusal_expected = NO_TEMPLATE_LABEL in expected_macros
         for attempt in range(1, repeat + 1):
             started_at = time.perf_counter()
             record = {
                 "id": item["id"],
                 "repeat_index": attempt,
-                "expected": expected,
-                "template": None,
-                "slots": {},
                 "status": "OK",
                 "error": None,
+                "stage": "planner",
+                "concepts": [],
+                "factors": {},
+                "macros": [],
+                "operators": [],
+                "concept_score": {
+                    name: _empty_score()
+                    for name in ("concept", "subtype", "role")
+                },
+                "macro_score": _empty_score(),
+                "operator_score": _empty_score(),
+                "validated": False,
+                "executed": None,
+                # 실행 실패가 재계획으로 복구 가능한 종류였는지. 장소 조회
+                # 실패는 런타임이 한 번 고쳐 다시 시도하지만, 이 측정은
+                # 첫 계획을 그대로 실행하므로 여기서 구분해 둔다.
+                "execution_retryable": None,
+                "refused": False,
                 "role_order_ok": None,
                 "duration_ms": 0.0,
             }
             try:
                 output = planner.plan(item["question"])
-                record["template"] = output.template
-                record["slots"] = output.slots
-                record["role_order_ok"] = check_slot_roles(
-                    item["question"], output.slots,
+                grounding = output.grounding
+                record["concepts"] = concept_keys(grounding)
+                record["factors"] = dict(grounding.factors)
+                record["role_order_ok"] = check_concept_roles(
+                    item["question"], grounding,
                 )
+                record["concept_score"] = score_concepts(
+                    record["concepts"], expected_concepts,
+                )
+
+                record["stage"] = "composition"
+                plan = composer.compose(grounding)
+                record["macros"] = list(plan.applied_macros)
+                record["operators"] = [
+                    item.operator for item in plan.transformations
+                ]
+                record["macro_score"] = score_sequence(
+                    record["macros"], expected_macros,
+                )
+                record["operator_score"] = score_sequence(
+                    record["operators"], expected_operators,
+                )
+
+                record["stage"] = "validation"
+                report = geoflow_validator.validate(
+                    plan, available_tools=available_tools,
+                )
+                record["validated"] = report.ok
+                if not report.ok:
+                    record["status"] = "VALIDATION_FAILED"
+                    record["error"] = "; ".join(
+                        error["message"] for error in report.errors
+                    )
+                elif execute and tool_executor is not None:
+                    record["stage"] = "execution"
+                    # 사용자가 발화에 적은 scope는 실행 시점에도 known scope로
+                    # 넘겨야 한다. 파이프라인이 하는 것과 같은 처리이며,
+                    # 빠뜨리면 provenance gate가 정상 질의를 막는다.
+                    result = execute_plan(
+                        compile_plan(plan),
+                        tool_executor,
+                        known_scopes=set(extract_scopes(item["question"])),
+                    )
+                    record["executed"] = result.status == STATUS_OK
+                    if not record["executed"]:
+                        record["status"] = result.status
+                        error = result.error or {}
+                        record["error"] = error.get("detail")
+                        record["execution_retryable"] = bool(
+                            (error.get("context") or {}).get("retryable")
+                        )
+                else:
+                    record["stage"] = "done"
             except GeoFlowError as error:
                 record["status"] = error.code
                 record["error"] = error.detail
-                if error.code == "NO_MATCHING_TEMPLATE":
+                if error.code in REFUSAL_CODES:
                     # 지원 범위 밖임을 스스로 인정한 경우도 하나의 판정 결과다.
-                    record["template"] = NO_TEMPLATE_LABEL
+                    record["refused"] = True
+                    record["macros"] = [NO_TEMPLATE_LABEL]
+                    record["macro_score"] = score_sequence(
+                        record["macros"], expected_macros,
+                    )
             except Exception as error:  # noqa: BLE001 - 모델 오류도 기록 대상
                 record["status"] = "CLIENT_ERROR"
                 record["error"] = f"{type(error).__name__}: {error}"
             record["duration_ms"] = round(
                 (time.perf_counter() - started_at) * 1000, 3
             )
-            record["correct"] = (
-                record["template"] is not None
-                and record["template"] == expected
+            # 종합 판정은 "실행 가능한 올바른 그래프가 나왔는가"만 본다.
+            # concept/subtype/role 정확도를 여기에 다시 곱하지 않는 이유는
+            # 설계상 질문에 드러나지 않아도 되는 개념이 있기 때문이다.
+            # "평균 속도"라는 질문에 passage를 적지 않아도 registry가 유일하게
+            # 결정할 수 있으므로 합성은 성공한다. 그것을 틀렸다고 셀 수 없다.
+            # grounding 품질은 별도 지표로 따로 본다.
+            record["correct"] = bool(
+                record["macro_score"].get("exact")
+                and record["operator_score"].get("exact")
+                and record["validated"]
             )
+            if refusal_expected:
+                # 라벨이 NONE이면 "실행 가능한 계획이 만들어지지 않는 것"이
+                # 정답이다. Planner가 거부했든 합성이 포기했든 같다.
+                record["correct"] = not record["validated"]
             records.append(record)
             if verbose:
                 mark = "O" if record["correct"] else "X"
+                shown = " + ".join(record["macros"]) or record["status"]
                 print(
                     f"  {mark} {item['id']:<36} "
-                    f"{str(record['template'] or record['status']):<28} "
+                    f"{shown[:34]:<36} "
                     f"{record['duration_ms']:7.0f}ms"
                 )
     return records
 
 
+def _ratio(matched, expected):
+    return round(matched / expected, 4) if expected else 0.0
+
+
 def summarize(records):
     total = len(records)
     correct = sum(1 for item in records if item["correct"])
-    # 지원 범위 밖임을 인정한 거부는 오류가 아니라 정상 판정 결과다.
-    refused = sum(
-        1 for item in records if item["status"] == "NO_MATCHING_TEMPLATE"
-    )
+    refused = sum(1 for item in records if item["refused"])
     failed = sum(
         1 for item in records
-        if item["status"] not in ("OK", "NO_MATCHING_TEMPLATE")
+        if item["status"] not in ("OK", *REFUSAL_CODES)
     )
     roles = [
         item["role_order_ok"] for item in records
         if item["role_order_ok"] is not None
     ]
+    executed = [item["executed"] for item in records if item["executed"] is not None]
+    retryable = sum(1 for item in records if item["execution_retryable"])
+
+    def level(name):
+        matched = sum(item["concept_score"][name]["matched"] for item in records)
+        expected = sum(
+            item["concept_score"][name]["expected"] for item in records
+        )
+        return _ratio(matched, expected)
+
+    macro_matched = sum(item["macro_score"]["matched"] for item in records)
+    macro_expected = sum(item["macro_score"]["expected"] for item in records)
+    operator_matched = sum(item["operator_score"]["matched"] for item in records)
+    operator_expected = sum(
+        item["operator_score"]["expected"] for item in records
+    )
     return {
         "total": total,
         "correct": correct,
-        "accuracy": round(correct / total, 4) if total else 0.0,
+        "accuracy": _ratio(correct, total),
+        "concept_accuracy": level("concept"),
+        "subtype_accuracy": level("subtype"),
+        "role_accuracy": level("role"),
+        "macro_recall": _ratio(macro_matched, macro_expected),
+        "macro_exact": _ratio(
+            sum(1 for item in records if item["macro_score"].get("exact")),
+            total,
+        ),
+        "operator_accuracy": _ratio(operator_matched, operator_expected),
+        "validation_pass_rate": _ratio(
+            sum(1 for item in records if item["validated"]), total,
+        ),
+        "execution_success_rate": (
+            _ratio(sum(1 for item in executed if item), len(executed))
+            if executed else None
+        ),
+        # 장소 조회 실패처럼 런타임이 재계획으로 복구하는 실패.
+        # 이 측정은 첫 계획을 그대로 실행하므로 복구를 포함하지 않는다.
+        "execution_retryable_failures": retryable,
         "refused": refused,
         "planner_error": failed,
         "role_order_checked": len(roles),
@@ -165,7 +383,7 @@ def print_report(results, query_ids):
     width = max((len(name) for name in ids), default=10) + 2
 
     print("\n" + "=" * 78)
-    print("Template 선택 정확도")
+    print("Macro 합성 정확도")
     print("=" * 78)
     header = "query".ljust(width) + "".join(
         name[:14].ljust(16) for name in models
@@ -180,10 +398,12 @@ def print_report(results, query_ids):
                 if item["id"] == query_id
             ]
             hit = sum(1 for item in picks if item["correct"])
-            if hit == len(picks):
+            if picks and hit == len(picks):
                 cell = "O"
             elif hit == 0:
-                shown = picks[0]["template"] or picks[0]["status"]
+                shown = (
+                    "+".join(picks[0]["macros"]) or picks[0]["status"]
+                ) if picks else "-"
                 cell = f"X {str(shown)[:12]}"
             else:
                 cell = f"~ {hit}/{len(picks)}"
@@ -191,24 +411,34 @@ def print_report(results, query_ids):
         print(row)
 
     print("-" * len(header))
-    print("\n" + "모델".ljust(20) + "정확도".ljust(14) + "거부".ljust(8)
-          + "응답 실패".ljust(12) + "역할 순서".ljust(12) + "평균 지연")
-    print("-" * 78)
+    print(
+        "\n" + "모델".ljust(20) + "종합".ljust(12) + "concept".ljust(10)
+        + "subtype".ljust(10) + "role".ljust(10) + "macro".ljust(10)
+        + "operator".ljust(10) + "G1~G6".ljust(10) + "평균 지연"
+    )
+    print("-" * 100)
     for model in models:
         summary = results[model]["summary"]
-        roles = (
-            f"{summary['role_order_ok']}/{summary['role_order_checked']}"
-            if summary["role_order_checked"] else "-"
-        )
         print(
             model.ljust(20)
-            + f"{summary['correct']}/{summary['total']} "
-              f"({summary['accuracy'] * 100:.0f}%)".ljust(14)
-            + str(summary.get("refused", 0)).ljust(8)
-            + str(summary["planner_error"]).ljust(12)
-            + roles.ljust(12)
+            + f"{summary['correct']}/{summary['total']}".ljust(12)
+            + f"{summary['concept_accuracy'] * 100:.0f}%".ljust(10)
+            + f"{summary['subtype_accuracy'] * 100:.0f}%".ljust(10)
+            + f"{summary['role_accuracy'] * 100:.0f}%".ljust(10)
+            + f"{summary['macro_recall'] * 100:.0f}%".ljust(10)
+            + f"{summary['operator_accuracy'] * 100:.0f}%".ljust(10)
+            + f"{summary['validation_pass_rate'] * 100:.0f}%".ljust(10)
             + f"{summary['mean_duration_ms']:.0f} ms"
         )
+    for model in models:
+        summary = results[model]["summary"]
+        if summary["execution_success_rate"] is not None:
+            print(
+                f"  {model}: 실행 성공률 "
+                f"{summary['execution_success_rate'] * 100:.0f}% "
+                f"(재계획으로 복구 가능한 실패 "
+                f"{summary['execution_retryable_failures']}건 포함)"
+            )
 
 
 def load_latest_runs():
@@ -238,9 +468,31 @@ def installed_models(host):
     ]
 
 
+def check_labels(queries, library):
+    """정답 라벨이 현재 macro library와 어긋나지 않는지 확인한다."""
+    unlabeled = [
+        item["id"] for item in queries if not item.get("expected_macros")
+    ]
+    if unlabeled:
+        raise SystemExit(
+            "expected_macros 라벨이 없는 Query가 있습니다: "
+            + ", ".join(unlabeled)
+        )
+    unknown = sorted({
+        name
+        for item in queries
+        for name in item["expected_macros"]
+        if name not in library and name != NO_TEMPLATE_LABEL
+    })
+    if unknown:
+        raise SystemExit(
+            f"등록되지 않은 expected_macros입니다: {', '.join(unknown)}"
+        )
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(
-        description="GeoFlow Planner template 선택 정확도 측정",
+        description="GeoFlow Planner concept grounding 정확도 측정",
     )
     parser.add_argument(
         "--model", action="append", help="측정할 모델(여러 번 지정 가능)",
@@ -252,6 +504,23 @@ def parse_args(argv=None):
     parser.add_argument("--query-file", default=str(BASE_DIR / "stub_query.yaml"))
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--chat-timeout", type=float, default=None)
+    parser.add_argument(
+        "--model-think",
+        choices=THINK_CHOICES,
+        default="auto",
+        help="모델 thinking 사용 여부(기본: auto=모델 기본값)",
+    )
+    parser.add_argument(
+        "--num-predict",
+        type=int,
+        default=None,
+        help="Planner 응답 1회의 생성 토큰 상한(기본: 모델 기본값)",
+    )
+    parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="합성된 계획을 실제로 실행해 성공률까지 측정",
+    )
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument(
         "--aggregate",
@@ -288,28 +557,12 @@ def main(argv=None):
     except QueryValidationError as error:
         raise SystemExit(str(error)) from error
 
-    unlabeled = [item["id"] for item in queries if not item.get("expected_template")]
-    if unlabeled:
-        raise SystemExit(
-            "expected_template 라벨이 없는 Query가 있습니다: "
-            + ", ".join(unlabeled)
-        )
+    library = MacroLibrary.from_directory()
+    check_labels(queries, library)
 
-    # 라벨이 현재 template registry와 맞는지 먼저 확인한다.
-    registry = TemplateRegistry.from_directory()
-    unknown = sorted({
-        item["expected_template"] for item in queries
-        if item["expected_template"] not in registry
-        and item["expected_template"] != NO_TEMPLATE_LABEL
-    })
-    if unknown:
-        raise SystemExit(
-            f"등록되지 않은 expected_template입니다: {', '.join(unknown)}"
-        )
-
-    # Tool 실행은 하지 않지만 registry ↔ Tool 계약은 여기서도 확인해 둔다.
+    # registry ↔ Tool 계약은 Tool을 실행하지 않더라도 여기서 확인해 둔다.
     tools, _prompt = build()
-    ToolExecutor(tools=tools, handlers=get_tool_handlers())
+    tool_executor = ToolExecutor(tools=tools, handlers=get_tool_handlers())
 
     models = args.model or installed_models(args.ollama_host)
     results = {}
@@ -322,6 +575,10 @@ def main(argv=None):
             chat_timeout=chat_timeout,
             repeat=args.repeat,
             verbose=not args.quiet,
+            think=resolve_think(args.model_think),
+            num_predict=args.num_predict,
+            execute=args.execute,
+            tool_executor=tool_executor,
         )
         results[model] = {
             "records": records,
@@ -338,7 +595,8 @@ def main(argv=None):
         "query_file": str(args.query_file),
         "query_count": len(queries),
         "repeat": args.repeat,
-        "templates": list(registry.names),
+        "executed": args.execute,
+        "macros": list(library.names),
         "models": {
             model: {
                 "summary": value["summary"],

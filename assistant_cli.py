@@ -25,7 +25,14 @@ from query_loader import (
     load_queries,
     select_queries,
 )
-from ollama_client import DEFAULT_CHAT_TIMEOUT, OllamaClient, resolve_chat_timeout
+from ollama_client import (
+    DEFAULT_CHAT_TIMEOUT,
+    THINK_CHOICES,
+    OllamaClient,
+    chat_options,
+    resolve_chat_timeout,
+    resolve_think,
+)
 from tool_executor import ToolExecutor
 from tool_handlers import (
     DEFAULT_TOOL_PROVIDER,
@@ -57,7 +64,8 @@ RESULT_METADATA_KEYS = {
 
 verbose = None
 
-def configure_ollama_client(host, model, chat_timeout=None):
+def configure_ollama_client(host, model, chat_timeout=None, think=None,
+                           num_predict=None):
     """CLI/환경변수로 확정된 설정을 모든 실행 경로에 적용한다."""
     global OLLAMA_HOST, MODEL_NAME, CHAT_TIMEOUT, OLLAMA_CLIENT
     OLLAMA_HOST = host.rstrip("/")
@@ -66,8 +74,9 @@ def configure_ollama_client(host, model, chat_timeout=None):
     OLLAMA_CLIENT = OllamaClient(
         OLLAMA_HOST,
         MODEL_NAME,
-        dict(OLLAMA_OPTIONS),
+        chat_options(OLLAMA_OPTIONS, num_predict),
         chat_timeout=CHAT_TIMEOUT,
+        think=think,
     )
     return OLLAMA_CLIENT
 
@@ -440,7 +449,8 @@ def _make_graph_event_handler():
         elif event == "max_hops":
             print(f"\n[Max Hops] ERROR | {payload['error']}")
         elif event == "geoflow_plan":
-            print(f"\n[Planner] template={payload['template']}")
+            macros = payload.get("applied_macros") or []
+            print(f"\n[Compose] {' + '.join(macros) or payload['template']}")
             print("\n".join(_wrap_trace_items(
                 "  → ", _format_argument_items(payload["slots"]),
             )))
@@ -457,8 +467,8 @@ def _make_graph_event_handler():
             failure = payload["failure"]
             print(
                 f"\n[Repair {payload['attempt']}] "
-                f"slot={failure['slot']} name={failure['name']} "
-                f"조회 실패 → Planner에 slot 수정 요청"
+                f"concept={failure['concept']} name={failure['name']} "
+                f"조회 실패 → Planner에 값 수정 요청"
             )
         elif event == "geoflow_execution_plan":
             steps = payload["execution_plan"]["steps"]
@@ -606,19 +616,40 @@ def _raw_record(item, result):
 
 def _geoflow_report_lines(geoflow):
     """geoflow mode 실행의 planning 과정을 사람이 읽을 수 있게 정리한다."""
-    lines = ["### Planner", ""]
-    template = geoflow.get("template") or "(선택 실패)"
-    lines.append(f"- Template: `{template}`")
-    slots = geoflow.get("slots") or {}
-    if slots:
-        lines.append("- Slots:")
-        for key, value in slots.items():
-            lines.append(f"  - `{key}` = {_format_value(value)}")
+    lines = ["### Grounding", ""]
+    grounding = geoflow.get("grounding") or {}
+    concepts = grounding.get("concepts") or []
+    if concepts:
+        for node in concepts:
+            text = f" \"{node['text']}\"" if node.get("text") else ""
+            lines.append(
+                f"- `{node['id']}`{text} = {node['concept']}/{node['subtype']}"
+                f" role={node['role']} source={node['source']}"
+            )
     else:
-        lines.append("- Slots: (없음)")
+        lines.append("- (grounding 실패)")
+    factors = grounding.get("factors") or {}
+    if factors:
+        lines.append("- Factors:")
+        for key, value in factors.items():
+            lines.append(f"  - `{key}` = {_format_value(value)}")
     duration = (geoflow.get("durations") or {}).get("planner_ms")
     if duration is not None:
         lines.append(f"- Planner 소요: {duration:g} ms")
+    lines.append("")
+
+    macros = geoflow.get("applied_macros") or []
+    lines.extend(["### Macro Composition", ""])
+    lines.append(
+        "- 적용된 조각: "
+        + (" + ".join(f"`{name}`" for name in macros) or "(합성 실패)")
+    )
+    unused = (geoflow.get("plan") or {}).get("unused_factors") or {}
+    if unused:
+        lines.append(
+            "- 이 Tool이 받지 않아 빠진 조건: "
+            + ", ".join(f"`{key}`" for key in unused)
+        )
     lines.append("")
 
     plan = geoflow.get("plan")
@@ -931,6 +962,20 @@ def parse_args(argv=None):
         choices=("full", "short"),
         help="model thinking 출력 수준",
     )
+    parser.add_argument(
+        "--model-think",
+        choices=THINK_CHOICES,
+        default="auto",
+        help=(
+            "모델 thinking 사용 여부. auto=모델 기본값, on/off=명시 지정"
+            "(기본: auto). --verbose는 출력 수준이고 이것은 모델 동작이다."
+        ),
+    )
+    parser.add_argument(
+        "--num-predict",
+        type=positive_int,
+        help="model 응답 1회의 생성 토큰 상한(기본: 모델 기본값)",
+    )
     args = parser.parse_args(argv)
     if not args.list_models and args.query is None and args.query_file is None:
         parser.error("--query 또는 --query-file 중 하나가 필요합니다.")
@@ -977,10 +1022,14 @@ def main(argv=None):
         args.ollama_host,
         args.model,
         args.chat_timeout,
+        think=resolve_think(args.model_think),
+        num_predict=args.num_predict,
     )
     print(
         f"설정 — 모델: {MODEL_NAME} / 주소: {OLLAMA_HOST} "
-        f"/ chat timeout: {CHAT_TIMEOUT:g}초 / agent mode: {AGENT_MODE}"
+        f"/ chat timeout: {CHAT_TIMEOUT:g}초 / agent mode: {AGENT_MODE} "
+        f"/ think: {args.model_think} "
+        f"/ num_predict: {args.num_predict or '모델 기본값'}"
     )
     check_ollama_connection()
     try:

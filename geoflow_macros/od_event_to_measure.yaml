@@ -1,0 +1,50 @@
+# geoflow_macros/od_event_to_measure.yaml
+# 승차/하차 범위가 구분되는 EVENT -> AMOUNT 변환.
+#
+# EVENT_TO_MEASURE와 다른 점은 공간 조건의 구조뿐이다. 하나의 포함 범위가
+# 아니라 출발/도착이라는 서로 다른 의미의 범위 두 개를 받는다. 이것은 질문
+# 유형의 차이가 아니라 concept 구조의 차이이므로 조각을 나눈다.
+#
+# 어느 범위가 승차이고 어느 쪽이 하차인지는 node의 od_role 속성이 정하고,
+# 실제 Tool 인자 이름(scope_pickup/scope_dropoff) binding은 operator
+# registry가 고정한다. LLM은 어느 쪽에도 관여하지 않는다.
+
+name: OD_EVENT_TO_MEASURE
+description: 승차 범위와 하차 범위가 구분된 사건에서 통계값을 구한다.
+priority: 10
+
+inputs:
+  event:
+    concept: EVENT
+    subtypes: [trip]
+    roles: [SUPPORT]
+  pickup:
+    concept: LOCATION
+    subtypes: [scope, vicinity_scope]
+    roles: [COND]
+    required: false
+    attributes:
+      od_role: pickup
+  dropoff:
+    concept: LOCATION
+    subtypes: [scope, vicinity_scope]
+    roles: [COND]
+    required: false
+    attributes:
+      od_role: dropoff
+
+outputs:
+  measure:
+    types:
+      - concept: AMOUNT
+        subtypes: [trip_count]
+
+concepts:
+  - key: measure
+    role: MEASURE
+    source: tool
+
+transformations:
+  - id: measure_od_event
+    inputs: [event, pickup, dropoff]
+    output: measure

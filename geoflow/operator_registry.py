@@ -38,16 +38,56 @@ class Operator:
 
 @dataclass(frozen=True)
 class OperatorInput:
-    """semantic input port 하나의 정의."""
+    """semantic input port 하나의 정의.
 
-    arg_name: str
+    ``arg_name``이 ``None``이면 Tool 인자를 만들지 않는 의미 전용 port다.
+    EVENT처럼 "무엇을 재는가"를 결정하지만 Tool 인자로는 나타나지 않는
+    개념을 graph에 남기기 위한 것이다. 덕분에 operator mapping이
+    (EVENT subtype, 출력 subtype)으로 Tool을 고를 수 있고, G3가 통행
+    통계 Tool에 trip 사건이 붙는 것을 정적으로 막는다.
+
+    ``match_attributes``는 타입이 같고 의미가 다른 port를 구분한다. 승차/하차
+    binding을 LLM이 아니라 registry가 정한다는 계약을 코드로 표현한 것이다.
+    node가 그 속성을 갖고 있지 않으면 검사하지 않으므로, 속성을 쓰지 않는
+    기존 계획은 그대로 통과한다.
+    """
+
+    arg_name: str | None
     concept: CoreConcept
     subtypes: frozenset[str]
     field: str | None = None
     required: bool = True
+    match_attributes: tuple[tuple[str, Any], ...] = ()
 
-    def accepts(self, concept, subtype):
-        return concept == self.concept and subtype in self.subtypes
+    @property
+    def semantic_only(self):
+        return self.arg_name is None
+
+    def accepts(self, concept, subtype, attributes=None):
+        if concept != self.concept or subtype not in self.subtypes:
+            return False
+        return self.matches_attributes(attributes)
+
+    def matches_attributes(self, attributes):
+        """node가 선언한 속성만 검사한다. 없는 속성은 제약으로 보지 않는다."""
+        attributes = attributes or {}
+        for key, value in self.match_attributes:
+            if key in attributes and attributes[key] != value:
+                return False
+        return True
+
+    def binds(self, concept, subtype, attributes=None):
+        """operator mapping이 port를 고를 때 쓰는 엄격한 판정.
+
+        ``accepts``와 달리 속성이 아예 없는 node는 속성을 요구하는 port에
+        묶이지 않는다. origin/destination을 임의로 채우지 않기 위해서다.
+        """
+        if concept != self.concept or subtype not in self.subtypes:
+            return False
+        attributes = attributes or {}
+        return all(
+            attributes.get(key) == value for key, value in self.match_attributes
+        )
 
 
 @dataclass(frozen=True)
@@ -63,13 +103,31 @@ class OperatorOutput:
 
 @dataclass(frozen=True)
 class OperatorSpec:
-    """semantic operator 하나의 전체 계약."""
+    """semantic operator 하나의 전체 계약.
+
+    ``param_enums``/``param_requires``는 Tool이 INVALID_ARGUMENT로 거절할
+    조합을 실행 전에 걸러 내기 위한 것이다. 예전에는 template YAML마다
+    ``slot_types``/``slot_requires``로 적어 두었지만, 이는 질문 유형이 아니라
+    Tool 계약에 속한 제약이므로 registry가 갖는 편이 맞다.
+    """
 
     name: str
     tool_name: str
     inputs: dict[str, OperatorInput] = field(default_factory=dict)
     output: OperatorOutput | None = None
     params: frozenset[str] = frozenset()
+    param_enums: dict[str, frozenset[str]] = field(default_factory=dict)
+    param_requires: dict[str, tuple[str, ...]] = field(default_factory=dict)
+
+    def allowed_values(self, param):
+        return self.param_enums.get(param)
+
+    def missing_companions(self, param, present):
+        """``param``과 함께 있어야 하는데 빠진 parameter 이름."""
+        return tuple(
+            name for name in self.param_requires.get(param, ())
+            if name not in present
+        )
 
     def input(self, port):
         return self.inputs.get(port)
@@ -81,7 +139,20 @@ class OperatorSpec:
         )
 
     def argument_names(self):
-        return {spec.arg_name for spec in self.inputs.values()} | set(self.params)
+        return {
+            spec.arg_name for spec in self.inputs.values()
+            if not spec.semantic_only
+        } | set(self.params)
+
+    @property
+    def event_subtypes(self):
+        """이 operator가 다루는 EVENT subtype. 없으면 빈 집합."""
+        return frozenset(
+            subtype
+            for spec in self.inputs.values()
+            if spec.concept == CoreConcept.EVENT
+            for subtype in spec.subtypes
+        )
 
 
 def _inputs(*specs):
@@ -89,6 +160,24 @@ def _inputs(*specs):
 
 
 _SCOPE_INPUT_SUBTYPES = frozenset({Subtype.SCOPE, Subtype.VICINITY_SCOPE})
+
+
+def _event(subtype):
+    """Tool 인자를 만들지 않는 EVENT 의미 port.
+
+    "무엇을 재는가"를 graph에 남기기 위한 port다. 이 port가 있어야
+    ``EVENT/trip → AMOUNT/fare``라는 개념 변환만 표현한 macro에서
+    ``TRIP_METRIC``을 유도할 수 있고, 반대로 통행 통계 Tool에 trip 사건이
+    붙는 계획을 G3가 정적으로 거부할 수 있다.
+
+    기존 template은 EVENT node를 두지 않으므로 required=False로 둔다.
+    """
+    return OperatorInput(
+        arg_name=None,
+        concept=CoreConcept.EVENT,
+        subtypes=frozenset({subtype}),
+        required=False,
+    )
 
 _SPECS: tuple[OperatorSpec, ...] = (
     OperatorSpec(
@@ -122,6 +211,7 @@ _SPECS: tuple[OperatorSpec, ...] = (
         name=Operator.PASSAGE_METRIC,
         tool_name="get_passage_metrics",
         inputs=_inputs(
+            ("event", _event(Subtype.PASSAGE)),
             ("area", OperatorInput(
                 arg_name="scope",
                 concept=CoreConcept.LOCATION,
@@ -137,11 +227,13 @@ _SPECS: tuple[OperatorSpec, ...] = (
             }),
         ),
         params=frozenset({"metric", "date", "time", "aggregation"}),
+        param_enums={"aggregation": frozenset({"max", "min", "sum", "avg", "med"})},
     ),
     OperatorSpec(
         name=Operator.PASSAGE_COUNT,
         tool_name="get_passage_count",
         inputs=_inputs(
+            ("event", _event(Subtype.PASSAGE)),
             ("area", OperatorInput(
                 arg_name="scope",
                 concept=CoreConcept.LOCATION,
@@ -155,35 +247,50 @@ _SPECS: tuple[OperatorSpec, ...] = (
             "date", "time", "taxi_type", "taxi_status",
             "dimension", "order", "limit",
         }),
+        param_enums={
+            "dimension": frozenset({"h3", "sido", "sigungu", "emd"}),
+            "taxi_type": frozenset({"private", "corporate", "all"}),
+            "taxi_status": frozenset({"occupied", "vacant", "stationary", "all"}),
+            "order": frozenset({"top", "bottom"}),
+        },
+        # order/limit은 dimension이 있어야 의미를 갖는다.
+        param_requires={"order": ("dimension",), "limit": ("dimension",)},
     ),
     OperatorSpec(
         name=Operator.TRIP_COUNT,
         tool_name="get_trip_count",
         inputs=_inputs(
+            ("event", _event(Subtype.TRIP)),
             # origin/destination 역할 뒤바뀜을 막는 고정 binding.
-            # 이 mapping은 LLM이 아니라 registry가 결정한다.
+            # 이 mapping은 LLM이 아니라 registry가 결정한다. od_role 속성은
+            # 어느 node가 어느 port로 가는지를 이름이 아니라 의미로 정한다.
             ("pickup", OperatorInput(
                 arg_name="scope_pickup",
                 concept=CoreConcept.LOCATION,
                 subtypes=_SCOPE_INPUT_SUBTYPES,
                 required=False,
+                match_attributes=(("od_role", "pickup"),),
             )),
             ("dropoff", OperatorInput(
                 arg_name="scope_dropoff",
                 concept=CoreConcept.LOCATION,
                 subtypes=_SCOPE_INPUT_SUBTYPES,
                 required=False,
+                match_attributes=(("od_role", "dropoff"),),
             )),
         ),
         output=OperatorOutput(
             allowed=frozenset({(CoreConcept.AMOUNT, Subtype.TRIP_COUNT)}),
         ),
         params=frozenset({"date", "time", "dimension", "order", "limit"}),
+        param_enums={"order": frozenset({"top", "bottom"})},
+        param_requires={"order": ("dimension",), "limit": ("dimension",)},
     ),
     OperatorSpec(
         name=Operator.TRIP_METRIC,
         tool_name="get_trip_metrics",
         inputs=_inputs(
+            ("event", _event(Subtype.TRIP)),
             ("area", OperatorInput(
                 arg_name="scope",
                 concept=CoreConcept.LOCATION,
@@ -195,11 +302,13 @@ _SPECS: tuple[OperatorSpec, ...] = (
             allowed=frozenset({(CoreConcept.AMOUNT, Subtype.FARE)}),
         ),
         params=frozenset({"metric", "date", "time", "aggregation"}),
+        param_enums={"aggregation": frozenset({"max", "min", "sum", "avg", "med"})},
     ),
     OperatorSpec(
         name=Operator.DRIVE_METRIC,
         tool_name="get_drive_metrics",
         inputs=_inputs(
+            ("event", _event(Subtype.DRIVE)),
             ("area", OperatorInput(
                 arg_name="scope",
                 concept=CoreConcept.LOCATION,
@@ -213,11 +322,13 @@ _SPECS: tuple[OperatorSpec, ...] = (
         params=frozenset({
             "metric", "date", "time", "taxi_type", "aggregation",
         }),
+        param_enums={"aggregation": frozenset({"max", "min", "sum", "avg", "med"}), "taxi_type": frozenset({"private", "corporate", "all"})},
     ),
     OperatorSpec(
         name=Operator.OPERATION_METRIC,
         tool_name="get_operation_metrics",
         inputs=_inputs(
+            ("event", _event(Subtype.OPERATION)),
             ("area", OperatorInput(
                 arg_name="scope",
                 concept=CoreConcept.LOCATION,
@@ -237,6 +348,19 @@ _SPECS: tuple[OperatorSpec, ...] = (
             "metric", "date", "taxi_type", "dimension", "order", "limit",
             "aggregation", "bucket", "rollup",
         }),
+        param_enums={
+            "dimension": frozenset({"dayofweek", "sido"}),
+            "taxi_type": frozenset({"private", "corporate", "all"}),
+            "order": frozenset({"top", "bottom"}),
+            "aggregation": frozenset({"max", "min", "sum", "avg", "med"}),
+            "bucket": frozenset({"week", "month"}),
+            "rollup": frozenset({"max", "min", "sum", "avg", "med"}),
+        },
+        # bucket/rollup 2단계 집계는 반드시 짝으로 쓰인다.
+        param_requires={
+            "bucket": ("rollup",), "rollup": ("bucket",),
+            "order": ("dimension",), "limit": ("dimension",),
+        },
     ),
     OperatorSpec(
         name=Operator.SCOPE_NAME,
@@ -258,7 +382,10 @@ OPERATORS: dict[str, OperatorSpec] = {}
 for _spec in _SPECS:
     if _spec.name in OPERATORS:
         raise RuntimeError(f"중복 operator 정의입니다: {_spec.name}")
-    _arg_names = [spec.arg_name for spec in _spec.inputs.values()]
+    _arg_names = [
+        spec.arg_name for spec in _spec.inputs.values()
+        if not spec.semantic_only
+    ]
     if len(set(_arg_names)) != len(_arg_names):
         raise RuntimeError(f"{_spec.name}: input port의 tool argument가 충돌합니다.")
     _collision = set(_arg_names) & set(_spec.params)
@@ -266,6 +393,15 @@ for _spec in _SPECS:
         raise RuntimeError(
             f"{_spec.name}: input과 param의 argument 이름이 겹칩니다: "
             f"{sorted(_collision)}"
+        )
+    _unknown_params = (
+        set(_spec.param_enums) | set(_spec.param_requires)
+        | {name for names in _spec.param_requires.values() for name in names}
+    ) - set(_spec.params)
+    if _unknown_params:
+        raise RuntimeError(
+            f"{_spec.name}: params에 없는 parameter 제약입니다: "
+            f"{sorted(_unknown_params)}"
         )
     OPERATORS[_spec.name] = _spec
 

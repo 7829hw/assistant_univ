@@ -1,0 +1,48 @@
+# geoflow_macros/place_to_scope.yaml
+# LOCATION/place -> LOCATION/scope 변환 하나만 표현한다.
+#
+# 이 조각은 질문 유형이 아니다. 속도·통행량·요금·공차율·OD 질의가 모두 같은
+# 조각을 쓴다. "근처/주변" 여부는 별도 macro가 아니라 vicinity factor가
+# 출력 subtype을 고르는 것으로 표현한다.
+
+name: PLACE_TO_SCOPE
+description: 장소명(place)을 조회 가능한 공간 범위(scope)로 바꾼다. vicinity factor가 참이면 주변 영역을 포함한 범위를 만든다.
+
+inputs:
+  place:
+    concept: LOCATION
+    subtypes: [place]
+    # EXTENT는 "분석의 공간적 배경"을 뜻하는 contextual role이다. "대구시의
+    # 평균 택시 요금"의 대구를 좁혀야 할 조건(SUBCOND)으로 볼 수도, 배경
+    # (EXTENT)으로 볼 수도 있고 둘 다 타당하다. 어느 쪽이든 조회를 거쳐야
+    # 범위가 된다는 사실은 같으므로 둘 다 받는다.
+    #
+    # contextual role은 절차 순서를 갖지 않아 G2 검사에서 제외되므로,
+    # 이 port를 넓혀도 role ordering이 약해지지 않는다. 받아들인 node의
+    # role은 바꾸지 않고 그대로 보존한다.
+    roles: [SUBCOND, COND, EXTENT]
+
+outputs:
+  scope:
+    concept: LOCATION
+    subtypes: [scope, vicinity_scope]
+
+concepts:
+  - key: scope
+    role: COND
+    source: tool
+    subtype_by_factor:
+      factor: vicinity
+      cases:
+        true: vicinity_scope
+        false: scope
+      default: scope
+    # OD 질의에서 승차/하차 구분이 place -> scope 변환을 건너뛰지 않게 한다.
+    inherit_attributes:
+      from: place
+      names: [od_role]
+
+transformations:
+  - id: resolve_scope
+    inputs: [place]
+    output: scope

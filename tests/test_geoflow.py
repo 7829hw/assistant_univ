@@ -22,9 +22,16 @@ from assistant_runtime import (  # noqa: E402
     AssistantRuntime,
 )
 from build import build  # noqa: E402
-from evaluate_planner import check_slot_roles  # noqa: E402
+from evaluate_planner import (  # noqa: E402
+    NO_TEMPLATE_LABEL,
+    check_concept_roles,
+    score_concepts,
+    score_sequence,
+)
 from query_loader import load_queries  # noqa: E402
 from tool_executor import ToolExecutor  # noqa: E402
+from mock_responses import mock_get_place_scope  # noqa: E402
+from ollama_client import OllamaClient, chat_options, resolve_think  # noqa: E402
 from tool_handlers import get_tool_handlers  # noqa: E402
 
 from geoflow.answer import format_answer  # noqa: E402
@@ -42,7 +49,9 @@ from geoflow.executor import (  # noqa: E402
     execute_plan,
     resolve_refs,
 )
-from geoflow.operator_registry import Operator  # noqa: E402
+from geoflow.grounding import parse_grounding  # noqa: E402
+from geoflow.macros import MacroLibrary  # noqa: E402
+from geoflow.operator_registry import Operator, operator_names  # noqa: E402
 from geoflow.pipeline import (  # noqa: E402
     STATUS_REPAIR_FAILED,
     STATUS_REPAIR_SKIPPED,
@@ -50,7 +59,8 @@ from geoflow.pipeline import (  # noqa: E402
     Stage,
 )
 from geoflow.planner import (  # noqa: E402
-    NO_TEMPLATE,
+    DEFAULT_MAX_ATTEMPTS,
+    DEFAULT_PLANNER_PROMPT,
     GeoFlowPlanner,
     drop_invented_regions,
 )
@@ -67,6 +77,7 @@ from geoflow.types import (  # noqa: E402
 )
 from geoflow.validator import Rule, validate  # noqa: E402
 
+BASE_DIR = Path(__file__).resolve().parent.parent
 TOOLS, SYSTEM_PROMPT = build()
 
 OD_QUESTION = "대구 동성로동에서 출발하여 신천동에 도착한 실차 구간 건수는?"
@@ -83,6 +94,79 @@ OD_SLOTS = {
     "origin": {"name": "동성로", "region": "대구"},
     "destination": {"name": "신천동", "region": ""},
 }
+
+
+# -- grounding 계약 fixture --------------------------------------------------
+# Planner는 template 이름이 아니라 개념을 돌려준다. 아래 helper는 그 계약을
+# 테스트에서 읽기 쉽게 만들기 위한 것이다.
+
+def grounding_payload(concepts, factors=None):
+    return {"concepts": list(concepts), "factors": dict(factors or {})}
+
+
+def place_concept(node_id, name, region="", *, od_role=None, role="SUBCOND"):
+    concept = {
+        "id": node_id,
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": role,
+        "source": "user",
+        "value": {"name": name, "region": region},
+    }
+    if od_role is not None:
+        concept["attributes"] = {"od_role": od_role}
+    return concept
+
+
+def scope_concept(node_id, value, subtype="scope"):
+    return {
+        "id": node_id,
+        "concept": "LOCATION",
+        "subtype": subtype,
+        "role": "COND",
+        "source": "user",
+        "value": value,
+    }
+
+
+def event_concept(node_id, subtype):
+    return {
+        "id": node_id,
+        "concept": "EVENT",
+        "subtype": subtype,
+        "role": "SUPPORT",
+        "source": "implicit",
+    }
+
+
+def measure_concept(node_id, concept, subtype):
+    return {
+        "id": node_id,
+        "concept": concept,
+        "subtype": subtype,
+        "role": "MEASURE",
+        "source": "implicit",
+    }
+
+
+def od_grounding(origin="동성로", destination="신천동"):
+    return grounding_payload([
+        place_concept("origin", origin, "대구", od_role="pickup"),
+        place_concept("destination", destination, od_role="dropoff"),
+        event_concept("trip", "trip"),
+        measure_concept("trip_count", "AMOUNT", "trip_count"),
+    ])
+
+
+def fare_grounding(name, region=""):
+    return grounding_payload([
+        place_concept("place_1", name, region),
+        event_concept("trip", "trip"),
+        measure_concept("fare", "AMOUNT", "fare"),
+    ], {"aggregation": "avg"})
+
+
+OD_GROUNDING = od_grounding()
 
 
 def new_tool_executor():
@@ -102,7 +186,11 @@ class ScriptedClient:
         self.calls.append({"messages": messages, "tools": tools})
         if not self.responses:
             raise AssertionError("준비된 응답보다 많은 chat 호출이 발생했습니다.")
-        return self.responses.pop(0)
+        response = self.responses.pop(0)
+        # 각본에 예외를 넣으면 무응답·연결 실패를 그대로 재현할 수 있다.
+        if isinstance(response, Exception):
+            raise response
+        return response
 
 
 def planner_response(payload):
@@ -760,48 +848,100 @@ class ExecutorTest(unittest.TestCase):
 class PlannerTest(unittest.TestCase):
     """Planner 출력은 모두 untrusted input으로 다룬다."""
 
-    def setUp(self):
-        self.registry = TemplateRegistry.from_directory()
-
     def _planner(self, text):
         return GeoFlowPlanner(
             client=ScriptedClient([{"message": {"content": text}}]),
-            templates=self.registry,
         )
 
     def test_planner_is_called_without_tools(self):
-        planner = self._planner(
-            json.dumps({"template": "OD_TRIP_COUNT", "slots": OD_SLOTS})
-        )
+        planner = self._planner(json.dumps(OD_GROUNDING))
         planner.plan(OD_QUESTION)
         self.assertIsNone(planner.client.calls[0]["tools"])
 
-    def test_prompt_lists_every_template(self):
-        planner = self._planner("{}")
-        prompt = planner.system_prompt()
-        for name in self.registry.names:
-            self.assertIn(name, prompt)
+    def test_prompt_states_the_concept_vocabulary(self):
+        """어휘는 registry에서 만들어 붙이므로 prompt가 표류하지 않는다."""
+        prompt = self._planner("{}").system_prompt()
+        for line in ("EVENT/trip", "AMOUNT/fare", "PROPORTION/vacant_ratio"):
+            self.assertIn(line, prompt)
+        for factor in ("aggregation", "vicinity", "dimension"):
+            self.assertIn(factor, prompt)
+
+    def test_prompt_does_not_offer_question_type_templates(self):
+        """질문 유형을 고르라는 지시가 남아 있으면 안 된다."""
+        prompt = self._planner("{}").system_prompt()
+        for name in TemplateRegistry.from_directory().names:
+            self.assertNotIn(name, prompt)
 
     def test_json_inside_code_fence_is_parsed(self):
         planner = self._planner(
-            "설명입니다.\n```json\n"
-            + json.dumps({"template": "OD_TRIP_COUNT", "slots": OD_SLOTS})
-            + "\n```"
+            "설명입니다.\n```json\n" + json.dumps(OD_GROUNDING) + "\n```"
         )
         output = planner.plan(OD_QUESTION)
-        self.assertEqual(output.template, "OD_TRIP_COUNT")
-        self.assertEqual(output.slots["origin"]["region"], "대구")
+        self.assertEqual(
+            [item.id for item in output.concepts],
+            ["origin", "destination", "trip", "trip_count"],
+        )
+        self.assertEqual(
+            output.grounding.get("origin").value["region"], "대구",
+        )
 
-    def test_unknown_template_is_planner_error(self):
-        planner = self._planner('{"template": "FREESTYLE", "slots": {}}')
+    def test_unknown_concept_is_planner_error(self):
+        planner = self._planner(json.dumps(grounding_payload([
+            {"id": "x", "concept": "TAXI", "subtype": "place",
+             "role": "MEASURE", "source": "user", "value": "x"},
+        ])))
         with self.assertRaises(PlannerError) as caught:
             planner.plan(OD_QUESTION)
-        self.assertEqual(caught.exception.code, "UNKNOWN_TEMPLATE")
+        self.assertEqual(caught.exception.code, "INVALID_CONCEPT")
+
+    def test_unknown_subtype_is_planner_error(self):
+        """어휘에 없는 subtype은 어느 concept에 붙어도 즉시 거부한다."""
+        planner = self._planner(json.dumps(grounding_payload([
+            measure_concept("m", "AMOUNT", "택시비"),
+        ])))
+        with self.assertRaises(PlannerError) as caught:
+            planner.plan(OD_QUESTION)
+        self.assertEqual(caught.exception.code, "INVALID_SUBTYPE")
+
+    def test_valid_subtype_that_cannot_be_measured_is_rejected(self):
+        """어휘에는 있으나 측정값이 될 수 없는 조합은 따로 거른다."""
+        planner = self._planner(json.dumps(grounding_payload([
+            measure_concept("m", "NETWORK", "road_edge"),
+        ])))
+        with self.assertRaises(PlannerError) as caught:
+            planner.plan(OD_QUESTION)
+        self.assertEqual(caught.exception.code, "UNSUPPORTED_MEASURE")
+
+    def test_missing_measure_is_planner_error(self):
+        planner = self._planner(json.dumps(grounding_payload([
+            place_concept("place_1", "대구"),
+        ])))
+        with self.assertRaises(PlannerError) as caught:
+            planner.plan(PLACE_QUESTION)
+        self.assertEqual(caught.exception.code, "NO_MEASURE")
+
+    def test_two_measures_are_planner_error(self):
+        planner = self._planner(json.dumps(grounding_payload([
+            measure_concept("speed", "AMOUNT", "speed"),
+            measure_concept("fare", "AMOUNT", "fare"),
+        ])))
+        with self.assertRaises(PlannerError) as caught:
+            planner.plan(PLACE_QUESTION)
+        self.assertEqual(caught.exception.code, "MULTIPLE_MEASURES")
 
     def test_tool_name_output_is_planner_error(self):
         planner = self._planner('{"tool": "get_trip_count", "arguments": {}}')
         with self.assertRaises(PlannerError):
             planner.plan(OD_QUESTION)
+
+    def test_template_style_output_is_planner_error(self):
+        """예전 계약(template + slots)은 더 이상 받지 않는다."""
+        planner = self._planner(
+            '{"template": "OD_TRIP_COUNT", "slots": {}}'
+        )
+        with self.assertRaises(PlannerError) as caught:
+            planner.plan(OD_QUESTION)
+        self.assertEqual(caught.exception.code, "UNKNOWN_KEY")
 
     def test_broken_json_is_planner_error(self):
         planner = self._planner("답을 모르겠습니다.")
@@ -809,23 +949,197 @@ class PlannerTest(unittest.TestCase):
             planner.plan(OD_QUESTION)
         self.assertEqual(caught.exception.code, "JSON_NOT_FOUND")
 
-    def test_no_matching_template_is_planner_error(self):
-        planner = self._planner('{"template": "NONE", "slots": {}}')
+    def test_unsupported_question_is_planner_error(self):
+        planner = self._planner('{"unsupported": true}')
         with self.assertRaises(PlannerError) as caught:
             planner.plan("오늘 날씨 알려줘")
-        self.assertEqual(caught.exception.code, "NO_MATCHING_TEMPLATE")
+        self.assertEqual(caught.exception.code, "UNSUPPORTED_QUESTION")
+
+
+class PlannerRetryTest(unittest.TestCase):
+    """응답을 반환하지 못한 호출만 다시 부른다.
+
+    작은 모델이 thinking 안에서 같은 문장을 반복하다 생성을 끝내지 못하는
+    경우가 있고, 같은 입력이라도 다시 부르면 끝나는 경우가 관측되었다.
+    반대로 grounding 판단이 어긋난 출력은 다시 불러도 같으므로 재시도
+    대상이 아니다.
+    """
+
+    def _planner(self, responses, **kwargs):
+        return GeoFlowPlanner(client=ScriptedClient(responses), **kwargs)
+
+    def _valid_response(self):
+        return planner_response(OD_GROUNDING)
+
+    def test_unanswered_call_is_retried(self):
+        planner = self._planner([
+            TimeoutError("timed out"),
+            self._valid_response(),
+        ])
+        output = planner.plan(OD_QUESTION)
+        self.assertEqual(output.attempts, 2)
+        self.assertEqual(len(planner.client.calls), 2)
+
+    def test_retry_count_is_bounded(self):
+        planner = self._planner(
+            [TimeoutError("timed out")] * DEFAULT_MAX_ATTEMPTS,
+        )
+        with self.assertRaises(PlannerError) as caught:
+            planner.plan(OD_QUESTION)
+        self.assertEqual(caught.exception.code, "PLANNER_CALL_FAILED")
+        self.assertEqual(len(planner.client.calls), DEFAULT_MAX_ATTEMPTS)
+        self.assertEqual(
+            caught.exception.context["attempts"], DEFAULT_MAX_ATTEMPTS,
+        )
+
+    def test_empty_response_is_retried(self):
+        planner = self._planner([{"message": {}}, self._valid_response()])
+        self.assertEqual(planner.plan(OD_QUESTION).attempts, 2)
+
+    def test_truncated_response_is_retried(self):
+        """생성 상한에 걸려 잘린 응답은 읽히더라도 계획으로 쓰지 않는다."""
+        planner = self._planner([
+            {"message": {"content": '{"concepts": [{"id": "origin"'},
+             "done_reason": "length"},
+            self._valid_response(),
+        ])
+        self.assertEqual(planner.plan(OD_QUESTION).attempts, 2)
+
+    def test_truncation_without_retry_is_reported(self):
+        planner = self._planner(
+            [{"message": {"content": "{}"}, "done_reason": "length"}],
+            max_attempts=1,
+        )
+        with self.assertRaises(PlannerError) as caught:
+            planner.plan(OD_QUESTION)
+        self.assertEqual(caught.exception.code, "OUTPUT_TRUNCATED")
+
+    def test_judgment_error_is_not_retried(self):
+        planner = self._planner([
+            {"message": {"content": "답을 모르겠습니다."}},
+            self._valid_response(),
+        ])
+        with self.assertRaises(PlannerError) as caught:
+            planner.plan(OD_QUESTION)
+        self.assertEqual(caught.exception.code, "JSON_NOT_FOUND")
+        self.assertEqual(len(planner.client.calls), 1)
+
+    def test_retry_is_configurable(self):
+        with self.assertRaises(ValueError):
+            self._planner([], max_attempts=0)
+
+
+class FakeResponse:
+    status_code = 200
+
+    def __init__(self, body):
+        self._body = body
+
+    def json(self):
+        return self._body
+
+
+class FakeHttp:
+    """payload만 받아 두는 httpx 대역."""
+
+    def __init__(self):
+        self.payloads = []
+
+    def post(self, url, json=None, timeout=None):
+        self.payloads.append(json)
+        return FakeResponse({"message": {"content": "{}"}})
+
+
+class ChatPayloadTest(unittest.TestCase):
+    """think/num_predict는 지정했을 때만 요청에 들어간다."""
+
+    def _client(self, **kwargs):
+        http = FakeHttp()
+        client = OllamaClient(
+            "http://localhost:11434", "test-model", {"temperature": 0},
+            http_client=http, **kwargs,
+        )
+        return client, http
+
+    def test_think_is_absent_by_default(self):
+        client, http = self._client()
+        client.chat([{"role": "user", "content": "안녕"}])
+        self.assertNotIn("think", http.payloads[0])
+
+    def test_think_off_is_sent(self):
+        client, http = self._client(think=False)
+        client.chat([{"role": "user", "content": "안녕"}])
+        self.assertIs(http.payloads[0]["think"], False)
+
+    def test_num_predict_is_sent_as_option(self):
+        client, http = self._client()
+        client.options = chat_options({"temperature": 0}, 2048)
+        client.chat([{"role": "user", "content": "안녕"}])
+        self.assertEqual(http.payloads[0]["options"]["num_predict"], 2048)
+
+    def test_chat_options_keeps_base_when_unset(self):
+        self.assertEqual(chat_options({"temperature": 0}), {"temperature": 0})
+        with self.assertRaises(ValueError):
+            chat_options({}, 0)
+
+    def test_resolve_think_choices(self):
+        self.assertIsNone(resolve_think("auto"))
+        self.assertIs(resolve_think("on"), True)
+        self.assertIs(resolve_think("off"), False)
+
+
+class PlannerPromptExampleTest(unittest.TestCase):
+    """출력 예시의 장소명은 실제로 조회되는 이름이어야 한다.
+
+    조회에 실패하는 이름을 정답 예시로 보여 주면, 그 값으로 조회가 깨졌을 때
+    재계획 요청과 예시가 충돌해 Planner가 결론을 내지 못한다.
+    """
+
+    def test_output_format_example_places_resolve(self):
+        import re
+
+        import yaml
+
+        document = yaml.safe_load(
+            Path(DEFAULT_PLANNER_PROMPT).read_text(encoding="utf-8")
+        )
+        examples = document["sections"]["output_format"]
+        places = re.findall(
+            r'\{"name": "([^"]+)", "region": "([^"]*)"\}', examples,
+        )
+        self.assertTrue(places, "출력 예시에서 장소 slot을 찾지 못했습니다.")
+        for name, region in places:
+            with self.subTest(name=name, region=region):
+                result = mock_get_place_scope({"name": name, "region": region})
+                self.assertNotIsInstance(
+                    result, dict,
+                    f"예시 장소가 조회되지 않습니다: {name} / {region}",
+                )
+
+    def test_repair_instruction_covers_dong_suffix(self):
+        """"동"이 접미사 목록에 없으면 재계획이 결론을 내지 못한다."""
+        planner = GeoFlowPlanner(client=ScriptedClient([]))
+        for suffix in ("시", "군", "구", "동", "길", "로"):
+            self.assertIn(f'"{suffix}"', planner.repair_instruction)
 
 
 class PipelineScenarioTest(unittest.TestCase):
-    """stub_query.yaml 기준 필수 시나리오."""
+    """stub_query.yaml 기준 필수 시나리오.
+
+    같은 macro library에서 서로 다른 합성 결과가 나오는지를 본다. 질문마다
+    다른 완성 template을 고르는 것이 아니라는 점이 요점이다.
+    """
 
     def test_case1_od_trip_count(self):
-        pipeline, _client = new_pipeline([
-            {"template": "OD_TRIP_COUNT", "slots": OD_SLOTS},
-        ])
+        pipeline, _client = new_pipeline([OD_GROUNDING])
         run = pipeline.run(OD_QUESTION)
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
-        self.assertEqual(run.template, "OD_TRIP_COUNT")
+        # 출발지·도착지 각각에 장소 변환 조각이 한 번씩 적용된다.
+        self.assertEqual(
+            run.applied_macros,
+            ["PLACE_TO_SCOPE", "PLACE_TO_SCOPE", "OD_EVENT_TO_MEASURE"],
+        )
+        self.assertEqual(run.template, "PLACE_TO_SCOPE+OD_EVENT_TO_MEASURE")
         self.assertEqual(
             analysis_tools(run.hop_log),
             ["get_place_scope", "get_place_scope", "get_trip_count"],
@@ -844,9 +1158,7 @@ class PipelineScenarioTest(unittest.TestCase):
 
     def test_result_scopes_are_labeled_with_place_names(self):
         """집계 결과의 scope는 장소명으로 바꿔 보여준다."""
-        pipeline, _client = new_pipeline([
-            {"template": "OD_TRIP_COUNT", "slots": OD_SLOTS},
-        ])
+        pipeline, _client = new_pipeline([OD_GROUNDING])
         run = pipeline.run(OD_QUESTION)
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
         self.assertEqual(
@@ -860,98 +1172,77 @@ class PipelineScenarioTest(unittest.TestCase):
             self.assertIn(name, run.final_answer)
 
     def test_scope_to_place_name(self):
-        """사용자가 제시한 scope의 장소명을 찾는다."""
-        registry = TemplateRegistry.from_directory()
-        template = registry.require("SCOPE_PLACE_NAME")
+        """사용자가 제시한 scope의 장소명을 찾는다. 측정값이 없는 질문이다."""
         question = "scope:district:2700000000은 어디인가요?"
-        plan = template.instantiate(
-            question, {"scope": "scope:district:2700000000"},
-        )
-        report = validate(
-            plan, available_tools=new_tool_executor().tool_names,
-        )
-        self.assertTrue(report.ok, report.errors)
-        steps = compile_plan(plan).steps
-        self.assertEqual([step.tool_name for step in steps],
-                         ["get_scope_name"])
-        result = execute_plan(
-            compile_plan(plan),
-            new_tool_executor(),
-            known_scopes={"scope:district:2700000000"},
-        )
-        self.assertEqual(result.status, STATUS_OK, result.error)
-        self.assertIn("대구", format_answer(
-            plan, result, answer=template.answer,
-        ))
+        pipeline, _client = new_pipeline([grounding_payload([
+            scope_concept("user_scope", "scope:district:2700000000"),
+            {"id": "place_name", "concept": "LOCATION", "subtype": "place",
+             "role": "MEASURE", "source": "implicit"},
+        ])])
+        run = pipeline.run(question)
+        self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
+        self.assertEqual(run.applied_macros, ["SCOPE_TO_PLACE"])
+        self.assertEqual(analysis_tools(run.hop_log), ["get_scope_name"])
+        self.assertIn("대구", run.final_answer)
 
     def test_bucket_requires_rollup(self):
-        """혼자 쓸 수 없는 slot은 실행 전에 거부한다."""
-        template = TemplateRegistry.from_directory().require(
-            "OPERATION_METRIC",
-        )
-        for slots in (
-            {"metric": "revenue", "bucket": "week"},
-            {"metric": "revenue", "rollup": "avg"},
+        """혼자 쓸 수 없는 조건은 실행 전에 거부한다."""
+        for factors in (
+            {"bucket": "week"},
+            {"rollup": "avg"},
         ):
-            with self.subTest(slots=slots):
-                with self.assertRaises(TemplateError) as caught:
-                    template.instantiate("주 단위 수입은?", slots)
-                self.assertIn("함께", caught.exception.detail)
+            with self.subTest(factors=factors):
+                pipeline, _client = new_pipeline([grounding_payload([
+                    event_concept("operation", "operation"),
+                    measure_concept("revenue", "AMOUNT", "revenue"),
+                ], factors)])
+                run = pipeline.run("주 단위 수입은?")
+                self.assertEqual(run.stage, Stage.COMPOSITION)
+                self.assertIn("함께", run.error["detail"])
 
     def test_bucket_rollup_is_passed_and_shown(self):
-        template = TemplateRegistry.from_directory().require(
-            "OPERATION_METRIC",
-        )
-        plan = template.instantiate(
-            "주 단위로 집계한 택시 수입의 평균은?",
-            {"metric": "revenue", "bucket": "week", "rollup": "avg"},
-        )
-        step = compile_plan(plan).steps[-1]
-        self.assertEqual(step.arguments["bucket"], "week")
-        self.assertEqual(step.arguments["rollup"], "avg")
-        result = execute_plan(compile_plan(plan), new_tool_executor())
-        answer = format_answer(plan, result, answer=template.answer)
-        self.assertIn("주 단위", answer)
-        self.assertIn("영업 수익", answer)
+        pipeline, _client = new_pipeline([grounding_payload([
+            event_concept("operation", "operation"),
+            measure_concept("revenue", "AMOUNT", "revenue"),
+        ], {"bucket": "week", "rollup": "avg"})])
+        run = pipeline.run("주 단위로 집계한 택시 수입의 평균은?")
+        self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
+        arguments = run.hop_log[0]["arguments"]
+        self.assertEqual(arguments["bucket"], "week")
+        self.assertEqual(arguments["rollup"], "avg")
+        self.assertIn("주 단위", run.final_answer)
+        self.assertIn("영업 수익", run.final_answer)
 
     def test_order_requires_dimension(self):
-        template = TemplateRegistry.from_directory().require(
-            "PLACE_PASSAGE_COUNT",
-        )
-        with self.assertRaises(TemplateError):
-            template.instantiate(
-                "대구에서 통행량이 가장 많은 곳은?",
-                {"place": {"name": "대구", "region": ""}, "order": "top"},
-            )
+        pipeline, _client = new_pipeline([grounding_payload([
+            place_concept("place_1", "대구"),
+            event_concept("passage", "passage"),
+            measure_concept("count", "AMOUNT", "passage_count"),
+        ], {"order": "top"})])
+        run = pipeline.run("대구에서 통행량이 가장 많은 곳은?")
+        self.assertEqual(run.stage, Stage.COMPOSITION)
+        self.assertIn("함께", run.error["detail"])
 
     def test_relative_date_and_metric_are_named_in_answer(self):
-        """상대 날짜와 metric은 원시값 대신 사람이 읽을 이름으로 보인다."""
-        registry = TemplateRegistry.from_directory()
-        tool_executor = new_tool_executor()
+        """상대 날짜와 측정값은 원시값 대신 사람이 읽을 이름으로 보인다."""
+        pipeline, _client = new_pipeline([grounding_payload([
+            place_concept("place_1", "대구"),
+            event_concept("passage", "passage"),
+            measure_concept("speed", "AMOUNT", "speed"),
+        ], {"date": "last_month", "aggregation": "avg"})])
+        run = pipeline.run("지난달 대구 지역 평균 속도는?")
+        self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
+        self.assertIn("지난달", run.final_answer)
+        self.assertNotIn("last_month", run.final_answer)
+        self.assertIn("속도", run.final_answer)
 
-        template = registry.require("PLACE_SCOPE_METRIC")
-        plan = template.instantiate(
-            "지난달 대구 지역 평균 속도는?",
-            {
-                "place": {"name": "대구", "region": ""},
-                "metric": "speed",
-                "date": "last_month",
-            },
-        )
-        result = execute_plan(compile_plan(plan), tool_executor)
-        answer = format_answer(plan, result, answer=template.answer)
-        self.assertIn("지난달", answer)
-        self.assertNotIn("last_month", answer)
-        self.assertIn("속도", answer)
-
-        operation = registry.require("OPERATION_METRIC")
-        plan2 = operation.instantiate(
-            "부산 개인택시의 영업 횟수는?",
-            {"metric": "operating_count", "taxi_type": "private"},
-        )
-        result2 = execute_plan(compile_plan(plan2), tool_executor)
-        answer2 = format_answer(plan2, result2, answer=operation.answer)
-        self.assertIn("영업 횟수", answer2)
+        pipeline2, _c2 = new_pipeline([grounding_payload([
+            event_concept("operation", "operation"),
+            measure_concept("count", "AMOUNT", "operating_count"),
+        ], {"taxi_type": "private"})])
+        run2 = pipeline2.run("부산 개인택시의 영업 횟수는?")
+        self.assertEqual(run2.stage, Stage.DONE, run2.runtime_error)
+        self.assertIn("영업 횟수", run2.final_answer)
 
     def test_labeling_failure_keeps_raw_scope(self):
         """장소명 조회가 실패해도 답변 생성은 계속한다."""
@@ -971,18 +1262,19 @@ class PipelineScenarioTest(unittest.TestCase):
         self.assertEqual(trace[0]["result"]["status"], "ERROR")
 
     def test_case2_vicinity_scope_metric(self):
-        pipeline, _client = new_pipeline([{
-            "template": "VICINITY_SCOPE_METRIC",
-            "slots": {
-                "place": {"name": "동대구역", "region": ""},
-                "metric": "speed",
-                "aggregation": "avg",
-                "date": "20260530",
-                "time": "120000-130000",
-            },
-        }])
+        pipeline, _client = new_pipeline([grounding_payload([
+            place_concept("place_1", "동대구역"),
+            event_concept("passage", "passage"),
+            measure_concept("speed", "AMOUNT", "speed"),
+        ], {
+            "date": "20260530", "time": "120000-130000",
+            "aggregation": "avg", "vicinity": True,
+        })])
         run = pipeline.run(VICINITY_QUESTION)
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
+        self.assertEqual(
+            run.applied_macros, ["PLACE_TO_SCOPE", "EVENT_TO_MEASURE"],
+        )
         resolve_arguments = run.hop_log[0]["arguments"]
         self.assertEqual(run.hop_log[0]["tool"], "get_place_scope")
         self.assertIs(resolve_arguments["include_vicinity"], True)
@@ -994,16 +1286,17 @@ class PipelineScenarioTest(unittest.TestCase):
         self.assertEqual(metric_arguments["time"], "120000-130000")
 
     def test_case3_place_scope_metric(self):
-        pipeline, _client = new_pipeline([{
-            "template": "PLACE_SCOPE_METRIC",
-            "slots": {
-                "place": {"name": "대구", "region": ""},
-                "metric": "speed",
-                "aggregation": "avg",
-            },
-        }])
+        """근처 표현이 없으면 같은 조각이 주변을 포함하지 않는 범위를 만든다."""
+        pipeline, _client = new_pipeline([grounding_payload([
+            place_concept("place_1", "대구"),
+            event_concept("passage", "passage"),
+            measure_concept("speed", "AMOUNT", "speed"),
+        ], {"aggregation": "avg"})])
         run = pipeline.run(PLACE_QUESTION)
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
+        self.assertEqual(
+            run.applied_macros, ["PLACE_TO_SCOPE", "EVENT_TO_MEASURE"],
+        )
         self.assertEqual(
             [entry["tool"] for entry in run.hop_log],
             ["get_place_scope", "get_passage_metrics"],
@@ -1013,18 +1306,18 @@ class PipelineScenarioTest(unittest.TestCase):
         )
 
     def test_case4_direct_scope_metric_skips_gazetteer(self):
-        pipeline, _client = new_pipeline([{
-            "template": "DIRECT_SCOPE_METRIC",
-            "slots": {
-                "scope": "scope:edge:1742",
-                "metric": "speed",
-                "aggregation": "avg",
-                "date": "20260530",
-                "time": "120000-130000",
-            },
-        }])
+        """범위를 직접 받은 질문은 장소 변환 조각 없이 합성된다."""
+        pipeline, _client = new_pipeline([grounding_payload([
+            scope_concept("user_scope", "scope:edge:1742"),
+            event_concept("passage", "passage"),
+            measure_concept("speed", "AMOUNT", "speed"),
+        ], {
+            "date": "20260530", "time": "120000-130000",
+            "aggregation": "avg",
+        })])
         run = pipeline.run(DIRECT_QUESTION)
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
+        self.assertEqual(run.applied_macros, ["EVENT_TO_MEASURE"])
         tools_used = [entry["tool"] for entry in run.hop_log]
         self.assertEqual(tools_used, ["get_passage_metrics"])
         self.assertNotIn("get_place_scope", tools_used)
@@ -1032,33 +1325,51 @@ class PipelineScenarioTest(unittest.TestCase):
             run.hop_log[0]["arguments"]["scope"], "scope:edge:1742",
         )
 
-    def test_case5_hallucinated_scope_is_blocked(self):
-        pipeline, _client = new_pipeline([{
-            "template": "DIRECT_SCOPE_METRIC",
-            "slots": {
-                "scope": "scope:district:999999999",
-                "metric": "speed",
-            },
-        }])
-        run = pipeline.run(DIRECT_QUESTION)
-        self.assertEqual(run.stage, Stage.VALIDATION)
-        self.assertEqual(run.hop_log, [])
-        self.assertIn(
-            Rule.SCOPE_PROVENANCE, run.validation["failed_rules"],
+    def test_direct_and_place_share_one_measure_macro(self):
+        """직접 범위와 장소 질문은 같은 측정 조각을 쓴다.
+
+        완성 template을 따로 두지 않고 앞단 조각의 유무로만 갈린다.
+        """
+        direct, _ = new_pipeline([grounding_payload([
+            scope_concept("user_scope", "scope:edge:1742"),
+            measure_concept("speed", "AMOUNT", "speed"),
+        ])])
+        place, _ = new_pipeline([grounding_payload([
+            place_concept("place_1", "대구"),
+            measure_concept("speed", "AMOUNT", "speed"),
+        ])])
+        direct_run = direct.run(DIRECT_QUESTION)
+        place_run = place.run(PLACE_QUESTION)
+        self.assertEqual(direct_run.applied_macros, ["EVENT_TO_MEASURE"])
+        self.assertEqual(
+            place_run.applied_macros, ["PLACE_TO_SCOPE", "EVENT_TO_MEASURE"],
         )
+        self.assertEqual(
+            direct_run.applied_macros[-1], place_run.applied_macros[-1],
+        )
+
+    def test_case5_hallucinated_scope_is_blocked(self):
+        """발화에 없는 scope는 계획이 만들어지기 전에 막힌다."""
+        pipeline, _client = new_pipeline([grounding_payload([
+            scope_concept("user_scope", "scope:district:999999999"),
+            event_concept("passage", "passage"),
+            measure_concept("speed", "AMOUNT", "speed"),
+        ])])
+        run = pipeline.run(DIRECT_QUESTION)
+        self.assertEqual(run.stage, Stage.PLANNER)
+        self.assertEqual(run.error["code"], "UNGROUNDED_SCOPE")
+        self.assertEqual(run.hop_log, [])
         self.assertIsNone(run.final_answer)
 
     def test_grouped_aggregate(self):
-        pipeline, _client = new_pipeline([{
-            "template": "GROUPED_AGGREGATE",
-            "slots": {
-                "metric": "revenue",
-                "dimension": "dayofweek",
-                "taxi_type": "private",
-            },
-        }])
+        """그룹화는 별도 조각이 아니라 측정 변환의 factor다."""
+        pipeline, _client = new_pipeline([grounding_payload([
+            event_concept("operation", "operation"),
+            measure_concept("revenue", "AMOUNT", "revenue"),
+        ], {"dimension": "dayofweek", "taxi_type": "private"})])
         run = pipeline.run("개인용 택시의 요일별 택시 수입 분포는?")
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
+        self.assertEqual(run.applied_macros, ["EVENT_TO_MEASURE"])
         arguments = run.hop_log[0]["arguments"]
         self.assertEqual(run.hop_log[0]["tool"], "get_operation_metrics")
         self.assertEqual(arguments["dimension"], "dayofweek")
@@ -1067,17 +1378,18 @@ class PipelineScenarioTest(unittest.TestCase):
 
 
 class RepairTest(unittest.TestCase):
-    """장소 조회 실패에 한정한 1회 재계획."""
+    """장소 조회 실패에 한정한 1회 재계획.
+
+    재계획은 개념 구조를 바꾸지 못하고 실패한 장소의 값만 고칠 수 있다.
+    """
 
     FARE_QUESTION = "대구시의 평균 택시 요금은?"
 
     def test_not_found_triggers_one_repair(self):
         """대구시(NOT_FOUND) → 재계획 → 대구(성공)."""
         pipeline, client = new_pipeline([
-            {"template": "TRIP_FARE_METRIC",
-             "slots": {"place": {"name": "대구시", "region": ""}}},
-            {"template": "TRIP_FARE_METRIC",
-             "slots": {"place": {"name": "대구", "region": ""}}},
+            fare_grounding("대구시"),
+            fare_grounding("대구"),
         ])
         run = pipeline.run(self.FARE_QUESTION)
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
@@ -1095,10 +1407,8 @@ class RepairTest(unittest.TestCase):
 
     def test_repair_is_capped_at_one_attempt(self):
         pipeline, client = new_pipeline([
-            {"template": "TRIP_FARE_METRIC",
-             "slots": {"place": {"name": "대구시", "region": ""}}},
-            {"template": "TRIP_FARE_METRIC",
-             "slots": {"place": {"name": "없는장소", "region": ""}}},
+            fare_grounding("대구시"),
+            fare_grounding("없는장소"),
         ])
         run = pipeline.run(self.FARE_QUESTION)
         self.assertEqual(run.repair_count, 1)
@@ -1108,18 +1418,20 @@ class RepairTest(unittest.TestCase):
         self.assertEqual(run.attempts[-1]["status"], STATUS_REPAIR_SKIPPED)
 
     def test_repair_output_still_passes_every_guard(self):
-        """재계획이 지어낸 scope를 넣어도 validation이 막는다."""
-        pipeline, _client = new_pipeline([
-            {"template": "TRIP_FARE_METRIC",
-             "slots": {"place": {"name": "대구시", "region": ""}}},
-            {"template": "TRIP_FARE_METRIC",
-             "slots": {"place": {"name": "대구", "region": "",
-                                 "code": "scope:district:999999999"}}},
-        ])
+        """재계획이 지어낸 scope를 끼워 넣어도 계획이 만들어지지 않는다."""
+        smuggled = fare_grounding("대구")
+        smuggled["concepts"].append(
+            scope_concept("smuggled", "scope:district:999999999"),
+        )
+        pipeline, _client = new_pipeline([fare_grounding("대구시"), smuggled])
         run = pipeline.run(self.FARE_QUESTION)
-        # 두 번째 시도가 template 검증에서 막혀 원래 실행 실패가 유지된다.
+        # 재계획 결과가 grounding 계약에서 탈락해 원래 실행 실패가 유지된다.
         self.assertIsNotNone(run.runtime_error)
-        self.assertEqual(run.attempts[-1]["status"], "template")
+        self.assertEqual(run.attempts[-1]["status"], STATUS_REPAIR_FAILED)
+        self.assertEqual(
+            run.attempts[-1]["error"]["code"], "UNGROUNDED_SCOPE",
+        )
+        self.assertIn("NOT_FOUND", json.dumps(run.error, ensure_ascii=False))
 
     def test_repair_call_failure_is_distinguishable(self):
         """재계획 호출 실패와 재계획 결과 탈락을 기록에서 구분한다.
@@ -1128,11 +1440,9 @@ class RepairTest(unittest.TestCase):
         보인다. 모델별 실패 원인을 나중에 판별하려면 attempt 기록이 필요하다.
         """
         client = ScriptedClient([
-            planner_response({
-                "template": "TRIP_FARE_METRIC",
-                "slots": {"place": {"name": "대구시", "region": ""}},
-            }),
-            {"message": {}},  # content 없음 → 재계획 호출 실패
+            planner_response(fare_grounding("대구시")),
+            # content 없음. 재시도 횟수만큼 반복되고 나서야 실패로 확정된다.
+            *[{"message": {}}] * DEFAULT_MAX_ATTEMPTS,
         ])
         pipeline = GeoFlowPipeline.create(
             client=client, tool_executor=new_tool_executor(),
@@ -1144,57 +1454,106 @@ class RepairTest(unittest.TestCase):
             ["TOOL_ERROR", STATUS_REPAIR_FAILED],
         )
         self.assertIn("content", run.attempts[-1]["error"]["detail"])
+        self.assertEqual(
+            run.attempts[-1]["error"]["context"]["attempts"],
+            DEFAULT_MAX_ATTEMPTS,
+        )
 
-    def test_repair_rejects_template_switch(self):
+    def test_repair_keeps_values_other_than_the_failed_one(self):
+        """접미사 제거 규칙이 성공한 개념까지 망가뜨리지 못하게 한다.
+
+        재계획이 origin을 고치면서 destination "신천동"을 "신천"으로 함께
+        줄이는 경우가 관측되었다. 고칠 대상은 오류가 난 개념 하나뿐이다.
+        """
         pipeline, _client = new_pipeline([
-            {"template": "TRIP_FARE_METRIC",
-             "slots": {"place": {"name": "대구시", "region": ""}}},
-            {"template": "GROUPED_AGGREGATE",
-             "slots": {"metric": "revenue", "dimension": "dayofweek"}},
+            od_grounding("동성로동", "신천동"),
+            od_grounding("동성로", "신천"),
+        ])
+        run = pipeline.run(OD_QUESTION)
+        self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
+        self.assertEqual(run.slots["origin"]["name"], "동성로")
+        self.assertEqual(run.slots["destination"]["name"], "신천동")
+        self.assertEqual(
+            analysis_tools(run.hop_log)[-3:],
+            ["get_place_scope", "get_place_scope", "get_trip_count"],
+        )
+
+    def test_repair_rejects_structure_change(self):
+        """재계획이 측정 대상이나 개념 구성을 바꾸면 받지 않는다."""
+        pipeline, _client = new_pipeline([
+            fare_grounding("대구시"),
+            grounding_payload([
+                event_concept("operation", "operation"),
+                measure_concept("revenue", "AMOUNT", "revenue"),
+            ], {"dimension": "dayofweek"}),
         ])
         run = pipeline.run(self.FARE_QUESTION)
         self.assertEqual(run.repair_count, 0)
         self.assertEqual(run.attempts[-1]["status"], STATUS_REPAIR_FAILED)
+        self.assertEqual(
+            run.attempts[-1]["error"]["code"], "REPAIR_CHANGED_STRUCTURE",
+        )
         self.assertIn("NOT_FOUND", json.dumps(run.error, ensure_ascii=False))
 
-    def test_repair_rejects_identical_slots(self):
+    def test_repair_rejects_identical_values(self):
         pipeline, _client = new_pipeline([
-            {"template": "TRIP_FARE_METRIC",
-             "slots": {"place": {"name": "대구시", "region": ""}}},
-            {"template": "TRIP_FARE_METRIC",
-             "slots": {"place": {"name": "대구시", "region": ""}}},
+            fare_grounding("대구시"),
+            fare_grounding("대구시"),
         ])
         run = pipeline.run(self.FARE_QUESTION)
         self.assertEqual(run.repair_count, 0)
         self.assertIsNotNone(run.runtime_error)
+        self.assertEqual(
+            run.attempts[-1]["error"]["code"], "REPAIR_NO_CHANGE",
+        )
+
+    def _grounding(self, payload, question):
+        return parse_grounding(payload, question)
 
     def test_repair_cannot_invent_a_region(self):
         """업체 지적: 재계획이 발화에 없는 상위 지역을 만들어 붙이는 문제."""
         for invented in ("경상북도", "시", "대구광역시"):
             with self.subTest(region=invented):
-                sanitized = drop_invented_regions(
-                    {"place": {"name": "대구시", "region": ""}},
-                    {"place": {"name": "대구", "region": invented}},
+                previous = self._grounding(
+                    fare_grounding("대구시"), self.FARE_QUESTION,
                 )
+                repaired = self._grounding(
+                    fare_grounding("대구", invented), self.FARE_QUESTION,
+                )
+                drop_invented_regions(previous, repaired)
                 self.assertEqual(
-                    sanitized, {"place": {"name": "대구", "region": ""}},
+                    repaired.get("place_1").value,
+                    {"name": "대구", "region": ""},
                 )
 
     def test_repair_keeps_region_the_user_actually_said(self):
         """처음부터 region이 있었다면 재계획이 다듬는 것은 허용한다."""
-        sanitized = drop_invented_regions(
-            {"place": {"name": "어린이대공원", "region": "부산 초읍동"}},
-            {"place": {"name": "어린이대공원", "region": "부산"}},
+        question = "부산 초읍동의 어린이대공원 평균 택시 요금은?"
+        previous = self._grounding(
+            fare_grounding("어린이대공원", "부산 초읍동"), question,
         )
-        self.assertEqual(sanitized["place"]["region"], "부산")
+        repaired = self._grounding(
+            fare_grounding("어린이대공원", "부산"), question,
+        )
+        drop_invented_regions(previous, repaired)
+        self.assertEqual(repaired.get("place_1").value["region"], "부산")
+
+    def test_grounding_drops_a_region_absent_from_the_question(self):
+        """최초 grounding도 발화에 없는 상위 지역을 만들 수 없다."""
+        planner = GeoFlowPlanner(client=ScriptedClient([
+            planner_response(fare_grounding("대구", "경상북도")),
+        ]))
+        output = planner.plan(self.FARE_QUESTION)
+        self.assertEqual(
+            output.grounding.get("place_1").value,
+            {"name": "대구", "region": ""},
+        )
 
     def test_repair_drops_invented_region_end_to_end(self):
         """대구시 → 대구/시 로 고쳐 와도 region 없이 조회해 성공해야 한다."""
         pipeline, _client = new_pipeline([
-            {"template": "TRIP_FARE_METRIC",
-             "slots": {"place": {"name": "대구시", "region": ""}}},
-            {"template": "TRIP_FARE_METRIC",
-             "slots": {"place": {"name": "대구", "region": "시"}}},
+            fare_grounding("대구시"),
+            fare_grounding("대구", "시"),
         ])
         run = pipeline.run("대구시의 평균 택시 요금은?")
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
@@ -1207,64 +1566,103 @@ class RepairTest(unittest.TestCase):
         self.assertNotIn("region", resolved[-1]["arguments"])
 
     def test_non_place_failure_is_not_repaired(self):
-        """scope provenance 차단은 재계획 대상이 아니다."""
-        pipeline, client = new_pipeline([
-            {"template": "DIRECT_SCOPE_METRIC",
-             "slots": {"scope": "scope:edge:1742", "metric": "speed"}},
-        ])
+        """장소 조회가 아닌 경로는 재계획 대상이 아니다."""
+        pipeline, client = new_pipeline([grounding_payload([
+            scope_concept("user_scope", "scope:edge:1742"),
+            event_concept("passage", "passage"),
+            measure_concept("speed", "AMOUNT", "speed"),
+        ])])
         run = pipeline.run(DIRECT_QUESTION)
         self.assertEqual(run.stage, Stage.DONE)
         self.assertEqual(len(client.calls), 1)
 
     def test_successful_run_does_not_call_planner_twice(self):
-        pipeline, client = new_pipeline([
-            {"template": "OD_TRIP_COUNT", "slots": OD_SLOTS},
-        ])
+        pipeline, client = new_pipeline([OD_GROUNDING])
         run = pipeline.run(OD_QUESTION)
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
         self.assertEqual(len(client.calls), 1)
         self.assertEqual(run.repair_count, 0)
 
 
-class PlannerAccuracyHarnessTest(unittest.TestCase):
-    """template 선택 정확도 측정 harness의 판정 로직."""
+class GroundingAccuracyHarnessTest(unittest.TestCase):
+    """grounding 정확도 측정 harness의 판정 로직."""
+
+    OD_QUESTION = "대구 동성로동에서 출발하여 신천동에 도착한 실차 구간 건수는?"
+
+    def _grounding(self, origin, destination):
+        return parse_grounding(
+            od_grounding(origin, destination), self.OD_QUESTION,
+        )
 
     def test_correct_origin_destination_order(self):
-        self.assertTrue(check_slot_roles(OD_QUESTION, OD_SLOTS))
-
-    def test_swapped_origin_destination_is_detected(self):
-        swapped = {
-            "origin": {"name": "신천동", "region": ""},
-            "destination": {"name": "동성로", "region": "대구"},
-        }
-        self.assertFalse(check_slot_roles(OD_QUESTION, swapped))
-
-    def test_unjudgeable_slots_return_none(self):
-        self.assertIsNone(check_slot_roles(OD_QUESTION, {"place": "대구"}))
-        self.assertIsNone(check_slot_roles(
-            OD_QUESTION,
-            {
-                "origin": {"name": "없는곳", "region": ""},
-                "destination": {"name": "신천동", "region": ""},
-            },
+        self.assertTrue(check_concept_roles(
+            self.OD_QUESTION, self._grounding("동성로동", "신천동"),
         ))
 
-    def test_every_query_label_is_a_known_template(self):
-        """평가 셋의 expected_template이 registry와 어긋나지 않아야 한다."""
-        registry = TemplateRegistry.from_directory()
-        for name in ("stub_query.yaml", "stub_query_boundary.yaml"):
-            queries = load_queries(ROOT / name)
-            self.assertTrue(queries)
-            for item in queries:
-                with self.subTest(query_file=name, query=item["id"]):
-                    expected = item.get("expected_template")
-                    self.assertIsNotNone(
-                        expected,
-                        f"{item['id']}에 expected_template이 없습니다.",
-                    )
-                    if expected == NO_TEMPLATE:
-                        continue
-                    self.assertIn(expected, registry)
+    def test_swapped_origin_destination_is_detected(self):
+        self.assertFalse(check_concept_roles(
+            self.OD_QUESTION, self._grounding("신천동", "동성로동"),
+        ))
+
+    def test_unjudgeable_grounding_returns_none(self):
+        grounding = parse_grounding(
+            fare_grounding("대구"), "대구시의 평균 택시 요금은?",
+        )
+        self.assertIsNone(check_concept_roles(
+            "대구시의 평균 택시 요금은?", grounding,
+        ))
+
+    def test_concept_scoring_counts_each_level(self):
+        score = score_concepts(
+            ["LOCATION/place:SUBCOND", "AMOUNT/fare:MEASURE"],
+            ["LOCATION/place:SUBCOND", "AMOUNT/revenue:MEASURE"],
+        )
+        # concept은 둘 다 맞고, subtype부터 하나가 어긋난다.
+        self.assertEqual(score["concept"]["matched"], 2)
+        self.assertEqual(score["subtype"]["matched"], 1)
+        self.assertEqual(score["role"]["matched"], 1)
+
+    def test_repeated_concepts_are_counted_as_a_multiset(self):
+        """출발지·도착지처럼 같은 개념이 둘인 질문을 집합으로 뭉개지 않는다."""
+        score = score_concepts(
+            ["LOCATION/place:SUBCOND"],
+            ["LOCATION/place:SUBCOND", "LOCATION/place:SUBCOND"],
+        )
+        self.assertEqual(score["role"]["matched"], 1)
+        self.assertEqual(score["role"]["expected"], 2)
+
+    def test_macro_scoring_reports_recall_and_exactness(self):
+        score = score_sequence(
+            ["PLACE_TO_SCOPE", "EVENT_TO_MEASURE"],
+            ["PLACE_TO_SCOPE", "EVENT_TO_MEASURE"],
+        )
+        self.assertTrue(score["exact"])
+        partial = score_sequence(
+            ["EVENT_TO_MEASURE"],
+            ["PLACE_TO_SCOPE", "EVENT_TO_MEASURE"],
+        )
+        self.assertFalse(partial["exact"])
+        self.assertEqual(partial["matched"], 1)
+
+    def test_every_query_label_is_a_known_macro(self):
+        """평가 셋의 정답 라벨이 macro library와 어긋나지 않아야 한다."""
+        library = MacroLibrary.from_directory()
+        for query_file in ("stub_query.yaml", "stub_query_boundary.yaml"):
+            for query in load_queries(BASE_DIR / query_file):
+                with self.subTest(query_file=query_file, query=query["id"]):
+                    expected = query.get("expected_macros")
+                    self.assertTrue(expected, "expected_macros가 없습니다.")
+                    for name in expected:
+                        if name == NO_TEMPLATE_LABEL:
+                            continue
+                        self.assertIn(name, library)
+
+    def test_every_query_label_is_a_known_operator(self):
+        for query_file in ("stub_query.yaml", "stub_query_boundary.yaml"):
+            for query in load_queries(BASE_DIR / query_file):
+                with self.subTest(query_file=query_file, query=query["id"]):
+                    for name in query.get("expected_operators") or []:
+                        self.assertIn(name, operator_names())
 
 
 class RuntimeIntegrationTest(unittest.TestCase):
@@ -1358,9 +1756,7 @@ class RuntimeIntegrationTest(unittest.TestCase):
         self.assertEqual(blocked["error_code"], "INVALID_ARGUMENT")
 
     def test_geoflow_mode_runs_through_runtime(self):
-        pipeline, client = new_pipeline([
-            {"template": "OD_TRIP_COUNT", "slots": OD_SLOTS},
-        ])
+        pipeline, client = new_pipeline([OD_GROUNDING])
         runtime = AssistantRuntime(
             client=client,
             tools=TOOLS,
@@ -1373,15 +1769,17 @@ class RuntimeIntegrationTest(unittest.TestCase):
         self.assertIsNone(result["runtime_error"])
         self.assertEqual(result["agent_mode"], AGENT_MODE_GEOFLOW)
         self.assertEqual(len(analysis_tools(result["hop_log"])), 3)
-        self.assertEqual(result["geoflow"]["template"], "OD_TRIP_COUNT")
+        self.assertEqual(
+            result["geoflow"]["applied_macros"],
+            ["PLACE_TO_SCOPE", "PLACE_TO_SCOPE", "OD_EVENT_TO_MEASURE"],
+        )
+        self.assertTrue(result["geoflow"]["grounding"]["concepts"])
         self.assertEqual(result["geoflow"]["validation"]["status"], "OK")
         self.assertIn("planner_ms", result["geoflow"]["durations"])
         self.assertEqual(len(result["model_calls"]), 1)
 
     def test_geoflow_result_is_json_serializable(self):
-        pipeline, client = new_pipeline([
-            {"template": "OD_TRIP_COUNT", "slots": OD_SLOTS},
-        ])
+        pipeline, client = new_pipeline([OD_GROUNDING])
         runtime = AssistantRuntime(
             client=client,
             tools=TOOLS,

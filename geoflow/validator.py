@@ -213,6 +213,36 @@ def _check_executability(plan, report, available_tools):
                 f"parameter입니다: {', '.join(unknown_params)}",
                 transformation=transformation.id,
             )
+        _check_param_contract(transformation, spec, report)
+
+
+def _check_param_contract(transformation, spec, report):
+    """G4. Tool이 거절할 parameter 값·조합을 실행 전에 걸러 낸다.
+
+    예전에 template YAML의 slot_types/slot_requires가 하던 검사를 registry
+    기준으로 옮긴 것이다. 계획을 만든 경로(template이든 macro composition이든)와
+    무관하게 같은 규칙이 적용된다.
+    """
+    for name, value in sorted(transformation.params.items()):
+        allowed = spec.allowed_values(name)
+        if allowed is not None and value is not None and value not in allowed:
+            report.add(
+                Rule.EXECUTABILITY,
+                f"{transformation.id}: {spec.name}의 {name}은 "
+                f"{', '.join(sorted(allowed))} 중 하나여야 하지만 "
+                f"{value!r}입니다.",
+                transformation=transformation.id,
+                param=name,
+            )
+        missing = spec.missing_companions(name, transformation.params)
+        if missing:
+            report.add(
+                Rule.EXECUTABILITY,
+                f"{transformation.id}: {name}을 쓰려면 "
+                f"{', '.join(missing)}도 함께 필요합니다.",
+                transformation=transformation.id,
+                param=name,
+            )
 
 
 def _check_types(plan, nodes, report):
@@ -226,7 +256,9 @@ def _check_types(plan, nodes, report):
             node = nodes.get(ref.node_id)
             if port_spec is None or node is None:
                 continue
-            if not port_spec.accepts(node.concept, node.subtype):
+            if not port_spec.accepts(
+                node.concept, node.subtype, node.attributes,
+            ):
                 report.add(
                     Rule.TYPE_COMPATIBILITY,
                     f"{transformation.id}.{port}는 "

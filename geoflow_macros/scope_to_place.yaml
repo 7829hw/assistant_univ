@@ -1,0 +1,29 @@
+# geoflow_macros/scope_to_place.yaml
+# LOCATION/scope -> LOCATION/place 역변환.
+#
+# 집계 결과의 scope에 이름을 붙이는 일은 실행 후 labeling(geoflow/labeling.py)이
+# 담당한다. 이 조각은 "이 범위가 어디인가"를 묻는 질문의 변환 자체를 뜻한다.
+
+name: SCOPE_TO_PLACE
+description: 공간 범위(scope)에 해당하는 장소명을 찾는다.
+
+inputs:
+  scope:
+    concept: LOCATION
+    subtypes: [scope, vicinity_scope]
+
+outputs:
+  place:
+    concept: LOCATION
+    subtypes: [place]
+
+concepts:
+  - key: place
+    role: MEASURE
+    source: tool
+    subtype: place
+
+transformations:
+  - id: name_scope
+    inputs: [scope]
+    output: place

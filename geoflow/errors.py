@@ -70,3 +70,17 @@ class ExecutionError(GeoFlowError):
 
     stage = "execution"
     default_user_message = "분석 계획을 실행하지 못했습니다."
+
+
+class MacroError(GeoFlowError):
+    """Macro 정의 자체가 계약을 만족하지 못함."""
+
+    stage = "macro"
+    default_user_message = "분석 조각(macro) 정의를 읽지 못했습니다."
+
+
+class CompositionError(GeoFlowError):
+    """Grounding 결과를 하나의 GeoFlow Graph로 합성하지 못함."""
+
+    stage = "composition"
+    default_user_message = "질문을 실행 가능한 분석 그래프로 구성하지 못했습니다."
