@@ -184,145 +184,15 @@ def evaluate_model(model, queries, *, host, chat_timeout, repeat, verbose,
     available_tools = None if tool_executor is None else tool_executor.tool_names
 
     records = []
+    records = []
     for item in queries:
-        expected_concepts = list(item.get("expected_concepts") or [])
-        expected_macros = list(item.get("expected_macros") or [])
-        expected_operators = list(item.get("expected_operators") or [])
-        refusal_expected = NO_TEMPLATE_LABEL in expected_macros
         for attempt in range(1, repeat + 1):
-            started_at = time.perf_counter()
-            record = {
-                "id": item["id"],
-                "repeat_index": attempt,
-                "status": "OK",
-                "error": None,
-                "stage": "planner",
-                "concepts": [],
-                "factors": {},
-                "macros": [],
-                "operators": [],
-                "concept_score": {
-                    name: _empty_score()
-                    for name in ("concept", "subtype", "role")
-                },
-                "macro_score": _empty_score(),
-                "operator_score": _empty_score(),
-                "validated": False,
-                "executed": None,
-                # 실행 실패가 재계획으로 복구 가능한 종류였는지. 장소 조회
-                # 실패는 런타임이 한 번 고쳐 다시 시도하지만, 이 측정은
-                # 첫 계획을 그대로 실행하므로 여기서 구분해 둔다.
-                "execution_retryable": None,
-                "refused": False,
-                "role_order_ok": None,
-                # 계획 단계 재질의. 파이프라인과 같은 1회 규칙을 따른다.
-                "od_qualified_initial": None,
-                "repair_kind": None,
-                "repair_attempted": False,
-                "repair_succeeded": False,
-                "repair_error": None,
-                "unsupported_relation": False,
-                # 지연을 단계별로 나눠 본다. 총합만 보면 한 건의 이상치가
-                # 전체 평균을 지배하는 것을 알 수 없다.
-                "initial_planner_ms": 0.0,
-                "repair_planner_ms": 0.0,
-                "planner_calls": 0,
-                "output_chars": 0,
-                "duration_ms": 0.0,
-            }
-            try:
-                output = planner.plan(item["question"])
-                record["initial_planner_ms"] = output.duration_ms
-                record["planner_calls"] = 1
-                record["output_chars"] = len(output.raw_text)
-                grounding = output.grounding
-                record["concepts"] = concept_keys(grounding)
-                record["factors"] = dict(grounding.factors)
-                record["role_order_ok"] = check_concept_roles(
-                    item["question"], grounding,
-                )
-                record["concept_score"] = score_concepts(
-                    record["concepts"], expected_concepts,
-                )
-                record["od_qualified_initial"] = _od_qualified(grounding)
-
-                record["stage"] = "composition"
-                plan = _compose_with_repair(
-                    composer, planner, item["question"], output, record,
-                )
-                record["macros"] = list(plan.applied_macros)
-                record["operators"] = [
-                    item.operator for item in plan.transformations
-                ]
-                record["macro_score"] = score_sequence(
-                    record["macros"], expected_macros,
-                )
-                record["operator_score"] = score_sequence(
-                    record["operators"], expected_operators,
-                )
-
-                record["stage"] = "validation"
-                report = geoflow_validator.validate(
-                    plan, available_tools=available_tools,
-                )
-                record["validated"] = report.ok
-                if not report.ok:
-                    record["status"] = "VALIDATION_FAILED"
-                    record["error"] = "; ".join(
-                        error["message"] for error in report.errors
-                    )
-                elif execute and tool_executor is not None:
-                    record["stage"] = "execution"
-                    # 사용자가 발화에 적은 scope는 실행 시점에도 known scope로
-                    # 넘겨야 한다. 파이프라인이 하는 것과 같은 처리이며,
-                    # 빠뜨리면 provenance gate가 정상 질의를 막는다.
-                    result = execute_plan(
-                        compile_plan(plan),
-                        tool_executor,
-                        known_scopes=set(extract_scopes(item["question"])),
-                    )
-                    record["executed"] = result.status == STATUS_OK
-                    if not record["executed"]:
-                        record["status"] = result.status
-                        error = result.error or {}
-                        record["error"] = error.get("detail")
-                        record["execution_retryable"] = bool(
-                            (error.get("context") or {}).get("retryable")
-                        )
-                else:
-                    record["stage"] = "done"
-            except GeoFlowError as error:
-                record["status"] = error.code
-                record["error"] = error.detail
-                if error.code in REFUSAL_CODES:
-                    # 지원 범위 밖임을 스스로 인정한 경우도 하나의 판정 결과다.
-                    record["refused"] = True
-                    record["macros"] = [NO_TEMPLATE_LABEL]
-                    record["macro_score"] = score_sequence(
-                        record["macros"], expected_macros,
-                    )
-            except Exception as error:  # noqa: BLE001 - 모델 오류도 기록 대상
-                record["status"] = "CLIENT_ERROR"
-                record["error"] = f"{type(error).__name__}: {error}"
-            record["duration_ms"] = round(
-                (time.perf_counter() - started_at) * 1000, 3
+            record = evaluate_once(
+                planner, composer, item, attempt=attempt,
+                available_tools=available_tools, execute=execute,
+                tool_executor=tool_executor,
+                system_prompt_chars=system_prompt_chars,
             )
-            # 종합 판정은 "실행 가능한 올바른 그래프가 나왔는가"만 본다.
-            # concept/subtype/role 정확도를 여기에 다시 곱하지 않는 이유는
-            # 설계상 질문에 드러나지 않아도 되는 개념이 있기 때문이다.
-            # "평균 속도"라는 질문에 passage를 적지 않아도 registry가 유일하게
-            # 결정할 수 있으므로 합성은 성공한다. 그것을 틀렸다고 셀 수 없다.
-            # grounding 품질은 별도 지표로 따로 본다.
-            record["correct"] = bool(
-                record["macro_score"].get("exact")
-                and record["operator_score"].get("exact")
-                and record["validated"]
-            )
-            if refusal_expected:
-                # 라벨이 NONE이면 "실행 가능한 계획이 만들어지지 않는 것"이
-                # 정답이다. Planner가 거부했든 합성이 포기했든 같다.
-                record["correct"] = not record["validated"]
-            record["system_prompt_chars"] = system_prompt_chars
             records.append(record)
             if verbose:
                 mark = "O" if record["correct"] else "X"
@@ -333,6 +203,218 @@ def evaluate_model(model, queries, *, host, chat_timeout, repeat, verbose,
                     f"{record['duration_ms']:7.0f}ms"
                 )
     return records
+
+
+def evaluate_once(planner, composer, item, *, attempt=1,
+                  available_tools=None, execute=False, tool_executor=None,
+                  system_prompt_chars=0, variant=None):
+    """질문 하나를 한 번 측정해 record를 돌려준다.
+
+    한 번의 측정을 함수로 떼어 둔 이유는, prompt A/B처럼 질문 단위로
+    조건을 번갈아 실행해야 하는 측정이 있기 때문이다. 모델은 시간에 따라
+    흔들리므로 조건별로 몰아서 돌리면 그 변동과 섞인다.
+    """
+    expected_concepts = list(item.get("expected_concepts") or [])
+    expected_macros = list(item.get("expected_macros") or [])
+    expected_operators = list(item.get("expected_operators") or [])
+    refusal_expected = NO_TEMPLATE_LABEL in expected_macros
+    started_at = time.perf_counter()
+    record = {
+        "id": item["id"],
+        "repeat_index": attempt,
+        "status": "OK",
+        "error": None,
+        "stage": "planner",
+        "concepts": [],
+        "factors": {},
+        "macros": [],
+        "operators": [],
+        "concept_score": {
+            name: _empty_score()
+            for name in ("concept", "subtype", "role")
+        },
+        "macro_score": _empty_score(),
+        "operator_score": _empty_score(),
+        "validated": False,
+        "executed": None,
+        # 실행 실패가 재계획으로 복구 가능한 종류였는지. 장소 조회
+        # 실패는 런타임이 한 번 고쳐 다시 시도하지만, 이 측정은
+        # 첫 계획을 그대로 실행하므로 여기서 구분해 둔다.
+        "execution_retryable": None,
+        "refused": False,
+        "role_order_ok": None,
+        # 계획 단계 재질의. 파이프라인과 같은 1회 규칙을 따른다.
+        "od_qualified_initial": None,
+        "repair_kind": None,
+        "repair_attempted": False,
+        "repair_succeeded": False,
+        "repair_error": None,
+        "unsupported_relation": False,
+        # 지연을 단계별로 나눠 본다. 총합만 보면 한 건의 이상치가
+        # 전체 평균을 지배하는 것을 알 수 없다.
+        "initial_planner_ms": 0.0,
+        "repair_planner_ms": 0.0,
+        "planner_calls": 0,
+        "output_chars": 0,
+        "duration_ms": 0.0,
+    }
+    try:
+        output = planner.plan(item["question"])
+        record["initial_planner_ms"] = output.duration_ms
+        record["planner_calls"] = 1
+        record["output_chars"] = len(output.raw_text)
+        record["raw_text"] = output.raw_text
+        grounding = output.grounding
+        record["concepts"] = concept_keys(grounding)
+        record["factors"] = dict(grounding.factors)
+        record["role_order_ok"] = check_concept_roles(
+            item["question"], grounding,
+        )
+        record["concept_score"] = score_concepts(
+            record["concepts"], expected_concepts,
+        )
+        record["od_qualified_initial"] = _od_qualified(grounding)
+
+        record["stage"] = "composition"
+        plan = _compose_with_repair(
+            composer, planner, item["question"], output, record,
+        )
+        record["macros"] = list(plan.applied_macros)
+        record["operators"] = [
+            item.operator for item in plan.transformations
+        ]
+        record["macro_score"] = score_sequence(
+            record["macros"], expected_macros,
+        )
+        record["operator_score"] = score_sequence(
+            record["operators"], expected_operators,
+        )
+
+        record["stage"] = "validation"
+        report = geoflow_validator.validate(
+            plan, available_tools=available_tools,
+        )
+        record["validated"] = report.ok
+        if not report.ok:
+            record["status"] = "VALIDATION_FAILED"
+            record["error"] = "; ".join(
+                error["message"] for error in report.errors
+            )
+        elif execute and tool_executor is not None:
+            record["stage"] = "execution"
+            # 사용자가 발화에 적은 scope는 실행 시점에도 known scope로
+            # 넘겨야 한다. 파이프라인이 하는 것과 같은 처리이며,
+            # 빠뜨리면 provenance gate가 정상 질의를 막는다.
+            result = execute_plan(
+                compile_plan(plan),
+                tool_executor,
+                known_scopes=set(extract_scopes(item["question"])),
+            )
+            record["executed"] = result.status == STATUS_OK
+            if not record["executed"]:
+                record["status"] = result.status
+                error = result.error or {}
+                record["error"] = error.get("detail")
+                record["execution_retryable"] = bool(
+                    (error.get("context") or {}).get("retryable")
+                )
+        else:
+            record["stage"] = "done"
+    except GeoFlowError as error:
+        record["status"] = error.code
+        record["error"] = error.detail
+        if error.code in REFUSAL_CODES:
+            # 지원 범위 밖임을 스스로 인정한 경우도 하나의 판정 결과다.
+            record["refused"] = True
+            record["macros"] = [NO_TEMPLATE_LABEL]
+            record["macro_score"] = score_sequence(
+                record["macros"], expected_macros,
+            )
+    except Exception as error:  # noqa: BLE001 - 모델 오류도 기록 대상
+        record["status"] = "CLIENT_ERROR"
+        record["error"] = f"{type(error).__name__}: {error}"
+    record["duration_ms"] = round(
+        (time.perf_counter() - started_at) * 1000, 3
+    )
+    # 종합 판정은 "실행 가능한 올바른 그래프가 나왔는가"만 본다.
+    # concept/subtype/role 정확도를 여기에 다시 곱하지 않는 이유는
+    # 설계상 질문에 드러나지 않아도 되는 개념이 있기 때문이다.
+    # "평균 속도"라는 질문에 passage를 적지 않아도 registry가 유일하게
+    # 결정할 수 있으므로 합성은 성공한다. 그것을 틀렸다고 셀 수 없다.
+    # grounding 품질은 별도 지표로 따로 본다.
+    record["correct"] = bool(
+        record["macro_score"].get("exact")
+        and record["operator_score"].get("exact")
+        and record["validated"]
+    )
+    if refusal_expected:
+        # 라벨이 NONE이면 "실행 가능한 계획이 만들어지지 않는 것"이
+        # 정답이다. Planner가 거부했든 합성이 포기했든 같다.
+        record["correct"] = not record["validated"]
+    record["system_prompt_chars"] = system_prompt_chars
+    record["variant"] = variant
+    _annotate_record(record)
+    return record
+
+
+#: 집계 단계를 잘못 고른 대표 실패. rollup은 합치는 방식이지 시간 단위가
+#: 아니므로, 여기에 구간 단위가 들어오면 두 단계를 뒤섞은 것이다.
+_BUCKET_UNITS = frozenset({"week", "month"})
+
+#: 의미 실패가 아니라 전송/모델 지연으로 끝난 경우. 정확도와 분리해 센다.
+_TIMEOUT_MARKERS = ("Timeout", "timed out", "ReadTimeout")
+
+
+def _annotate_record(record):
+    """비교에 쓰는 파생 필드를 채운다."""
+    factors = record.get("factors") or {}
+    for name in ("bucket", "aggregation", "rollup"):
+        record[name] = factors.get(name)
+    record["bucket_unit_as_rollup"] = factors.get("rollup") in _BUCKET_UNITS
+    text = f"{record.get('status')} {record.get('error') or ''}"
+    record["timeout"] = any(mark in text for mark in _TIMEOUT_MARKERS)
+
+
+#: 측정용 prompt 변형. 제품 Planner는 건드리지 않는다.
+_SEMANTICS_HEADING = "\n\n[조건이 뜻하는 것]\n"
+_CONSTRAINTS_HEADING = "\n\n[짝을 이루는 factor]\n"
+
+
+def _without_semantics(prompt):
+    """factor 의미 절만 들어낸 prompt. 나머지 문구는 그대로 둔다."""
+    start = prompt.find(_SEMANTICS_HEADING)
+    end = prompt.find(_CONSTRAINTS_HEADING)
+    if start < 0 or end < start:
+        raise ValueError("factor 의미 절을 찾지 못했다")
+    return prompt[:start] + prompt[end:]
+
+
+class PromptVariantPlanner(GeoFlowPlanner):
+    """system prompt 구성만 바꿔 A/B를 재는 측정용 Planner.
+
+    제품 Planner를 그대로 두고 여기서만 갈아 끼운다. ``D``는 제품 prompt와
+    글자 하나까지 같아야 하며, 테스트가 hash로 그것을 확인한다. 이전 측정에서
+    harness가 제품과 다른 prompt를 D라고 부른 적이 있어 그 사고를 막는다.
+    """
+
+    #: 재질의 prompt는 두 변형이 공유한다. 이번 측정 대상은 grounding prompt다.
+    variant = "D"
+
+    def system_prompt(self):
+        full = super().system_prompt()
+        if self.variant == "D":
+            return full
+        if self.variant == "C":
+            return _without_semantics(full)
+        raise ValueError(f"모르는 prompt variant: {self.variant}")
+
+
+def make_variant_planner(variant, client):
+    planner = PromptVariantPlanner(client=client)
+    planner.variant = variant
+    return planner
+
+
 
 
 def _od_qualified(grounding):
@@ -359,6 +441,7 @@ def _compose_with_repair(composer, planner, question, output, record):
     try:
         return composer.compose(output.grounding)
     except GeoFlowError as error:
+        record["initial_error"] = error.code
         decision = decide_repair(error)
         record["repair_kind"] = decision.kind
         if error.code == "AMBIGUOUS_LOCATION_RELATION" and not (
