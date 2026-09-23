@@ -12,6 +12,7 @@ from pathlib import Path
 
 import yaml
 
+import aggregation_plan
 from geoflow.compiler import compile_plan
 from geoflow.types import ValueRef
 from query_loader import load_queries
@@ -23,12 +24,15 @@ HOLDOUT_CORPUS_FILE = BASE_DIR / "evaluation" / "paraphrases_holdout.yaml"
 PARENT_FILES = ("stub_query_boundary.yaml", "stub_query.yaml")
 
 LABEL_KEYS = ("expected_concepts", "expected_macros", "expected_operators")
-COHORTS = frozenset({"taxi_type", "factor_stage", "relation"})
+COHORTS = frozenset({"taxi_type", "factor_stage", "relation", "aggregation_stage"})
 NONE_LABEL = "NONE"
 
 _INTENT_KEYS = frozenset({
     "intent", "cohorts", "expected_tool_args", "must_include", "must_exclude",
     "od_roles", "golden", "paraphrases", "note",
+    # 두 단계 집계의 의미 golden. 있으면 golden factor와 기대 Tool 인자의 집계
+    # 부분을 여기서 유도한다(aggregation_plan.py).
+    "aggregation",
 })
 #: label 관련 key가 없다. paraphrase마다 정답을 바꿀 수 없게 한다.
 _PARAPHRASE_KEYS = frozenset({"id", "question", "note"})
@@ -66,11 +70,43 @@ def corpus_parents(path):
     return load_parents(_read(path).get("parents") or PARENT_FILES)
 
 
+def expand_aggregation(document):
+    """intent의 집계 의미 golden을 H0 golden factor와 기대 Tool 인자로 편다.
+
+    집계는 aggregation 한 곳에만 적는다. golden이나 기대 Tool 인자에 집계 key가
+    따로 있으면 두 출처가 되므로 문제로 돌려준다. document를 제자리에서 바꾼다.
+    """
+    problems = []
+    for intent in (document.get("intents") or []) if isinstance(document, dict) else []:
+        if "aggregation" not in intent:
+            continue
+        where = f"intent {intent.get('intent')}"
+        semantic = intent["aggregation"]
+        issues = aggregation_plan.semantic_problems(semantic)
+        problems += [f"{where}: aggregation {issue}" for issue in issues]
+        if issues:
+            continue
+        golden = intent.get("golden")
+        args = dict(intent.get("expected_tool_args") or {})
+        if set(args) & set(aggregation_plan.FLAT_KEYS):
+            problems.append(f"{where}: 집계 Tool 인자는 aggregation에서 유도한다")
+        if isinstance(golden, dict) and "concepts" in golden:
+            factors = dict(golden.get("factors") or {})
+            if set(factors) & set(aggregation_plan.FLAT_KEYS):
+                problems.append(f"{where}: golden의 집계 factor는 aggregation에서 유도한다")
+            golden["factors"] = {**factors, **aggregation_plan.semantic_to_flat(semantic)}
+            intent["expected_tool_args"] = {**args,
+                                            **aggregation_plan.expected_tool_args(semantic)}
+        elif semantic is not None:
+            problems.append(f"{where}: 지원하지 않는 질의의 aggregation은 null이다")
+    return problems
+
+
 def load_corpus(path=CORPUS_FILE, parents=None):
     """corpus를 읽고 검증한 intent 목록을 돌려준다."""
     document = _read(path)
     parents = corpus_parents(path) if parents is None else parents
-    problems = validate(document, parents)
+    problems = expand_aggregation(document) + validate(document, parents)
     if problems:
         raise CorpusError(problems)
     return document["intents"]
@@ -137,6 +173,8 @@ def corpus_items(intents, parents=None, cohorts=None):
                 "cohorts": list(intent["cohorts"]),
                 "expected_tool_args": dict(intent.get("expected_tool_args") or {}),
                 "paraphrase_note": paraphrase.get("note"),
+                **({"semantic_aggregation": intent["aggregation"]}
+                   if "aggregation" in intent else {}),
             })
     return items
 

@@ -64,7 +64,9 @@ class CorpusShapeTest(unittest.TestCase):
                 seen.add(cohort)
                 with self.subTest(intent=intent["intent"], cohort=cohort):
                     self.assertGreaterEqual(len(intent["paraphrases"]), minimum[cohort])
-        self.assertEqual(seen, set(P.COHORTS))
+        # aggregation_stage는 집계 holdout에만 있다. 이 corpus는 세 cohort를 다룬다.
+        self.assertEqual(seen, set(minimum))
+        self.assertLessEqual(seen, set(P.COHORTS))
 
     def test_paraphrase_ids_are_unique(self):
         ids = [p["id"] for intent in INTENTS for p in intent["paraphrases"]]

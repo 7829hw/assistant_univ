@@ -1,0 +1,155 @@
+# 두 단계 집계 grounding(H0 vs H2) 검증용 fresh holdout 부모 질의.
+#
+# H2 arm을 구현하거나 어떤 결과를 보기 전에 작성해 고정했다. 이 결과를 보고
+# 문구를 고치지 않는다. development corpus의 집계 의도(b21, b24, h12, f13, f01,
+# f02, f03)와 문장을 겹치지 않게 썼다.
+#
+# expected_macros: [NONE] 은 "실행 가능한 계획이 만들어지면 안 됨"을 뜻한다.
+
+# --- A. 구간 안 집계와 최종 집계를 모두 말한다 ---
+- id: a01_week_sum_then_avg_hours
+  question: "주별로 합한 영업 시간의 평균은?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/hours:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: a02_month_sum_then_max_revenue
+  question: "매달 합산한 수입 중 가장 큰 값은?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/revenue:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: a03_week_max_then_avg_revenue
+  question: "매주 가장 높았던 하루 수입의 평균은?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/revenue:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: a04_week_min_then_avg_count
+  question: "매주 가장 적었던 하루 영업 횟수의 평균은?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/operating_count:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: a05_month_sum_then_min_hours
+  question: "달마다 더한 영업 시간 가운데 가장 작은 값은?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/hours:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+# --- B. 구간 표현과 최종 집계만 있다. 구간 안 집계는 말하지 않는다 ---
+- id: a06_week_unspecified_max_count
+  question: "주별 영업 횟수의 최대값은?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/operating_count:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: a07_month_unspecified_min_revenue
+  question: "월별 택시 수입의 최소값은?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/revenue:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: a08_week_unspecified_sum_revenue
+  question: "주별 수입의 합계는?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/revenue:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: a09_month_unspecified_avg_ratio
+  question: "월별 운행률의 평균은?"
+  expected_concepts: [EVENT/operation:SUPPORT, PROPORTION/operating_ratio:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+# --- C. 구간 안 집계로 평균을 명시한다 ---
+- id: a10_week_avg_then_max_revenue
+  question: "각 주의 평균 수입 중 가장 높은 값은?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/revenue:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: a11_month_avg_then_sum_count
+  question: "달마다 평균 낸 영업 횟수를 모두 합하면?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/operating_count:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: a12_month_avg_then_min_hours
+  question: "각 달의 평균 영업 시간 중 가장 짧은 값은?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/hours:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+# --- D. 구간이 없다. 집계는 한 단계다 ---
+- id: a13_avg_hours
+  question: "택시 영업 시간의 평균값은?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/hours:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: a14_max_revenue
+  question: "택시 하루 수입의 최대값은?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/revenue:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: a15_sum_count_last_month
+  question: "지난달 영업 횟수의 합계는?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/operating_count:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: a16_median_speed_dongdaegu
+  question: "동대구역 택시 속도의 중간값은?"
+  expected_concepts: [LOCATION/place:SUBCOND, EVENT/passage:SUPPORT, AMOUNT/speed:MEASURE]
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, PASSAGE_METRIC]
+
+# --- E. 택시 유형 + 두 단계 집계 ---
+- id: a17_private_month_sum_then_avg_count
+  question: "개인택시 영업 횟수를 달마다 합한 값의 평균은?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/operating_count:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: a18_corporate_week_unspecified_max_hours
+  question: "법인택시의 주별 영업 시간 최대값은?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/hours:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+# --- F. 장소 + 두 단계 집계 ---
+- id: a19_busan_month_sum_then_max_revenue
+  question: "부산 택시 수입을 달마다 합한 값 중 가장 큰 값은?"
+  expected_concepts: [LOCATION/place:SUBCOND, EVENT/operation:SUPPORT, AMOUNT/revenue:MEASURE]
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, OPERATION_METRIC]
+
+- id: a20_daegu_week_unspecified_avg_ratio
+  question: "대구 택시의 주별 운행률 평균은?"
+  expected_concepts: [LOCATION/place:SUBCOND, EVENT/operation:SUPPORT, PROPORTION/operating_ratio:MEASURE]
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, OPERATION_METRIC]
+
+# --- G. 지원 범위 밖. 한 집계 계획으로 뭉개면 안 된다 ---
+# 어느 구간인지 묻는다. bucket은 rollup으로 값 하나만 돌려준다.
+- id: a21_which_week_max_revenue
+  question: "수입이 가장 많았던 주는 언제인가요?"
+  expected_concepts: []
+  expected_macros: [NONE]
+  expected_operators: []
+
+# 구간별 값을 목록으로 달라고 한다. 같은 이유로 표현할 수 없다.
+- id: a22_monthly_series_count
+  question: "달마다 영업 횟수를 각각 보여줘"
+  expected_concepts: []
+  expected_macros: [NONE]
+  expected_operators: []
+
+# 두 기간의 비교다.
+- id: a23_weekday_weekend_hours_compare
+  question: "평일과 주말 중 평균 영업 시간이 더 긴 쪽은?"
+  expected_concepts: []
+  expected_macros: [NONE]
+  expected_operators: []
