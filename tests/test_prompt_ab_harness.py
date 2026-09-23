@@ -110,9 +110,11 @@ class FakeLLM:
         self.server = server
         self.always_warm = always_warm
         self.calls = 0
+        self.requests = []
 
     def chat(self, messages, tools=None):
         self.calls += 1
+        self.requests.append(messages)
         cold = False
         if self.server is not None and not self.server.loaded:
             self.server.loaded = True
@@ -138,15 +140,16 @@ def run(tmp, items, llm_contents, *, arms=("T0", "T0"), repetitions=1,
     server = server or FakeServer()
     llm = FakeLLM(llm_contents, server, always_warm=always_warm)
     variants = [A.build_variant(name) for name in arms]
+    labels = "ABCDEFG"[:len(variants)]
     meta = {
         "protocol": A.PROTOCOL, "run_id": "test", "model": "fake-model",
         "arms": [{"label": label, "variant": v.name, "prompt_sha256": v.sha256}
-                 for label, v in zip("AB", variants)],
+                 for label, v in zip(labels, variants)],
         "query_ids": [item["id"] for item in items],
         "repetitions": repetitions,
     }
     run_dir = Path(tmp) / "run"
-    A.run_protocol(items, list(zip("AB", variants)), repetitions=repetitions,
+    A.run_protocol(items, list(zip(labels, variants)), repetitions=repetitions,
                    reset=make_reset(server), client=llm,
                    composer=MacroComposer(MacroLibrary.from_directory()),
                    run_dir=run_dir, meta=meta, max_invalid=max_invalid,
@@ -491,3 +494,213 @@ class ComparisonTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# -- paraphrase 측정 확장 ----------------------------------------------------
+
+OD_ITEM = {
+    "id": "t_od_p0", "question": "동성로동에서 출발한 실차 구간 건수는?",
+    "expected_concepts": ["LOCATION/place:SUBCOND", "EVENT/trip:SUPPORT",
+                          "AMOUNT/trip_count:MEASURE"],
+    "expected_macros": ["PLACE_TO_SCOPE", "OD_EVENT_TO_MEASURE"],
+    "expected_operators": ["RESOLVE_PLACE_SCOPE", "TRIP_COUNT"],
+    "expected_tool_args": {"scope_pickup": "@place:동성로동", "scope_dropoff": None},
+    "intent_id": "t_od", "paraphrase_id": "t_od_p0", "original_question_id": "t_od",
+    "cohorts": ["relation"], "paraphrase_note": "테스트",
+}
+WEEK_ITEM = dict(MONTH_ITEM, id="t_week_p0", question="주 단위로 집계한 수입의 평균은?",
+                 expected_tool_args={"bucket": "week", "rollup": "avg"},
+                 intent_id="t_week", paraphrase_id="t_week_p0", cohorts=["factor_stage"])
+
+
+def od_grounding(role, factors=None):
+    return grounding(factors or {}, [
+        {"id": "o", "concept": "LOCATION", "subtype": "place", "role": "SUBCOND",
+         "source": "user", "value": {"name": "동성로동", "region": ""},
+         "attributes": {"od_role": role}},
+        {"id": "t", "concept": "EVENT", "subtype": "trip", "role": "SUPPORT",
+         "source": "implicit"},
+        {"id": "c", "concept": "AMOUNT", "subtype": "trip_count", "role": "MEASURE",
+         "source": "implicit"},
+    ])
+
+
+class ContractVariantTest(unittest.TestCase):
+    """C는 system prompt뿐 아니라 재질의 문구도 87ca968이어야 한다."""
+
+    def test_pinned_repair_contracts(self):
+        for name, expected in A.PINNED_REPAIR_SHA256.items():
+            with self.subTest(variant=name):
+                self.assertEqual(A.build_variant(name).repair_sha256, expected)
+
+    def test_c_drops_the_semantics_section_only(self):
+        c, d_pre = A.build_variant("C"), A.build_variant("D_PRE")
+        self.assertNotIn("[조건이 뜻하는 것]", c.prompt)
+        self.assertIn("[조건이 뜻하는 것]", d_pre.prompt)
+        self.assertIn("[짝을 이루는 factor]", c.prompt)
+
+    def test_c_repair_shows_values_only_with_the_old_rule(self):
+        c_text = A.render_factor_repair(A.build_variant("C"))
+        d_text = A.render_factor_repair(A.build_variant("D_PRE"))
+        self.assertIn("채울 조건의 허용값:", c_text)
+        self.assertIn("rollup은 나누는 단위가 아니라", c_text)
+        self.assertNotIn("합치는 2차 집계 방식", c_text)
+        self.assertIn("합치는 2차 집계 방식", d_text)
+        self.assertNotIn("rollup은 나누는 단위가 아니라", d_text)
+
+    def test_repair_hash_mismatch_refuses_to_run(self):
+        with self.assertRaises(A.BenchmarkAborted):
+            A.build_variant("C", pinned_repair={"C": "0" * 64})
+
+    def test_repair_request_actually_uses_the_variant_contract(self):
+        month = grounding({"bucket": "month", "aggregation": "max"})
+        patch = json.dumps({"kind": "factor_completion", "factors": {"rollup": "max"}})
+        for name, marker, absent in (("C", "rollup은 나누는 단위가 아니라", "합치는 2차 집계"),
+                                     ("D_PRE", "합치는 2차 집계", "rollup은 나누는 단위가 아니라")):
+            with self.subTest(variant=name), tempfile.TemporaryDirectory() as tmp:
+                run_dir, llm, _ = run(tmp, [MONTH_ITEM], [month, patch, month, patch],
+                                      arms=(name, name))
+                repair_request = llm.requests[1][-1]["content"]
+                self.assertIn(marker, repair_request)
+                self.assertNotIn(absent, repair_request)
+                self.assertTrue(rows_of(run_dir)[0]["repair_succeeded"])
+
+
+class ThreeArmTest(unittest.TestCase):
+    def test_three_arms_rotate_and_reset_every_observation(self):
+        self.assertEqual([A.arm_order(i, 1, ["C", "D", "T"]) for i in range(3)],
+                         [["D", "T", "C"], ["T", "C", "D"], ["C", "D", "T"]])
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir, _, server = run(tmp, [REVENUE_ITEM], [GOOD] * 3,
+                                     arms=("C", "D_PRE", "T0"))
+            rows = rows_of(run_dir)
+            meta, loaded, report = A.load_run(run_dir)
+        self.assertEqual(server.unloads, 3)
+        self.assertEqual({row["variant"] for row in rows}, {"C", "D_PRE", "T0"})
+        self.assertTrue(report.clean)
+        self.assertEqual(A.summarize(meta, loaded, report, pair=("B", "C"))["pairs"], 1)
+
+    def test_arm_labels_use_names_unless_repeated(self):
+        self.assertEqual(A.arm_labels(["C", "D_PRE", "T0"]), ["C", "D_PRE", "T0"])
+        self.assertEqual(A.arm_labels(["T0", "T0"]), ["A", "B"])
+
+
+class ToolArgumentTest(unittest.TestCase):
+    """기존 채점은 승하차가 뒤바뀌어도 정답으로 센다. 최종 인자가 잡는다."""
+
+    def _one(self, item, content):
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir, _, _ = run(tmp, [item], [content, content])
+            return rows_of(run_dir)[0]
+
+    def test_right_direction_is_strictly_correct(self):
+        row = self._one(OD_ITEM, od_grounding("pickup"))
+        self.assertEqual(row["final_tool"], "get_trip_count")
+        self.assertEqual(row["final_tool_args"]["scope_pickup"], "@place:동성로동")
+        self.assertTrue(row["correct"])
+        self.assertTrue(row["strict_correct"])
+        self.assertEqual(row["final_category"], "correct")
+
+    def test_flipped_direction_passes_old_scoring_but_not_strict(self):
+        row = self._one(OD_ITEM, od_grounding("dropoff"))
+        self.assertTrue(row["correct"])
+        self.assertFalse(row["strict_correct"])
+        self.assertEqual(row["final_category"], "wrong_arguments")
+        self.assertIn(["scope_pickup", "@place:동성로동", None], row["arg_mismatches"])
+
+    def test_missing_bucket_passes_old_scoring_but_not_strict(self):
+        row = self._one(WEEK_ITEM, grounding({"aggregation": "avg"}))
+        self.assertTrue(row["correct"])
+        self.assertFalse(row["strict_correct"])
+
+    def test_corpus_metadata_is_copied_into_the_record(self):
+        row = self._one(OD_ITEM, od_grounding("pickup"))
+        for key in ("intent_id", "paraphrase_id", "original_question_id", "cohorts",
+                    "expected_tool_args"):
+            self.assertEqual(row[key], OD_ITEM[key])
+        self.assertTrue(row["repair_contract_sha256"])
+
+
+class CategoryV2Test(unittest.TestCase):
+    def _one(self, item, contents):
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir, _, _ = run(tmp, [item], contents * 2)
+            return rows_of(run_dir)[0]
+
+    def test_time_unit_in_rollup(self):
+        row = self._one(WEEK_ITEM, [grounding({"bucket": "week", "rollup": "week"})])
+        self.assertEqual(row["final_category"], "bucket_as_rollup")
+        self.assertIn("bucket_as_rollup", row["initial_issues"])
+
+    def test_repaired_missing_rollup_stays_visible_in_initial_issues(self):
+        month = grounding({"bucket": "month", "aggregation": "max"})
+        patch = json.dumps({"kind": "factor_completion", "factors": {"rollup": "max"}})
+        item = dict(MONTH_ITEM, expected_tool_args={"bucket": "month", "rollup": "max"})
+        row = self._one(item, [month, patch])
+        self.assertEqual(row["final_category"], "correct")
+        self.assertIn("missing_rollup", row["initial_issues"])
+
+    def test_relation_attribute_placed_as_factor(self):
+        """T0가 b11에서 od_role을 factor 자리에 넣은 실패."""
+        content = od_grounding("pickup", {"od_role": "pickup"}).replace(
+            ', "attributes": {"od_role": "pickup"}', "")
+        row = self._one(OD_ITEM, [content])
+        self.assertEqual(row["status"], "UNKNOWN_FACTOR")
+        self.assertEqual(row["final_category"], "relation_attribute_as_factor")
+        self.assertIn("relation_attribute_as_factor", row["initial_issues"])
+
+    def test_factor_and_concept_both_present(self):
+        """T0가 b05에서 factor를 더하고도 개념을 남긴 실패."""
+        content = grounding({"taxi_type": "corporate"}, [
+            {"id": "t", "concept": "OBJECT", "subtype": "corporate", "role": "COND",
+             "source": "user", "value": "법인"}] + CONCEPTS)
+        row = self._one(REVENUE_ITEM | {"expected_tool_args": {"taxi_type": "corporate"}},
+                        [content])
+        self.assertEqual(row["final_category"], "taxi_type_as_concept")
+        self.assertEqual(row["initial_taxi_type_factor"], "corporate")
+        self.assertIn("taxi_type_as_concept", row["initial_issues"])
+
+    def test_unsupported_outcomes(self):
+        self.assertEqual(self._one(NONE_ITEM, [UNSUPPORTED])["final_category"],
+                         "unsupported_correct")
+        self.assertEqual(self._one(NONE_ITEM, [GOOD])["final_category"],
+                         "unsupported_incorrect")
+        self.assertEqual(self._one(REVENUE_ITEM, [UNSUPPORTED])["final_category"],
+                         "refused_supported")
+
+
+class IntentAnalysisTest(unittest.TestCase):
+    """판정은 paraphrase 수가 아니라 intent 수로 한다."""
+
+    def _row(self, intent, paraphrase, arm, ok):
+        return {"id": paraphrase, "repeat_index": 1, "arm": arm, "measurement": A.VALID,
+                "intent_id": intent, "paraphrase_id": paraphrase, "question": paraphrase,
+                "cohorts": ["taxi_type"], "strict_correct": ok, "correct": ok,
+                "final_category": "correct" if ok else "taxi_type_as_concept",
+                "initial_issues": [] if ok else ["taxi_type_as_concept"],
+                "expected_tool_args": {"taxi_type": "private"},
+                "initial_taxi_type_factor": "private" if ok else None}
+
+    def test_many_paraphrases_of_one_intent_count_as_one_win(self):
+        rows = []
+        for index in range(6):   # intent x: B가 6개 모두 이긴다
+            rows += [self._row("x", f"x_p{index}", "A", False),
+                     self._row("x", f"x_p{index}", "B", True)]
+        for index in range(2):   # intent y, z: 같다
+            for intent in ("y", "z"):
+                rows += [self._row(intent, f"{intent}_p{index}", "A", True),
+                         self._row(intent, f"{intent}_p{index}", "B", True)]
+        result = A.analyze_intents(rows, "A", "B")
+        self.assertEqual(result["paraphrase_level"]["B_only"], 6)
+        self.assertEqual(result["intent_level"]["B_better"], ["x"])
+        self.assertEqual(result["intent_level"]["tied"], ["y", "z"])
+        # 한 intent의 승리는 부호 검정에서 한 번이다. 6번으로 세지 않는다.
+        self.assertEqual(result["intent_level"]["sign_test_p"], 1.0)
+        self.assertEqual(result["by_arm"]["B"]["taxi_type_factor_initial"], 10)
+
+    def test_cohort_filter_and_report(self):
+        rows = [self._row("x", "x_p0", "A", True), self._row("x", "x_p0", "B", False)]
+        self.assertEqual(A.analyze_intents(rows, "A", "B", cohort="relation")
+                         ["paraphrase_level"]["pairs"], 0)
+        result = A.analyze_intents(rows, "A", "B", cohort="taxi_type")
+        A.print_intent_report(result, out=io.StringIO())

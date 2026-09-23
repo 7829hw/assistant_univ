@@ -40,6 +40,7 @@ reset은 Ollama 0.33.2에서 실측으로 확인한 방법을 쓴다.
 
 import argparse
 import dataclasses
+import functools
 import hashlib
 import json
 import math
@@ -53,10 +54,18 @@ from pathlib import Path
 import httpx
 
 import evaluate_planner as E
+import paraphrase_corpus
+from paraphrase_corpus import final_tool_call, tool_arg_mismatches
 from geoflow import factors as F
+from geoflow import planner as planner_module
 from geoflow.composer import MacroComposer
+from geoflow.errors import GeoFlowError
+from geoflow.grounding import OD_ROLE, parse_grounding
 from geoflow.macros import MacroLibrary
 from geoflow.planner import GeoFlowPlanner, parse_planner_json
+from geoflow.repair import RepairKind
+from geoflow.repair import decide as decide_repair
+from geoflow.types import CoreConcept, subtype_allowed
 from ollama_client import OllamaClient
 from query_loader import load_queries
 
@@ -209,13 +218,30 @@ def _ns_to_ms(body, key):
 
 @dataclasses.dataclass(frozen=True)
 class PromptVariant:
+    """LLM이 보는 계약 하나. system prompt만이 아니라 재질의 문구까지다.
+
+    50fae72는 system prompt에 factor 의미 절을 더하면서 factor 재질의 문구와
+    그 안의 허용값 렌더링도 바꿨다. system prompt만 갈아 끼우면 이전 commit의
+    재질의 경로를 재현하지 못한다.
+    """
+
     name: str
     prompt: str
     note: str
+    #: 재질의 종류별 문구 교체. 비어 있으면 현재 코드의 문구를 쓴다.
+    repair_templates: dict = dataclasses.field(default_factory=dict)
+    #: factor 재질의의 {allowed} 렌더링. "semantics"는 현재(의미 포함),
+    #: "values"는 87ca968(허용값만).
+    allowed_renderer: str = "semantics"
 
     @property
     def sha256(self):
         return hashlib.sha256(self.prompt.encode("utf-8")).hexdigest()
+
+    @functools.cached_property
+    def repair_sha256(self):
+        """대표 factor 재질의 문구를 실제 경로로 렌더링한 hash."""
+        return hashlib.sha256(render_factor_repair(self).encode("utf-8")).hexdigest()
 
 
 class _StubClient:
@@ -236,48 +262,100 @@ def _prompt_with_meaning(factor, meaning):
         F.FACTOR_SPECS[factor] = original
 
 
-#: 이름은 특정 prompt 하나를 가리킨다. 제품 prompt가 바뀌면 T0는 검증에서
+#: 이름은 특정 계약 하나를 가리킨다. 제품 prompt가 바뀌면 T0는 검증에서
 #: 걸린다. 그때는 T0를 고치지 말고 새 이름을 붙인다. 같은 이름이 다른 prompt를
-#: 가리키면 이력 결과를 잘못 읽게 된다.
+#: 가리키면 이력 결과를 잘못 읽게 된다. 값은 각 commit의 git worktree에서
+#: 직접 렌더링해 얻었다.
 PINNED_SHA256 = {
+    "C": "a4db7f29955beeb7e83d3ec454b3d58b4024b80a9093a7184126cd2fb2489228",
     "D_PRE": "64bbceb4e171085f38de782ceb413b3ee814c9df8c7f9576479a9324e123d45d",
     "T0": "f268b2b28feb8b29211a0128798f9bb89d08a491184eaa3df9675cb7e139a02e",
 }
+PINNED_REPAIR_SHA256 = {
+    "C": "a5d9baa0bbbf73d1adb43f6a389dd8cef024bfee78c51d9fcc3ade518ed12850",
+    "D_PRE": "5af4c744a448f008fa9e1fa92848f4b08e24870bcd156852e4c71369e80e67c4",
+    "T0": "5af4c744a448f008fa9e1fa92848f4b08e24870bcd156852e4c71369e80e67c4",
+}
+
+VARIANT_DIR = RESULT_DIR / "variants"
+
+
+def _c_variant():
+    """87ca968: factor 의미 절이 없고, 재질의는 허용값만 보여 준다."""
+    template = (VARIANT_DIR / "87ca968_factor_repair_instruction.txt").read_text(
+        encoding="utf-8",
+    )
+    return {
+        "prompt": E._without_semantics(_production_prompt()),
+        "repair_templates": {RepairKind.FACTOR_COMPLETION: template},
+        "allowed_renderer": "values",
+    }
+
 
 _BUILDERS = {
+    "C": (_c_variant, "87ca968 (factor 의미 절 이전)"),
     # 0ccabc3~1의 production. git worktree로 만든 prompt와 hash가 같음을 확인했다.
-    "D_PRE": (lambda: _prompt_with_meaning("taxi_type", "택시 유형 조건."),
-              "0ccabc3~1 production (taxi_type 구분 이전)"),
-    "T0": (_production_prompt, "0ccabc3 production (taxi_type 구분)"),
+    "D_PRE": (lambda: {"prompt": _prompt_with_meaning("taxi_type", "택시 유형 조건.")},
+              "50fae72 = 0ccabc3~1 production (taxi_type 구분 이전)"),
+    "T0": (lambda: {"prompt": _production_prompt()}, "0ccabc3 production (taxi_type 구분)"),
     # 고정하지 않는다. 그때그때의 production을 뜻한다.
-    "PRODUCTION": (_production_prompt, "실행 시점의 production"),
+    "PRODUCTION": (lambda: {"prompt": _production_prompt()}, "실행 시점의 production"),
 }
 
 
-def build_variant(name, *, pinned=None):
+def build_variant(name, *, pinned=None, pinned_repair=None):
     if name not in _BUILDERS:
         raise KeyError(f"모르는 prompt 변형: {name} (가능: {', '.join(sorted(_BUILDERS))})")
     builder, note = _BUILDERS[name]
-    variant = PromptVariant(name=name, prompt=builder(), note=note)
-    expected = (PINNED_SHA256 if pinned is None else pinned).get(name)
-    if expected is not None and variant.sha256 != expected:
-        raise BenchmarkAborted(
-            f"prompt 변형 {name}의 hash가 고정값과 다르다: "
-            f"{variant.sha256[:16]} != {expected[:16]}. "
-            "prompt가 바뀌었다면 이 이름을 고치지 말고 새 변형을 추가한다."
-        )
+    variant = PromptVariant(name=name, note=note, **builder())
+    checks = (
+        ("system prompt", variant.sha256,
+         (PINNED_SHA256 if pinned is None else pinned).get(name)),
+        ("factor 재질의 문구", None,
+         (PINNED_REPAIR_SHA256 if pinned_repair is None else pinned_repair).get(name)),
+    )
+    for what, actual, expected in checks:
+        if expected is None:
+            continue
+        actual = variant.repair_sha256 if actual is None else actual
+        if actual != expected:
+            raise BenchmarkAborted(
+                f"prompt 변형 {name}의 {what} hash가 고정값과 다르다: "
+                f"{actual[:16]} != {expected[:16]}. "
+                "계약이 바뀌었다면 이 이름을 고치지 말고 새 변형을 추가한다."
+            )
     return variant
 
 
 class FixedPromptPlanner(GeoFlowPlanner):
-    """확정한 prompt만 쓰는 측정용 Planner. 재질의도 같은 prompt를 쓴다."""
+    """확정한 계약만 쓰는 측정용 Planner. 재질의도 같은 계약을 쓴다."""
 
-    def __init__(self, *, client, prompt):
+    def __init__(self, *, client, variant=None, prompt=None):
         super().__init__(client=client)
-        self._fixed_prompt = prompt
+        if variant is None:
+            variant = PromptVariant(name="ad-hoc", prompt=prompt, note="")
+        self.variant = variant
+        self._fixed_prompt = variant.prompt
+        if variant.repair_templates:
+            self.repair_instructions = {**self.repair_instructions,
+                                        **variant.repair_templates}
 
     def system_prompt(self):
         return self._fixed_prompt
+
+    def variant_repair_values(self, decision):
+        """재질의 문구의 자리 채움 중 변형이 다르게 정하는 것."""
+        if (self.variant.allowed_renderer == "values"
+                and decision.kind == RepairKind.FACTOR_COMPLETION):
+            return {"allowed": "\n  ".join(
+                F.describe_factor(name) for name in decision.allowed_additions
+            )}
+        return {}
+
+    def _ask_patch(self, question, previous, decision, *, message, extra=None):
+        merged = {**self.variant_repair_values(decision), **(extra or {})}
+        return super()._ask_patch(question, previous, decision, message=message,
+                                  extra=merged or None)
 
     def plan(self, question):
         _set_phase(self.client, "initial")
@@ -290,6 +368,33 @@ class FixedPromptPlanner(GeoFlowPlanner):
         )
 
 
+@functools.lru_cache(maxsize=1)
+def _canonical_factor_repair():
+    """hash용 대표 재질의 상황: bucket만 있고 rollup이 빠졌다."""
+    grounding = parse_grounding({"concepts": [
+        {"id": "op", "concept": "EVENT", "subtype": "operation", "role": "SUPPORT",
+         "source": "implicit"},
+        {"id": "r", "concept": "AMOUNT", "subtype": "revenue", "role": "MEASURE",
+         "source": "implicit"},
+    ], "factors": {"bucket": "month", "aggregation": "max"}}, "q")
+    try:
+        MacroComposer(MacroLibrary.from_directory()).compose(grounding)
+    except GeoFlowError as error:
+        return decide_repair(error), error.user_message or error.detail
+    raise RuntimeError("대표 재질의 상황이 합성에 성공해 버렸다")
+
+
+def render_factor_repair(variant):
+    """Planner가 실제로 보낼 factor 재질의 문구. _ask_patch와 같은 경로다."""
+    decision, message = _canonical_factor_repair()
+    planner = FixedPromptPlanner(client=_StubClient(), variant=variant)
+    return planner_module._fill_instruction(
+        planner.repair_instructions[decision.kind],
+        {**planner_module._instruction_values(decision, message),
+         **planner.variant_repair_values(decision)},
+    )
+
+
 def _set_phase(client, phase):
     if isinstance(client, RecordingClient):
         client.phase = phase
@@ -299,9 +404,144 @@ def _set_phase(client, phase):
 
 
 def arm_order(query_index, repetition, arms):
-    """관측 순서. 난수 없이 질문·반복마다 교대한다."""
+    """관측 순서. 난수 없이 질문·반복마다 한 칸씩 돌린다.
+
+    arm이 둘이면 번갈아 가며 먼저 실행된다.
+    """
     arms = list(arms)
-    return arms if (query_index + repetition) % 2 == 0 else arms[::-1]
+    shift = (query_index + repetition) % len(arms)
+    return arms[shift:] + arms[:shift]
+
+
+class RecordingComposer:
+    """관측 하나에서 마지막으로 합성에 성공한 plan을 남긴다.
+
+    재질의가 있으면 합성을 두 번 부르므로 마지막 것이 최종 plan이다.
+    """
+
+    def __init__(self, composer):
+        self._composer = composer
+        self.last_plan = None
+
+    def compose(self, grounding):
+        plan = self._composer.compose(grounding)
+        self.last_plan = plan
+        return plan
+
+
+# -- 오류 분류 (v2) --------------------------------------------------------
+#
+# 첫 grounding에서 무엇이 잘못됐는지(initial_issues)와 최종적으로 어떻게
+# 끝났는지(final_category)를 나눈다. 재질의로 고쳐진 실패는 최종 결과에서는
+# 보이지 않지만 첫 grounding에는 남는다.
+
+_TIME_UNITS = frozenset({"week", "month", "day", "hour"})
+_TAXI_SUBTYPES = frozenset({"taxi_type", "private", "corporate"})
+#: 개념에 붙어야 하는 속성. factor 자리에 오면 관계를 잘못 옮긴 것이다.
+_CONCEPT_ATTRIBUTES = frozenset({OD_ROLE})
+_VALUELESS_CODES = frozenset({"VALUELESS_CONCEPT", "MISSING_CONCEPT_VALUE", "INVALID_PLACE"})
+_RELATION_CODES = frozenset({"AMBIGUOUS_LOCATION_RELATION", "MISSING_RELATION_QUALIFIER"})
+
+
+def _initial_payload(record):
+    try:
+        payload = parse_planner_json(record.get("raw_text") or "")
+    except Exception:  # noqa: BLE001
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def initial_issues(record):
+    """첫 grounding 응답에 있던 문제. 여러 개일 수 있다."""
+    issues = []
+    refusal_expected = E.NO_TEMPLATE_LABEL in (record.get("expected_macros") or [])
+    payload = _initial_payload(record)
+    if payload is not None and not payload.get("unsupported"):
+        factors = payload.get("factors") if isinstance(payload.get("factors"), dict) else {}
+        if factors.get("rollup") in _TIME_UNITS:
+            issues.append("bucket_as_rollup")
+        if "bucket" in factors and "rollup" not in factors:
+            issues.append("missing_rollup")
+        if "rollup" in factors and "bucket" not in factors:
+            issues.append("rollup_without_bucket")
+        for key in factors:
+            if key in _CONCEPT_ATTRIBUTES:
+                issues.append("relation_attribute_as_factor")
+            elif key not in F.FACTOR_SPECS:
+                issues.append("invalid_factor")
+        concepts = payload.get("concepts") if isinstance(payload.get("concepts"), list) else []
+        for concept in concepts:
+            if not isinstance(concept, dict):
+                continue
+            subtype = concept.get("subtype")
+            if subtype in _TAXI_SUBTYPES:
+                issues.append("taxi_type_as_concept")
+                continue
+            try:
+                core = CoreConcept(concept.get("concept"))
+            except ValueError:
+                issues.append("invalid_subtype")
+                continue
+            if not subtype_allowed(core, subtype):
+                issues.append("invalid_subtype")
+    code = record.get("initial_error") or record.get("status")
+    if code in _VALUELESS_CODES:
+        issues.append("valueless_location")
+    elif code == "UNGROUNDED_SCOPE":
+        issues.append("fabricated_scope")
+    elif code in _RELATION_CODES and not refusal_expected:
+        issues.append("relation_missing")
+    elif code == "DUPLICATE_CONCEPT_ID":
+        issues.append("duplicate_concept_id")
+    elif code == "INVALID_FACTOR" and "bucket_as_rollup" not in issues:
+        issues.append("invalid_factor")
+    return list(dict.fromkeys(issues))
+
+
+def final_category(record):
+    """최종 결과 하나. 정답이어도 인자가 틀리면 wrong_arguments다."""
+    if record.get("measurement") == INVALID:
+        return "invalid_measurement"
+    if E.NO_TEMPLATE_LABEL in (record.get("expected_macros") or []):
+        return "unsupported_correct" if record.get("correct") else "unsupported_incorrect"
+    if record.get("correct"):
+        return "wrong_arguments" if record.get("arg_mismatches") else "correct"
+    if record.get("timeout"):
+        return "other:timeout"
+    status = record.get("status") or ""
+    detail = record.get("error") or ""
+    if status == "INVALID_SUBTYPE":
+        return ("taxi_type_as_concept" if any(word in detail for word in _TAXI_WORDS)
+                else "invalid_subtype")
+    if status == "INVALID_FACTOR":
+        rollup_unit = any(f"'{unit}'" in detail for unit in _TIME_UNITS)
+        return "bucket_as_rollup" if "rollup" in detail and rollup_unit else "invalid_factor"
+    if status == "UNKNOWN_FACTOR":
+        return ("relation_attribute_as_factor"
+                if any(key in detail for key in _CONCEPT_ATTRIBUTES) else "invalid_factor")
+    if status == "INVALID_FACTOR_COMBINATION":
+        factors = record.get("factors_after_repair") or record.get("factors") or {}
+        if "bucket" in factors and "rollup" not in factors:
+            return "missing_rollup"
+        if "rollup" in factors and "bucket" not in factors:
+            return "rollup_without_bucket"
+        return "other:invalid_factor_combination"
+    if status in _VALUELESS_CODES:
+        return "valueless_location"
+    if status == "UNGROUNDED_SCOPE":
+        return "fabricated_scope"
+    if status in _RELATION_CODES:
+        return "relation_missing"
+    if status == "DUPLICATE_CONCEPT_ID":
+        return "duplicate_concept_id"
+    if status in E.REFUSAL_CODES:
+        return "refused_supported"
+    return f"other:{status.lower() or 'unknown'}"
+
+
+#: corpus item이 record에 넘겨주는 정보.
+_CORPUS_KEYS = ("intent_id", "paraphrase_id", "original_question_id", "cohorts",
+                "paraphrase_note")
 
 
 def observe(item, *, arm, variant, repetition, position, pair_index,
@@ -317,7 +557,10 @@ def observe(item, *, arm, variant, repetition, position, pair_index,
         "arm": arm,
         "variant": variant.name,
         "prompt_sha256": variant.sha256,
+        "repair_contract_sha256": variant.repair_sha256,
         "execution_order": position,
+        **{key: item[key] for key in _CORPUS_KEYS if key in item},
+        "expected_tool_args": dict(item.get("expected_tool_args") or {}),
     }
     outcome = reset.reset()
     base.update(
@@ -332,15 +575,33 @@ def observe(item, *, arm, variant, repetition, position, pair_index,
         return {**base, "measurement": INVALID, "invalid_reason": "reset_failed",
                 "correct": None, "status": "RESET_FAILED", "llm_calls": [],
                 "raw_text": "", "planner_calls": 0,
-                "category": "invalid_measurement"}
+                "category": "invalid_measurement",
+                "final_category": "invalid_measurement", "initial_issues": [],
+                "strict_correct": None}
 
     recorder = RecordingClient(client)
-    planner = FixedPromptPlanner(client=recorder, prompt=variant.prompt)
+    planner = FixedPromptPlanner(client=recorder, variant=variant)
+    plans = RecordingComposer(composer)
     record = E.evaluate_once(
-        planner, composer, item, attempt=repetition, variant=variant.name,
+        planner, plans, item, attempt=repetition, variant=variant.name,
         system_prompt_chars=len(variant.prompt),
     )
     record.update(base)
+    record["expected_macros"] = list(item.get("expected_macros") or [])
+
+    record["final_tool"], record["final_tool_args"] = None, None
+    record["tool_call_error"] = None
+    if plans.last_plan is not None:
+        try:
+            record["final_tool"], record["final_tool_args"] = final_tool_call(plans.last_plan)
+        except Exception as error:  # noqa: BLE001 - 측정 결과로 남긴다
+            record["tool_call_error"] = f"{type(error).__name__}: {error}"
+    if record["final_tool_args"] is None:
+        record["arg_mismatches"] = None
+    else:
+        record["arg_mismatches"] = tool_arg_mismatches(
+            record["expected_tool_args"], record["final_tool_args"],
+        )
 
     calls = [dict(call) for call in recorder.calls]
     initial = [call for call in calls if call["phase"] == "initial"]
@@ -367,6 +628,16 @@ def observe(item, *, arm, variant, repetition, position, pair_index,
         record["invalid_reason"] = None
     record["canonical_grounding"] = canonical_grounding(record["raw_text"])
     record["category"] = error_category(record)
+    payload = _initial_payload(record) or {}
+    factors = payload.get("factors") if isinstance(payload.get("factors"), dict) else {}
+    record["initial_taxi_type_factor"] = factors.get("taxi_type")
+    record["initial_issues"] = initial_issues(record)
+    record["final_category"] = final_category(record)
+    # 기존 correct는 macro/operator/검증만 본다. strict는 최종 Tool 인자까지 본다.
+    record["strict_correct"] = (
+        None if record["measurement"] == INVALID
+        else record["final_category"] in ("correct", "unsupported_correct")
+    )
     return record
 
 
@@ -405,8 +676,9 @@ def run_protocol(items, arms, *, repetitions, reset, client, composer,
     ``arms``는 ``[(arm_label, PromptVariant), ...]`` 두 개다. 같은 변형을
     두 번 넣으면 자기 자신과의 비교가 된다.
     """
-    if len(arms) != 2 or arms[0][0] == arms[1][0]:
-        raise ValueError("arm은 이름이 다른 두 개여야 한다")
+    labels = [label for label, _ in arms]
+    if len(arms) < 2 or len(set(labels)) != len(labels):
+        raise ValueError("arm은 이름이 서로 다른 두 개 이상이어야 한다")
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=False)
     _write_exclusive(run_dir / "meta.json", meta)
@@ -621,9 +893,10 @@ def pairs(rows, arm_a, arm_b):
     return result
 
 
-def summarize(meta, rows, report):
+def summarize(meta, rows, report, pair=None):
     labels = [arm["label"] for arm in meta["arms"]]
-    arm_a, arm_b = labels
+    arm_a, arm_b = pair or labels[:2]
+    labels = [arm_a, arm_b]
     matched = pairs(rows, arm_a, arm_b)
     valid = [row for row in rows if row.get("measurement") == VALID]
 
@@ -673,7 +946,7 @@ def summarize(meta, rows, report):
     return {
         "protocol": meta.get("protocol"),
         "run_id": meta.get("run_id"),
-        "arms": meta["arms"],
+        "arms": [arm for label in labels for arm in meta["arms"] if arm["label"] == label],
         "integrity": dataclasses.asdict(report) | {"clean": report.clean},
         "observations": len(rows),
         "valid_observations": len(valid),
@@ -720,6 +993,127 @@ def _percentile(values, q):
         return None
     values = sorted(values)
     return values[min(int(round(q * (len(values) - 1))), len(values) - 1)]
+
+
+# -- paraphrase corpus 분석 -------------------------------------------------
+#
+# paraphrase는 같은 의도를 다른 표현으로 물은 것이라 서로 독립이 아니다.
+# 그래서 두 층으로 센다. paraphrase 층은 관측 수를 그대로 보여 주고, 판정은
+# intent 층에서 한다. 한 intent 안에서 어느 쪽이 더 많이 맞혔는지를 세고,
+# 부호 검정도 intent 수로 한다.
+
+
+def _in_cohort(row, cohort):
+    return cohort is None or cohort in (row.get("cohorts") or [])
+
+
+def analyze_intents(rows, arm_a, arm_b, *, cohort=None, metric="strict_correct"):
+    matched = [
+        (key, a, b) for key, a, b in pairs(rows, arm_a, arm_b)
+        if _in_cohort(a, cohort)
+    ]
+    ok = lambda row: bool(row.get(metric))  # noqa: E731
+    table = Counter((ok(a), ok(b)) for _, a, b in matched)
+
+    per_intent = defaultdict(lambda: {arm_a: 0, arm_b: 0, "paraphrases": 0})
+    for _, a, b in matched:
+        entry = per_intent[a["intent_id"]]
+        entry["paraphrases"] += 1
+        entry[arm_a] += ok(a)
+        entry[arm_b] += ok(b)
+    a_better = sorted(i for i, v in per_intent.items() if v[arm_a] > v[arm_b])
+    b_better = sorted(i for i, v in per_intent.items() if v[arm_b] > v[arm_a])
+
+    def arm_stats(label, side):
+        mine = [pair[side] for pair in matched]
+        taxi = [row for row in mine if "taxi_type" in (row.get("expected_tool_args") or {})]
+        repairs = Counter(str(row.get("repair_kind")) for row in mine
+                          if row.get("repair_attempted"))
+        return {
+            "observations": len(mine),
+            metric: sum(ok(row) for row in mine),
+            "legacy_correct": sum(bool(row.get("correct")) for row in mine),
+            "final_categories": dict(Counter(row["final_category"] for row in mine)),
+            "initial_issues": dict(Counter(issue for row in mine
+                                           for issue in row.get("initial_issues") or [])),
+            "repairs_attempted": sum(repairs.values()),
+            "repairs_succeeded": sum(1 for row in mine if row.get("repair_succeeded")),
+            "repairs_by_kind": dict(repairs),
+            "planner_calls": sum(row.get("planner_calls") or 0 for row in mine),
+            "taxi_type_rows": len(taxi),
+            "taxi_type_factor_initial": sum(1 for row in taxi
+                                            if row.get("initial_taxi_type_factor")),
+            "taxi_type_as_concept_initial": sum(
+                1 for row in taxi if "taxi_type_as_concept" in (row.get("initial_issues") or [])),
+        }
+
+    return {
+        "cohort": cohort,
+        "arms": [arm_a, arm_b],
+        "metric": metric,
+        "paraphrase_level": {
+            "pairs": len(matched),
+            "both": table[(True, True)],
+            f"{arm_a}_only": table[(True, False)],
+            f"{arm_b}_only": table[(False, True)],
+            "neither": table[(False, False)],
+        },
+        "intent_level": {
+            "intents": len(per_intent),
+            f"{arm_a}_better": a_better,
+            f"{arm_b}_better": b_better,
+            "tied": sorted(set(per_intent) - set(a_better) - set(b_better)),
+            "sign_test_p": round(mcnemar_exact(len(a_better), len(b_better)), 4),
+        },
+        "per_intent": {key: dict(value) for key, value in sorted(per_intent.items())},
+        "by_arm": {arm_a: arm_stats(arm_a, 1), arm_b: arm_stats(arm_b, 2)},
+        "per_paraphrase": [
+            {
+                "paraphrase_id": a["paraphrase_id"],
+                "intent_id": a["intent_id"],
+                "question": a["question"],
+                **{label: {
+                    "strict": row.get("strict_correct"),
+                    "final": row["final_category"],
+                    "initial_issues": row.get("initial_issues") or [],
+                    "taxi_type_factor": row.get("initial_taxi_type_factor"),
+                    "repair": row.get("repair_kind") if row.get("repair_attempted") else None,
+                    "arg_mismatches": row.get("arg_mismatches"),
+                } for label, row in ((arm_a, a), (arm_b, b))},
+            }
+            for _, a, b in matched
+        ],
+        "note": ("paraphrase는 같은 intent 안에서 독립이 아니다. 판정은 intent 층의 "
+                 "승패로 하고, paraphrase 층 수치는 관측 규모를 보여 줄 뿐이다."),
+    }
+
+
+def print_intent_report(result, out=sys.stdout):
+    a, b = result["arms"]
+    w = lambda text="": print(text, file=out)  # noqa: E731
+    p, i = result["paraphrase_level"], result["intent_level"]
+    w(f"== {a} vs {b}  cohort={result['cohort'] or '전체'}  기준={result['metric']} ==")
+    w(f"  paraphrase 층: 짝 {p['pairs']} | both {p['both']} | {a}만 {p[f'{a}_only']} | "
+      f"{b}만 {p[f'{b}_only']} | 둘 다 틀림 {p['neither']}")
+    w(f"  intent 층: {i['intents']}개 중 {a} 우세 {len(i[f'{a}_better'])} "
+      f"{i[f'{a}_better']}, {b} 우세 {len(i[f'{b}_better'])} {i[f'{b}_better']}, "
+      f"같음 {len(i['tied'])}, 부호검정 p={i['sign_test_p']}")
+    for intent, value in result["per_intent"].items():
+        flag = " *" if value[a] != value[b] else ""
+        w(f"    {intent:<38} {a} {value[a]}/{value['paraphrases']}  "
+          f"{b} {value[b]}/{value['paraphrases']}{flag}")
+    for label in (a, b):
+        stats = result["by_arm"][label]
+        w(f"  [{label}] strict {stats[result['metric']]}/{stats['observations']} "
+          f"(기존 채점 {stats['legacy_correct']}), 재질의 {stats['repairs_attempted']}회 "
+          f"성공 {stats['repairs_succeeded']} {stats['repairs_by_kind']}, "
+          f"LLM 호출 {stats['planner_calls']}")
+        w(f"      최종: {stats['final_categories']}")
+        w(f"      첫 grounding 문제: {stats['initial_issues']}")
+        if stats["taxi_type_rows"]:
+            w(f"      taxi_type 질의 {stats['taxi_type_rows']}개: factor로 적음 "
+              f"{stats['taxi_type_factor_initial']}, 개념으로 적음 "
+              f"{stats['taxi_type_as_concept_initial']}")
 
 
 # -- 출력 ------------------------------------------------------------------
@@ -802,12 +1196,35 @@ def _server_info(host, model):
     return version, digest
 
 
+def arm_labels(names):
+    """변형 이름이 서로 다르면 그대로 쓰고, 같으면(자기 비교) A, B, ...로 붙인다."""
+    if len(set(names)) == len(names):
+        return list(names)
+    return [chr(ord("A") + index) for index in range(len(names))]
+
+
 def cmd_run(args):
     variants = [build_variant(name) for name in args.arms.split(",")]
-    if len(variants) != 2:
-        raise SystemExit("--arms에는 변형 두 개를 쉼표로 적는다 (같은 이름 두 번이면 자기 비교)")
-    labels = ["A", "B"]
-    items = select_queries(args.queries)
+    if len(variants) < 2:
+        raise SystemExit("--arms에는 변형을 둘 이상 쉼표로 적는다 (같은 이름 두 번이면 자기 비교)")
+    labels = arm_labels([variant.name for variant in variants])
+    corpus = None
+    if args.corpus:
+        corpus_path = Path(args.corpus)
+        cohorts = args.cohorts.split(",") if args.cohorts else None
+        items = paraphrase_corpus.corpus_items(
+            paraphrase_corpus.load_corpus(corpus_path), cohorts=cohorts,
+        )
+        corpus = {
+            "path": str(corpus_path),
+            "sha256": hashlib.sha256(corpus_path.read_bytes()).hexdigest(),
+            "cohorts": cohorts,
+            "intents": sorted({item["intent_id"] for item in items}),
+        }
+    elif args.queries:
+        items = select_queries(args.queries)
+    else:
+        raise SystemExit("--queries 또는 --corpus가 필요하다")
     version, digest = _server_info(args.host, args.model)
     run_id = f"{E._now_local().strftime('%Y%m%d_%H%M%S')}_{args.label}"
     meta = {
@@ -827,30 +1244,59 @@ def cmd_run(args):
             "cold_load_min_ms": COLD_LOAD_MIN_MS,
             "max_invalid": args.max_invalid,
         },
-        "order_rule": "(query_index + repetition) % 2 == 0 이면 A 먼저",
+        "order_rule": "arm 목록을 (query_index + repetition) % arm 수만큼 돌린 순서",
         "arms": [{"label": label, "variant": variant.name, "note": variant.note,
-                  "prompt_sha256": variant.sha256, "prompt_chars": len(variant.prompt)}
+                  "prompt_sha256": variant.sha256, "prompt_chars": len(variant.prompt),
+                  "repair_contract_sha256": variant.repair_sha256}
                  for label, variant in zip(labels, variants)],
+        "corpus": corpus,
         "query_ids": [item["id"] for item in items],
         "repetitions": args.repetitions,
-        "expected_observations": len(items) * args.repetitions * 2,
+        "expected_observations": len(items) * args.repetitions * len(variants),
     }
     client = OllamaClient(args.host, args.model, {"temperature": 0},
                           chat_timeout=args.chat_timeout)
     reset = OllamaStateReset(args.host, args.model)
     composer = MacroComposer(MacroLibrary.from_directory())
     run_dir = Path(args.out) / run_id
-    print(f"[setup] {run_id}: {len(items)} queries x {args.repetitions} x 2 = "
+    print(f"[setup] {run_id}: {len(items)} queries x {args.repetitions} x {len(variants)} = "
           f"{meta['expected_observations']} observations", flush=True)
     for arm in meta["arms"]:
         print(f"[prompt] {arm['label']}={arm['variant']} "
-              f"sha256={arm['prompt_sha256'][:16]} chars={arm['prompt_chars']}", flush=True)
+              f"sha256={arm['prompt_sha256'][:16]} chars={arm['prompt_chars']} "
+              f"repair={arm['repair_contract_sha256'][:16]}", flush=True)
     run_protocol(items, list(zip(labels, variants)), repetitions=args.repetitions,
                  reset=reset, client=client, composer=composer, run_dir=run_dir,
                  meta=meta, max_invalid=args.max_invalid,
                  log=lambda text: print(text, flush=True))
-    cmd_analyze(argparse.Namespace(run_dir=run_dir, allow_incomplete=False))
+    if len(variants) == 2 and corpus is None:
+        cmd_analyze(argparse.Namespace(run_dir=run_dir, allow_incomplete=False))
+    else:
+        print(f"분석: python evaluate_prompt_ab.py analyze-corpus {run_dir} "
+              f"--pairs {labels[0]}:{labels[1]}", flush=True)
     print("PROMPT AB DONE", flush=True)
+
+
+def cmd_analyze_corpus(args):
+    meta, rows, report = load_run(args.run_dir)
+    if not report.clean and not args.allow_incomplete:
+        raise SystemExit(f"무결성 문제로 분석하지 않는다: {dataclasses.asdict(report)}")
+    cohorts = args.cohorts.split(",") if args.cohorts else [None]
+    results = []
+    for pair in args.pairs.split(","):
+        arm_a, arm_b = pair.split(":")
+        for cohort in cohorts:
+            result = analyze_intents(rows, arm_a, arm_b, cohort=cohort or None)
+            print_intent_report(result)
+            print()
+            results.append(result)
+    path = Path(args.run_dir) / "intent_summary.json"
+    if path.exists():
+        path = Path(args.run_dir) / f"intent_summary.{int(time.time())}.json"
+    _write_exclusive(path, {"run_id": meta.get("run_id"),
+                            "integrity": dataclasses.asdict(report) | {"clean": report.clean},
+                            "results": results})
+    return results
 
 
 def cmd_analyze(args):
@@ -884,7 +1330,9 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run")
     run.add_argument("--arms", required=True)
-    run.add_argument("--queries", required=True)
+    run.add_argument("--queries")
+    run.add_argument("--corpus", help="paraphrase corpus. 주면 --queries 대신 쓴다")
+    run.add_argument("--cohorts", help="corpus에서 고를 cohort, 쉼표로")
     run.add_argument("--repetitions", type=int, default=5)
     run.add_argument("--label", required=True)
     run.add_argument("--host", default=DEFAULT_HOST)
@@ -897,6 +1345,12 @@ def main(argv=None):
     analyze.add_argument("run_dir")
     analyze.add_argument("--allow-incomplete", action="store_true")
     analyze.set_defaults(func=cmd_analyze)
+    corpus = sub.add_parser("analyze-corpus")
+    corpus.add_argument("run_dir")
+    corpus.add_argument("--pairs", required=True, help="예: C:D_PRE,D_PRE:T0")
+    corpus.add_argument("--cohorts", help="cohort별로 나눠 본다, 쉼표로")
+    corpus.add_argument("--allow-incomplete", action="store_true")
+    corpus.set_defaults(func=cmd_analyze_corpus)
     floor = sub.add_parser("floor")
     floor.add_argument("run_dirs", nargs="+")
     floor.set_defaults(func=cmd_floor)
