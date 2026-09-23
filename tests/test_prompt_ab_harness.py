@@ -347,12 +347,14 @@ class RawResponseTest(unittest.TestCase):
     def test_record_fields_exist_even_when_the_model_call_fails(self):
         """초기화 누락으로 KeyError가 났던 자리다."""
         with tempfile.TemporaryDirectory() as tmp:
+            # planner가 세 번 시도하고, 관측을 새로 시작해도 다시 세 번 실패한다.
             run_dir, _, _ = run(tmp, [REVENUE_ITEM],
-                                [ConnectionError("x")] * 3 + [GOOD], max_invalid=5)
+                                [ConnectionError("x")] * 6 + [GOOD], max_invalid=5)
             row = rows_of(run_dir)[0]
         for key in ("raw_text", "initial_error", "repair_attempted", "factors"):
             self.assertIn(key, row)
         self.assertEqual(row["status"], "PLANNER_CALL_FAILED")
+        self.assertEqual(row["measurement"], A.INVALID)
 
 
 class NoLeakTest(unittest.TestCase):
@@ -890,3 +892,55 @@ class CensusTest(unittest.TestCase):
             _, rows, report = A.load_run(run_dir)
         self.assertEqual(len(rows), 1)
         self.assertTrue(report.clean)
+
+
+class TimeoutIsolationTest(unittest.TestCase):
+    """planner가 timeout 뒤 모델이 올라간 채로 다시 부른 호출은 isolated가 아니다."""
+
+    def _observe(self, contents):
+        server = FakeServer()
+        llm = FakeLLM(contents, server)
+        record = A.observe(REVENUE_ITEM, arm="A", variant=A.build_variant("T0"),
+                           repetition=1, position=1, pair_index=0,
+                           reset=make_reset(server), client=llm,
+                           composer=MacroComposer(MacroLibrary.from_directory()))
+        return record, server
+
+    def test_a_warm_retry_restarts_the_whole_observation_from_a_cold_model(self):
+        record, server = self._observe([TimeoutError("timed out"), GOOD, GOOD])
+        # 첫 시도: 호출이 timeout, planner가 warm 상태에서 재시도해 성공.
+        # 그 시도는 버리고, 모델을 내린 뒤 처음부터 다시 잰다.
+        self.assertEqual(server.unloads, 2)
+        self.assertEqual(record["fresh_restarts"], 1)
+        self.assertEqual(record["discarded_attempts"][0]["retried_call_indices"], [0])
+        self.assertEqual(record["measurement"], A.VALID)
+        self.assertTrue(record["cold_load_verified"])
+        self.assertEqual(len(record["llm_calls"]), 1)
+        self.assertEqual(record["status"], "OK")
+
+    def test_a_warm_retry_that_happens_again_is_invalid(self):
+        record, _ = self._observe([TimeoutError("t"), GOOD, TimeoutError("t"), GOOD])
+        self.assertEqual(record["measurement"], A.INVALID)
+        self.assertEqual(record["invalid_reason"], "warm_retry")
+        self.assertIsNone(record["strict_correct"])
+
+    def test_a_truncated_response_counts_as_a_retry(self):
+        self.assertEqual(A.retried_calls([
+            {"index": 0, "content": "{", "done_reason": "length"},
+            {"index": 1, "content": "   "},
+            {"index": 2, "error": "ReadTimeout"},
+            {"index": 3, "content": "{}", "done_reason": "stop"},
+        ]), [0, 1, 2])
+
+    def test_every_valid_observation_has_a_verified_cold_load(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir, _, _ = run(tmp, [REVENUE_ITEM, MONTH_ITEM],
+                                [TimeoutError("t"), GOOD, GOOD, GOOD, GOOD, GOOD, GOOD],
+                                max_invalid=5)
+            rows = rows_of(run_dir)
+        valid = [row for row in rows if row["measurement"] == A.VALID]
+        self.assertTrue(valid)
+        for row in valid:
+            self.assertTrue(row["reset_succeeded"])
+            self.assertIs(row["cold_load_verified"], True)
+            self.assertEqual(A.retried_calls(row["llm_calls"]), [])

@@ -654,6 +654,19 @@ _CORPUS_KEYS = ("intent_id", "paraphrase_id", "original_question_id", "cohorts",
                 "paraphrase_note", "census_source", "census_aliases")
 
 
+#: planner가 같은 요청을 다시 부르게 만드는 응답. geoflow.planner.RETRYABLE_CODES와
+#: 같은 조건이다(호출 실패, 생성 상한에서 잘림, 빈 본문). 재시도 호출은 모델이
+#: 이미 올라간 상태에서 나가므로 isolated 관측의 일부로 인정하지 않는다.
+def retried_calls(calls):
+    return [call["index"] for call in calls
+            if call.get("error") or call.get("done_reason") == "length"
+            or not (call.get("content") or "").strip()]
+
+
+#: planner 재시도가 생긴 관측을 처음부터 다시 시작하는 횟수. 넘으면 무효다.
+MAX_FRESH_RESTARTS = 1
+
+
 def observe(item, *, arm, variant, repetition, position, pair_index,
             reset, client, composer, context=None):
     """새 모델 상태에서 관측 하나를 만든다. 매번 새 dict를 돌려준다."""
@@ -672,32 +685,50 @@ def observe(item, *, arm, variant, repetition, position, pair_index,
         **{key: item[key] for key in _CORPUS_KEYS if key in item},
         "expected_tool_args": dict(item.get("expected_tool_args") or {}),
     }
-    outcome = reset.reset()
-    base.update(
-        reset_attempted=outcome.attempted,
-        reset_succeeded=outcome.succeeded,
-        reset_duration_ms=outcome.duration_ms,
-        reset_detail=outcome.detail,
-        loaded_models_after_reset=list(outcome.loaded_after),
-    )
-    if not outcome.succeeded:
-        # 오염된 상태에서 부르지 않는다. 결과가 있어도 비교할 수 없다.
-        return {**base, "measurement": INVALID, "invalid_reason": "reset_failed",
-                "correct": None, "status": "RESET_FAILED", "llm_calls": [],
-                "raw_text": "", "planner_calls": 0,
-                "category": "invalid_measurement",
-                "final_category": "invalid_measurement", "initial_issues": [],
-                "strict_correct": None}
+    discarded = []
+    while True:
+        outcome = reset.reset()
+        base.update(
+            reset_attempted=outcome.attempted,
+            reset_succeeded=outcome.succeeded,
+            reset_duration_ms=outcome.duration_ms,
+            reset_detail=outcome.detail,
+            loaded_models_after_reset=list(outcome.loaded_after),
+        )
+        if not outcome.succeeded:
+            # 오염된 상태에서 부르지 않는다. 결과가 있어도 비교할 수 없다.
+            return {**base, "measurement": INVALID, "invalid_reason": "reset_failed",
+                    "correct": None, "status": "RESET_FAILED", "llm_calls": [],
+                    "raw_text": "", "planner_calls": 0,
+                    "category": "invalid_measurement",
+                    "final_category": "invalid_measurement", "initial_issues": [],
+                    "strict_correct": None, "fresh_restarts": len(discarded),
+                    "discarded_attempts": discarded}
 
-    recorder = RecordingClient(client)
-    planner = FixedPromptPlanner(client=recorder, variant=variant)
-    plans = RecordingComposer(composer)
-    record = E.evaluate_once(
-        planner, plans, item, attempt=repetition, variant=variant.name,
-        system_prompt_chars=len(variant.prompt),
-    )
+        recorder = RecordingClient(client)
+        planner = FixedPromptPlanner(client=recorder, variant=variant)
+        plans = RecordingComposer(composer)
+        record = E.evaluate_once(
+            planner, plans, item, attempt=repetition, variant=variant.name,
+            system_prompt_chars=len(variant.prompt),
+        )
+        retried = retried_calls(recorder.calls)
+        if not retried:
+            break
+        # planner가 모델이 올라간 채로 다시 불렀다. 결과를 버리고 모델을 내린
+        # 상태에서 관측 전체를 다시 한다.
+        discarded.append({
+            "retried_call_indices": retried,
+            "calls": [{key: call.get(key) for key in
+                       ("phase", "index", "error", "done_reason", "elapsed_ms",
+                        "load_duration_ms")} for call in recorder.calls],
+        })
+        if len(discarded) > MAX_FRESH_RESTARTS:
+            break
     record.update(base)
     record["expected_macros"] = list(item.get("expected_macros") or [])
+    record["fresh_restarts"] = len(discarded)
+    record["discarded_attempts"] = discarded
 
     record["final_tool"], record["final_tool_args"] = None, None
     record["tool_call_error"] = None
@@ -731,9 +762,16 @@ def observe(item, *, arm, variant, repetition, position, pair_index,
     else:
         record["cold_load_verified"] = first_load >= COLD_LOAD_MIN_MS
 
-    if record["cold_load_verified"] is False:
+    if retried_calls(calls):
+        # 다시 시작해도 재시도가 생겼다. warm 호출이 섞인 관측이다.
         record["measurement"] = INVALID
-        record["invalid_reason"] = "reset_not_effective"
+        record["invalid_reason"] = "warm_retry"
+    elif record["cold_load_verified"] is not True:
+        # cold load를 확인하지 못한 관측은 isolated라고 말할 수 없다.
+        record["measurement"] = INVALID
+        record["invalid_reason"] = ("reset_not_effective"
+                                    if record["cold_load_verified"] is False
+                                    else "cold_load_unverified")
     else:
         record["measurement"] = VALID
         record["invalid_reason"] = None
