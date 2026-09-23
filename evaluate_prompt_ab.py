@@ -288,6 +288,13 @@ VARIANT_DIR = RESULT_DIR / "variants"
 #:   (b) 금지 지시    "…별도 개념 node로 만들지 않고 이 조건으로만 적는다."
 #:   (c) 긍정 예시    "예: … → EVENT/operation + AMOUNT/hours + taxi_type=corporate"
 #:   (d) 부정 literal "(OBJECT/corporate, OBJECT/taxi_type으로 적지 않는다)"
+#: 0ccabc3에 들어간 문구 그대로. production이 바뀌어도 T0는 이 문구를 가리킨다.
+TAXI_MEANING_T0 = (
+    '택시 영업 유형을 제한하는 조건이며 개념이 아니다. "개인택시", "법인택시"는\n'
+    "    별도 개념 node로 만들지 않고 이 조건으로만 적는다.\n"
+    '    예: "법인택시의 평균 운행시간" → EVENT/operation + AMOUNT/hours +\n'
+    "    taxi_type=corporate (OBJECT/corporate, OBJECT/taxi_type으로 적지 않는다)"
+)
 #: T1은 (d)만 뺀다. 틀린 형태를 글자 그대로 보여 준 것의 효과를 본다.
 TAXI_MEANING_T1 = (
     '택시 영업 유형을 제한하는 조건이며 개념이 아니다. "개인택시", "법인택시"는\n'
@@ -322,7 +329,9 @@ _BUILDERS = {
     # 0ccabc3~1의 production. git worktree로 만든 prompt와 hash가 같음을 확인했다.
     "D_PRE": (lambda: {"prompt": _prompt_with_meaning("taxi_type", "택시 유형 조건.")},
               "50fae72 = 0ccabc3~1 production (taxi_type 구분 이전)"),
-    "T0": (lambda: {"prompt": _production_prompt()}, "0ccabc3 production (taxi_type 구분)"),
+    # production이 바뀌어도 0ccabc3의 계약을 가리키도록 문구를 직접 넣는다.
+    "T0": (lambda: {"prompt": _prompt_with_meaning("taxi_type", TAXI_MEANING_T0)},
+           "0ccabc3 (taxi_type 구분 문구)"),
     "T1": (lambda: {"prompt": _prompt_with_meaning("taxi_type", TAXI_MEANING_T1)},
            "T0에서 부정 literal 예시만 뺌"),
     "T2": (lambda: {"prompt": _prompt_with_meaning("taxi_type", TAXI_MEANING_T2)},
