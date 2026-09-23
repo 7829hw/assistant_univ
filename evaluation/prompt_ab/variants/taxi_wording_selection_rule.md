@@ -28,3 +28,22 @@ T1과 T2가 둘 다 조건을 만족하면 1번 순서대로 T2를 고른다.
 가설 판정은 후보 선택과 별개로 보고한다.
   가설 A(부정 literal): T1이 T0보다 b24에서 회복하면 지지.
   가설 B(일반 분류어의 번짐): b11 od_role 오배치가 T1에 남고 T2에서 사라지면 지지.
+
+# holdout 최종 판정 규칙 (holdout 결과를 보기 전에 작성)
+
+selection 결과: 규칙 3 "D_PRE 우세". holdout 후보는 T2 (57ddf87).
+§14의 기준을 holdout(D_PRE vs T2) 지표로 옮긴다. 모두 재채점(schema 기본값 반영) 기준.
+
+  S    strict 정답 수 (paraphrase 층)
+  W/L  intent 층에서 T2가 이긴 intent 수 / 진 intent 수
+  TC   첫 응답의 택시 유형 개념 node 수
+  RA   첫 응답의 relation_attribute_as_factor 수
+
+Case A (문구를 T2로 교체)
+  S(T2) >= S(D_PRE) 이고, W >= L 이고, TC(T2) < TC(D_PRE) 이고, RA(T2) <= RA(D_PRE)
+Case C (0ccabc3 전체 rollback)
+  S(T2) < S(D_PRE) 이고 W < L, 또는 RA(T2) > RA(D_PRE), 또는 TC(T2) > TC(D_PRE)
+Case B (추가 문구의 가치 없음, rollback 검토)
+  위 둘이 아닌 경우. 예: TC가 양쪽 모두 0이라 줄일 것이 없는 경우.
+
+holdout 결과를 보고 T2 문구를 고치지 않는다. 실패하면 일반화 실패로 보고한다.
