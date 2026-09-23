@@ -21,7 +21,7 @@ os.environ.setdefault("ASSISTANT_TOOL_PROVIDER", "mock")
 from geoflow import validator as geoflow_validator
 from geoflow.compiler import compile_plan
 from geoflow.composer import MacroComposer
-from geoflow.errors import CompositionError
+from geoflow.errors import CompositionError, PlannerError
 from geoflow.executor import STATUS_OK, execute_plan
 from geoflow.factors import FACTOR_CONSTRAINTS
 from geoflow.grounding import parse_grounding
@@ -42,23 +42,38 @@ AREA_DIMENSIONS = ("h3", "sigungu", "emd")
 FREE_DIMENSIONS = ("sido", "dayofweek")
 
 
-def _schema_enums():
-    tims = yaml.safe_load((BASE_DIR / "schemas" / "tims.yaml").read_text(encoding="utf-8"))
+def _vendor_params():
+    """(tool, param) -> vendor schema의 parameter 정의. $ref는 _common.yaml에서 푼다."""
     common = yaml.safe_load((BASE_DIR / "schemas" / "_common.yaml").read_text(encoding="utf-8"))
     definitions = common.get("$defs") or common
-    enums = {}
-    for entry in tims:
-        function = entry["function"]
-        for param, spec in function["parameters"]["properties"].items():
-            ref = spec.get("$ref", "")
-            enum = spec.get("enum") or (
-                definitions.get(ref.rsplit("/", 1)[-1], {}).get("enum") if ref else None)
-            if enum is not None:
-                enums[(function["name"], param)] = frozenset(enum)
-    return enums
+    params = {}
+    for schema in ("tims.yaml", "gazetteer.yaml"):
+        entries = yaml.safe_load((BASE_DIR / "schemas" / schema).read_text(encoding="utf-8"))
+        for entry in entries:
+            function = entry["function"]
+            for param, spec in function["parameters"]["properties"].items():
+                ref = spec.get("$ref", "")
+                if ref:
+                    spec = {**definitions.get(ref.rsplit("/", 1)[-1], {}), **spec}
+                params[(function["name"], param)] = spec
+    return params
 
 
-SCHEMA_ENUMS = _schema_enums()
+VENDOR_PARAMS = _vendor_params()
+
+
+def vendor_enum_for(tool, param):
+    """vendor가 값을 목록으로 한정한 parameter면 그 목록, 아니면 None.
+
+    pattern(date·time), 정수 범위(limit), 자유 문자열(name), boolean은 enum이
+    아니므로 None이다. registry에 param_enums를 요구하는 대상은 enum뿐이다.
+    """
+    enum = VENDOR_PARAMS.get((tool, param), {}).get("enum")
+    return frozenset(enum) if enum is not None else None
+
+
+SCHEMA_ENUMS = {key: vendor_enum_for(*key) for key in VENDOR_PARAMS
+                if vendor_enum_for(*key) is not None}
 
 
 class ConstraintObjectTest(unittest.TestCase):
@@ -116,18 +131,37 @@ class SchemaEnumTest(unittest.TestCase):
                 with self.subTest(operator=name, param=param):
                     self.assertEqual(values, SCHEMA_ENUMS[(spec.tool_name, param)])
 
-    def test_known_missing_static_enums(self):
-        """schema는 값을 한정하는데 registry가 enum을 적지 않은 곳. 늘어나면 안 된다.
+    def test_every_exposed_param_exists_in_the_vendor_schema(self):
+        for name in OPERATORS:
+            spec = get_operator(name)
+            for param in spec.params:
+                with self.subTest(operator=name, param=param):
+                    self.assertIn((spec.tool_name, param), VENDOR_PARAMS)
 
-        TRIP_COUNT.dimension은 이번 변경의 범위 밖이다. 따로 다룬다.
+    def test_every_vendor_enum_has_a_registry_enum(self):
+        """선언이 아예 빠진 enum도 잡는다.
+
+        위 검사는 registry가 적은 enum만 비교해서, TRIP_COUNT.dimension처럼 선언
+        자체가 없으면 지나갔다. 이번에는 operator가 노출하는 param 쪽에서 출발한다.
+        registry가 output에서 값을 정하는 param(metric 등)은 사용자 값이 들어오지
+        않으므로 제외한다.
         """
         missing = set()
         for name in OPERATORS:
             spec = get_operator(name)
-            for param in spec.params - set(DERIVED_PARAMS) - set(spec.param_enums):
-                if (spec.tool_name, param) in SCHEMA_ENUMS:
+            for param in spec.params - set(DERIVED_PARAMS):
+                if vendor_enum_for(spec.tool_name, param) is not None \
+                        and spec.allowed_values(param) is None:
                     missing.add((name, param))
-        self.assertEqual(missing, {(Operator.TRIP_COUNT, "dimension")})
+        self.assertEqual(missing, set())
+
+    def test_non_enum_params_are_not_forced_into_an_enum(self):
+        """pattern·범위·자유 문자열 param에는 enum을 억지로 적지 않는다."""
+        for name in OPERATORS:
+            spec = get_operator(name)
+            for param in spec.param_enums:
+                with self.subTest(operator=name, param=param):
+                    self.assertIsNotNone(vendor_enum_for(spec.tool_name, param))
 
 
 class _ContractCase(unittest.TestCase):
@@ -246,6 +280,83 @@ class SharedEvaluatorTest(_ContractCase):
         context.pop("code")
         context.pop("transformation")
         self.assertEqual(context, caught.exception.context)
+
+
+TRIP_DIMENSIONS = ("h3", "sido", "sigungu", "emd")
+
+
+class TripCountEnumTest(_ContractCase):
+    """TRIP_COUNT.dimension은 vendor enum으로 한정한다. 조건부 계약은 없다."""
+
+    def _trip_grounding(self, dimension, *, pickup):
+        concepts = [event("e", "trip"), measure("m", "AMOUNT", "trip_count")]
+        if pickup:
+            concepts.insert(0, place("p", "대구", od_role="pickup"))
+        return parse_grounding(payload(concepts, {"dimension": dimension}),
+                               ("대구에서 출발한 " if pickup else "") + "실차 구간 건수는?")
+
+    def _trip_step(self, plan):
+        return next(t for t in plan.transformations if t.operator == Operator.TRIP_COUNT)
+
+    def test_vendor_dimensions_pass_every_stage(self):
+        for dimension in TRIP_DIMENSIONS:
+            for pickup in (True, False):
+                with self.subTest(dimension=dimension, pickup=pickup):
+                    plan = self.composer.compose(self._trip_grounding(dimension, pickup=pickup))
+                    report = self._validate(plan)
+                    self.assertTrue(report.ok, report.errors)
+                    compiled = compile_plan(plan)
+                    self.assertEqual(compiled.steps[-1].tool_name, "get_trip_count")
+                    self.assertEqual(compiled.steps[-1].arguments["dimension"], dimension)
+                    result = execute_plan(compiled, self.tool_executor)
+                    self.assertEqual(result.status, STATUS_OK, result.error)
+
+    def test_dayofweek_is_rejected_at_mapping(self):
+        """factor로는 합법이지만 이 Tool은 받지 않는 값. Tool 호출 전에 막는다."""
+        with self.assertRaises(CompositionError) as caught:
+            self.composer.compose(self._trip_grounding("dayofweek", pickup=True))
+        self.assertEqual(caught.exception.code, "INVALID_PARAM_VALUE")
+        self.assertEqual(caught.exception.context,
+                         {"operator": Operator.TRIP_COUNT, "param": "dimension"})
+
+    def test_values_outside_every_enum_are_rejected_at_mapping(self):
+        """grounding parse를 거치지 않고 들어온 값도 operator enum이 막는다."""
+        for value in ("week", "banana"):
+            with self.subTest(value=value):
+                grounding = self._trip_grounding("sigungu", pickup=True)
+                grounding.factors["dimension"] = value
+                with self.assertRaises(CompositionError) as caught:
+                    self.composer.compose(grounding)
+                self.assertEqual(caught.exception.code, "INVALID_PARAM_VALUE")
+
+    def test_grounding_parse_rejects_values_outside_the_factor_range_first(self):
+        for value in ("week", "banana"):
+            with self.subTest(value=value):
+                with self.assertRaises(PlannerError) as caught:
+                    self._trip_grounding(value, pickup=True)
+                self.assertEqual(caught.exception.code, "INVALID_FACTOR")
+
+    def test_g4_rejects_hand_edited_values(self):
+        for value in ("dayofweek", "week", "banana"):
+            with self.subTest(value=value):
+                plan = copy.deepcopy(self.composer.compose(
+                    self._trip_grounding("sigungu", pickup=True)))
+                self._trip_step(plan).params["dimension"] = value
+                errors = [e for e in self._validate(plan).errors
+                          if e["rule"] == Rule.EXECUTABILITY
+                          and e["context"].get("param") == "dimension"]
+                self.assertEqual(len(errors), 1)
+
+    def test_static_enum_and_conditional_contract_stay_separate(self):
+        trip = get_operator(Operator.TRIP_COUNT)
+        self.assertEqual(trip.input_constraints, ())
+        self.assertEqual(trip.contract_violations({"dimension": "h3"}, ()), ())
+        metric = get_operator(Operator.OPERATION_METRIC)
+        # OPERATION_METRIC의 dayofweek는 enum 안이고 area도 필요 없다.
+        self.assertIn("dayofweek", metric.allowed_values("dimension"))
+        self.assertEqual(metric.contract_violations({"dimension": "dayofweek"}, ()), ())
+        # TRIP_COUNT의 dayofweek는 enum 밖이다. 조건부 계약이 아니라 enum이 막는다.
+        self.assertNotIn("dayofweek", trip.allowed_values("dimension"))
 
 
 class RegressionTest(unittest.TestCase):

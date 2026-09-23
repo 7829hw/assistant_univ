@@ -380,7 +380,12 @@ _SPECS: tuple[OperatorSpec, ...] = (
             allowed=frozenset({(CoreConcept.AMOUNT, Subtype.TRIP_COUNT)}),
         ),
         params=frozenset({"date", "time", "dimension", "order", "limit"}),
-        param_enums={"order": frozenset({"top", "bottom"})},
+        # vendor schema get_trip_count.dimension. 공간 기준만 받고 dayofweek는 없다.
+        # scope_pickup/scope_dropoff 유무에 따른 조건은 schema에 없다.
+        param_enums={
+            "dimension": frozenset({"h3", "sido", "sigungu", "emd"}),
+            "order": frozenset({"top", "bottom"}),
+        },
     ),
     OperatorSpec(
         name=Operator.TRIP_METRIC,
