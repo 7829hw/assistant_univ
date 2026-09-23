@@ -103,10 +103,14 @@ class CorpusRegistryTest(unittest.TestCase):
         self.assertEqual(roles["evaluation/paraphrases.yaml"], "development")
         self.assertEqual(roles["evaluation/paraphrases_holdout.yaml"], "development")
         self.assertEqual(set(roles.values()) - {"development", "fresh_holdout"}, set())
+        # 결과를 본 factor holdout은 development다. 지금 fresh holdout은 없다.
+        self.assertEqual(roles["evaluation/paraphrases_factor_holdout.yaml"], "development")
 
-    def test_fresh_holdout_is_disjoint_from_every_development_corpus(self):
+    def test_factor_holdout_was_disjoint_from_every_earlier_corpus(self):
+        """쓰기 전에는 fresh였다. 쓴 뒤에는 development지만 다른 corpus와 겹치지 않는다."""
         development = [P.BASE_DIR / e["path"] for e in REGISTRY["corpora"]
-                       if e["role"] == "development"]
+                       if e["role"] == "development"
+                       and P.BASE_DIR / e["path"] != FACTOR_HOLDOUT]
         for path in development:
             with self.subTest(development=path.name):
                 self.assertEqual(P.corpus_overlap(path, FACTOR_HOLDOUT),
