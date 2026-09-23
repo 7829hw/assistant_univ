@@ -656,8 +656,36 @@ class CategoryV2Test(unittest.TestCase):
              "source": "user", "value": "법인"}] + CONCEPTS)
         row = self._one(REVENUE_ITEM | {"expected_tool_args": {"taxi_type": "corporate"}},
                         [content])
-        self.assertEqual(row["final_category"], "taxi_type_as_concept")
+        # factor를 모르는 것이 아니라 불필요한 개념을 억제하지 못한 것이다.
+        self.assertEqual(row["final_category"], "correct_factor_plus_spurious_concept")
         self.assertEqual(row["initial_taxi_type_factor"], "corporate")
+        self.assertIn("taxi_type_as_concept", row["initial_issues"])
+        self.assertIn("correct_factor_plus_spurious_concept", row["initial_issues"])
+
+    def test_concept_instead_of_factor(self):
+        """T0가 b24에서 factor 대신 OBJECT/private를 만든 실패."""
+        content = grounding({"bucket": "month", "rollup": "max"}, CONCEPTS + [
+            {"id": "t", "concept": "OBJECT", "subtype": "private", "role": "COND",
+             "source": "user", "value": "개인택시"}])
+        row = self._one(MONTH_ITEM | {"expected_tool_args": {"taxi_type": "private"}},
+                        [content])
+        self.assertEqual(row["final_category"], "taxi_type_as_concept")
+        self.assertNotIn("correct_factor_plus_spurious_concept", row["initial_issues"])
+
+    def test_wrong_factor_value_plus_concept_is_not_counted_as_correct_factor(self):
+        content = grounding({"taxi_type": "private"}, [
+            {"id": "t", "concept": "OBJECT", "subtype": "corporate", "role": "COND",
+             "source": "user", "value": "법인"}] + CONCEPTS)
+        row = self._one(REVENUE_ITEM | {"expected_tool_args": {"taxi_type": "corporate"}},
+                        [content])
+        self.assertEqual(row["final_category"], "taxi_type_as_concept")
+
+    def test_object_node_named_by_the_taxi_word_counts(self):
+        """subtype 이름이 달라도 개인·법인 택시를 가리키는 OBJECT node는 같은 실패다."""
+        content = grounding({}, [
+            {"id": "t", "concept": "OBJECT", "subtype": "taxi", "role": "COND",
+             "source": "user", "value": "법인택시"}] + CONCEPTS)
+        row = self._one(REVENUE_ITEM, [content])
         self.assertIn("taxi_type_as_concept", row["initial_issues"])
 
     def test_unsupported_outcomes(self):
@@ -736,3 +764,57 @@ class SchemaDefaultTest(unittest.TestCase):
         self.assertEqual(result["scoring"], A.SCORING_VERSION)
         self.assertEqual(result["by_arm"]["A"]["strict_correct"], 1)
         self.assertEqual(observed["scoring"], "as_observed")
+
+
+class TaxiWordingVariantTest(unittest.TestCase):
+    """0ccabc3 문구를 조각별로 뺀 변형이 정말 그 조각만 다른지."""
+
+    WRONG_LITERALS = ("OBJECT/corporate", "OBJECT/taxi_type", "OBJECT/private")
+
+    def _meaning_block(self, prompt):
+        start = prompt.find("- taxi_type:", prompt.find("[조건이 뜻하는 것]"))
+        return prompt[start:prompt.find("\n- time", start)]
+
+    def test_hashes_are_pinned_and_deterministic(self):
+        for name in ("T1", "T2"):
+            with self.subTest(variant=name):
+                first, second = A.build_variant(name), A.build_variant(name)
+                self.assertEqual(first.sha256, A.PINNED_SHA256[name])
+                self.assertEqual(first.prompt, second.prompt)
+                self.assertEqual(first.repair_sha256, A.PINNED_REPAIR_SHA256[name])
+
+    def test_variants_differ_only_in_the_taxi_type_meaning(self):
+        base = A.build_variant("D_PRE").prompt
+        block = self._meaning_block(base)
+        for name in ("T0", "T1", "T2"):
+            with self.subTest(variant=name):
+                prompt = A.build_variant(name).prompt
+                mine = self._meaning_block(prompt)
+                self.assertEqual(prompt.replace(mine, block), base)
+
+    def test_t1_drops_only_the_wrong_literals(self):
+        t0 = self._meaning_block(A.build_variant("T0").prompt)
+        t1 = self._meaning_block(A.build_variant("T1").prompt)
+        for literal in self.WRONG_LITERALS:
+            self.assertNotIn(literal, A.build_variant("T1").prompt)
+        self.assertIn("개념이 아니다", t1)
+        self.assertIn("taxi_type=corporate", t1)
+        self.assertEqual(t0.replace(" (OBJECT/corporate, OBJECT/taxi_type으로 적지 않는다)", ""), t1)
+
+    def test_t2_states_only_where_and_what_taxi_type_is(self):
+        t2 = self._meaning_block(A.build_variant("T2").prompt)
+        for word in ("개념", "조건", "node", "OBJECT", "LOCATION", "od_role", "관계", "속성"):
+            with self.subTest(word=word):
+                self.assertNotIn(word, t2)
+        self.assertIn("factors의 taxi_type", t2)
+        self.assertIn("private", t2)
+        self.assertIn("corporate", t2)
+        for literal in self.WRONG_LITERALS:
+            self.assertNotIn(literal, A.build_variant("T2").prompt)
+
+    def test_building_new_variants_leaves_production_untouched(self):
+        before = GeoFlowPlanner(client=A._StubClient()).system_prompt()
+        for name in ("T1", "T2"):
+            A.build_variant(name)
+        self.assertEqual(GeoFlowPlanner(client=A._StubClient()).system_prompt(), before)
+        self.assertEqual(hashlib.sha256(before.encode()).hexdigest(), A.PINNED_SHA256["T0"])

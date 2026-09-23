@@ -270,14 +270,39 @@ PINNED_SHA256 = {
     "C": "a4db7f29955beeb7e83d3ec454b3d58b4024b80a9093a7184126cd2fb2489228",
     "D_PRE": "64bbceb4e171085f38de782ceb413b3ee814c9df8c7f9576479a9324e123d45d",
     "T0": "f268b2b28feb8b29211a0128798f9bb89d08a491184eaa3df9675cb7e139a02e",
+    "T1": "71dcbaf681fcd8c6bc58a9d203f625a7f8b797964ca3a90979b7f49317dde64a",
+    "T2": "3523abc587d303e48c0ba4812c2d507eda9e2077668f9cf249ae74ec7ad8e355",
 }
 PINNED_REPAIR_SHA256 = {
     "C": "a5d9baa0bbbf73d1adb43f6a389dd8cef024bfee78c51d9fcc3ade518ed12850",
     "D_PRE": "5af4c744a448f008fa9e1fa92848f4b08e24870bcd156852e4c71369e80e67c4",
     "T0": "5af4c744a448f008fa9e1fa92848f4b08e24870bcd156852e4c71369e80e67c4",
+    "T1": "5af4c744a448f008fa9e1fa92848f4b08e24870bcd156852e4c71369e80e67c4",
+    "T2": "5af4c744a448f008fa9e1fa92848f4b08e24870bcd156852e4c71369e80e67c4",
 }
 
 VARIANT_DIR = RESULT_DIR / "variants"
+
+#: 0ccabc3 문구를 조각으로 나눈 것. T1/T2는 이 조각을 빼거나 바꾼다.
+#:   (a) 일반 분류    "…조건이며 개념이 아니다."
+#:   (b) 금지 지시    "…별도 개념 node로 만들지 않고 이 조건으로만 적는다."
+#:   (c) 긍정 예시    "예: … → EVENT/operation + AMOUNT/hours + taxi_type=corporate"
+#:   (d) 부정 literal "(OBJECT/corporate, OBJECT/taxi_type으로 적지 않는다)"
+#: T1은 (d)만 뺀다. 틀린 형태를 글자 그대로 보여 준 것의 효과를 본다.
+TAXI_MEANING_T1 = (
+    '택시 영업 유형을 제한하는 조건이며 개념이 아니다. "개인택시", "법인택시"는\n'
+    "    별도 개념 node로 만들지 않고 이 조건으로만 적는다.\n"
+    '    예: "법인택시의 평균 운행시간" → EVENT/operation + AMOUNT/hours +\n'
+    "    taxi_type=corporate"
+)
+#: T2는 (a)(b)(d)를 모두 빼고 taxi_type이 어디에 무엇으로 적히는지만 말한다.
+#: "개념" "조건" 같은 일반 분류어를 쓰지 않아 다른 구조로 번지지 않게 한다.
+#: 예시 질문은 T0와 같게 두어 예시 선택의 차이를 섞지 않는다.
+TAXI_MEANING_T2 = (
+    "개인택시·법인택시 여부는 factors의 taxi_type에 적는다. 개인택시는 private,\n"
+    "    법인택시는 corporate다.\n"
+    '    예: "법인택시의 평균 운행시간" → "factors": {"taxi_type": "corporate"}'
+)
 
 
 def _c_variant():
@@ -298,6 +323,10 @@ _BUILDERS = {
     "D_PRE": (lambda: {"prompt": _prompt_with_meaning("taxi_type", "택시 유형 조건.")},
               "50fae72 = 0ccabc3~1 production (taxi_type 구분 이전)"),
     "T0": (lambda: {"prompt": _production_prompt()}, "0ccabc3 production (taxi_type 구분)"),
+    "T1": (lambda: {"prompt": _prompt_with_meaning("taxi_type", TAXI_MEANING_T1)},
+           "T0에서 부정 literal 예시만 뺌"),
+    "T2": (lambda: {"prompt": _prompt_with_meaning("taxi_type", TAXI_MEANING_T2)},
+           "taxi_type 위치와 값만 긍정문으로"),
     # 고정하지 않는다. 그때그때의 production을 뜻한다.
     "PRODUCTION": (lambda: {"prompt": _production_prompt()}, "실행 시점의 production"),
 }
@@ -443,6 +472,28 @@ _VALUELESS_CODES = frozenset({"VALUELESS_CONCEPT", "MISSING_CONCEPT_VALUE", "INV
 _RELATION_CODES = frozenset({"AMBIGUOUS_LOCATION_RELATION", "MISSING_RELATION_QUALIFIER"})
 
 
+_TAXI_WORDS_KO = ("개인", "법인", "택시")
+
+
+def _is_taxi_concept(concept):
+    """택시 유형에서 나온 개념 node인가. OBJECT/private, OBJECT/taxi_type 등."""
+    if concept.get("subtype") in _TAXI_SUBTYPES:
+        return True
+    if concept.get("concept") == "OBJECT":
+        surface = f"{concept.get('value')} {concept.get('text')}"
+        return any(word in surface for word in _TAXI_WORDS_KO)
+    return False
+
+
+def _correct_taxi_factor(record, factors):
+    """taxi_type factor를 맞게 적었는가. 기대값이 없으면 적었는지만 본다."""
+    value = factors.get("taxi_type")
+    if not value:
+        return False
+    expected = record.get("expected_tool_args") or {}
+    return "taxi_type" not in expected or expected["taxi_type"] == value
+
+
 def _initial_payload(record):
     try:
         payload = parse_planner_json(record.get("raw_text") or "")
@@ -474,8 +525,12 @@ def initial_issues(record):
             if not isinstance(concept, dict):
                 continue
             subtype = concept.get("subtype")
-            if subtype in _TAXI_SUBTYPES:
+            if _is_taxi_concept(concept):
                 issues.append("taxi_type_as_concept")
+                # factor는 맞게 적고 개념 node를 덧붙인 경우. factor를 모르는 것이
+                # 아니라 불필요한 개념을 억제하지 못한 것이다.
+                if _correct_taxi_factor(record, factors):
+                    issues.append("correct_factor_plus_spurious_concept")
                 continue
             try:
                 core = CoreConcept(concept.get("concept"))
@@ -511,8 +566,12 @@ def final_category(record):
     status = record.get("status") or ""
     detail = record.get("error") or ""
     if status == "INVALID_SUBTYPE":
-        return ("taxi_type_as_concept" if any(word in detail for word in _TAXI_WORDS)
-                else "invalid_subtype")
+        issues = initial_issues(record)
+        if "correct_factor_plus_spurious_concept" in issues:
+            return "correct_factor_plus_spurious_concept"
+        if "taxi_type_as_concept" in issues or any(word in detail for word in _TAXI_WORDS):
+            return "taxi_type_as_concept"
+        return "invalid_subtype"
     if status == "INVALID_FACTOR":
         rollup_unit = any(f"'{unit}'" in detail for unit in _TIME_UNITS)
         return "bucket_as_rollup" if "rollup" in detail and rollup_unit else "invalid_factor"
@@ -1006,7 +1065,9 @@ def _percentile(values, q):
 
 #: 분석 시점의 채점 규칙. 관측 파일에는 관측 당시의 채점이 들어 있다.
 #: tool_args_schema_defaults_v1: schema 기본값과 같은 인자는 생략한 것과 같게 본다.
-SCORING_VERSION = "tool_args_schema_defaults_v1"
+#: v2: 택시 유형 개념 node 중 factor는 맞게 적은 경우를
+#:     correct_factor_plus_spurious_concept로 따로 센다. strict 판정은 같다.
+SCORING_VERSION = "tool_args_schema_defaults_v2"
 
 
 def rescore(record):
@@ -1019,6 +1080,7 @@ def rescore(record):
             record.get("expected_tool_args") or {}, record["final_tool_args"],
             tool_defaults(record.get("final_tool")),
         )
+    record["initial_issues"] = initial_issues(record)
     record["final_category"] = final_category(record)
     record["strict_correct"] = record["final_category"] in ("correct", "unsupported_correct")
     return record
@@ -1066,8 +1128,14 @@ def analyze_intents(rows, arm_a, arm_b, *, cohort=None, metric="strict_correct",
             "taxi_type_rows": len(taxi),
             "taxi_type_factor_initial": sum(1 for row in taxi
                                             if row.get("initial_taxi_type_factor")),
+            "taxi_type_factor_correct_initial": sum(
+                1 for row in taxi
+                if row.get("initial_taxi_type_factor") == row["expected_tool_args"]["taxi_type"]),
             "taxi_type_as_concept_initial": sum(
                 1 for row in taxi if "taxi_type_as_concept" in (row.get("initial_issues") or [])),
+            "spurious_concept_with_correct_factor": sum(
+                1 for row in taxi
+                if "correct_factor_plus_spurious_concept" in (row.get("initial_issues") or [])),
         }
 
     return {
@@ -1136,9 +1204,10 @@ def print_intent_report(result, out=sys.stdout):
         w(f"      최종: {stats['final_categories']}")
         w(f"      첫 grounding 문제: {stats['initial_issues']}")
         if stats["taxi_type_rows"]:
-            w(f"      taxi_type 질의 {stats['taxi_type_rows']}개: factor로 적음 "
-              f"{stats['taxi_type_factor_initial']}, 개념으로 적음 "
-              f"{stats['taxi_type_as_concept_initial']}")
+            w(f"      taxi_type 질의 {stats['taxi_type_rows']}개: factor 맞게 적음 "
+              f"{stats['taxi_type_factor_correct_initial']}, 개념 node "
+              f"{stats['taxi_type_as_concept_initial']} (그중 factor도 맞게 적은 것 "
+              f"{stats['spurious_concept_with_correct_factor']})")
 
 
 # -- 출력 ------------------------------------------------------------------
