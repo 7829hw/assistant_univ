@@ -53,13 +53,15 @@ from pathlib import Path
 
 import httpx
 
+import aggregation_plan
+import aggregation_prompt
 import evaluate_planner as E
 import paraphrase_corpus
 from paraphrase_corpus import final_tool_call, tool_arg_mismatches, tool_defaults
 from geoflow import factors as F
 from geoflow import planner as planner_module
 from geoflow.composer import MacroComposer
-from geoflow.errors import GeoFlowError
+from geoflow.errors import GeoFlowError, PlannerError
 from geoflow.grounding import OD_ROLE, parse_grounding
 from geoflow.macros import MacroLibrary
 from geoflow.planner import GeoFlowPlanner, parse_planner_json
@@ -233,6 +235,9 @@ class PromptVariant:
     #: factor 재질의의 {allowed} 렌더링. "semantics"는 현재(의미 포함),
     #: "values"는 87ca968(허용값만).
     allowed_renderer: str = "semantics"
+    #: 모델 출력을 제품 grounding 모양으로 바꾸는 평가 전용 변환. None이면 그대로다.
+    #: "aggregation_plan"은 H2의 구조화 집계를 flat factor로 내린다.
+    grounding_adapter: str | None = None
 
     @property
     def sha256(self):
@@ -277,6 +282,9 @@ PINNED_SHA256 = {
     "F10": "64bbceb4e171085f38de782ceb413b3ee814c9df8c7f9576479a9324e123d45d",
     "F01": "a4db7f29955beeb7e83d3ec454b3d58b4024b80a9093a7184126cd2fb2489228",
     "F11": "64bbceb4e171085f38de782ceb413b3ee814c9df8c7f9576479a9324e123d45d",
+    # 두 단계 집계 grounding. H0 = 이 실험 시점의 production, H2 = 집계 계약만 바꿈.
+    "H0_AGG": "64bbceb4e171085f38de782ceb413b3ee814c9df8c7f9576479a9324e123d45d",
+    "H2_AGG": "04d7baed2220c1d5dc748b2b9593b15e28921ef1c0ff2411feeb30ab307224bc",
 }
 PINNED_REPAIR_SHA256 = {
     "C": "a5d9baa0bbbf73d1adb43f6a389dd8cef024bfee78c51d9fcc3ade518ed12850",
@@ -288,6 +296,8 @@ PINNED_REPAIR_SHA256 = {
     "F10": "a5d9baa0bbbf73d1adb43f6a389dd8cef024bfee78c51d9fcc3ade518ed12850",
     "F01": "5af4c744a448f008fa9e1fa92848f4b08e24870bcd156852e4c71369e80e67c4",
     "F11": "5af4c744a448f008fa9e1fa92848f4b08e24870bcd156852e4c71369e80e67c4",
+    "H0_AGG": "5af4c744a448f008fa9e1fa92848f4b08e24870bcd156852e4c71369e80e67c4",
+    "H2_AGG": "5af4c744a448f008fa9e1fa92848f4b08e24870bcd156852e4c71369e80e67c4",
 }
 
 VARIANT_DIR = RESULT_DIR / "variants"
@@ -380,6 +390,12 @@ _BUILDERS = {
     "F10": (lambda: _factorial(True, False), "S1 R0 = system 의미 절만"),
     "F01": (lambda: _factorial(False, True), "S0 R1 = 재질의 의미만"),
     "F11": (lambda: _factorial(True, True), "S1 R1 = 50fae72의 factor 계약"),
+    "H0_AGG": (lambda: {"prompt": _production_prompt()},
+               "H0: flat bucket·aggregation·rollup (production)"),
+    # 재질의 문구는 H0와 같다. H2 전용 재질의는 만들지 않는다.
+    "H2_AGG": (lambda: {"prompt": aggregation_prompt.h2_prompt(_production_prompt()),
+                        "grounding_adapter": "aggregation_plan"},
+               "H2: aggregation_plan(bucket.reducer, result.reducer)"),
 }
 
 
@@ -422,6 +438,18 @@ class FixedPromptPlanner(GeoFlowPlanner):
 
     def system_prompt(self):
         return self._fixed_prompt
+
+    def _validate_payload(self, payload, text, question):
+        """H2는 구조화 집계를 flat factor로 내린 뒤 제품 검증을 그대로 탄다."""
+        if self.variant.grounding_adapter == "aggregation_plan":
+            try:
+                payload = aggregation_plan.lower_payload(payload)
+            except aggregation_plan.PlanError as error:
+                raise PlannerError(
+                    f"집계 계획을 읽을 수 없습니다: {error.detail}",
+                    code=error.code, context={"raw_text": text},
+                ) from error
+        return super()._validate_payload(payload, text, question)
 
     def variant_repair_values(self, decision):
         """재질의 문구의 자리 채움 중 변형이 다르게 정하는 것."""
