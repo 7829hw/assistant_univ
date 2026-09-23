@@ -82,6 +82,22 @@ def load_corpus_items(path=CORPUS_FILE, cohorts=None):
     return corpus_items(load_corpus(path, parents), parents, cohorts=cohorts)
 
 
+#: factor 단계와 관련된 Tool 인자. 이 중 하나라도 값을 기대하는 intent가
+#: factor factorial의 대상이다. 결과를 보기 전에 label만으로 고른다.
+FACTOR_KEYS = ("aggregation", "bucket", "rollup", "date", "time", "dimension",
+               "order", "limit")
+
+
+def is_factor_item(item):
+    args = item.get("expected_tool_args") or {}
+    return any(args.get(key) is not None for key in FACTOR_KEYS)
+
+
+def factor_subset(items):
+    """factor 관련 item만. 순서는 입력 그대로다."""
+    return [item for item in items if is_factor_item(item)]
+
+
 def corpus_overlap(first, second):
     """두 corpus가 겹치는 intent, 부모 질의, 질문. 선택용과 검증용은 비어야 한다."""
     def facts(path):

@@ -272,6 +272,11 @@ PINNED_SHA256 = {
     "T0": "f268b2b28feb8b29211a0128798f9bb89d08a491184eaa3df9675cb7e139a02e",
     "T1": "71dcbaf681fcd8c6bc58a9d203f625a7f8b797964ca3a90979b7f49317dde64a",
     "T2": "3523abc587d303e48c0ba4812c2d507eda9e2077668f9cf249ae74ec7ad8e355",
+    # 50fae72 factorial. S = system 의미 절, R = factor 재질의 의미.
+    "F00": "a4db7f29955beeb7e83d3ec454b3d58b4024b80a9093a7184126cd2fb2489228",
+    "F10": "64bbceb4e171085f38de782ceb413b3ee814c9df8c7f9576479a9324e123d45d",
+    "F01": "a4db7f29955beeb7e83d3ec454b3d58b4024b80a9093a7184126cd2fb2489228",
+    "F11": "64bbceb4e171085f38de782ceb413b3ee814c9df8c7f9576479a9324e123d45d",
 }
 PINNED_REPAIR_SHA256 = {
     "C": "a5d9baa0bbbf73d1adb43f6a389dd8cef024bfee78c51d9fcc3ade518ed12850",
@@ -279,6 +284,10 @@ PINNED_REPAIR_SHA256 = {
     "T0": "5af4c744a448f008fa9e1fa92848f4b08e24870bcd156852e4c71369e80e67c4",
     "T1": "5af4c744a448f008fa9e1fa92848f4b08e24870bcd156852e4c71369e80e67c4",
     "T2": "5af4c744a448f008fa9e1fa92848f4b08e24870bcd156852e4c71369e80e67c4",
+    "F00": "a5d9baa0bbbf73d1adb43f6a389dd8cef024bfee78c51d9fcc3ade518ed12850",
+    "F10": "a5d9baa0bbbf73d1adb43f6a389dd8cef024bfee78c51d9fcc3ade518ed12850",
+    "F01": "5af4c744a448f008fa9e1fa92848f4b08e24870bcd156852e4c71369e80e67c4",
+    "F11": "5af4c744a448f008fa9e1fa92848f4b08e24870bcd156852e4c71369e80e67c4",
 }
 
 VARIANT_DIR = RESULT_DIR / "variants"
@@ -312,6 +321,35 @@ TAXI_MEANING_T2 = (
 )
 
 
+def _d_pre_prompt():
+    """50fae72의 system prompt. production이 바뀌어도 이 계약을 가리킨다."""
+    return _prompt_with_meaning("taxi_type", "택시 유형 조건.")
+
+
+def _repair_r0():
+    """87ca968의 factor 재질의: 옛 문구 + 허용값만 렌더링."""
+    template = (VARIANT_DIR / "87ca968_factor_repair_instruction.txt").read_text(
+        encoding="utf-8",
+    )
+    return {"repair_templates": {RepairKind.FACTOR_COMPLETION: template},
+            "allowed_renderer": "values"}
+
+
+def _factorial(system_semantics, repair_semantics):
+    """50fae72가 한 번에 바꾼 두 축을 따로 켠다.
+
+    S: system prompt의 [조건이 뜻하는 것] 절. R: factor 재질의에 의미를 싣는 것.
+    나머지 계약(기본 prompt, 다른 재질의, taxi_type 정의)은 네 arm이 같다.
+    """
+    prompt = _d_pre_prompt()
+    if not system_semantics:
+        prompt = E._without_semantics(prompt)
+    contract = {"prompt": prompt}
+    if not repair_semantics:
+        contract.update(_repair_r0())
+    return contract
+
+
 def _c_variant():
     """87ca968: factor 의미 절이 없고, 재질의는 허용값만 보여 준다."""
     template = (VARIANT_DIR / "87ca968_factor_repair_instruction.txt").read_text(
@@ -338,6 +376,10 @@ _BUILDERS = {
            "taxi_type 위치와 값만 긍정문으로"),
     # 고정하지 않는다. 그때그때의 production을 뜻한다.
     "PRODUCTION": (lambda: {"prompt": _production_prompt()}, "실행 시점의 production"),
+    "F00": (lambda: _factorial(False, False), "S0 R0 = 87ca968의 factor 계약"),
+    "F10": (lambda: _factorial(True, False), "S1 R0 = system 의미 절만"),
+    "F01": (lambda: _factorial(False, True), "S0 R1 = 재질의 의미만"),
+    "F11": (lambda: _factorial(True, True), "S1 R1 = 50fae72의 factor 계약"),
 }
 
 
@@ -1076,7 +1118,9 @@ def _percentile(values, q):
 #: tool_args_schema_defaults_v1: schema 기본값과 같은 인자는 생략한 것과 같게 본다.
 #: v2: 택시 유형 개념 node 중 factor는 맞게 적은 경우를
 #:     correct_factor_plus_spurious_concept로 따로 센다. strict 판정은 같다.
-SCORING_VERSION = "tool_args_schema_defaults_v2"
+#: v3: factor factorial용 단계별 지표(첫 응답·최종의 factor 실패)를 더한다.
+#:     strict 판정은 같다.
+SCORING_VERSION = "tool_args_schema_defaults_v3"
 
 
 def rescore(record):
@@ -1199,6 +1243,280 @@ def analyze_intents(rows, arm_a, arm_b, *, cohort=None, metric="strict_correct",
         "note": ("paraphrase는 같은 intent 안에서 독립이 아니다. 판정은 intent 층의 "
                  "승패로 하고, paraphrase 층 수치는 관측 규모를 보여 줄 뿐이다."),
     }
+
+
+# -- factor 단계 지표와 2x2 factorial --------------------------------------
+#
+# 50fae72는 system prompt의 의미 절(S)과 factor 재질의의 의미(R)를 한 번에
+# 바꿨다. 두 축을 따로 켠 네 arm으로 각 변경의 효과를 가른다. 격리 상태에서는
+# 같은 system prompt + 같은 질문이면 첫 응답이 글자까지 같으므로, S가 같은 두
+# arm(F00/F01, F10/F11)은 첫 응답을 공유하고 재질의만 다르다. 그래서 R의 효과는
+# 같은 재질의 대상 위에서 깨끗하게 잰다.
+
+FACTORIAL_ARMS = {"F00": (0, 0), "F10": (1, 0), "F01": (0, 1), "F11": (1, 1)}
+
+#: grounding factor 이름과 Tool 인자 이름이 같은 것. 첫 응답을 기대 인자와 바로
+#: 비교할 수 있다.
+_FACTOR_ARG_KEYS = paraphrase_corpus.FACTOR_KEYS + ("taxi_type",)
+
+
+def _factor_error(key, got):
+    if key == "rollup":
+        return "missing_rollup" if got is None else "wrong_rollup_value"
+    if key == "dimension":
+        return "missing_dimension" if got is None else "invalid_dimension"
+    if key == "aggregation":
+        return "wrong_aggregation"
+    if key == "taxi_type":
+        return "taxi_type_missing" if got is None else "wrong_tool_args"
+    return "wrong_tool_args"
+
+
+def initial_factor_errors(record):
+    """재질의 전 첫 grounding의 factor가 기대와 어떻게 다른가."""
+    payload = _initial_payload(record) or {}
+    if payload.get("unsupported"):
+        return []
+    factors = payload.get("factors") if isinstance(payload.get("factors"), dict) else {}
+    expected = {key: value for key, value in (record.get("expected_tool_args") or {}).items()
+                if key in _FACTOR_ARG_KEYS}
+    tool = record.get("final_tool") or _expected_tool(record)
+    errors = [issue for issue in record.get("initial_issues") or []
+              if issue in ("missing_rollup", "bucket_as_rollup", "rollup_without_bucket")]
+    for key, _, got in tool_arg_mismatches(expected, factors, tool_defaults(tool)):
+        errors.append(_factor_error(key, got))
+    return list(dict.fromkeys(errors))
+
+
+def final_factor_errors(record):
+    """최종 결과의 factor 실패. 정답이면 비어 있다."""
+    if record.get("strict_correct"):
+        return []
+    errors = []
+    category = record.get("final_category")
+    if category in ("missing_rollup", "bucket_as_rollup", "rollup_without_bucket"):
+        errors.append(category)
+    detail = record.get("error") or ""
+    if record.get("status") in ("INVALID_FACTOR", "INVALID_PARAM_VALUE") and "dimension" in detail:
+        errors.append("invalid_dimension")
+    for key, _, got in record.get("arg_mismatches") or []:
+        errors.append(_factor_error(key, got))
+    return list(dict.fromkeys(errors))
+
+
+def _expected_tool(record):
+    from geoflow.operator_registry import get_operator
+    operators = record.get("expected_operators") or []
+    return get_operator(operators[-1]).tool_name if operators else None
+
+
+def _factor_repair(row):
+    return row.get("repair_attempted") and row.get("repair_kind") == "factor_completion"
+
+
+def factorial_stats(rows, arm):
+    mine = [row for row in rows if row["arm"] == arm]
+    repair = [row for row in mine if _factor_repair(row)]
+    return {
+        "observations": len(mine),
+        "strict_correct": sum(bool(row["strict_correct"]) for row in mine),
+        # 재질의 없이 처음부터 맞힌 것. system 의미 절의 효과는 여기서 본다.
+        "correct_without_repair": sum(1 for row in mine
+                                      if row["strict_correct"] and not row.get("repair_attempted")),
+        "initial_factor_clean": sum(1 for row in mine if not row["initial_factor_errors"]),
+        "initial_factor_errors": dict(Counter(e for row in mine
+                                              for e in row["initial_factor_errors"])),
+        "final_factor_errors": dict(Counter(e for row in mine
+                                            for e in row["final_factor_errors"])),
+        "final_categories": dict(Counter(row["final_category"] for row in mine)),
+        "factor_repair_needed": len(repair),
+        "factor_repair_succeeded": sum(bool(row.get("repair_succeeded")) for row in repair),
+        "factor_repair_final_correct": sum(bool(row["strict_correct"]) for row in repair),
+        "factor_repair_errors": dict(Counter(str(row.get("repair_error")) for row in repair
+                                             if not row.get("repair_succeeded"))),
+        "llm_calls": sum(row.get("planner_calls") or 0 for row in mine),
+    }
+
+
+def _shared_initial(rows, arm_a, arm_b):
+    """두 arm의 첫 응답이 같은 관측 수. S가 같으면 전부 같아야 한다."""
+    matched = pairs(rows, arm_a, arm_b)
+    return sum(1 for _, a, b in matched if a.get("raw_text") == b.get("raw_text")), len(matched)
+
+
+def _repair_subset(rows, base, treated):
+    """base arm에서 factor 재질의가 필요했던 paraphrase 위에서 두 arm을 비교한다.
+
+    S가 같아 첫 응답이 같으면 재질의 대상도 같다. 재질의가 필요 없어진 경우는
+    이 비교에 넣지 않는다. 그것은 R이 아니라 S의 효과다.
+    """
+    needed = {row["id"] for row in rows if row["arm"] == base and _factor_repair(row)}
+    result = {"needed": len(needed)}
+    for arm in (base, treated):
+        mine = [row for row in rows if row["arm"] == arm and row["id"] in needed]
+        result[arm] = {
+            "attempted": sum(1 for row in mine if _factor_repair(row)),
+            "succeeded": sum(bool(row.get("repair_succeeded")) for row in mine),
+            "final_correct": sum(bool(row["strict_correct"]) for row in mine),
+            "repair_errors": dict(Counter(str(row.get("repair_error")) for row in mine
+                                          if _factor_repair(row) and not row.get("repair_succeeded"))),
+        }
+    return result
+
+
+def _with_factor_errors(rows, rescored=True):
+    rows = [rescore(row) for row in rows] if rescored else [dict(row) for row in rows]
+    for row in rows:
+        row["initial_factor_errors"] = initial_factor_errors(row)
+        row["final_factor_errors"] = final_factor_errors(row)
+    return rows
+
+
+def analyze_factorial(rows, arms=None, rescored=True):
+    arms = arms or FACTORIAL_ARMS
+    rows = _with_factor_errors(rows, rescored)
+    by_level = {level: name for name, level in arms.items()}
+    f00, f10, f01, f11 = (by_level[(0, 0)], by_level[(1, 0)], by_level[(0, 1)],
+                          by_level[(1, 1)])
+    stats = {name: factorial_stats(rows, name) for name in (f00, f10, f01, f11)}
+
+    def effect(metric):
+        value = {name: stats[name][metric] for name in stats}
+        return {
+            "S_given_R0": value[f10] - value[f00],
+            "S_given_R1": value[f11] - value[f01],
+            "R_given_S0": value[f01] - value[f00],
+            "R_given_S1": value[f11] - value[f10],
+            "interaction": (value[f11] - value[f10]) - (value[f01] - value[f00]),
+        }
+
+    return {
+        "scoring": SCORING_VERSION if rescored else "as_observed",
+        "arms": {name: list(level) for name, level in arms.items()},
+        "stats": stats,
+        "effects": {metric: effect(metric) for metric in
+                    ("strict_correct", "correct_without_repair", "initial_factor_clean",
+                     "factor_repair_needed", "llm_calls")},
+        "shared_initial": {f"{f00}/{f01}": _shared_initial(rows, f00, f01),
+                           f"{f10}/{f11}": _shared_initial(rows, f10, f11)},
+        "repair_subset": {"S0": _repair_subset(rows, f00, f01),
+                          "S1": _repair_subset(rows, f10, f11)},
+        "intent_level": {
+            f"{a}:{b}": analyze_intents(rows, a, b, rescored=False)["intent_level"]
+            for a, b in ((f00, f10), (f00, f01), (f10, f11), (f01, f11), (f00, f11))
+        },
+        "note": ("paraphrase는 같은 intent 안에서 독립이 아니다. 효과 크기는 관측 수 "
+                 "차이로 보여 주고, 판정은 intent 층 승패와 단계별 지표로 한다."),
+    }
+
+
+# -- 후보 선택과 holdout 판정 (결과 전에 고정) --------------------------------
+#
+# development 결과를 보기 전에 규칙을 코드로 정한다. 같은 정확도라면 LLM이 보는
+# 의미 설명이 적은 계약을 고른다. 크기 순서가 곧 단순함 순서다.
+#   F00 (11336 + 473) < F01 (11336 + 540) < F10 (12595 + 473) < F11 (12595 + 540)
+
+def contract_size(name):
+    variant = build_variant(name)
+    return len(variant.prompt) + len(render_factor_repair(variant))
+
+
+def _repair_rate(stats):
+    needed = stats["factor_repair_needed"]
+    return 1.0 if needed == 0 else stats["factor_repair_succeeded"] / needed
+
+
+def candidate_ranking(result):
+    """좋은 순서로 arm 이름. 앞 기준이 같을 때만 다음 기준을 본다.
+
+    1. strict 정답 (많을수록)
+    2. 첫 응답의 factor 실패 수 (적을수록)
+    3. factor 재질의 성공률 (높을수록)
+    4. LLM 호출 수 (적을수록)
+    5. LLM이 보는 계약 크기 (작을수록) — 단순한 계약 우선
+    """
+    def key(name):
+        stats = result["stats"][name]
+        return (-stats["strict_correct"],
+                sum(stats["initial_factor_errors"].values()),
+                -_repair_rate(stats),
+                stats["llm_calls"],
+                contract_size(name))
+    return sorted(result["stats"], key=key)
+
+
+def holdout_arms(ranking):
+    """holdout에서 비교할 두 arm. 후보와 현재 production(F11)을 맞붙인다.
+
+    후보가 F11이면 다음 순위와 맞붙여, development 우세가 새 의도에서도 유지되는지 본다.
+    """
+    candidate = ranking[0]
+    if candidate == "F11":
+        return candidate, ranking[1]
+    return candidate, "F11"
+
+
+#: 후보별 결정. §15.
+DECISIONS = {
+    "F11": "A: 50fae72 유지",
+    "F10": "B: 재질의 의미 제거",
+    "F01": "C: system 의미 절 제거, 재질의 때만 의미 제공",
+    "F00": "D: 50fae72의 LLM 노출 되돌림 (FactorSpec.meaning은 유지)",
+}
+KEEP_PRODUCTION = "E: current production 유지, 효과 불확실로 기록"
+
+
+def holdout_summary(rows, candidate, other, rescored=True):
+    """holdout 두 arm의 단계별 지표와 intent 층 승패."""
+    rows = _with_factor_errors(rows, rescored)
+    return {
+        "scoring": SCORING_VERSION if rescored else "as_observed",
+        "arms": [candidate, other],
+        "stats": {name: factorial_stats(rows, name) for name in (candidate, other)},
+        "intent_level": analyze_intents(rows, candidate, other, rescored=False)["intent_level"],
+    }
+
+
+def holdout_decision(summary, candidate, other):
+    """holdout 결과로 최종 결정.
+
+    후보를 채택하려면 셋 모두를 만족해야 한다. strict가 비교 arm 이상, intent 층에서
+    진 intent가 이긴 intent보다 많지 않음, 최종 factor 실패가 늘지 않음.
+    후보가 F11이면 "채택"은 현재 상태 유지(A)이고, 못 미치면 E다. 어느 쪽이든
+    production은 그대로다.
+    """
+    mine, theirs = summary["stats"][candidate], summary["stats"][other]
+    level = summary["intent_level"]
+    holds = (mine["strict_correct"] >= theirs["strict_correct"]
+             and len(level[f"{candidate}_better"]) >= len(level[f"{other}_better"])
+             and sum(mine["final_factor_errors"].values())
+             <= sum(theirs["final_factor_errors"].values()))
+    return DECISIONS[candidate] if holds else KEEP_PRODUCTION
+
+
+def print_factorial_report(result, out=sys.stdout):
+    w = lambda text="": print(text, file=out)  # noqa: E731
+    names = list(result["stats"])
+    w(f"== 2x2 factorial  채점={result['scoring']} ==")
+    keys = ("observations", "strict_correct", "correct_without_repair", "initial_factor_clean",
+            "factor_repair_needed", "factor_repair_succeeded", "factor_repair_final_correct",
+            "llm_calls")
+    w(f"  {'':<30}" + "".join(f"{n:>8}" for n in names))
+    for key in keys:
+        w(f"  {key:<30}" + "".join(f"{result['stats'][n][key]:>8}" for n in names))
+    for key in ("initial_factor_errors", "final_factor_errors", "factor_repair_errors"):
+        w(f"  {key}:")
+        for n in names:
+            w(f"      {n}: {result['stats'][n][key]}")
+    w("  효과 (관측 수 차이):")
+    for metric, values in result["effects"].items():
+        w(f"      {metric:<24} " + "  ".join(f"{k}={v:+d}" for k, v in values.items()))
+    w(f"  첫 응답 공유: {result['shared_initial']}")
+    w(f"  재질의 대상 위 비교: {result['repair_subset']}")
+    for pair, level in result["intent_level"].items():
+        a, b = pair.split(":")
+        w(f"  intent {pair}: {a} 우세 {level[f'{a}_better']}, {b} 우세 {level[f'{b}_better']}, "
+          f"같음 {len(level['tied'])}, p={level['sign_test_p']}")
 
 
 def print_intent_report(result, out=sys.stdout):
@@ -1329,13 +1647,24 @@ def cmd_run(args):
     labels = arm_labels([variant.name for variant in variants])
     corpus = None
     if args.corpus:
-        corpus_path = Path(args.corpus)
+        # 쉼표로 여러 corpus를 합칠 수 있다. id가 겹치면 합치지 않는다.
+        paths = [Path(part) for part in args.corpus.split(",") if part]
         cohorts = args.cohorts.split(",") if args.cohorts else None
-        items = paraphrase_corpus.load_corpus_items(corpus_path, cohorts=cohorts)
+        items = []
+        for corpus_path in paths:
+            items += paraphrase_corpus.load_corpus_items(corpus_path, cohorts=cohorts)
+        if len({item["id"] for item in items}) != len(items):
+            raise SystemExit("여러 corpus에 같은 paraphrase id가 있다")
+        if args.factor_subset:
+            items = paraphrase_corpus.factor_subset(items)
         corpus = {
-            "path": str(corpus_path),
-            "sha256": hashlib.sha256(corpus_path.read_bytes()).hexdigest(),
+            "path": ",".join(str(path) for path in paths),
+            "sha256": hashlib.sha256(b"".join(path.read_bytes() for path in paths)).hexdigest(),
+            "files": [{"path": str(path),
+                       "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+                      for path in paths],
             "cohorts": cohorts,
+            "factor_subset": bool(args.factor_subset),
             "intents": sorted({item["intent_id"] for item in items}),
         }
     elif args.queries:
@@ -1392,6 +1721,21 @@ def cmd_run(args):
         print(f"분석: python evaluate_prompt_ab.py analyze-corpus {run_dir} "
               f"--pairs {labels[0]}:{labels[1]}", flush=True)
     print("PROMPT AB DONE", flush=True)
+
+
+def cmd_analyze_factorial(args):
+    meta, rows, report = load_run(args.run_dir)
+    if not report.clean and not args.allow_incomplete:
+        raise SystemExit(f"무결성 문제로 분석하지 않는다: {dataclasses.asdict(report)}")
+    result = analyze_factorial(rows, rescored=not args.as_observed)
+    print_factorial_report(result)
+    path = Path(args.run_dir) / "factorial_summary.json"
+    if path.exists():
+        path = Path(args.run_dir) / f"factorial_summary.{int(time.time())}.json"
+    _write_exclusive(path, {"run_id": meta.get("run_id"),
+                            "integrity": dataclasses.asdict(report) | {"clean": report.clean},
+                            "result": result})
+    return result
 
 
 def cmd_analyze_corpus(args):
@@ -1451,6 +1795,8 @@ def main(argv=None):
     run.add_argument("--queries")
     run.add_argument("--corpus", help="paraphrase corpus. 주면 --queries 대신 쓴다")
     run.add_argument("--cohorts", help="corpus에서 고를 cohort, 쉼표로")
+    run.add_argument("--factor-subset", action="store_true",
+                     help="factor 관련 Tool 인자를 기대하는 intent만 쓴다")
     run.add_argument("--repetitions", type=int, default=5)
     run.add_argument("--label", required=True)
     run.add_argument("--host", default=DEFAULT_HOST)
@@ -1471,6 +1817,11 @@ def main(argv=None):
     corpus.add_argument("--as-observed", action="store_true",
                         help="다시 채점하지 않고 관측 당시의 채점을 쓴다")
     corpus.set_defaults(func=cmd_analyze_corpus)
+    factorial = sub.add_parser("analyze-factorial")
+    factorial.add_argument("run_dir")
+    factorial.add_argument("--allow-incomplete", action="store_true")
+    factorial.add_argument("--as-observed", action="store_true")
+    factorial.set_defaults(func=cmd_analyze_factorial)
     floor = sub.add_parser("floor")
     floor.add_argument("run_dirs", nargs="+")
     floor.set_defaults(func=cmd_floor)
