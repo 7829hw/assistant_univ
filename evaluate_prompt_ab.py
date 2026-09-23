@@ -1111,7 +1111,11 @@ def analyze_intents(rows, arm_a, arm_b, *, cohort=None, metric="strict_correct",
 
     def arm_stats(label, side):
         mine = [pair[side] for pair in matched]
-        taxi = [row for row in mine if "taxi_type" in (row.get("expected_tool_args") or {})]
+        taxi = [row for row in mine
+                if (row.get("expected_tool_args") or {}).get("taxi_type")]
+        control = [row for row in mine
+                   if "taxi_type" in (row.get("expected_tool_args") or {})
+                   and row["expected_tool_args"]["taxi_type"] is None]
         repairs = Counter(str(row.get("repair_kind")) for row in mine
                           if row.get("repair_attempted"))
         return {
@@ -1136,6 +1140,14 @@ def analyze_intents(rows, arm_a, arm_b, *, cohort=None, metric="strict_correct",
             "spurious_concept_with_correct_factor": sum(
                 1 for row in taxi
                 if "correct_factor_plus_spurious_concept" in (row.get("initial_issues") or [])),
+            # 택시 유형을 말하지 않은 질문에 조건이나 개념을 지어냈는가.
+            "control_rows": len(control),
+            "control_taxi_factor_added": sum(
+                1 for row in control
+                if row.get("initial_taxi_type_factor") not in (None, "all")),
+            "control_taxi_concept_added": sum(
+                1 for row in control
+                if "taxi_type_as_concept" in (row.get("initial_issues") or [])),
         }
 
     return {
@@ -1208,6 +1220,10 @@ def print_intent_report(result, out=sys.stdout):
               f"{stats['taxi_type_factor_correct_initial']}, 개념 node "
               f"{stats['taxi_type_as_concept_initial']} (그중 factor도 맞게 적은 것 "
               f"{stats['spurious_concept_with_correct_factor']})")
+        if stats["control_rows"]:
+            w(f"      택시 유형이 없는 대조 질의 {stats['control_rows']}개: factor 지어냄 "
+              f"{stats['control_taxi_factor_added']}, 개념 지어냄 "
+              f"{stats['control_taxi_concept_added']}")
 
 
 # -- 출력 ------------------------------------------------------------------
@@ -1306,9 +1322,7 @@ def cmd_run(args):
     if args.corpus:
         corpus_path = Path(args.corpus)
         cohorts = args.cohorts.split(",") if args.cohorts else None
-        items = paraphrase_corpus.corpus_items(
-            paraphrase_corpus.load_corpus(corpus_path), cohorts=cohorts,
-        )
+        items = paraphrase_corpus.load_corpus_items(corpus_path, cohorts=cohorts)
         corpus = {
             "path": str(corpus_path),
             "sha256": hashlib.sha256(corpus_path.read_bytes()).hexdigest(),

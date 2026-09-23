@@ -1,0 +1,105 @@
+# taxi_type 문구 검증용 holdout 부모 질의.
+#
+# evaluation/paraphrases.yaml(선택용)과 겹치지 않는 새 의도다. 선택용 결과를 보기
+# 전에 작성해 고정했다. 이 결과를 보고 문구를 다시 고치지 않는다.
+#
+# 형식은 stub_query_boundary.yaml과 같다. 기존 stub 파일은 다른 benchmark가
+# 쓰므로 거기에 더하지 않는다.
+#
+# expected_macros: [NONE] 은 "실행 가능한 계획이 만들어지면 안 됨"을 뜻한다.
+
+# --- taxi_type 값 x 측정값 x 위치 x 범위 ---
+- id: h01_private_hours_max
+  question: "개인택시 영업 시간의 최대값은?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/hours:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: h02_corporate_revenue_by_day
+  question: "법인택시의 요일별 수입은?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/revenue:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: h03_corporate_operating_ratio_daegu
+  question: "대구 법인택시의 운행률은?"
+  expected_concepts: [LOCATION/place:SUBCOND, EVENT/operation:SUPPORT, PROPORTION/operating_ratio:MEASURE]
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, OPERATION_METRIC]
+
+- id: h04_private_vacant_ratio_busan
+  question: "부산 개인택시의 공차율은?"
+  expected_concepts: [LOCATION/place:SUBCOND, EVENT/drive:SUPPORT, PROPORTION/vacant_ratio:MEASURE]
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, DRIVE_METRIC]
+
+- id: h05_corporate_vacant_ratio_last_month
+  question: "지난달 법인택시 공차율은?"
+  expected_concepts: [EVENT/drive:SUPPORT, PROPORTION/vacant_ratio:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [DRIVE_METRIC]
+
+- id: h06_private_vicinity_passage_count
+  question: "동대구역 주변 개인택시 통행량은?"
+  expected_concepts: [LOCATION/place:SUBCOND, EVENT/passage:SUPPORT, AMOUNT/passage_count:MEASURE]
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, PASSAGE_COUNT]
+
+- id: h07_corporate_direct_scope_passage_count
+  question: "scope:edge:1742의 법인택시 통행량은?"
+  expected_concepts: [LOCATION/scope:COND, EVENT/passage:SUPPORT, AMOUNT/passage_count:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [PASSAGE_COUNT]
+
+- id: h10_private_operating_count_top_sido
+  question: "개인택시 영업 횟수가 가장 많은 시도 3곳은?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/operating_count:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: h11_corporate_revenue_weekend
+  question: "주말 법인택시 평균 수입은?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/revenue:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: h12_private_revenue_week_min
+  question: "주 단위로 집계한 개인택시 수입의 최소값은?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/revenue:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+# --- taxi_type이 없는 대조군. 택시 유형 문구가 없는 조건을 지어내는지 본다 ---
+- id: h08_control_revenue_max
+  question: "택시 수입의 최대값은?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/revenue:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: h09_control_vacant_ratio_daegu
+  question: "대구 택시 공차율은?"
+  expected_concepts: [LOCATION/place:SUBCOND, EVENT/drive:SUPPORT, PROPORTION/vacant_ratio:MEASURE]
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, DRIVE_METRIC]
+
+# --- 승하차. od_role을 factor로 옮기는 실패가 다른 장소에서도 나는지 본다 ---
+- id: h13_origin_sincheon
+  question: "신천동에서 출발한 실차 구간 건수는?"
+  expected_concepts: [LOCATION/place:SUBCOND, EVENT/trip:SUPPORT, AMOUNT/trip_count:MEASURE]
+  expected_macros: [PLACE_TO_SCOPE, OD_EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, TRIP_COUNT]
+
+- id: h14_destination_dongseongro
+  question: "동성로동에 도착한 실차 구간 건수는?"
+  expected_concepts: [LOCATION/place:SUBCOND, EVENT/trip:SUPPORT, AMOUNT/trip_count:MEASURE]
+  expected_macros: [PLACE_TO_SCOPE, OD_EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, TRIP_COUNT]
+
+# --- 지원하지 않는 비교. taxi_type 하나로는 두 유형을 비교할 수 없다 ---
+# b20(지역 비교)과 같은 이유로 거부가 정답이다. 한쪽 값만 적어 계획을 만들면
+# 질문과 다른 것에 답한다.
+- id: h15_taxi_type_comparison
+  question: "개인택시와 법인택시 중 어느 쪽 수입이 더 많은가요?"
+  expected_concepts: []
+  expected_macros: [NONE]
+  expected_operators: []

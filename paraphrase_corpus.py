@@ -18,6 +18,8 @@ from query_loader import load_queries
 
 BASE_DIR = Path(__file__).resolve().parent
 CORPUS_FILE = BASE_DIR / "evaluation" / "paraphrases.yaml"
+#: 문구 변형을 고른 뒤 검증에만 쓰는 corpus. 선택용과 intent·질문이 겹치면 안 된다.
+HOLDOUT_CORPUS_FILE = BASE_DIR / "evaluation" / "paraphrases_holdout.yaml"
 PARENT_FILES = ("stub_query_boundary.yaml", "stub_query.yaml")
 
 LABEL_KEYS = ("expected_concepts", "expected_macros", "expected_operators")
@@ -33,8 +35,9 @@ _PARAPHRASE_KEYS = frozenset({"id", "question", "note"})
 
 #: 장소 이름 뒤나 앞에 붙는 승하차 표지. 방향을 바꾸는 paraphrase를 막는다.
 _OD_MARKERS = {
-    "pickup": (r"{p}\s*에서", r"{p}\s*출발", r"출발지가\s*{p}"),
-    "dropoff": (r"{p}\s*에(?!서)", r"{p}\s*으로", r"{p}\s*도착", r"도착지가\s*{p}"),
+    "pickup": (r"{p}\s*에서", r"{p}\s*출발", r"출발지가\s*{p}", r"{p}[을를]\s*출발지로"),
+    "dropoff": (r"{p}\s*에(?!서)", r"{p}\s*으로", r"{p}\s*도착", r"도착지가\s*{p}",
+                r"{p}[을를]\s*도착지로"),
 }
 
 
@@ -54,14 +57,45 @@ def load_parents(files=PARENT_FILES):
     return parents
 
 
+def _read(path):
+    return yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+
+
+def corpus_parents(path):
+    """corpus가 선언한 부모 파일의 질의. 선언이 없으면 stub 평가셋이다."""
+    return load_parents(_read(path).get("parents") or PARENT_FILES)
+
+
 def load_corpus(path=CORPUS_FILE, parents=None):
     """corpus를 읽고 검증한 intent 목록을 돌려준다."""
-    document = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-    parents = load_parents() if parents is None else parents
+    document = _read(path)
+    parents = corpus_parents(path) if parents is None else parents
     problems = validate(document, parents)
     if problems:
         raise CorpusError(problems)
     return document["intents"]
+
+
+def load_corpus_items(path=CORPUS_FILE, cohorts=None):
+    """검증한 corpus를 측정용 item으로. 부모도 corpus가 선언한 곳에서 읽는다."""
+    parents = corpus_parents(path)
+    return corpus_items(load_corpus(path, parents), parents, cohorts=cohorts)
+
+
+def corpus_overlap(first, second):
+    """두 corpus가 겹치는 intent, 부모 질의, 질문. 선택용과 검증용은 비어야 한다."""
+    def facts(path):
+        items = load_corpus_items(path)
+        return ({item["intent_id"] for item in items},
+                {normalize_question(item["question"]) for item in items},
+                set(corpus_parents(path)))
+    (intents_a, questions_a, parents_a), (intents_b, questions_b, parents_b) = (
+        facts(first), facts(second))
+    return {
+        "intents": sorted(intents_a & intents_b),
+        "questions": sorted(questions_a & questions_b),
+        "parents_used": sorted((intents_a & parents_b) | (intents_b & parents_a)),
+    }
 
 
 def corpus_items(intents, parents=None, cohorts=None):

@@ -818,3 +818,28 @@ class TaxiWordingVariantTest(unittest.TestCase):
             A.build_variant(name)
         self.assertEqual(GeoFlowPlanner(client=A._StubClient()).system_prompt(), before)
         self.assertEqual(hashlib.sha256(before.encode()).hexdigest(), A.PINNED_SHA256["T0"])
+
+
+class ControlIntentTest(unittest.TestCase):
+    """택시 유형을 말하지 않은 질문에 조건이나 개념을 지어내는지 따로 센다."""
+
+    def test_control_rows_are_counted_apart_from_taxi_rows(self):
+        base = {"repeat_index": 1, "measurement": A.VALID, "question": "q",
+                "cohorts": ["taxi_type"], "strict_correct": True, "correct": True,
+                "final_category": "correct"}
+        rows = []
+        for arm, factor, issues in (("A", None, []), ("B", "private", [])):
+            rows.append(dict(base, id="c_p0", arm=arm, intent_id="c", paraphrase_id="c_p0",
+                             expected_tool_args={"taxi_type": None},
+                             initial_taxi_type_factor=factor, initial_issues=issues))
+        result = A.analyze_intents(rows, "A", "B", rescored=False)
+        self.assertEqual(result["by_arm"]["A"]["control_rows"], 1)
+        self.assertEqual(result["by_arm"]["A"]["taxi_type_rows"], 0)
+        self.assertEqual(result["by_arm"]["A"]["control_taxi_factor_added"], 0)
+        self.assertEqual(result["by_arm"]["B"]["control_taxi_factor_added"], 1)
+
+    def test_holdout_corpus_loads_through_the_run_path(self):
+        import paraphrase_corpus as P
+        items = P.load_corpus_items(P.HOLDOUT_CORPUS_FILE)
+        self.assertEqual(len({item["intent_id"] for item in items}), 15)
+        self.assertTrue(all(item["original_question_id"].startswith("h") for item in items))

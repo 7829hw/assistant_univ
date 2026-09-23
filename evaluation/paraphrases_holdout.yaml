@@ -1,0 +1,283 @@
+# taxi_type 문구 검증용 holdout corpus.
+#
+# evaluation/paraphrases.yaml은 문구 변형을 고르는 데 쓴다. 이 파일은 고른
+# 변형이 새 의도에도 통하는지 확인하는 데만 쓴다. 선택용 측정을 돌리기 전에
+# 작성해 고정했다. 이 결과를 보고 문구를 다시 고치지 않는다. 여기서 실패하면
+# 그대로 "일반화 실패"로 보고한다.
+#
+# 작성 원칙은 paraphrases.yaml과 같다. 사람이 쓰고, 어순·조사·수식어 위치만
+# 바꾸고, 동의어는 쓰지 않는다. prompt 예시 문장("법인택시의 평균 운행시간")은
+# 쓰지 않는다.
+#
+# 부모 질의는 evaluation/holdout_parents.yaml에 있다.
+
+version: 1
+parents: [evaluation/holdout_parents.yaml]
+
+intents:
+
+  # --- taxi_type 값(개인/법인) x 측정값 x 위치 x 범위 ---------------------
+
+  - intent: h01_private_hours_max
+    cohorts: [taxi_type]
+    expected_tool_args: {metric: hours, taxi_type: private, aggregation: max}
+    must_include: [["개인"], ["영업 시간"], ["최대"]]
+    must_exclude: ["법인", "단위"]
+    golden:
+      concepts:
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: hours, concept: AMOUNT, subtype: hours, role: MEASURE, source: implicit}
+      factors: {taxi_type: private, aggregation: max}
+    paraphrases:
+      - {id: h01_p0, question: "개인택시 영업 시간의 최대값은?", note: "원문. 맨 앞"}
+      - {id: h01_p1, question: "영업 시간의 최대값을 개인택시 기준으로 알려줘", note: "측정값 뒤"}
+      - {id: h01_p2, question: "최대 영업 시간은 개인택시가 얼마인가요?", note: "집계어가 맨 앞"}
+      - {id: h01_p3, question: "영업 시간 최대값, 개인택시만 보면?", note: "문장 끝"}
+
+  - intent: h02_corporate_revenue_by_day
+    cohorts: [taxi_type]
+    expected_tool_args: {metric: revenue, taxi_type: corporate, dimension: dayofweek, bucket: null}
+    must_include: [["법인"], ["요일별"], ["수입"]]
+    must_exclude: ["개인", "주말", "단위"]
+    golden:
+      concepts:
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: revenue, concept: AMOUNT, subtype: revenue, role: MEASURE, source: implicit}
+      factors: {taxi_type: corporate, dimension: dayofweek}
+    paraphrases:
+      - {id: h02_p0, question: "법인택시의 요일별 수입은?", note: "원문. 맨 앞"}
+      - {id: h02_p1, question: "요일별 법인택시 수입은?", note: "그룹 표현이 앞"}
+      - {id: h02_p2, question: "수입을 요일별로 법인택시 기준으로 알려줘", note: "측정값 뒤"}
+      - {id: h02_p3, question: "법인택시 수입, 요일별로는?", note: "그룹 표현이 끝"}
+
+  - intent: h03_corporate_operating_ratio_daegu
+    cohorts: [taxi_type]
+    expected_tool_args: {metric: operating_ratio, taxi_type: corporate}
+    must_include: [["대구"], ["법인"], ["운행률"]]
+    must_exclude: ["개인"]
+    golden:
+      concepts:
+        - {id: daegu, concept: LOCATION, subtype: place, role: SUBCOND, source: user,
+           value: {name: 대구, region: ""}}
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: ratio, concept: PROPORTION, subtype: operating_ratio, role: MEASURE, source: implicit}
+      factors: {taxi_type: corporate}
+    paraphrases:
+      - {id: h03_p0, question: "대구 법인택시의 운행률은?", note: "원문. 장소 뒤"}
+      - {id: h03_p1, question: "법인택시의 대구 운행률은?", note: "맨 앞"}
+      - {id: h03_p2, question: "대구에서 법인택시 운행률은 얼마인가요?", note: "장소 뒤, 조사 '에서'"}
+      - {id: h03_p3, question: "운행률을 대구 법인택시 기준으로 알려줘", note: "측정값 뒤"}
+
+  - intent: h04_private_vacant_ratio_busan
+    cohorts: [taxi_type]
+    expected_tool_args: {metric: vacant_ratio, taxi_type: private}
+    must_include: [["부산"], ["개인"], ["공차율"]]
+    must_exclude: ["법인"]
+    golden:
+      concepts:
+        - {id: busan, concept: LOCATION, subtype: place, role: SUBCOND, source: user,
+           value: {name: 부산, region: ""}}
+        - {id: drive, concept: EVENT, subtype: drive, role: SUPPORT, source: implicit}
+        - {id: ratio, concept: PROPORTION, subtype: vacant_ratio, role: MEASURE, source: implicit}
+      factors: {taxi_type: private}
+    paraphrases:
+      - {id: h04_p0, question: "부산 개인택시의 공차율은?", note: "원문. 장소 뒤"}
+      - {id: h04_p1, question: "개인택시의 부산 공차율은?", note: "맨 앞"}
+      - {id: h04_p2, question: "공차율을 부산 개인택시 기준으로 알려줘", note: "측정값 뒤"}
+      - {id: h04_p3, question: "부산에서 개인택시 공차율은 얼마인가요?", note: "장소 뒤, 조사 '에서'"}
+
+  - intent: h05_corporate_vacant_ratio_last_month
+    cohorts: [taxi_type]
+    expected_tool_args: {metric: vacant_ratio, taxi_type: corporate, date: last_month}
+    must_include: [["지난달"], ["법인"], ["공차율"]]
+    must_exclude: ["개인"]
+    golden:
+      concepts:
+        - {id: drive, concept: EVENT, subtype: drive, role: SUPPORT, source: implicit}
+        - {id: ratio, concept: PROPORTION, subtype: vacant_ratio, role: MEASURE, source: implicit}
+      factors: {taxi_type: corporate, date: last_month}
+    paraphrases:
+      - {id: h05_p0, question: "지난달 법인택시 공차율은?", note: "원문. 기간 뒤"}
+      - {id: h05_p1, question: "법인택시의 지난달 공차율은?", note: "맨 앞"}
+      - {id: h05_p2, question: "공차율을 지난달 법인택시 기준으로 알려줘", note: "측정값 뒤"}
+      - {id: h05_p3, question: "법인택시 공차율, 지난달만 보면?", note: "기간이 끝"}
+
+  # 주변 여부는 장소 resolve 단계의 인자라 최종 인자로는 확인하지 않는다.
+  # "주변"이 빠지지 않았는지만 must_include로 본다.
+  - intent: h06_private_vicinity_passage_count
+    cohorts: [taxi_type]
+    expected_tool_args: {taxi_type: private, scope: "@place:동대구역"}
+    must_include: [["동대구역"], ["주변"], ["개인"], ["통행량"]]
+    must_exclude: ["법인"]
+    golden:
+      concepts:
+        - {id: station, concept: LOCATION, subtype: place, role: SUBCOND, source: user,
+           value: {name: 동대구역, region: ""}}
+        - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+        - {id: count, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+      factors: {vicinity: true, taxi_type: private}
+    paraphrases:
+      - {id: h06_p0, question: "동대구역 주변 개인택시 통행량은?", note: "원문. 장소 뒤"}
+      - {id: h06_p1, question: "개인택시의 동대구역 주변 통행량은?", note: "맨 앞"}
+      - {id: h06_p2, question: "동대구역 주변 통행량을 개인택시 기준으로 알려줘", note: "측정값 뒤"}
+      - {id: h06_p3, question: "동대구역 주변에서 개인택시 통행량은 얼마인가요?", note: "조사 '에서'"}
+
+  - intent: h07_corporate_direct_scope_passage_count
+    cohorts: [taxi_type]
+    expected_tool_args: {taxi_type: corporate, scope: "scope:edge:1742"}
+    must_include: [["scope:edge:1742"], ["법인"], ["통행량"]]
+    must_exclude: ["개인"]
+    golden:
+      concepts:
+        - {id: edge, concept: LOCATION, subtype: scope, role: COND, source: user,
+           value: "scope:edge:1742"}
+        - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+        - {id: count, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+      factors: {taxi_type: corporate}
+    paraphrases:
+      - {id: h07_p0, question: "scope:edge:1742의 법인택시 통행량은?", note: "원문. 범위 뒤"}
+      - {id: h07_p1, question: "법인택시의 scope:edge:1742 통행량은?", note: "맨 앞"}
+      - {id: h07_p2, question: "scope:edge:1742 통행량을 법인택시 기준으로 알려줘", note: "측정값 뒤"}
+      - {id: h07_p3, question: "scope:edge:1742에서 법인택시 통행량은 얼마인가요?", note: "조사 '에서'"}
+
+  - intent: h10_private_operating_count_top_sido
+    cohorts: [taxi_type]
+    expected_tool_args: {metric: operating_count, taxi_type: private, dimension: sido,
+                         order: top, limit: 3}
+    must_include: [["개인"], ["영업 횟수"], ["시도"], ["3"]]
+    must_exclude: ["법인"]
+    golden:
+      concepts:
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: count, concept: AMOUNT, subtype: operating_count, role: MEASURE, source: implicit}
+      factors: {taxi_type: private, dimension: sido, order: top, limit: 3}
+    paraphrases:
+      - {id: h10_p0, question: "개인택시 영업 횟수가 가장 많은 시도 3곳은?", note: "원문. 맨 앞"}
+      - {id: h10_p1, question: "영업 횟수가 가장 많은 시도 3곳을 개인택시 기준으로 알려줘", note: "뒤"}
+      - {id: h10_p2, question: "시도별 개인택시 영업 횟수 상위 3곳은?", note: "그룹 표현이 앞"}
+      - {id: h10_p3, question: "개인택시의 영업 횟수 기준 상위 3개 시도는?", note: "맨 앞, 순위 표현 바꿈"}
+
+  - intent: h11_corporate_revenue_weekend
+    cohorts: [taxi_type]
+    expected_tool_args: {metric: revenue, taxi_type: corporate, date: weekend,
+                         aggregation: avg, bucket: null}
+    must_include: [["주말"], ["법인"], ["평균"], ["수입"]]
+    must_exclude: ["개인", "주 단위", "요일"]
+    golden:
+      concepts:
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: revenue, concept: AMOUNT, subtype: revenue, role: MEASURE, source: implicit}
+      factors: {taxi_type: corporate, date: weekend, aggregation: avg}
+    paraphrases:
+      - {id: h11_p0, question: "주말 법인택시 평균 수입은?", note: "원문. 기간 뒤"}
+      - {id: h11_p1, question: "법인택시의 주말 평균 수입은?", note: "맨 앞"}
+      - {id: h11_p2, question: "평균 수입을 주말 법인택시 기준으로 알려줘", note: "측정값 뒤"}
+      - {id: h11_p3, question: "법인택시 평균 수입, 주말만 보면?", note: "기간이 끝"}
+
+  # b24에서 T0가 무너진 조합(구간 집계 + taxi_type)을 다른 값으로 다시 본다.
+  - intent: h12_private_revenue_week_min
+    cohorts: [taxi_type, factor_stage]
+    expected_tool_args: {metric: revenue, taxi_type: private, bucket: week, rollup: min}
+    must_include: [["주 단위"], ["개인"], ["최소"], ["수입"]]
+    must_exclude: ["법인", "주말", "요일", "월 단위"]
+    golden:
+      concepts:
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: revenue, concept: AMOUNT, subtype: revenue, role: MEASURE, source: implicit}
+      factors: {bucket: week, rollup: min, taxi_type: private}
+    paraphrases:
+      - {id: h12_p0, question: "주 단위로 집계한 개인택시 수입의 최소값은?", note: "원문"}
+      - {id: h12_p1, question: "개인택시 수입을 주 단위로 집계했을 때 최소값은?", note: "taxi_type 맨 앞"}
+      - {id: h12_p2, question: "개인택시의 주 단위 수입 최소값은?", note: "명사구로 압축"}
+      - {id: h12_p3, question: "최소 수입은 주 단위로 개인택시 기준 집계하면 얼마인가요?", note: "집계어가 맨 앞"}
+
+  # --- taxi_type이 없는 대조군 --------------------------------------------
+  # 택시 유형을 말하지 않았다. taxi_type factor도 개념 node도 없어야 한다.
+
+  - intent: h08_control_revenue_max
+    cohorts: [taxi_type]
+    expected_tool_args: {metric: revenue, aggregation: max, taxi_type: null, bucket: null}
+    must_include: [["수입"], ["최대"]]
+    must_exclude: ["개인", "법인", "단위"]
+    golden:
+      concepts:
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: revenue, concept: AMOUNT, subtype: revenue, role: MEASURE, source: implicit}
+      factors: {aggregation: max}
+    paraphrases:
+      - {id: h08_p0, question: "택시 수입의 최대값은?", note: "원문"}
+      - {id: h08_p1, question: "최대 택시 수입은 얼마인가요?", note: "집계어가 맨 앞"}
+      - {id: h08_p2, question: "택시의 수입 최대값은?", note: "조사 '의' 위치"}
+      - {id: h08_p3, question: "택시 수입, 최대값은?", note: "문장 끝"}
+
+  - intent: h09_control_vacant_ratio_daegu
+    cohorts: [taxi_type]
+    expected_tool_args: {metric: vacant_ratio, taxi_type: null}
+    must_include: [["대구"], ["공차율"]]
+    must_exclude: ["개인", "법인"]
+    golden:
+      concepts:
+        - {id: daegu, concept: LOCATION, subtype: place, role: SUBCOND, source: user,
+           value: {name: 대구, region: ""}}
+        - {id: drive, concept: EVENT, subtype: drive, role: SUPPORT, source: implicit}
+        - {id: ratio, concept: PROPORTION, subtype: vacant_ratio, role: MEASURE, source: implicit}
+      factors: {}
+    paraphrases:
+      - {id: h09_p0, question: "대구 택시 공차율은?", note: "원문"}
+      - {id: h09_p1, question: "택시의 대구 공차율은?", note: "'택시'가 맨 앞"}
+      - {id: h09_p2, question: "공차율을 대구 택시 기준으로 알려줘", note: "측정값 뒤"}
+      - {id: h09_p3, question: "대구에서 택시 공차율은 얼마인가요?", note: "조사 '에서'"}
+
+  # --- 승하차 ---------------------------------------------------------------
+
+  - intent: h13_origin_sincheon
+    cohorts: [relation]
+    expected_tool_args: {scope_pickup: "@place:신천동", scope_dropoff: null}
+    must_include: [["신천동"], ["출발"], ["건수", "몇 건"]]
+    must_exclude: ["도착"]
+    od_roles: {신천동: pickup}
+    golden:
+      concepts:
+        - {id: origin, concept: LOCATION, subtype: place, role: SUBCOND, source: user,
+           value: {name: 신천동, region: ""}, attributes: {od_role: pickup}}
+        - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+        - {id: count, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+      factors: {}
+    paraphrases:
+      - {id: h13_p0, question: "신천동에서 출발한 실차 구간 건수는?", note: "원문"}
+      - {id: h13_p1, question: "출발지가 신천동인 실차 구간 건수는?", note: "'출발지가 X'"}
+      - {id: h13_p2, question: "신천동을 출발지로 한 실차 구간은 몇 건인가요?", note: "'X를 출발지로'"}
+      - {id: h13_p3, question: "실차 구간 중 신천동에서 출발한 건수는?", note: "측정 대상이 앞"}
+
+  - intent: h14_destination_dongseongro
+    cohorts: [relation]
+    expected_tool_args: {scope_dropoff: "@place:동성로동", scope_pickup: null}
+    must_include: [["동성로동"], ["도착"], ["건수", "몇 건"]]
+    must_exclude: ["출발"]
+    od_roles: {동성로동: dropoff}
+    golden:
+      concepts:
+        - {id: destination, concept: LOCATION, subtype: place, role: SUBCOND, source: user,
+           value: {name: 동성로동, region: ""}, attributes: {od_role: dropoff}}
+        - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+        - {id: count, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+      factors: {}
+    paraphrases:
+      - {id: h14_p0, question: "동성로동에 도착한 실차 구간 건수는?", note: "원문"}
+      - {id: h14_p1, question: "도착지가 동성로동인 실차 구간 건수는?", note: "'도착지가 X'"}
+      - {id: h14_p2, question: "동성로동을 도착지로 한 실차 구간은 몇 건인가요?", note: "'X를 도착지로'"}
+      - {id: h14_p3, question: "실차 구간 중 동성로동에 도착한 건수는?", note: "측정 대상이 앞"}
+
+  # --- 지원하지 않는 비교 ---------------------------------------------------
+
+  - intent: h15_taxi_type_comparison
+    cohorts: [taxi_type]
+    expected_tool_args: {}
+    must_include: [["개인"], ["법인"], ["더 많"]]
+    must_exclude: []
+    golden: {unsupported: true}
+    paraphrases:
+      - {id: h15_p0, question: "개인택시와 법인택시 중 어느 쪽 수입이 더 많은가요?", note: "원문"}
+      - {id: h15_p1, question: "법인택시와 개인택시 중 수입이 더 많은 쪽은?", note: "순서를 바꿈"}
+      - {id: h15_p2, question: "수입은 개인택시와 법인택시 중 어디가 더 많은가요?", note: "측정값이 앞"}
+      - {id: h15_p3, question: "개인택시와 법인택시의 수입을 비교하면 어느 쪽이 더 많은가요?", note: "'비교하면'"}

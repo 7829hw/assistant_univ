@@ -176,18 +176,25 @@ class CorpusGuardTest(unittest.TestCase):
         self.assertTrue(any("unsupported여야" in p for p in problems))
 
 
-class CorpusContractTest(unittest.TestCase):
-    """label이 코드 계약과 맞는지. 사람이 쓴 golden을 실제 경로에 통과시킨다."""
+class _ContractChecks:
+    """label이 코드 계약과 맞는지. 사람이 쓴 golden을 실제 경로에 통과시킨다.
+
+    선택용과 검증용 corpus에 똑같이 적용한다.
+    """
+
+    PARENTS = PARENTS
+    INTENTS = INTENTS
+    CORPUS = P.CORPUS_FILE
 
     def setUp(self):
         self.composer = MacroComposer(MacroLibrary.from_directory())
 
     def _final_tool(self, intent):
-        parent = PARENTS[intent["intent"]]
+        parent = self.PARENTS[intent["intent"]]
         return get_operator(parent["expected_operators"][-1]).tool_name
 
     def test_expected_tool_args_are_real_arguments(self):
-        for intent in INTENTS:
+        for intent in self.INTENTS:
             if not intent["expected_tool_args"]:
                 continue
             schema = TOOL_SCHEMAS[self._final_tool(intent)]
@@ -199,8 +206,8 @@ class CorpusContractTest(unittest.TestCase):
                         self.assertIn(value, enum)
 
     def test_golden_grounding_meets_the_label(self):
-        for intent in INTENTS:
-            parent = PARENTS[intent["intent"]]
+        for intent in self.INTENTS:
+            parent = self.PARENTS[intent["intent"]]
             if P.NONE_LABEL in parent["expected_macros"]:
                 continue
             with self.subTest(intent=intent["intent"]):
@@ -214,15 +221,68 @@ class CorpusContractTest(unittest.TestCase):
                 self.assertEqual(P.tool_arg_mismatches(intent["expected_tool_args"], args), [])
 
     def test_golden_is_scored_correct_by_the_real_evaluator(self):
-        for item in P.corpus_items(INTENTS, PARENTS):
+        for item in P.corpus_items(self.INTENTS, self.PARENTS):
             if not item["id"].endswith("_p0"):
                 continue
-            intent = next(i for i in INTENTS if i["intent"] == item["intent_id"])
+            intent = next(i for i in self.INTENTS if i["intent"] == item["intent_id"])
             planner = GeoFlowPlanner(client=_Client(json.dumps(intent["golden"],
                                                                ensure_ascii=False)))
             with self.subTest(intent=item["intent_id"]):
                 record = E.evaluate_once(planner, self.composer, item)
                 self.assertTrue(record["correct"], record["status"])
+
+
+class CorpusContractTest(_ContractChecks, unittest.TestCase):
+    pass
+
+
+HOLDOUT_PARENTS = P.corpus_parents(P.HOLDOUT_CORPUS_FILE)
+HOLDOUT_INTENTS = P.load_corpus(P.HOLDOUT_CORPUS_FILE, HOLDOUT_PARENTS)
+
+
+class HoldoutContractTest(_ContractChecks, unittest.TestCase):
+    PARENTS = HOLDOUT_PARENTS
+    INTENTS = HOLDOUT_INTENTS
+    CORPUS = P.HOLDOUT_CORPUS_FILE
+
+
+class HoldoutSeparationTest(unittest.TestCase):
+    """검증용이 선택용과 섞이면 검증이 아니다."""
+
+    def test_no_shared_intent_question_or_parent(self):
+        self.assertEqual(P.corpus_overlap(P.CORPUS_FILE, P.HOLDOUT_CORPUS_FILE),
+                         {"intents": [], "questions": [], "parents_used": []})
+
+    def test_holdout_parents_are_not_in_the_stub_sets(self):
+        self.assertFalse(set(HOLDOUT_PARENTS) & set(PARENTS))
+
+    def test_holdout_brings_the_total_to_at_least_twenty_intents(self):
+        self.assertGreaterEqual(len(INTENTS) + len(HOLDOUT_INTENTS), 20)
+        for intent in HOLDOUT_INTENTS:
+            with self.subTest(intent=intent["intent"]):
+                self.assertGreaterEqual(len(intent["paraphrases"]), 3)
+
+    def test_holdout_covers_the_axes(self):
+        args = [intent["expected_tool_args"] for intent in HOLDOUT_INTENTS]
+        taxi = {a.get("taxi_type", "absent") for a in args if "taxi_type" in a}
+        self.assertTrue({"private", "corporate", None} <= taxi)
+        metrics = {a.get("metric") for a in args}
+        self.assertTrue({"vacant_ratio", "revenue", "hours", "operating_count",
+                         "operating_ratio"} <= metrics)
+        tools = {get_operator(HOLDOUT_PARENTS[i["intent"]]["expected_operators"][-1]).tool_name
+                 for i in HOLDOUT_INTENTS if HOLDOUT_PARENTS[i["intent"]]["expected_operators"]}
+        self.assertTrue({"get_drive_metrics", "get_operation_metrics",
+                         "get_passage_count"} <= tools)
+        self.assertTrue(any(P.NONE_LABEL in HOLDOUT_PARENTS[i["intent"]]["expected_macros"]
+                            for i in HOLDOUT_INTENTS))
+
+    def test_holdout_does_not_reuse_the_prompt_example(self):
+        for item in P.corpus_items(HOLDOUT_INTENTS, HOLDOUT_PARENTS):
+            self.assertNotIn("운행시간", item["question"])
+
+    def test_new_od_markers(self):
+        self.assertEqual(P.od_marker_problems("신천동을 출발지로 한 구간", {"신천동": "pickup"}), [])
+        self.assertTrue(P.od_marker_problems("신천동을 출발지로 한 구간", {"신천동": "dropoff"}))
 
 
 if __name__ == "__main__":
