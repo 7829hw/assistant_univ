@@ -651,7 +651,7 @@ def final_category(record):
 
 #: corpus item이 record에 넘겨주는 정보.
 _CORPUS_KEYS = ("intent_id", "paraphrase_id", "original_question_id", "cohorts",
-                "paraphrase_note")
+                "paraphrase_note", "census_source", "census_aliases")
 
 
 def observe(item, *, arm, variant, repetition, position, pair_index,
@@ -781,15 +781,17 @@ def expected_keys(query_ids, repetitions, arm_labels):
 
 
 def run_protocol(items, arms, *, repetitions, reset, client, composer,
-                 run_dir, meta, max_invalid=DEFAULT_MAX_INVALID, log=print):
+                 run_dir, meta, max_invalid=DEFAULT_MAX_INVALID, log=print,
+                 min_arms=2):
     """관측을 모두 실행한다. 이미 있는 결과는 덮어쓰지 않는다.
 
     ``arms``는 ``[(arm_label, PromptVariant), ...]`` 두 개다. 같은 변형을
-    두 번 넣으면 자기 자신과의 비교가 된다.
+    두 번 넣으면 자기 자신과의 비교가 된다. 비교가 아니라 실패 집계(census)는
+    ``min_arms=1``로 한 arm만 돌린다.
     """
     labels = [label for label, _ in arms]
-    if len(arms) < 2 or len(set(labels)) != len(labels):
-        raise ValueError("arm은 이름이 서로 다른 두 개 이상이어야 한다")
+    if len(arms) < min_arms or len(set(labels)) != len(labels):
+        raise ValueError(f"arm은 이름이 서로 다른 {min_arms}개 이상이어야 한다")
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=False)
     _write_exclusive(run_dir / "meta.json", meta)
@@ -1723,6 +1725,99 @@ def cmd_run(args):
     print("PROMPT AB DONE", flush=True)
 
 
+#: census가 한 번에 모으는 평가셋. 사람이 검토한 것 전체다.
+CENSUS_QUERY_FILES = ("stub_query.yaml", "stub_query_boundary.yaml")
+CENSUS_CORPORA = ("evaluation/paraphrases.yaml", "evaluation/paraphrases_holdout.yaml",
+                  "evaluation/paraphrases_factor_holdout.yaml")
+
+
+def census_items(query_files=CENSUS_QUERY_FILES, corpora=CENSUS_CORPORA, base=BASE_DIR):
+    """여러 평가셋을 합쳐 같은 질문은 한 번만 남긴다.
+
+    같은 질문이 여러 곳에 있으면 corpus 쪽 item을 쓴다. intent와 Tool 인자 라벨이
+    있기 때문이다. 버린 쪽은 ``census_aliases``로 남긴다. 라벨이 서로 다르면
+    어느 쪽으로 채점할지 정할 수 없으므로 멈춘다.
+    """
+    sources = []
+    for path in corpora:
+        for item in paraphrase_corpus.load_corpus_items(Path(base) / path):
+            sources.append((path, item))
+    for path in query_files:
+        for item in load_queries(Path(base) / path):
+            sources.append((path, {**item, "intent_id": item["id"]}))
+    chosen, order = {}, []
+    for path, item in sources:
+        question = item["question"].strip()
+        alias = {"source": path, "id": item["id"], "intent_id": item["intent_id"]}
+        if question not in chosen:
+            chosen[question] = {**item, "census_source": path, "census_aliases": []}
+            order.append(question)
+            continue
+        kept = chosen[question]
+        for key in ("expected_macros", "expected_operators"):
+            if list(kept.get(key) or []) != list(item.get(key) or []):
+                raise ValueError(f"같은 질문의 라벨이 다르다: {question!r} ({key})")
+        kept["census_aliases"].append(alias)
+    items = [chosen[question] for question in order]
+    if len({item["id"] for item in items}) != len(items):
+        raise ValueError("census item id가 겹친다")
+    return items
+
+
+def cmd_census(args):
+    """current production 한 arm으로 사람이 검토한 평가셋 전체를 한 번씩 잰다."""
+    variant = build_variant("PRODUCTION")
+    items = census_items()
+    version, digest = _server_info(args.host, args.model)
+    run_id = f"{E._now_local().strftime('%Y%m%d_%H%M%S')}_{args.label}"
+    files = [*CENSUS_CORPORA, *CENSUS_QUERY_FILES]
+    meta = {
+        "protocol": PROTOCOL,
+        "purpose": "failure census. variant 비교가 아니다",
+        "run_id": run_id,
+        "created_at": E._now_local().isoformat(),
+        "git": _git_state(),
+        "host": args.host,
+        "model": args.model,
+        "model_digest": digest,
+        "ollama_version": version,
+        "options": {"temperature": 0},
+        "chat_timeout": args.chat_timeout,
+        "model_reset": {
+            "method": "POST /api/generate {model, keep_alive: 0} 후 /api/ps에서 모델이 "
+                      "사라졌는지 확인, 관측 첫 호출의 load_duration으로 cold load 확인",
+            "cold_load_min_ms": COLD_LOAD_MIN_MS,
+            "max_invalid": args.max_invalid,
+        },
+        "order_rule": "census_items 순서. 한 arm, 한 번",
+        "arms": [{"label": "A", "variant": variant.name, "note": variant.note,
+                  "prompt_sha256": variant.sha256, "prompt_chars": len(variant.prompt),
+                  "repair_contract_sha256": variant.repair_sha256}],
+        "corpus": {
+            "files": [{"path": path,
+                       "sha256": hashlib.sha256((BASE_DIR / path).read_bytes()).hexdigest()}
+                      for path in files],
+            "unique_questions": len(items),
+            "source_items": len(items) + sum(len(item["census_aliases"]) for item in items),
+        },
+        "query_ids": [item["id"] for item in items],
+        "repetitions": 1,
+        "expected_observations": len(items),
+    }
+    client = OllamaClient(args.host, args.model, {"temperature": 0},
+                          chat_timeout=args.chat_timeout)
+    reset = OllamaStateReset(args.host, args.model)
+    composer = MacroComposer(MacroLibrary.from_directory())
+    run_dir = Path(args.out) / run_id
+    print(f"[setup] {run_id}: {len(items)} unique questions x 1 x PRODUCTION "
+          f"sha256={variant.sha256[:16]} repair={variant.repair_sha256[:16]}", flush=True)
+    run_protocol(items, [("A", variant)], repetitions=1, reset=reset, client=client,
+                 composer=composer, run_dir=run_dir, meta=meta,
+                 max_invalid=args.max_invalid, log=lambda text: print(text, flush=True),
+                 min_arms=1)
+    print(f"CENSUS DONE {run_dir}", flush=True)
+
+
 def cmd_analyze_factorial(args):
     meta, rows, report = load_run(args.run_dir)
     if not report.clean and not args.allow_incomplete:
@@ -1822,6 +1917,14 @@ def main(argv=None):
     factorial.add_argument("--allow-incomplete", action="store_true")
     factorial.add_argument("--as-observed", action="store_true")
     factorial.set_defaults(func=cmd_analyze_factorial)
+    census = sub.add_parser("census")
+    census.add_argument("--label", required=True)
+    census.add_argument("--host", default=DEFAULT_HOST)
+    census.add_argument("--model", default=DEFAULT_MODEL)
+    census.add_argument("--chat-timeout", type=float, default=300)
+    census.add_argument("--max-invalid", type=int, default=DEFAULT_MAX_INVALID)
+    census.add_argument("--out", default=str(RESULT_DIR))
+    census.set_defaults(func=cmd_census)
     floor = sub.add_parser("floor")
     floor.add_argument("run_dirs", nargs="+")
     floor.set_defaults(func=cmd_floor)

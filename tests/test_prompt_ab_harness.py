@@ -847,3 +847,46 @@ class ControlIntentTest(unittest.TestCase):
         items = P.load_corpus_items(P.HOLDOUT_CORPUS_FILE)
         self.assertEqual(len({item["intent_id"] for item in items}), 15)
         self.assertTrue(all(item["original_question_id"].startswith("h") for item in items))
+
+
+class CensusTest(unittest.TestCase):
+    """variant 비교가 아니라 실패 집계. production 한 arm, 질문마다 한 번."""
+
+    def test_reviewed_sets_are_merged_once_per_question(self):
+        items = A.census_items()
+        questions = [item["question"].strip() for item in items]
+        self.assertEqual(len(questions), len(set(questions)))
+        self.assertEqual(len(items), 211)
+        self.assertEqual(sum(len(item["census_aliases"]) for item in items), 13)
+        self.assertTrue(all(item["intent_id"] for item in items))
+
+    def test_conflicting_labels_for_the_same_question_stop_the_census(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, macros in (("a.yaml", "[EVENT_TO_MEASURE]"), ("b.yaml", "[NONE]")):
+                (Path(tmp) / name).write_text(
+                    f"- id: {name[0]}1\n  question: \"같은 질문\"\n"
+                    f"  expected_macros: {macros}\n  expected_operators: []\n",
+                    encoding="utf-8")
+            with self.assertRaises(ValueError):
+                A.census_items(query_files=("a.yaml", "b.yaml"), corpora=(), base=tmp)
+
+    def test_a_single_arm_runs_once_per_question(self):
+        variant = A.build_variant("T0")
+        with self.assertRaises(ValueError):
+            A.run_protocol([REVENUE_ITEM], [("A", variant)], repetitions=1,
+                           reset=None, client=None, composer=None,
+                           run_dir="unused", meta={})
+        with tempfile.TemporaryDirectory() as tmp:
+            server = FakeServer()
+            meta = {"protocol": A.PROTOCOL, "run_id": "census", "model": "fake-model",
+                    "arms": [{"label": "A", "variant": variant.name,
+                              "prompt_sha256": variant.sha256}],
+                    "query_ids": [REVENUE_ITEM["id"]], "repetitions": 1}
+            run_dir = Path(tmp) / "run"
+            A.run_protocol([REVENUE_ITEM], [("A", variant)], repetitions=1,
+                           reset=make_reset(server), client=FakeLLM([GOOD], server),
+                           composer=MacroComposer(MacroLibrary.from_directory()),
+                           run_dir=run_dir, meta=meta, log=lambda _: None, min_arms=1)
+            _, rows, report = A.load_run(run_dir)
+        self.assertEqual(len(rows), 1)
+        self.assertTrue(report.clean)
