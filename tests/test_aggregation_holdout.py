@@ -131,10 +131,12 @@ class HoldoutCorpusTest(unittest.TestCase):
         cls.composer = MacroComposer(MacroLibrary.from_directory())
         cls.executor = new_tool_executor()
 
-    def test_registered_as_fresh_and_pinned(self):
+    def test_registered_and_pinned(self):
+        """H0 vs H2 판정에 한 번 썼으므로 이제 development다."""
         entry = next(e for e in REGISTRY["corpora"]
                      if e["path"] == "evaluation/paraphrases_aggregation_holdout.yaml")
-        self.assertEqual(entry["role"], "fresh_holdout")
+        self.assertEqual(entry["role"], "development")
+        self.assertTrue(any("20260924_032103" in line for line in entry["history"]))
         self.assertEqual(entry["sha256"], hashlib.sha256(HOLDOUT.read_bytes()).hexdigest())
 
     def test_size(self):

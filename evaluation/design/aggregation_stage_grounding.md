@@ -99,3 +99,31 @@ factors:
 - H1 제품 구현 (위 3번 이유)
 - Phase B 격리 LLM 재질의 측정. 제품 후보가 없으므로 돌리지 않았다
 - taxi_type 누락, 범위 밖 질의 뭉갬. 이번 범위가 아니다
+
+## 7. H0 vs H2 측정 결과 (fresh holdout, 사전 등록 판정)
+
+run `evaluation/prompt_ab/20260924_032103_aggregation_holdout_h0_h2_r2`, 요약 `aggregation_ab_summary.json`.
+23 intent, 69 paraphrase × 2 arm. 무효 관측 4건(cold 첫 호출이 300초 안에 끝나지 않음, H0 3·H2 1)이 있는
+paraphrase 4개는 두 arm 모두에서 뺐다(65 × 2).
+
+| 지표 | H0 | H2 |
+|---|---|---|
+| 첫 응답 strict 정답 | 24 | 36 |
+| 최종 strict 정답 | 26 | 36 |
+| 조용한 오답 (관측) | 30 | 16 |
+| 조용한 오답 intent | 14 | 9 |
+| strict 정답 intent | 5 | 7 |
+| 명시된 두 단계의 조용한 오답 | 17 | 11 |
+| 단계 뒤바뀜 | 13 | 0 |
+| 안쪽 집계 지어냄 | 0 | 0 |
+| 구간 없음 strict 정답 | 11/12 | 12/12 |
+| 재질의 | 15 | 0 |
+
+판정은 Case A(검사 A~F 모두 성립)다. production 구현은 별도 단계에서 한다.
+
+남은 한계:
+
+- 질문에 적힌 구간 안 집계를 unspecified로 둔 조용한 오답 8건(a01, a04, a17, a19).
+- "주마다"를 month로 읽은 3건. H0에도 같은 관측이 있다.
+- 지원 범위 밖 질의를 계획으로 만든 5건. 두 arm 모두 같은 관측이다.
+- "월별", "달마다" 같은 구간 표현을 dimension·date·time에도 적어 INVALID_FACTOR로 거부된 경우(H0 8, H2 9). 안전한 거부지만 두 arm에 공통인 새 family다.
