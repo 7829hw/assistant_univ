@@ -214,13 +214,20 @@ def analyze(run_dir):
         raise SystemExit(f"무결성 문제로 분석하지 않는다: {dataclasses.asdict(report)}")
     items = {item["id"]: item for item in P.load_corpus_items(HOLDOUT)}
     goldens = {intent["intent"]: intent.get("golden") for intent in P.load_corpus(HOLDOUT)}
-    annotated = [annotate(row, items[row["id"]], goldens[row["intent_id"]]) for row in rows]
+    # 무효 관측이 있는 paraphrase는 두 arm 모두에서 뺀다. 한쪽만 빼면 짝이 어긋난다.
+    excluded = sorted({row["id"] for row in rows if row.get("measurement") != A.VALID})
+    kept = [row for row in rows if row["id"] not in excluded]
+    annotated = [annotate(row, items[row["id"]], goldens[row["intent_id"]]) for row in kept]
     by_arm = _group(annotated, "arm")
     h0, h2 = arm_summary(by_arm["H0"]), arm_summary(by_arm["H2"])
     table, outcome = intent_comparison(annotated)
     return {
         "run_id": meta["run_id"],
         "integrity": dataclasses.asdict(report) | {"clean": report.clean},
+        "excluded_paraphrases": [
+            {"id": row["id"], "arm": ARMS.get(row["variant"]),
+             "invalid_reason": row.get("invalid_reason")}
+            for row in rows if row["id"] in excluded],
         "arms": {"H0": h0, "H2": h2},
         "intent_outcome": outcome,
         "intents": table,
@@ -236,7 +243,8 @@ def main(argv=None):
     result = analyze(args.run_dir)
     with open(Path(args.run_dir) / "aggregation_ab_summary.json", "x", encoding="utf-8") as handle:
         json.dump(result, handle, ensure_ascii=False, indent=2, default=str)
-    view = {key: result[key] for key in ("run_id", "intent_outcome", "decision")}
+    view = {key: result[key] for key in ("run_id", "excluded_paraphrases",
+                                         "intent_outcome", "decision")}
     view["arms"] = {arm: {key: value for key, value in summary.items() if key != "by_cell"}
                     for arm, summary in result["arms"].items()}
     print(json.dumps(view, ensure_ascii=False, indent=2, default=str))

@@ -38,3 +38,15 @@ holdout 측정 **전에** 고정했다. 구현은 `aggregation_ab.py`의 `decide
 - **Case D(development에서는 좋고 holdout에서 뒤집힘):** 이번에는 development 비교를 측정하지 않았으므로 해당하지 않는다. development 질의 3개로는 parse·lowering 실행만 확인했다.
 
 결과를 본 뒤 H2 prompt를 고치고 다시 재지 않는다. 이 holdout은 측정 뒤 development로 바꾼다.
+
+## 무효 관측 처리 (7767312 뒤, 결과를 보기 전에 추가)
+
+첫 측정 run `20260924_023250_aggregation_holdout_h0_h2`는 관측 18건에서 멈췄다.
+H0_AGG `a03_p2`는 cold 상태의 첫 호출이 300초 안에 끝나지 않았다. 처음부터 다시
+시작해도 같았다. 따로 2,000초를 줘도 끝나지 않았고, warm 재시도는 몇 초 만에
+답했다. isolated 관측으로 잴 수 없으므로 f3b0eb0 규칙대로 무효다. 허용 무효 수가
+0이어서 run이 멈췄다. 그 run의 관측 결과는 보지 않았고 분석하지 않는다.
+
+- 측정은 `--max-invalid`를 두어 무효 관측이 있어도 끝까지 간다.
+- 무효 관측이 있는 paraphrase는 **두 arm 모두에서** 비교에서 빼고, 목록을 보고한다.
+- 판정 규칙(A~F)과 prompt, timeout(300초)은 바꾸지 않는다.

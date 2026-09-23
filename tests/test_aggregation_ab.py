@@ -118,5 +118,28 @@ class EndToEndTest(unittest.TestCase):
         self.assertEqual(result["decision"]["case"], "B")
 
 
+class ExclusionTest(unittest.TestCase):
+    def test_an_invalid_observation_drops_the_paraphrase_from_both_arms(self):
+        import json
+        import tempfile
+        import paraphrase_corpus as P
+        from tests.test_prompt_ab_harness import run
+        items = [item for item in P.load_corpus_items(B.HOLDOUT)
+                 if item["id"] in ("a21_p0", "a21_p1")]
+        refuse = json.dumps({"unsupported": True})
+        # a21_p0의 H2 관측: 재시도가 두 번 생겨 무효. a21_p1은 정상.
+        contents = [TimeoutError("t"), refuse, TimeoutError("t"), refuse, refuse,
+                    refuse, refuse]
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir, _, _ = run(tmp, items, contents, arms=("H0_AGG", "H2_AGG"),
+                                max_invalid=5)
+            result = B.analyze(run_dir)
+        self.assertEqual([entry["id"] for entry in result["excluded_paraphrases"]],
+                         ["a21_p0", "a21_p0"])
+        self.assertEqual({row["id"] for row in result["rows"]}, {"a21_p1"})
+        self.assertEqual(result["arms"]["H0"]["observations"], 1)
+        self.assertEqual(result["arms"]["H2"]["observations"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()
