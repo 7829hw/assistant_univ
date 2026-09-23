@@ -237,9 +237,14 @@ class PromptIdentityTest(unittest.TestCase):
             with self.subTest(variant=name):
                 self.assertEqual(A.build_variant(name).sha256, expected)
 
-    def test_t0_is_byte_identical_to_production(self):
+    def test_production_variant_is_byte_identical_to_production(self):
         production = GeoFlowPlanner(client=A._StubClient()).system_prompt()
-        self.assertEqual(A.build_variant("T0").prompt, production)
+        self.assertEqual(A.build_variant("PRODUCTION").prompt, production)
+
+    def test_t0_stays_the_0ccabc3_contract_whatever_production_is(self):
+        """이름은 계약 하나를 가리킨다. production이 바뀌어도 T0는 그대로다."""
+        self.assertEqual(A.build_variant("T0").sha256, A.PINNED_SHA256["T0"])
+        self.assertIn("OBJECT/corporate", A.build_variant("T0").prompt)
 
     def test_d_pre_differs_only_in_the_taxi_type_meaning(self):
         d_pre = A.build_variant("D_PRE").prompt
@@ -817,7 +822,6 @@ class TaxiWordingVariantTest(unittest.TestCase):
         for name in ("T1", "T2"):
             A.build_variant(name)
         self.assertEqual(GeoFlowPlanner(client=A._StubClient()).system_prompt(), before)
-        self.assertEqual(hashlib.sha256(before.encode()).hexdigest(), A.PINNED_SHA256["T0"])
 
 
 class ControlIntentTest(unittest.TestCase):

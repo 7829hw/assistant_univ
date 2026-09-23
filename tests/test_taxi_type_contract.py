@@ -1,9 +1,13 @@
 # -*- coding: utf-8 -*-
-"""택시 유형이 개념이 아니라 조건이라는 계약을 못박는다.
+"""택시 유형은 factor이고 개념 node가 아니라는 계약을 못박는다.
 
-paired A/B 측정에서 전체 실패 30건 중 18건이 "개인택시/법인택시"를 factor가
-아니라 concept node로 만든 것이었다. 어느 core concept에 붙이든 즉시 거부되어
+모델이 "개인택시/법인택시"를 OBJECT/private 같은 개념으로 적는 실패는 prompt
+문구와 무관하게 나온다. 어느 core concept에 붙이든 grounding에서 즉시 거부되어
 합성 단계까지 조용히 흘러가지 않아야 한다.
+
+prompt에 이 구분을 길게 적는 것은 도움이 되지 않았다. 모델 상태를 비운
+paraphrase 측정에서, 틀린 형태를 보여 준 문구는 오히려 그 형태를 만들게 했고
+긍정문으로 바꾼 문구도 새 intent에서는 짧은 정의를 넘지 못했다.
 """
 
 import dataclasses
@@ -148,7 +152,7 @@ class TaxiTypeAsConceptIsRejectedTest(unittest.TestCase):
 
 
 class TaxiTypePromptTest(unittest.TestCase):
-    """Prompt의 설명은 factor 정의에서 나와야 한다."""
+    """Prompt의 설명은 factor 정의에서 나오고, 만들면 안 되는 형태를 보여 주지 않는다."""
 
     def setUp(self):
         from geoflow.planner import GeoFlowPlanner
@@ -158,11 +162,20 @@ class TaxiTypePromptTest(unittest.TestCase):
 
         self.prompt = GeoFlowPlanner(client=_Client()).system_prompt()
 
-    def test_prompt_states_that_taxi_type_is_a_condition_not_a_concept(self):
-        self.assertIn("개념이 아니다", self.prompt)
-        self.assertIn("개인택시", self.prompt)
-        self.assertIn("법인택시", self.prompt)
-        self.assertIn("OBJECT/corporate", self.prompt)
+    def test_prompt_does_not_show_the_forms_it_must_not_produce(self):
+        """틀린 출력을 예시로 적으면 모델이 바로 그 형태를 만든다.
+
+        0ccabc3의 "(OBJECT/corporate, OBJECT/taxi_type으로 적지 않는다)"가 그랬다.
+        그 한 조각만 뺀 변형에서 b24가 회복됐다.
+        """
+        for form in ("OBJECT/corporate", "OBJECT/private", "OBJECT/taxi_type"):
+            self.assertNotIn(form, self.prompt)
+
+    def test_prompt_keeps_the_value_mapping(self):
+        """개인/법인을 어떤 값으로 적는지는 기본 prompt의 해석 규칙이 알려 준다."""
+        self.assertIn("개인=private", self.prompt)
+        self.assertIn("corporate", self.prompt)
+        self.assertEqual(FACTOR_SPECS["taxi_type"].meaning, "택시 유형 조건.")
 
     def test_prompt_text_comes_from_the_factor_definition(self):
         """설명을 바꾸면 prompt도 따라 바뀐다. 손으로 옮겨 적지 않았다는 뜻이다."""
