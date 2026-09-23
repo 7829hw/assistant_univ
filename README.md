@@ -1104,6 +1104,11 @@ python evaluate_planner.py --all-models --repeat 3 --execute
 비교함. 정답 라벨이 `[NONE]`인 질의는 "실행 가능한 계획이 만들어지지 않는 것"이
 정답이며, Planner가 거부했든 합성이 포기했든 같게 판정함.
 
+합성이 포기한 이유 가운데 "후보 operator는 있는데 필수 input 개념(현재는 지역)이
+질문에 없음"은 `MISSING_REQUIRED_INPUT`으로 따로 기록함. d454988까지의 결과에서는
+같은 경우가 `NO_OPERATOR`로 남아 있으므로, 옛 run과 status 문자열을 비교할 때
+둘을 같은 거부로 봐야 함. 판정(거부, 정답 여부)은 바뀌지 않음.
+
 결과는 `evaluation/planner_accuracy/<run_id>/planner_accuracy.json`에 저장됨.
 
 모델마다 지연 특성이 달라 한 번에 측정하기 어려우므로, 따로 실행한 결과를 하나의
@@ -1358,7 +1363,7 @@ LLM 호출 감소는 model hop마다 다음 Tool을 묻지 않기 때문임. Geo
 * 조각 4개로 `stub_query.yaml`과 `stub_query_boundary.yaml`의 지원 범위 질의가
   모두 처리되지만, 두 계획을 만들어 비교해야 하는 질의(지역 간 비교 등)는 아직
   표현할 수 없음. 지원하지 않는 질의는 오답 대신 계획 생성을 포기함
-  (`UNSUPPORTED_QUESTION`, `NO_OPERATOR`, `AMBIGUOUS_PORT`).
+  (`UNSUPPORTED_QUESTION`, `NO_OPERATOR`, `MISSING_REQUIRED_INPUT`, `AMBIGUOUS_PORT`).
 * 조각 합성은 현재 TIMS 도메인에 필요한 범위의 역방향 탐색임. 일반적인 AI
   planning solver가 아니며, 후보가 여럿이면 순위를 매기지 않고 포기함.
   question-graph retrieval은 인터페이스만 두었고 vector DB는 구축하지 않음.

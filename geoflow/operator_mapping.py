@@ -18,6 +18,7 @@ operator가 그 변환을 수행할 수 있는지는 여기서 정한다. 그래
 """
 
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any
 
 from geoflow.errors import CompositionError
@@ -47,31 +48,106 @@ def candidates_for(concept, subtype):
     ))
 
 
-def resolve(*, inputs, output, factors=None, where=""):
+class BindFailureReason(str, Enum):
+    """후보 operator 하나가 입력 node를 port에 배치하지 못한 이유."""
+
+    #: 필수 port에 맞는 입력 node가 없다.
+    REQUIRED_PORT_UNBOUND = "REQUIRED_PORT_UNBOUND"
+    #: 한 port에 맞는 입력 node가 둘 이상이다.
+    AMBIGUOUS_PORT = "AMBIGUOUS_PORT"
+    #: 어느 port에도 들어가지 못한 입력 node가 남는다.
+    UNCONSUMED_INPUT = "UNCONSUMED_INPUT"
+
+
+@dataclass(frozen=True)
+class BindProblem:
+    """배치 실패 하나. port가 없는 문제(UNCONSUMED_INPUT)는 port가 None이다."""
+
+    reason: BindFailureReason
+    port: str | None = None
+    expected_concept: CoreConcept | None = None
+    expected_subtypes: tuple[str, ...] = ()
+    #: 문제에 걸린 입력 node. 여럿이 맞은 port나 남은 입력이다.
+    nodes: tuple[str, ...] = ()
+
+    def to_dict(self):
+        return {
+            "reason": self.reason.value,
+            "port": self.port,
+            "expected_concept": (
+                self.expected_concept.value if self.expected_concept else None
+            ),
+            "expected_subtypes": list(self.expected_subtypes),
+            "nodes": list(self.nodes),
+        }
+
+
+@dataclass(frozen=True)
+class CandidateFailure:
+    """출력 타입은 맞지만 입력을 배치하지 못한 후보 operator.
+
+    한 후보가 여러 문제를 함께 가질 수 있으므로 문제를 모두 담는다.
+    """
+
+    operator: str
+    problems: tuple[BindProblem, ...]
+
+    @property
+    def reasons(self):
+        return tuple(sorted({item.reason for item in self.problems},
+                            key=lambda reason: reason.value))
+
+    def sole_missing_port(self):
+        """유일한 문제가 필수 port 하나가 빈 것이면 그 문제를, 아니면 None.
+
+        이때만 "입력 하나가 있으면 이 후보가 성립한다"고 말할 수 있다.
+        """
+        if len(self.problems) != 1:
+            return None
+        problem = self.problems[0]
+        if problem.reason != BindFailureReason.REQUIRED_PORT_UNBOUND:
+            return None
+        return problem
+
+    def to_dict(self):
+        return {
+            "operator": self.operator,
+            "reasons": [reason.value for reason in self.reasons],
+            "problems": [item.to_dict() for item in self.problems],
+        }
+
+
+#: 필수 input이 비었을 때 사용자에게 보이는 말. operator 이름은 쓰지 않는다.
+_MISSING_INPUT_MESSAGES = {
+    CoreConcept.LOCATION: "이 분석은 지역을 함께 지정해야 합니다.",
+}
+_MISSING_INPUT_FALLBACK = "이 분석에 필요한 조건이 질문에 없습니다."
+
+
+def resolve(*, inputs, output, factors=None, where="", available_nodes=None):
     """입력 node 집합과 출력 node로 operator를 확정한다.
 
     후보가 없거나 둘 이상이면 추측하지 않고 실패한다. 계획이 실행마다 달라지지
     않아야 하기 때문이다.
+
+    ``available_nodes``는 이 변환을 만들 때 graph에서 입력으로 쓸 수 있는 node
+    전체다. operator 선택에는 쓰지 않고, 실패했을 때 필수 input이 정말 없는지
+    판정하는 데만 쓴다. 주지 않으면 그 판정을 하지 않는다.
     """
     factors = dict(factors or {})
     matched = []
+    failures = []
     for spec in candidates_for(output.concept, output.subtype):
-        bound = _bind_ports(spec, inputs)
-        if bound is not None:
+        bound, failure = _bind_ports(spec, inputs)
+        if failure is None:
             matched.append((spec, bound))
+        else:
+            failures.append(failure)
 
     if not matched:
-        raise CompositionError(
-            f"{where or output.id}: "
-            f"{_describe(inputs)} → {output.concept.value}/{output.subtype} "
-            "변환을 수행할 semantic operator가 없습니다.",
-            code="NO_OPERATOR",
-            context={
-                "output": f"{output.concept.value}/{output.subtype}",
-                "inputs": [
-                    f"{node.concept.value}/{node.subtype}" for node in inputs
-                ],
-            },
+        raise _binding_failure(
+            inputs=inputs, output=output, failures=failures, where=where,
+            available_nodes=available_nodes,
         )
     if len(matched) > 1:
         names = ", ".join(spec.name for spec, _ in matched)
@@ -97,32 +173,124 @@ def resolve(*, inputs, output, factors=None, where=""):
     )
 
 
+def _type_name(node):
+    return f"{node.concept.value}/{node.subtype}"
+
+
+def _binding_failure(*, inputs, output, failures, where, available_nodes):
+    """모든 후보가 배치에 실패했을 때의 오류를 만든다.
+
+    MISSING_REQUIRED_INPUT은 다음을 모두 만족할 때만 낸다. 하나라도 어긋나면
+    NO_OPERATOR다. 틀린 안내("지역을 지정하세요")를 내는 것보다 원인을 덜
+    구체적으로 말하는 편이 낫다.
+
+    1. 출력 타입이 맞는 후보가 있다.
+    2. 그중 하나의 유일한 문제가 필수 port 하나가 빈 것이다.
+    3. 그 port가 기대하는 concept의 node가 graph 어디에도 없다. subtype이나
+       속성이 맞지 않는 node라도 concept이 같으면 "있다"고 본다. 질문에 장소가
+       있는데 역할이 맞지 않는 경우를 "장소가 없다"로 말하지 않기 위해서다.
+    """
+    output_type = f"{output.concept.value}/{output.subtype}"
+    input_types = [_type_name(node) for node in inputs]
+    candidate_failures = [failure.to_dict() for failure in failures]
+
+    if available_nodes is not None:
+        present = {
+            node.concept for node in available_nodes if node.id != output.id
+        }
+        for failure in failures:
+            problem = failure.sole_missing_port()
+            if problem is None or problem.expected_concept in present:
+                continue
+            return CompositionError(
+                f"{where or output.id}: {output_type}를 만들려면 "
+                f"{problem.expected_concept.value}"
+                f"({', '.join(problem.expected_subtypes)}) 입력이 필요하지만 "
+                "graph에 없습니다.",
+                code="MISSING_REQUIRED_INPUT",
+                user_message=_MISSING_INPUT_MESSAGES.get(
+                    problem.expected_concept, _MISSING_INPUT_FALLBACK,
+                ),
+                context={
+                    "output": output_type,
+                    "candidate_operator": failure.operator,
+                    "required_port": problem.port,
+                    "expected_concept": problem.expected_concept.value,
+                    "expected_subtypes": list(problem.expected_subtypes),
+                    "available_inputs": input_types,
+                    "candidate_failures": candidate_failures,
+                },
+            )
+
+    return CompositionError(
+        f"{where or output.id}: "
+        f"{_describe(inputs)} → {output_type} "
+        "변환을 수행할 semantic operator가 없습니다.",
+        code="NO_OPERATOR",
+        context={
+            "output": output_type,
+            "inputs": input_types,
+            "candidate_failures": candidate_failures,
+        },
+    )
+
+
 def _bind_ports(spec: OperatorSpec, inputs):
     """입력 node를 operator port에 결정적으로 배치한다.
 
     한 port에 후보가 둘 이상이면 배치하지 않는다. 출발지와 도착지를 임의로
     정하는 일이 없어야 하기 때문이다.
+
+    ``(assigned, None)`` 또는 ``(None, CandidateFailure)``를 돌려준다. 문제가
+    하나라도 있으면 배치하지 않는다는 판정은 예전과 같다. 첫 문제에서 멈추지
+    않고 끝까지 보는 것은 실패 이유를 모두 남기기 위해서다.
     """
     assigned: dict[str, ConceptNode] = {}
+    problems: list[BindProblem] = []
     for port, port_spec in spec.inputs.items():
         matches = [
             node for node in inputs
             if port_spec.binds(node.concept, node.subtype, node.attributes)
         ]
         if len(matches) > 1:
-            return None
+            problems.append(_port_problem(
+                BindFailureReason.AMBIGUOUS_PORT, port, port_spec, matches,
+            ))
+            continue
         if not matches:
             if port_spec.required:
-                return None
+                problems.append(_port_problem(
+                    BindFailureReason.REQUIRED_PORT_UNBOUND, port, port_spec,
+                ))
             continue
         assigned[port] = matches[0]
 
+    # 받아 줄 port가 없는 입력이 남아 있으면 이 operator는 그 조건을
+    # 조용히 버리게 된다. 후보에서 제외한다. 여러 node가 맞아 배치하지 못한
+    # port의 node는 AMBIGUOUS_PORT로 이미 적었으므로 다시 세지 않는다.
     consumed = {node.id for node in assigned.values()}
-    if any(node.id not in consumed for node in inputs):
-        # 받아 줄 port가 없는 입력이 남아 있으면 이 operator는 그 조건을
-        # 조용히 버리게 된다. 후보에서 제외한다.
-        return None
-    return assigned
+    consumed.update(
+        node_id for problem in problems for node_id in problem.nodes
+    )
+    leftover = [node for node in inputs if node.id not in consumed]
+    if leftover:
+        problems.append(BindProblem(
+            reason=BindFailureReason.UNCONSUMED_INPUT,
+            nodes=tuple(node.id for node in leftover),
+        ))
+    if problems:
+        return None, CandidateFailure(operator=spec.name, problems=tuple(problems))
+    return assigned, None
+
+
+def _port_problem(reason, port, port_spec, nodes=()):
+    return BindProblem(
+        reason=reason,
+        port=port,
+        expected_concept=port_spec.concept,
+        expected_subtypes=tuple(sorted(port_spec.subtypes)),
+        nodes=tuple(node.id for node in nodes),
+    )
 
 
 #: 출력 concept subtype에서 곧바로 따라오는 Tool 인자.

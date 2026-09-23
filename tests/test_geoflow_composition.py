@@ -379,8 +379,9 @@ class CompositionTest(ComposerCase):
                  measure("m", "AMOUNT", "passage_count")],
                 {"dimension": "sigungu"},
             )
-        # get_passage_count는 범위가 필수인데 질문에 장소가 없다.
-        self.assertEqual(caught.exception.code, "NO_OPERATOR")
+        # get_passage_count는 범위가 필수인데 질문에 장소가 없다. 범위를
+        # 지어내지 않고, operator가 없다가 아니라 input이 빠졌다고 말한다.
+        self.assertEqual(caught.exception.code, "MISSING_REQUIRED_INPUT")
 
 
 class RoleOrderingTest(ComposerCase):

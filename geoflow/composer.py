@@ -64,6 +64,7 @@ SPECIFIC_FAILURES = frozenset({
     "AMBIGUOUS_OPERATOR",
     "INVALID_PARAM_VALUE",
     "MISSING_COMPANION_PARAM",
+    "MISSING_REQUIRED_INPUT",
     "PARAM_VALUE_REQUIRES_INPUT",
 })
 
@@ -304,6 +305,12 @@ class MacroComposer:
             output=output_node,
             factors=grounding.factors,
             where=f"{macro.name}.{spec.id}",
+            # 선택에는 쓰지 않는다. 실패했을 때 필수 input이 graph에 정말
+            # 없는지 판정하는 데만 쓴다.
+            available_nodes=[
+                node for node in build.nodes.values()
+                if node.id != output_node.id and _bindable(node)
+            ],
         )
         build.transformations.append(Transformation(
             id=build.unique_transformation_id(spec.id),

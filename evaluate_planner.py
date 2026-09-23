@@ -71,6 +71,9 @@ REFUSAL_CODES = frozenset({
     "NO_MEASURE",
     "NO_MACRO",
     "NO_OPERATOR",
+    # 후보 operator는 있지만 필수 input 개념이 질문에 없음. d454988 이전
+    # 결과에서는 같은 경우가 NO_OPERATOR로 기록되어 있다.
+    "MISSING_REQUIRED_INPUT",
     "AMBIGUOUS_PORT",
     "AMBIGUOUS_OPERATOR",
     "UNUSED_CONCEPT",
