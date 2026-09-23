@@ -55,7 +55,7 @@ import httpx
 
 import evaluate_planner as E
 import paraphrase_corpus
-from paraphrase_corpus import final_tool_call, tool_arg_mismatches
+from paraphrase_corpus import final_tool_call, tool_arg_mismatches, tool_defaults
 from geoflow import factors as F
 from geoflow import planner as planner_module
 from geoflow.composer import MacroComposer
@@ -601,6 +601,7 @@ def observe(item, *, arm, variant, repetition, position, pair_index,
     else:
         record["arg_mismatches"] = tool_arg_mismatches(
             record["expected_tool_args"], record["final_tool_args"],
+            tool_defaults(record["final_tool"]),
         )
 
     calls = [dict(call) for call in recorder.calls]
@@ -1003,11 +1004,33 @@ def _percentile(values, q):
 # 부호 검정도 intent 수로 한다.
 
 
+#: 분석 시점의 채점 규칙. 관측 파일에는 관측 당시의 채점이 들어 있다.
+#: tool_args_schema_defaults_v1: schema 기본값과 같은 인자는 생략한 것과 같게 본다.
+SCORING_VERSION = "tool_args_schema_defaults_v1"
+
+
+def rescore(record):
+    """관측 원본에서 채점만 다시 한다. 관측 파일은 바꾸지 않는다."""
+    record = dict(record)
+    if record.get("measurement") != VALID:
+        return record
+    if record.get("final_tool_args") is not None:
+        record["arg_mismatches"] = tool_arg_mismatches(
+            record.get("expected_tool_args") or {}, record["final_tool_args"],
+            tool_defaults(record.get("final_tool")),
+        )
+    record["final_category"] = final_category(record)
+    record["strict_correct"] = record["final_category"] in ("correct", "unsupported_correct")
+    return record
+
+
 def _in_cohort(row, cohort):
     return cohort is None or cohort in (row.get("cohorts") or [])
 
 
-def analyze_intents(rows, arm_a, arm_b, *, cohort=None, metric="strict_correct"):
+def analyze_intents(rows, arm_a, arm_b, *, cohort=None, metric="strict_correct",
+                    rescored=True):
+    rows = [rescore(row) for row in rows] if rescored else list(rows)
     matched = [
         (key, a, b) for key, a, b in pairs(rows, arm_a, arm_b)
         if _in_cohort(a, cohort)
@@ -1051,6 +1074,7 @@ def analyze_intents(rows, arm_a, arm_b, *, cohort=None, metric="strict_correct")
         "cohort": cohort,
         "arms": [arm_a, arm_b],
         "metric": metric,
+        "scoring": SCORING_VERSION if rescored else "as_observed",
         "paraphrase_level": {
             "pairs": len(matched),
             "both": table[(True, True)],
@@ -1092,7 +1116,8 @@ def print_intent_report(result, out=sys.stdout):
     a, b = result["arms"]
     w = lambda text="": print(text, file=out)  # noqa: E731
     p, i = result["paraphrase_level"], result["intent_level"]
-    w(f"== {a} vs {b}  cohort={result['cohort'] or '전체'}  기준={result['metric']} ==")
+    w(f"== {a} vs {b}  cohort={result['cohort'] or '전체'}  기준={result['metric']} "
+      f"채점={result['scoring']} ==")
     w(f"  paraphrase 층: 짝 {p['pairs']} | both {p['both']} | {a}만 {p[f'{a}_only']} | "
       f"{b}만 {p[f'{b}_only']} | 둘 다 틀림 {p['neither']}")
     w(f"  intent 층: {i['intents']}개 중 {a} 우세 {len(i[f'{a}_better'])} "
@@ -1286,7 +1311,8 @@ def cmd_analyze_corpus(args):
     for pair in args.pairs.split(","):
         arm_a, arm_b = pair.split(":")
         for cohort in cohorts:
-            result = analyze_intents(rows, arm_a, arm_b, cohort=cohort or None)
+            result = analyze_intents(rows, arm_a, arm_b, cohort=cohort or None,
+                                     rescored=not args.as_observed)
             print_intent_report(result)
             print()
             results.append(result)
@@ -1350,6 +1376,8 @@ def main(argv=None):
     corpus.add_argument("--pairs", required=True, help="예: C:D_PRE,D_PRE:T0")
     corpus.add_argument("--cohorts", help="cohort별로 나눠 본다, 쉼표로")
     corpus.add_argument("--allow-incomplete", action="store_true")
+    corpus.add_argument("--as-observed", action="store_true",
+                        help="다시 채점하지 않고 관측 당시의 채점을 쓴다")
     corpus.set_defaults(func=cmd_analyze_corpus)
     floor = sub.add_parser("floor")
     floor.add_argument("run_dirs", nargs="+")

@@ -704,3 +704,35 @@ class IntentAnalysisTest(unittest.TestCase):
                          ["paraphrase_level"]["pairs"], 0)
         result = A.analyze_intents(rows, "A", "B", cohort="taxi_type")
         A.print_intent_report(result, out=io.StringIO())
+
+
+class SchemaDefaultTest(unittest.TestCase):
+    """schema 기본값과 같은 인자는 생략한 것과 같다. aggregation 기본값은 avg다."""
+
+    def test_defaults_come_from_the_schema(self):
+        import paraphrase_corpus as P
+        self.assertEqual(P.tool_defaults("get_passage_metrics"), {"aggregation": "avg"})
+        self.assertEqual(P.tool_defaults("get_trip_count"), {})
+
+    def test_default_value_equals_omission_both_ways(self):
+        import paraphrase_corpus as P
+        defaults = P.tool_defaults("get_operation_metrics")
+        self.assertEqual(P.tool_arg_mismatches({"aggregation": "avg"}, {}, defaults), [])
+        self.assertEqual(P.tool_arg_mismatches({"taxi_type": None},
+                                               {"taxi_type": "all"}, defaults), [])
+        self.assertTrue(P.tool_arg_mismatches({"aggregation": "max"}, {}, defaults))
+        self.assertTrue(P.tool_arg_mismatches({"taxi_type": "private"}, {}, defaults))
+
+    def test_rescoring_fixes_the_label_without_touching_the_record(self):
+        item = dict(REVENUE_ITEM, expected_tool_args={"aggregation": "avg"},
+                    intent_id="t", paraphrase_id="t_p0", cohorts=["factor_stage"])
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir, _, _ = run(tmp, [item], [grounding({})] * 2)
+            before = (run_dir / "observations.jsonl").read_bytes()
+            rows = rows_of(run_dir)
+            result = A.analyze_intents(rows, "A", "B")
+            observed = A.analyze_intents(rows, "A", "B", rescored=False)
+            self.assertEqual((run_dir / "observations.jsonl").read_bytes(), before)
+        self.assertEqual(result["scoring"], A.SCORING_VERSION)
+        self.assertEqual(result["by_arm"]["A"]["strict_correct"], 1)
+        self.assertEqual(observed["scoring"], "as_observed")

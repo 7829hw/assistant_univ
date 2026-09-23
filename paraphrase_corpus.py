@@ -5,6 +5,7 @@
 해서, 표현만 바뀌고 뜻은 그대로라는 전제가 파일 형식에서부터 지켜지게 한다.
 """
 
+import functools
 import re
 import unicodedata
 from pathlib import Path
@@ -220,14 +221,51 @@ def final_tool_call(plan):
     return step.tool_name, {key: resolve(value) for key, value in step.arguments.items()}
 
 
-def tool_arg_mismatches(expected, actual):
-    """기대한 인자와 다른 것. None은 "없어야 한다"는 뜻이다."""
+#: Tool schema 위치. 기본값을 읽는다.
+_SCHEMA_DIR = BASE_DIR / "schemas"
+
+
+@functools.lru_cache(maxsize=None)
+def tool_defaults(tool_name):
+    """Tool 인자의 schema 기본값. ``$ref``로 공통 정의를 가리키면 그것을 따른다.
+
+    기본값을 명시한 것과 생략한 것은 실행 의미가 같다. 예를 들어
+    ``aggregation``의 기본값은 avg이므로 "평균"을 묻고 aggregation을 생략해도
+    틀리지 않다.
+    """
+    common = yaml.safe_load((_SCHEMA_DIR / "_common.yaml").read_text(encoding="utf-8"))
+    definitions = common.get("$defs") or common
+    for entry in yaml.safe_load((_SCHEMA_DIR / "tims.yaml").read_text(encoding="utf-8")):
+        function = entry["function"]
+        if function["name"] != tool_name:
+            continue
+        defaults = {}
+        for key, spec in function["parameters"]["properties"].items():
+            ref = spec.get("$ref", "")
+            base = definitions.get(ref.rsplit("/", 1)[-1], {}) if ref else {}
+            default = spec.get("default", base.get("default"))
+            if default is not None:
+                defaults[key] = default
+        return defaults
+    return {}
+
+
+def tool_arg_mismatches(expected, actual, defaults=None):
+    """기대한 인자와 다른 것. None은 "없어야 한다"는 뜻이다.
+
+    schema 기본값과 같은 값은 생략한 것과 같게 본다. 양쪽 모두에 적용한다.
+    """
+    defaults = defaults or {}
+
+    def effective(key, value):
+        return None if value is not None and value == defaults.get(key) else value
+
     mismatches = []
     for key, want in expected.items():
         got = actual.get(key)
-        if want is None:
-            if got is not None:
-                mismatches.append([key, None, got])
+        if effective(key, want) is None:
+            if effective(key, got) is not None:
+                mismatches.append([key, want, got])
         elif got != want:
             mismatches.append([key, want, got])
     return mismatches
