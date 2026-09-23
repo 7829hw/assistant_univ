@@ -1,0 +1,38 @@
+# paraphrase corpus의 역할과 이력.
+#
+# 결과를 보고 결정을 내리는 데 한 번이라도 쓴 corpus는 더 이상 holdout이 아니다.
+# 이름에 holdout이 들어 있어도 여기서 development로 표시한다. corpus 파일 자체는
+# 고치지 않는다. 고치면 그 corpus로 잰 run의 meta에 남은 sha256과 어긋난다.
+#
+# role
+#   development    후보를 고르거나 결정을 내리는 데 이미 쓴 것
+#   fresh_holdout  아직 어떤 결과도 보지 않은 것. 한 번 쓰면 development로 바꾼다.
+#
+# sha256은 파일 본문이다. 테스트가 현재 파일과 대조해, 고정한 corpus가 바뀌면
+# 걸린다.
+
+corpora:
+  - path: evaluation/paraphrases.yaml
+    parents: [stub_query_boundary.yaml, stub_query.yaml]
+    role: development
+    sha256: a1a047c75914e415e8da67a966f970782a4e1f4576481db2a66308c385bb2f59
+    history:
+      - "68c5fe5 선택용 corpus로 작성 (12 intent, 68 paraphrase)"
+      - "645bb28 C/D_PRE/T0 재검증에 사용"
+      - "57ddf87 taxi_type 문구 변형 선택에 사용"
+
+  - path: evaluation/paraphrases_holdout.yaml
+    parents: [evaluation/holdout_parents.yaml]
+    role: development
+    sha256: 3d5cd763be49b6d119cc890ad631f96fbd7afe1bb4f8aaaaf74947003b0fc275
+    history:
+      - "5e8eaa0 taxi_type 문구 검증용 holdout으로 작성 (15 intent, 60 paraphrase)"
+      - "d9f4782 holdout 결과로 0ccabc3 rollback을 결정. 이후 development"
+
+  - path: evaluation/paraphrases_factor_holdout.yaml
+    parents: [evaluation/factor_holdout_parents.yaml]
+    role: fresh_holdout
+    purpose: "50fae72 factor 안내 factorial(F00/F10/F01/F11)에서 고른 후보의 검증"
+    sha256: 6c2d37e7bdde197ee43d8dcb3b0b17b35554fe73154e50d33a01842d60729e40
+    history:
+      - "factorial development 측정 전에 작성 (15 intent, 58 paraphrase)"
