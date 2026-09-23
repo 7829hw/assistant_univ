@@ -1,0 +1,269 @@
+# 의미는 같고 표현만 다른 질문 모음. isolated_state_v1 prompt A/B의 기본 단위다.
+#
+# 모델 상태를 비우면 같은 질문은 원문까지 똑같이 나온다. 같은 질문을 반복해도
+# 표본이 늘지 않으므로, 대신 같은 의도를 다른 표현으로 묻는다.
+#
+# 작성 원칙
+#   - 사람이 쓰고 검토한다. 평가 대상 모델로 만들지 않는다. 모델의 표현 선호가
+#     평가셋에 들어가면 그 모델에 유리해진다.
+#   - 어순, 조사, 수식어 위치, 명사구 위치만 바꾼다. 동의어는 쓰지 않는다
+#     ("법인"을 "회사"로 바꾸지 않는다). 무엇이 달라졌는지를 한 가지로 묶어 두기
+#     위해서다.
+#   - 측정값, 집계 의도, 범위, 승하차 방향, 기간의 뜻, 지원 여부를 바꾸지 않는다.
+#   - prompt 예시 문장을 그대로 가져오지 않는다.
+#   - p0은 부모 질의의 원문이다.
+#
+# 정답 label(expected_concepts / expected_macros / expected_operators)은 부모
+# 질의에서 물려받는다. paraphrase에 따로 적지 않는다.
+#
+# expected_tool_args는 최종 Tool 호출 인자 중 이 의도에서 반드시 맞아야 하는 것만
+# 적는다. null은 "없어야 한다", "@place:이름"은 그 장소에서 만든 scope를 뜻한다.
+# 기존 채점은 macro/operator/검증만 보므로 factor 값이나 승하차 방향이 뒤바뀌어도
+# 정답으로 센다. 이 칸이 그것을 잡는다.
+#
+# golden은 사람이 쓴 올바른 grounding이다. 테스트가 이것을 실제 합성·컴파일 경로에
+# 통과시켜 label이 코드 계약과 맞는지 확인한다.
+#
+# must_include는 "이 중 하나는 들어 있어야 한다"의 목록, must_exclude는 들어 있으면
+# 안 되는 표현이다. 뜻이 바뀌지 않았는지를 기계적으로 확인하는 최소 장치다.
+# od_roles는 장소마다 승하차 표지가 붙어 있는지 확인한다.
+
+version: 1
+
+intents:
+
+  # --- taxi_type ------------------------------------------------------------
+  # "문장 선두 명사구라서 개념으로 만든다"가 일반화된 실패인지 본다.
+  # taxi_type 표현을 맨 앞 / 장소 뒤 / 측정값 뒤 / 문장 끝으로 옮긴다.
+
+  - intent: b05_corporate_vacant_ratio
+    cohorts: [taxi_type]
+    expected_tool_args: {metric: vacant_ratio, taxi_type: corporate}
+    must_include: [["법인"], ["공차율"]]
+    must_exclude: ["개인"]
+    golden:
+      concepts:
+        - {id: drive, concept: EVENT, subtype: drive, role: SUPPORT, source: implicit}
+        - {id: ratio, concept: PROPORTION, subtype: vacant_ratio, role: MEASURE, source: implicit}
+      factors: {taxi_type: corporate}
+    paraphrases:
+      - {id: b05_p0, question: "법인택시의 공차율은?", note: "원문. 맨 앞"}
+      - {id: b05_p1, question: "공차율을 법인택시 기준으로 알려줘", note: "측정값 뒤"}
+      - {id: b05_p2, question: "공차율은 법인택시에서 얼마인가요?", note: "측정값 뒤, 조사 '에서'"}
+      - {id: b05_p3, question: "택시 공차율, 법인택시만 보면?", note: "문장 끝"}
+      - {id: b05_p4, question: "법인 택시 공차율은 얼마야?", note: "맨 앞, 띄어 쓰고 조사 없음"}
+      - {id: b05_p5, question: "공차율이 법인택시는 어떻게 되나요?", note: "측정값 뒤, 주제 조사"}
+
+  - intent: b10_revenue_without_grouping
+    cohorts: [taxi_type]
+    expected_tool_args: {metric: revenue, taxi_type: private, aggregation: avg, bucket: null}
+    must_include: [["개인"], ["평균"], ["수입"]]
+    must_exclude: ["법인", "단위"]
+    golden:
+      concepts:
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: revenue, concept: AMOUNT, subtype: revenue, role: MEASURE, source: implicit}
+      factors: {taxi_type: private, aggregation: avg}
+    paraphrases:
+      - {id: b10_p0, question: "개인택시의 평균 수입은?", note: "원문. 맨 앞"}
+      - {id: b10_p1, question: "개인택시 수입의 평균은?", note: "'평균 X' → 'X의 평균'"}
+      - {id: b10_p2, question: "평균 수입을 개인택시 기준으로 알려줘", note: "측정값 뒤"}
+      - {id: b10_p3, question: "수입의 평균은 개인택시가 얼마인가요?", note: "측정값 뒤"}
+      - {id: b10_p4, question: "택시 평균 수입, 개인택시만 보면?", note: "문장 끝"}
+      - {id: b10_p5, question: "평균적으로 개인택시의 수입은 얼마인가요?", note: "집계어가 맨 앞"}
+
+  - intent: b14_operating_count_private
+    cohorts: [taxi_type]
+    expected_tool_args: {metric: operating_count, taxi_type: private}
+    must_include: [["부산"], ["개인"], ["영업 횟수"]]
+    must_exclude: ["법인"]
+    golden:
+      concepts:
+        - {id: busan, concept: LOCATION, subtype: place, role: SUBCOND, source: user,
+           value: {name: 부산, region: ""}}
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: count, concept: AMOUNT, subtype: operating_count, role: MEASURE, source: implicit}
+      factors: {taxi_type: private}
+    paraphrases:
+      - {id: b14_p0, question: "부산 개인택시의 영업 횟수는?", note: "원문. 장소 뒤"}
+      - {id: b14_p1, question: "개인택시의 부산 영업 횟수는?", note: "맨 앞"}
+      - {id: b14_p2, question: "부산의 영업 횟수를 개인택시 기준으로 알려줘", note: "측정값 뒤"}
+      - {id: b14_p3, question: "영업 횟수는 부산 개인택시가 몇 회인가요?", note: "측정값 뒤, 장소와 붙음"}
+      - {id: b14_p4, question: "부산에서 개인택시의 영업 횟수는?", note: "장소 뒤, 조사 '에서'"}
+      - {id: b14_p5, question: "부산 영업 횟수, 개인택시만 보면?", note: "문장 끝"}
+
+  - intent: b24_bucket_rollup_month
+    cohorts: [taxi_type, factor_stage]
+    expected_tool_args: {metric: revenue, taxi_type: private, bucket: month, rollup: max}
+    must_include: [["월 단위"], ["개인"], ["최대"], ["수입"]]
+    must_exclude: ["주 단위", "주말", "요일", "법인"]
+    golden:
+      concepts:
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: revenue, concept: AMOUNT, subtype: revenue, role: MEASURE, source: implicit}
+      factors: {bucket: month, rollup: max, taxi_type: private}
+    paraphrases:
+      - {id: b24_p0, question: "월 단위로 집계한 개인택시 수입의 최대값은?", note: "원문"}
+      - {id: b24_p1, question: "개인택시 수입을 월 단위로 집계했을 때 최대값은?", note: "taxi_type 맨 앞, 구간 표현 중간"}
+      - {id: b24_p2, question: "월 단위 개인택시 수입 중 최대값은?", note: "'집계한' 없이 구간 표현만"}
+      - {id: b24_p3, question: "수입의 최대값을 월 단위로 개인택시 기준 집계하면?", note: "집계어가 앞, taxi_type 뒤"}
+      - {id: b24_p4, question: "개인택시의 월 단위 수입 최대값은?", note: "taxi_type 맨 앞"}
+      - {id: b24_p5, question: "월 단위로 집계하면 개인택시 수입의 최대값은 얼마인가요?", note: "조건절"}
+
+  # --- factor_stage ---------------------------------------------------------
+  # 50fae72(집계 단계의 의미) 재검증. "주 단위"는 bucket, "주말"은 date,
+  # "요일별"은 dimension이다. 셋 다 '주'나 '요일'을 품지만 서로 섞이면 안 된다.
+
+  - intent: b21_bucket_rollup
+    cohorts: [factor_stage]
+    expected_tool_args: {metric: revenue, bucket: week, rollup: avg, taxi_type: null}
+    must_include: [["주 단위"], ["평균"], ["수입"]]
+    must_exclude: ["주말", "요일", "월 단위", "개인", "법인"]
+    golden:
+      concepts:
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: revenue, concept: AMOUNT, subtype: revenue, role: MEASURE, source: implicit}
+      factors: {bucket: week, rollup: avg}
+    paraphrases:
+      - {id: b21_p0, question: "주 단위로 집계한 택시 수입의 평균은?", note: "원문"}
+      - {id: b21_p1, question: "택시 수입을 주 단위로 집계했을 때 평균은?", note: "측정값이 앞"}
+      - {id: b21_p2, question: "주 단위 택시 수입의 평균은?", note: "'집계한' 없이 구간 표현만"}
+      - {id: b21_p3, question: "수입의 평균을 주 단위로 집계하면?", note: "집계어가 앞"}
+      - {id: b21_p4, question: "택시 수입의 주 단위 집계 평균은?", note: "명사구로 압축"}
+      - {id: b21_p5, question: "주 단위로 집계하면 택시 수입의 평균은 얼마인가요?", note: "조건절"}
+
+  - intent: b06_fare_max
+    cohorts: [factor_stage]
+    expected_tool_args: {metric: fare, aggregation: max}
+    must_include: [["대구"], ["요금"], ["최대"]]
+    must_exclude: ["단위", "주말", "요일"]
+    golden:
+      concepts:
+        - {id: daegu, concept: LOCATION, subtype: place, role: SUBCOND, source: user,
+           value: {name: 대구, region: ""}}
+        - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+        - {id: fare, concept: AMOUNT, subtype: fare, role: MEASURE, source: implicit}
+      factors: {aggregation: max}
+    paraphrases:
+      - {id: b06_p0, question: "대구 택시 요금의 최대값은?", note: "원문. 구간 표현 없는 집계"}
+      - {id: b06_p1, question: "대구에서 택시 요금의 최대값은?", note: "조사 '에서'"}
+      - {id: b06_p2, question: "택시 요금 최대값을 대구 기준으로 알려줘", note: "장소가 뒤"}
+      - {id: b06_p3, question: "대구 택시 요금 중 최대값은?", note: "'X의 최대값' → 'X 중 최대값'"}
+      - {id: b06_p4, question: "최대 택시 요금은 대구에서 얼마인가요?", note: "집계어가 맨 앞"}
+      - {id: b06_p5, question: "대구의 택시 요금, 최대값은?", note: "문장 끝"}
+
+  - intent: b04_operating_ratio_by_day
+    cohorts: [factor_stage]
+    expected_tool_args: {metric: operating_ratio, dimension: dayofweek, bucket: null}
+    must_include: [["요일별"], ["운행률"]]
+    must_exclude: ["주말", "주 단위", "월 단위"]
+    golden:
+      concepts:
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: ratio, concept: PROPORTION, subtype: operating_ratio, role: MEASURE, source: implicit}
+      factors: {dimension: dayofweek}
+    paraphrases:
+      - {id: b04_p0, question: "요일별 택시 운행률은?", note: "원문"}
+      - {id: b04_p1, question: "택시 운행률을 요일별로 알려줘", note: "그룹 표현이 뒤"}
+      - {id: b04_p2, question: "운행률은 요일별로 어떻게 되나요?", note: "그룹 표현이 뒤"}
+      - {id: b04_p3, question: "요일별로 본 택시 운행률은?", note: "부사절"}
+      - {id: b04_p4, question: "택시의 운행률, 요일별로는?", note: "문장 끝"}
+      - {id: b04_p5, question: "택시 운행률을 요일별로 나눠 보면?", note: "동사 '나눠'"}
+
+  - intent: b16_weekend_speed
+    cohorts: [factor_stage]
+    expected_tool_args: {metric: speed, date: weekend, aggregation: avg}
+    must_include: [["주말"], ["대구"], ["평균"], ["속도"]]
+    must_exclude: ["주 단위", "요일", "월 단위"]
+    golden:
+      concepts:
+        - {id: daegu, concept: LOCATION, subtype: place, role: SUBCOND, source: user,
+           value: {name: 대구, region: ""}}
+        - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+        - {id: speed, concept: AMOUNT, subtype: speed, role: MEASURE, source: implicit}
+      factors: {date: weekend, aggregation: avg}
+    paraphrases:
+      - {id: b16_p0, question: "주말 대구 지역의 평균 속도는?", note: "원문. 기간 맨 앞"}
+      - {id: b16_p1, question: "대구 지역의 주말 평균 속도는?", note: "기간이 측정값 바로 앞"}
+      - {id: b16_p2, question: "대구의 평균 속도를 주말 기준으로 알려줘", note: "기간이 뒤"}
+      - {id: b16_p3, question: "주말에 대구 평균 속도는?", note: "조사 '에'"}
+      - {id: b16_p4, question: "평균 속도는 주말 대구에서 얼마인가요?", note: "측정값이 앞"}
+      - {id: b16_p5, question: "대구 지역 평균 속도, 주말만 보면?", note: "문장 끝"}
+
+  # --- relation -------------------------------------------------------------
+  # 승하차 방향과 관계 재질의, 지원하지 않는 비교의 거부가 표현을 바꿔도 유지되는지.
+
+  - intent: b11_origin_only
+    cohorts: [relation]
+    expected_tool_args: {scope_pickup: "@place:동성로동", scope_dropoff: null}
+    must_include: [["동성로동"], ["출발"], ["건수", "몇 건"]]
+    must_exclude: ["도착"]
+    od_roles: {동성로동: pickup}
+    golden:
+      concepts:
+        - {id: origin, concept: LOCATION, subtype: place, role: SUBCOND, source: user,
+           value: {name: 동성로동, region: ""}, attributes: {od_role: pickup}}
+        - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+        - {id: count, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+      factors: {}
+    paraphrases:
+      - {id: b11_p0, question: "동성로동에서 출발한 실차 구간 건수는?", note: "원문"}
+      - {id: b11_p1, question: "출발지가 동성로동인 실차 구간 건수는?", note: "'출발지가 X'"}
+      - {id: b11_p2, question: "실차 구간 건수를 동성로동 출발 기준으로 알려줘", note: "장소가 뒤"}
+      - {id: b11_p3, question: "동성로동 출발 실차 구간은 몇 건인가요?", note: "조사 없이 명사구"}
+      - {id: b11_p4, question: "실차 구간 중 동성로동에서 출발한 건수는?", note: "측정 대상이 앞"}
+
+  - intent: b17_destination_only
+    cohorts: [relation]
+    expected_tool_args: {scope_dropoff: "@place:신천동", scope_pickup: null}
+    must_include: [["신천동"], ["도착"], ["건수", "몇 건"]]
+    must_exclude: ["출발"]
+    od_roles: {신천동: dropoff}
+    golden:
+      concepts:
+        - {id: destination, concept: LOCATION, subtype: place, role: SUBCOND, source: user,
+           value: {name: 신천동, region: ""}, attributes: {od_role: dropoff}}
+        - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+        - {id: count, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+      factors: {}
+    paraphrases:
+      - {id: b17_p0, question: "신천동에 도착한 실차 구간 건수는?", note: "원문"}
+      - {id: b17_p1, question: "도착지가 신천동인 실차 구간 건수는?", note: "'도착지가 X'"}
+      - {id: b17_p2, question: "실차 구간 건수를 신천동 도착 기준으로 알려줘", note: "장소가 뒤"}
+      - {id: b17_p3, question: "신천동 도착 실차 구간은 몇 건인가요?", note: "조사 없이 명사구"}
+      - {id: b17_p4, question: "실차 구간 중 신천동에 도착한 건수는?", note: "측정 대상이 앞"}
+
+  - intent: q27_busan_origin_destination_count
+    cohorts: [relation]
+    expected_tool_args: {scope_pickup: "@place:초읍동", scope_dropoff: "@place:초량동"}
+    must_include: [["부산"], ["초읍동"], ["초량동"], ["건수"]]
+    must_exclude: []
+    od_roles: {초읍동: pickup, 초량동: dropoff}
+    golden:
+      concepts:
+        - {id: origin, concept: LOCATION, subtype: place, role: SUBCOND, source: user,
+           value: {name: 초읍동, region: 부산}, attributes: {od_role: pickup}}
+        - {id: destination, concept: LOCATION, subtype: place, role: SUBCOND, source: user,
+           value: {name: 초량동, region: 부산}, attributes: {od_role: dropoff}}
+        - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+        - {id: count, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+      factors: {}
+    paraphrases:
+      - {id: q27_p0, question: "부산 초읍동에서 출발하여 초량동에 도착한 실차 구간 건수는?", note: "원문"}
+      - {id: q27_p1, question: "부산에서 초읍동 출발, 초량동 도착인 실차 구간 건수는?", note: "조사 없이 명사구"}
+      - {id: q27_p2, question: "초량동에 도착하고 초읍동에서 출발한 부산 실차 구간 건수는?", note: "도착지를 먼저 말함. 방향은 그대로"}
+      - {id: q27_p3, question: "부산 실차 구간 중 출발지가 초읍동이고 도착지가 초량동인 건수는?", note: "'출발지가 X'"}
+      - {id: q27_p4, question: "부산 초읍동에서 초량동으로 간 실차 구간 건수는?", note: "출발·도착 없이 조사로만 방향"}
+
+  - intent: b20_region_comparison
+    cohorts: [relation]
+    expected_tool_args: {}
+    must_include: [["대구"], ["부산"], ["더 빠른", "더 빠르"]]
+    must_exclude: []
+    golden: {unsupported: true}
+    paraphrases:
+      - {id: b20_p0, question: "대구와 부산 중 어디가 택시 평균 속도가 더 빠른가요?", note: "원문"}
+      - {id: b20_p1, question: "택시 평균 속도는 대구와 부산 중 어디가 더 빠른가요?", note: "측정값이 앞"}
+      - {id: b20_p2, question: "부산과 대구 중 택시 평균 속도가 더 빠른 곳은?", note: "지역 순서를 바꿈"}
+      - {id: b20_p3, question: "대구와 부산의 택시 평균 속도를 비교하면 어디가 더 빠른가요?", note: "'비교하면'"}
+      - {id: b20_p4, question: "택시 평균 속도가 더 빠른 곳은 대구인가요, 부산인가요?", note: "선택 의문문"}
