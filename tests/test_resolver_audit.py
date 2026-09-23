@@ -11,6 +11,7 @@ OD_EVENT_TO_MEASURE). composer는 실패한 macro를 건너뛰고 다음 macro�
 순서를 뒤집어도 성공과 실패가 바뀌지 않아야 한다.
 """
 
+import dataclasses
 import itertools
 import os
 import unittest
@@ -25,7 +26,7 @@ from geoflow.compiler import compile_plan
 from geoflow.errors import CompositionError, GeoFlowError
 from geoflow.grounding import parse_grounding
 from geoflow.macros import MacroLibrary
-from geoflow.operator_registry import OPERATORS
+from geoflow.operator_registry import OPERATORS, Operator
 from geoflow.types import ConceptNode, CoreConcept, FunctionalRole, NodeSource
 from tests.test_geoflow_composition import event, measure, payload, place
 from tests.test_operator_diagnostics import SelectionUnchangedTest
@@ -127,6 +128,32 @@ class ResolverViabilityTest(unittest.TestCase):
         with mock.patch.object(operator_mapping, "candidates_for",
                                lambda c, s: tuple(reversed(original(c, s)))):
             self.assertGreater(self._check(), 5000)
+
+
+class KnownLimitationTest(unittest.TestCase):
+    """구조적 한계. 지금 registry로는 생기지 않는다.
+
+    같은 output을 만드는 operator가 둘이고 둘 다 배치에 성공하면, resolve()는
+    param 계약을 보기 전에 AMBIGUOUS_OPERATOR로 멈춘다. 한쪽이 param 계약에
+    걸려 실제로 성립하는 후보가 하나뿐이어도 그렇다. 두 번째 operator가 생기면
+    CandidateMultiplicityTest가 먼저 실패하고, 이 제한을 고칠지 정해야 한다.
+    고치면 이 테스트는 unexpected success가 되어 expectedFailure를 떼게 된다.
+    """
+
+    @unittest.expectedFailure
+    def test_a_param_contract_failure_should_not_mask_the_viable_candidate(self):
+        spec = OPERATORS[Operator.OPERATION_METRIC]
+        narrow = dataclasses.replace(
+            spec, name="OPERATION_METRIC_NARROW", input_constraints=(),
+            param_enums={**spec.param_enums, "dimension": frozenset({"sido", "dayofweek"})})
+        output = ConceptNode(id="out", concept=CoreConcept.AMOUNT, subtype="hours",
+                             role=FunctionalRole.MEASURE, source=NodeSource.TOOL)
+        area = ConceptNode(id="s", concept=CoreConcept.LOCATION, subtype="scope",
+                           role=FunctionalRole.COND, source=NodeSource.TOOL)
+        with mock.patch.dict(OPERATORS, {"OPERATION_METRIC_NARROW": narrow}):
+            binding = operator_mapping.resolve(inputs=[area], output=output,
+                                               factors={"dimension": "sigungu"})
+        self.assertEqual(binding.operator, Operator.OPERATION_METRIC)
 
 
 class MacroOrderTest(unittest.TestCase):

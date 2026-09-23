@@ -25,8 +25,8 @@ Grounding 결과(개념 + factor)를 입력으로 받아, macro 조각을 input/
 바뀌지 않아야 하기 때문이다.
 """
 
+import json
 from dataclasses import dataclass, field
-from typing import Any
 
 from geoflow import operator_mapping
 from geoflow.errors import CompositionError
@@ -56,17 +56,69 @@ INFERABLE_CONCEPTS = frozenset({CoreConcept.EVENT})
 #: 실행이 값을 채우는 node source. compiler와 같은 기준을 쓴다.
 PRODUCED_SOURCES = frozenset({NodeSource.TOOL, NodeSource.DERIVED})
 
-#: 합성 실패 원인 중 사용자에게 더 도움이 되는 것. 조각을 차례로 시도하는
-#: 과정에서 안쪽에서 난 구체적인 이유가 바깥의 "만들 수 있는 조각이 없다"에
-#: 묻히지 않도록, 이 코드들을 우선 보고한다.
-SPECIFIC_FAILURES = frozenset({
+#: 모든 macro가 실패했을 때 보고할 오류의 우선순위. 앞일수록 먼저다.
+#:
+#: 기준은 원인의 위치다. 입력 node를 어느 port에 둘지 정하지 못한 오류가 가장
+#: 앞이다. 그 port를 버리고 진행하면 뒤 단계의 오류(필수 input 부재, param 계약,
+#: 남은 입력, 쓰이지 않은 개념)가 결과로 따라 나올 수 있지만, 반대 방향은 없다.
+#: operator가 하나로 정해진 뒤에 난 param 계약 위반은 operator를 정하지 못한
+#: NO_OPERATOR보다 구체적이다. UNUSED_CONCEPT는 "어떤 조건이 계획에 닿지
+#: 않았다"는 결과만 말하므로 마지막이다. 재질의 가능 여부나 benchmark 점수는
+#: 기준으로 쓰지 않는다.
+#:
+#: 표에 없는 code는 표의 모든 code 뒤에 온다.
+DIAGNOSTIC_PRECEDENCE = (
     "AMBIGUOUS_PORT",
     "AMBIGUOUS_OPERATOR",
-    "INVALID_PARAM_VALUE",
-    "MISSING_COMPANION_PARAM",
     "MISSING_REQUIRED_INPUT",
     "PARAM_VALUE_REQUIRES_INPUT",
-})
+    "INVALID_PARAM_VALUE",
+    "MISSING_COMPANION_PARAM",
+    "NO_OPERATOR",
+    "UNUSED_CONCEPT",
+)
+_PRECEDENCE_RANK = {code: rank for rank, code in enumerate(DIAGNOSTIC_PRECEDENCE)}
+
+
+@dataclass(frozen=True)
+class MacroFailure:
+    """macro 하나를 시도하다 난 실패. 안쪽 macro에서 난 것도 포함한다."""
+
+    macro: str
+    error: CompositionError
+
+    def summary(self):
+        context = {
+            key: value for key, value in self.error.context.items()
+            if key != "macro_failures"
+        }
+        return {"macro": self.macro, "code": self.error.code, "context": context}
+
+
+def _canonical(value):
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+
+
+def choose_diagnostic(failures):
+    """모든 macro가 실패했을 때 보고할 오류 하나를 고른다.
+
+    시도 순서와 무관하다. 우선순위 표, code, context 순으로 정렬하고, macro
+    이름은 마지막 동률 해소에만 쓴다. 고른 오류의 context에는 모든 실패의
+    요약을 ``macro_failures``로 남긴다. 사용자 메시지는 고른 오류의 것이다.
+    """
+    chosen = min(failures, key=lambda item: (
+        _PRECEDENCE_RANK.get(item.error.code, len(DIAGNOSTIC_PRECEDENCE)),
+        item.error.code or "",
+        _canonical(item.summary()["context"]),
+        item.macro,
+    )).error
+    summaries = {_canonical(item.summary()): item.summary() for item in failures}
+    chosen.context = {
+        **chosen.context,
+        "macro_failures": [summaries[key] for key in sorted(summaries)],
+    }
+    return chosen
+
 
 #: answer/재계획이 읽는 표층 조건 이름. 값은 grounding에서만 온다.
 SLOT_PLACE = "place"
@@ -86,15 +138,18 @@ class _Build:
     transformations: list[Transformation] = field(default_factory=list)
     applied: list[str] = field(default_factory=list)
     used_factors: set = field(default_factory=set)
-    #: 되돌리기 대상이 아니다. 시도 중에 본 가장 구체적인 실패를 남긴다.
-    specific_error: Any = None
+    #: 되돌리기 대상이 아니다. 실패한 갈래의 오류를 모두 남긴다. 결국 성공한
+    #: 갈래 앞에서 난 실패는 원인이 아니므로 그 갈래가 성공하면 지운다.
+    failures: list = field(default_factory=list)
 
-    def note_failure(self, error):
-        if (
-            self.specific_error is None
-            and getattr(error, "code", None) in SPECIFIC_FAILURES
-        ):
-            self.specific_error = error
+    def note_failure(self, macro, error):
+        self.failures.append(MacroFailure(macro=macro, error=error))
+
+    def failure_mark(self):
+        return len(self.failures)
+
+    def forget_failures_since(self, mark):
+        del self.failures[mark:]
 
     def snapshot(self):
         return (
@@ -181,7 +236,6 @@ class MacroComposer:
         # 반영하지 못하는 합성은 성공으로 보지 않고 다음 후보로 넘어간다.
         # "A에서 B로"가 붙은 질문이 출발/도착을 조용히 버린 계획으로 끝나지
         # 않게 하는 장치다.
-        failure = None
         for macro in self.library.producing(goal.concept, goal.subtype):
             state = build.snapshot()
             try:
@@ -190,15 +244,14 @@ class MacroComposer:
                     depth=0, stack=(macro.name,), demand={},
                 )
             except CompositionError as error:
-                build.note_failure(error)
-                failure = failure or error
+                build.note_failure(macro.name, error)
                 build.restore(state)
                 continue
             if applied:
                 unused = self._unused_conditions(grounding, build, goal_node)
                 if not unused:
                     return self._build_plan(grounding, build, goal_node)
-                failure = failure or CompositionError(
+                build.note_failure(macro.name, CompositionError(
                     "질문의 조건을 계획에 반영하지 못했습니다: "
                     + ", ".join(sorted(unused)),
                     user_message=(
@@ -206,13 +259,13 @@ class MacroComposer:
                     ),
                     code="UNUSED_CONCEPT",
                     context={"unused": sorted(unused)},
-                )
+                ))
             build.restore(state)
 
-        if build.specific_error is not None:
-            raise build.specific_error
-        if failure is not None:
-            raise failure
+        # 성공한 macro가 없을 때만 온다. 어떤 오류를 보고할지는 시도 순서가
+        # 아니라 choose_diagnostic이 정한다.
+        if build.failures:
+            raise choose_diagnostic(build.failures)
         raise CompositionError(
             f"{goal.concept.value}/{goal.subtype}를 만들 수 있는 "
             "분석 조각이 없습니다.",
@@ -229,6 +282,7 @@ class MacroComposer:
         """``output_node``를 만드는 macro를 적용한다. 성공하면 True."""
         if depth > self.max_depth:
             return False
+        mark = build.failure_mark()
         for macro in self.library.producing(
             output_node.concept, output_node.subtype,
         ):
@@ -241,9 +295,10 @@ class MacroComposer:
                     macro, output_node, grounding, build,
                     depth=depth, stack=(*stack, macro.name), demand=demand,
                 ):
+                    build.forget_failures_since(mark)
                     return True
             except CompositionError as error:
-                build.note_failure(error)
+                build.note_failure(macro.name, error)
                 build.restore(state)
                 continue
             build.restore(state)
@@ -354,6 +409,7 @@ class MacroComposer:
     def _expand_port(self, macro, port, grounding, build, *, depth, stack,
                      demand):
         """port가 요구하는 개념을 다른 macro로 만들어 본다."""
+        mark = build.failure_mark()
         for producer in self._producers_for(port):
             concept, subtype = _first_type(producer, port)
             if concept is None:
@@ -382,12 +438,13 @@ class MacroComposer:
                     depth=depth + 1, stack=stack, demand=demand,
                 )
             except CompositionError as error:
-                build.note_failure(error)
+                build.note_failure(producer.name, error)
                 produced = False
             if produced:
                 _inherit_attributes(candidate, producer, key, build)
                 if _satisfies(candidate, demand):
                     _rename_produced(candidate, build)
+                    build.forget_failures_since(mark)
                     return candidate
             build.restore(state)
         return None

@@ -279,7 +279,11 @@ class SharedEvaluatorTest(_ContractCase):
         context = dict(self._g4(plan)[0]["context"])
         context.pop("code")
         context.pop("transformation")
-        self.assertEqual(context, caught.exception.context)
+        # 합성은 모든 macro 실패의 요약(macro_failures)을 덧붙인다. 비교 대상은
+        # 위반 자체의 context다.
+        mapped = dict(caught.exception.context)
+        mapped.pop("macro_failures")
+        self.assertEqual(context, mapped)
 
 
 TRIP_DIMENSIONS = ("h3", "sido", "sigungu", "emd")
@@ -316,8 +320,9 @@ class TripCountEnumTest(_ContractCase):
         with self.assertRaises(CompositionError) as caught:
             self.composer.compose(self._trip_grounding("dayofweek", pickup=True))
         self.assertEqual(caught.exception.code, "INVALID_PARAM_VALUE")
-        self.assertEqual(caught.exception.context,
-                         {"operator": Operator.TRIP_COUNT, "param": "dimension"})
+        context = dict(caught.exception.context)
+        context.pop("macro_failures")
+        self.assertEqual(context, {"operator": Operator.TRIP_COUNT, "param": "dimension"})
 
     def test_values_outside_every_enum_are_rejected_at_mapping(self):
         """grounding parse를 거치지 않고 들어온 값도 operator enum이 막는다."""

@@ -159,6 +159,8 @@ class MissingRequiredInputTest(_ComposeCase):
         self.assertEqual(error.code, "MISSING_REQUIRED_INPUT")
         context = dict(error.context)
         failures = context.pop("candidate_failures")
+        self.assertEqual([item["code"] for item in context.pop("macro_failures")],
+                         ["MISSING_REQUIRED_INPUT"])
         self.assertEqual(context, {
             "output": "AMOUNT/passage_count",
             "candidate_operator": Operator.PASSAGE_COUNT,
