@@ -1,0 +1,111 @@
+{
+  "description": "isolated_state_v1 이전의 prompt A/B 측정. 삭제하거나 덮어쓰지 않고 이력으로 보존한다. canonical=false인 결과는 variant 선택의 근거로 쓰지 않는다.",
+  "protocol_labels": {
+    "contaminated_interleaved": "같은 질문을 두 변형으로 인접 호출했다. 앞 요청의 서버 잔류 상태가 뒤 요청의 결과를 바꾼다.",
+    "contaminated_block": "변형별로 몰아서 호출했지만 요청 사이 모델 상태를 비우지 않았다. 결과가 앞선 요청 순서 전체에 좌우된다.",
+    "mixed_diagnostic": "오염을 드러내려고 block과 interleaved를 일부러 섞은 진단 실험.",
+    "isolated_state_unverified": "요청마다 모델을 unload했지만 unload 성공을 확인하지 않았다."
+  },
+  "runs": [
+    {
+      "dir": "20260922_135257_variants_cde",
+      "protocol": "contaminated_block",
+      "canonical": false,
+      "model": "qwen3:8b",
+      "variants": ["C", "D", "E"],
+      "design": "10 queries x 5 runs, 변형별 순차 실행",
+      "headline": "C 40/50, D 40/50, E 30/50",
+      "known_defects": [
+        "D arm이 production과 다르다: FACTOR_STAGE_NOTE가 67자 짧은 working tree 상태로 측정됐다 (12528자 vs 12595자).",
+        "success를 compose() 성공으로 정의해 expected NONE인 b18/b20을 뒤집어 채점했다."
+      ]
+    },
+    {
+      "dir": "20260922_153145_paired_cd",
+      "protocol": "contaminated_interleaved",
+      "canonical": false,
+      "model": "qwen3:8b",
+      "variants": ["C", "D"],
+      "prompt_sha256_prefix": {"C": "a4db7f29955beeb7", "D": "64bbceb4e171085f"},
+      "design": "boundary 24 + q27, 5 reps, 질문마다 C/D 인접 실행, 순서 교대",
+      "headline": "C 110/125, D 110/125 (both 101, C only 9, D only 9, both wrong 6)",
+      "known_defects": [
+        "q27 rep5 C 기록이 두 번 남았고 마지막 줄 하나가 잘렸다.",
+        "grounding 단계에서 거부된 관측은 raw_text가 비어 있다."
+      ]
+    },
+    {
+      "dir": "20260922_165423_taxi_probe",
+      "protocol": "contaminated_interleaved",
+      "canonical": false,
+      "model": "qwen3:8b",
+      "variants": ["D0", "T", "T2"],
+      "prompt_sha256_prefix": {"D0": "64bbceb4e171085f", "T": "f268b2b28feb8b29", "T2": "b5bd18000178e5e7"},
+      "design": "7 queries x 10 runs, 세 변형을 질문마다 인접 실행하며 순서 회전",
+      "headline": "D0 53/70, T 61/70, T2 41/70; factor_as_concept D0 13/40, T 6/40, T2 19/40",
+      "known_defects": [
+        "grounding 단계에서 거부된 관측은 raw_text가 비어 있다."
+      ]
+    },
+    {
+      "dir": "20260922_172911_full_taxi_ab",
+      "protocol": "contaminated_interleaved",
+      "canonical": false,
+      "model": "qwen3:8b",
+      "variants": ["D", "T"],
+      "prompt_sha256_prefix": {"D": "64bbceb4e171085f", "T": "f268b2b28feb8b29"},
+      "design": "boundary 24 + q27, 5 reps, 질문마다 D/T 인접 실행, 순서 교대",
+      "headline": "D 111/125, T 119/125 (both 108, D only 3, T only 11, both wrong 3)",
+      "used_for": "0ccabc3 채택 근거. 이 결과는 더 이상 확정 근거가 아니며 0ccabc3은 retained pending revalidation 상태다.",
+      "known_defects": [
+        "grounding 단계에서 거부된 관측은 raw_text가 비어 있다. b16 dimension='week' 실패 3건의 원문이 남지 않았다."
+      ]
+    },
+    {
+      "dir": "20260922_182502_repro_time",
+      "protocol": "contaminated_interleaved",
+      "canonical": false,
+      "model": "qwen3:8b",
+      "variants": ["D_PRE", "T0"],
+      "prompt_sha256_prefix": {"D_PRE": "64bbceb4e171085f", "T0": "f268b2b28feb8b29"},
+      "design": "시간 표현 cohort 8 queries x 10 runs, 질문마다 인접 실행",
+      "headline": "D_PRE 80/80, T0 60/80 (b24, q18에서 T0 0/10)",
+      "known_defects": [
+        "첫 실행이 harness KeyError로 중단된 뒤 같은 경로에 다시 기록했다. 보존본은 두 번째 실행이다."
+      ]
+    },
+    {
+      "dir": "20260922_184152_design_test",
+      "protocol": "mixed_diagnostic",
+      "canonical": false,
+      "model": "qwen3:8b",
+      "variants": ["D_PRE", "T0"],
+      "design": "b24, q18 각각 block 6회와 interleaved 6회",
+      "headline": "block: b24 6/6 vs 5/6, q18 5/6 vs 5/6. interleaved: b24 6/6 vs 3/6, q18 6/6 vs 3/6 (두 번째로 실행된 쪽만 실패)",
+      "known_defects": []
+    },
+    {
+      "dir": "20260922_184841_block_cohort",
+      "protocol": "contaminated_block",
+      "canonical": false,
+      "model": "qwen3:8b",
+      "variants": ["D_PRE", "T0"],
+      "design": "6 queries, 변형 블록 순서를 3회 교대, 블록 안에서 질문당 2회",
+      "headline": "D_PRE 29/36, T0 26/36 (b24 6/6 vs 0/6)",
+      "known_defects": []
+    },
+    {
+      "dir": "20260922_185057_state_test",
+      "protocol": "isolated_state_unverified",
+      "canonical": false,
+      "model": "qwen3:8b",
+      "variants": ["D_PRE", "T0"],
+      "design": "b24만, 요청마다 unload 후 5회",
+      "headline": "D_PRE 5/5 (전부 재질의), T0 5/5 (재질의 없음)",
+      "known_defects": [
+        "unload 응답과 /api/ps를 확인하지 않았다.",
+        "질문 하나, 표본 5개다."
+      ]
+    }
+  ]
+}
