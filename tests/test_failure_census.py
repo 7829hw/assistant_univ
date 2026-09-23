@@ -1,0 +1,116 @@
+# -*- coding: utf-8 -*-
+"""failure census 분석 코드의 판정을 못박는다."""
+
+import os
+import re
+import unittest
+from pathlib import Path
+
+os.environ.setdefault("ASSISTANT_TOOL_PROVIDER", "mock")
+
+import failure_census as C
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+#: 합성 전에 쓰이지 않는 코드(compile/IR 검사 등). census 대상 관측에서는 나지 않는다.
+_NOT_OBSERVABLE = {
+    "CYCLE", "EMPTY_REF", "EMPTY_REQUIRED_INPUT", "INVALID_FIELD_REFERENCE",
+    "OUTPUT_ARITY", "UNEXPECTED_OUTPUT", "UNKNOWN_EXTRACTION", "UNKNOWN_OPERATOR",
+    "UNKNOWN_PARAM", "UNKNOWN_PORT", "UNKNOWN_REFERENCE", "UNRESOLVED_FIELD",
+    "UNRESOLVED_REF",
+}
+
+
+def _item(concept, subtype, role, **extra):
+    return {"concept": concept, "subtype": subtype, "role": role, **extra}
+
+
+REVENUE = _item("AMOUNT", "revenue", "MEASURE")
+OPERATION = _item("EVENT", "operation", "SUPPORT")
+
+
+class StageTest(unittest.TestCase):
+    def test_every_geoflow_error_code_has_a_stage(self):
+        codes = set()
+        for path in (BASE_DIR / "geoflow").glob("*.py"):
+            codes.update(re.findall(r'code="([A-Z_]+)"', path.read_text(encoding="utf-8")))
+        unclassified = {code for code in codes if C.stage_of(code) == "UNCLASSIFIED"}
+        self.assertEqual(unclassified - _NOT_OBSERVABLE, set())
+
+    def test_execution_and_success(self):
+        self.assertEqual(C.stage_of("EXEC:NOT_FOUND"), "EXECUTION")
+        self.assertIsNone(C.stage_of("OK"))
+        self.assertEqual(C.stage_of("MISSING_REQUIRED_INPUT"), "OPERATOR_MAPPING")
+
+
+class OutcomeTest(unittest.TestCase):
+    def test_classes(self):
+        none = {"expected_macros": ["NONE"]}
+        cases = (
+            ({**none, "validated": False}, C.SAFE_REJECTION),
+            ({**none, "validated": True, "exec_status": "OK"}, C.SILENT_WRONG_PLAN),
+            ({"validated": False}, C.SUPPORTED_REJECTION),
+            ({"validated": True, "final_category": "correct", "exec_status": "OK"}, C.CORRECT),
+            ({"validated": True, "final_category": "correct", "exec_status": "TOOL_ERROR",
+              "exec_retryable": True}, C.RECOVERABLE_REJECTION),
+            ({"validated": True, "final_category": "wrong_arguments", "exec_status": "OK",
+              "arg_mismatches": [{"arg": "x"}], "expected_tool_args": {"x": 1}},
+             C.SILENT_WRONG_PLAN),
+            ({"validated": True, "final_category": "incorrect", "exec_status": "OK",
+              "arg_mismatches": [], "expected_tool_args": {"x": 1}, "correct": False},
+             C.EVALUATOR_ONLY),
+        )
+        for row, expected in cases:
+            with self.subTest(expected=expected):
+                self.assertEqual(C.outcome_of(row), expected)
+
+
+class FamilyTest(unittest.TestCase):
+    GOLDEN_TWO_STAGE = {"concepts": [OPERATION, REVENUE],
+                        "factors": {"bucket": "month", "aggregation": "sum", "rollup": "avg"}}
+
+    def test_collapsed_two_stage_aggregation(self):
+        payload = {"concepts": [OPERATION, REVENUE], "factors": {"bucket": "month", "rollup": "avg"}}
+        self.assertEqual(C.structural_families(payload, self.GOLDEN_TWO_STAGE, []),
+                         ["collapsed_two_stage_aggregation"])
+
+    def test_group_word_read_as_place_is_flagged_for_review(self):
+        golden = {"concepts": [OPERATION, _item("AMOUNT", "operating_count", "MEASURE")],
+                  "factors": {"dimension": "sido"}}
+        payload = {"concepts": [_item("LOCATION", "place", "SUBCOND", value={"name": "시도"}),
+                                OPERATION, _item("AMOUNT", "operating_count", "MEASURE")],
+                   "factors": {"dimension": "sigungu"}}
+        self.assertEqual(C.structural_families(payload, golden, []),
+                         ["group_word_as_place?", "wrong_dimension"])
+
+    def test_od_role(self):
+        place = {"name": "동성로동", "region": ""}
+        golden = {"concepts": [_item("LOCATION", "place", "SUBCOND", value=place,
+                                     attributes={"od_role": "pickup"}),
+                               _item("AMOUNT", "trip_count", "MEASURE")], "factors": {}}
+        missing = {"concepts": [_item("LOCATION", "place", "SUBCOND", value=place),
+                                _item("AMOUNT", "trip_count", "MEASURE")], "factors": {}}
+        wrong = {"concepts": [_item("LOCATION", "place", "SUBCOND", value=place,
+                                    attributes={"od_role": "dropoff"}),
+                              _item("AMOUNT", "trip_count", "MEASURE")], "factors": {}}
+        self.assertEqual(C.structural_families(missing, golden, []), ["missing_od_role"])
+        self.assertEqual(C.structural_families(wrong, golden, []), ["wrong_od_role"])
+
+    def test_matching_grounding_has_no_tag(self):
+        self.assertEqual(C.structural_families(self.GOLDEN_TWO_STAGE, self.GOLDEN_TWO_STAGE, []), [])
+
+    def test_refusal_of_a_supported_intent(self):
+        self.assertEqual(C.structural_families({"unsupported": True}, self.GOLDEN_TWO_STAGE, []),
+                         ["model_refused_supported"])
+        self.assertEqual(C.structural_families({"unsupported": True}, {"unsupported": True}, []), [])
+
+
+class ReplayTest(unittest.TestCase):
+    def test_replay_client_refuses_to_invent_responses(self):
+        client = C.ReplayClient(["{}"])
+        self.assertEqual(client.chat([])["message"]["content"], "{}")
+        with self.assertRaises(RuntimeError):
+            client.chat([])
+
+
+if __name__ == "__main__":
+    unittest.main()
