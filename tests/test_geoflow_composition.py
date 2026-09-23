@@ -710,12 +710,14 @@ class OperatorMappingTest(ComposerCase):
         )
 
     def test_parameter_value_outside_the_tool_enum_is_rejected(self):
+        # 통행량 Tool의 dimension에는 요일이 없다. factor로는 합법이지만 이
+        # Tool의 enum 밖이다.
         with self.assertRaises(CompositionError) as caught:
             self.compose(
-                "H3 셀별 택시 수입은?",
-                [event("e", "operation"),
-                 measure("m", "AMOUNT", "revenue")],
-                {"dimension": "h3"},
+                "대구의 요일별 통행량은?",
+                [place("p", "대구"), event("e", "passage"),
+                 measure("m", "AMOUNT", "passage_count")],
+                {"dimension": "dayofweek"},
             )
         self.assertEqual(caught.exception.code, "INVALID_PARAM_VALUE")
 
@@ -1392,7 +1394,7 @@ class FactorConstraintTest(ComposerCase):
         self.assertEqual(
             sorted(get_operator(Operator.OPERATION_METRIC)
                    .allowed_values("dimension")),
-            ["dayofweek", "sido"],
+            ["dayofweek", "emd", "h3", "sido", "sigungu"],
         )
         self.assertEqual(
             sorted(get_operator(Operator.PASSAGE_COUNT)

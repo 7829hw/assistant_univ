@@ -243,6 +243,16 @@ def _check_param_contract(transformation, spec, report):
                 transformation=transformation.id,
                 param=name,
             )
+    # 합성과 같은 규칙이다. 어떤 경로로 만든 계획이든 여기서 다시 막는다.
+    for violation in spec.contract_violations(transformation.params,
+                                              transformation.inputs):
+        report.add(
+            Rule.EXECUTABILITY,
+            f"{transformation.id}: {violation.detail()}",
+            transformation=transformation.id,
+            code=violation.kind,
+            **violation.context(),
+        )
 
 
 def _check_types(plan, nodes, report):

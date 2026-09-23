@@ -83,7 +83,9 @@ def resolve(*, inputs, output, factors=None, where=""):
         )
 
     spec, assigned = matched[0]
-    params, used = _resolve_params(spec, output, factors)
+    # param 값과 port binding이 모두 정해지는 가장 이른 지점이다. 어떤 input이
+    # 채워졌는지에 따라 합법 여부가 달라지는 param은 여기서부터 검사할 수 있다.
+    params, used = _resolve_params(spec, output, factors, bound_inputs=assigned)
     return OperatorBinding(
         operator=spec.name,
         inputs={
@@ -141,7 +143,7 @@ DERIVED_PARAMS = {
 }
 
 
-def _resolve_params(spec, output, factors):
+def _resolve_params(spec, output, factors, bound_inputs=()):
     """operator가 지원하는 parameter만 factor와 개념에서 채운다.
 
     지원하지 않는 factor는 인자로 만들지 않는다. 질문에 없는 조건을 만들어
@@ -158,11 +160,11 @@ def _resolve_params(spec, output, factors):
         if name in factors and factors[name] is not None:
             params[name] = factors[name]
             used.add(name)
-    _check_param_contract(spec, params)
+    _check_param_contract(spec, params, bound_inputs)
     return params, frozenset(used)
 
 
-def _check_param_contract(spec, params):
+def _check_param_contract(spec, params, bound_inputs=()):
     """Tool이 거절할 값·조합을 합성 단계에서 미리 막는다.
 
     Validator G4가 같은 검사를 다시 수행하지만, 여기서 먼저 걸러야 어떤
@@ -185,6 +187,13 @@ def _check_param_contract(spec, params):
                 code="MISSING_COMPANION_PARAM",
                 context={"operator": spec.name, "param": name},
             )
+    for violation in spec.contract_violations(params, bound_inputs):
+        raise CompositionError(
+            violation.detail(),
+            code=violation.kind,
+            user_message=violation.reason,
+            context=violation.context(),
+        )
 
 
 def _describe(nodes):

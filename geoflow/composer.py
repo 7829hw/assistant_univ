@@ -64,6 +64,7 @@ SPECIFIC_FAILURES = frozenset({
     "AMBIGUOUS_OPERATOR",
     "INVALID_PARAM_VALUE",
     "MISSING_COMPANION_PARAM",
+    "PARAM_VALUE_REQUIRES_INPUT",
 })
 
 #: answer/재계획이 읽는 표층 조건 이름. 값은 grounding에서만 온다.

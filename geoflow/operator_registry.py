@@ -102,6 +102,67 @@ class OperatorOutput:
         return (concept, subtype) in self.allowed
 
 
+#: 값은 합법이지만 특정 input이 채워져야만 Tool이 받는 경우.
+PARAM_VALUE_REQUIRES_INPUT = "PARAM_VALUE_REQUIRES_INPUT"
+
+
+@dataclass(frozen=True)
+class OperatorContractViolation:
+    """operator 계약 위반 하나. 합성과 G4가 같은 값을 받아 각자 보고한다."""
+
+    kind: str
+    operator: str
+    param: str
+    value: Any
+    required_input: str
+    bound_inputs: tuple[str, ...]
+    #: 사용자에게 보여도 되는 설명. 내부 operator 이름을 쓰지 않는다.
+    reason: str
+
+    def detail(self):
+        return (f"{self.operator}의 {self.param}={self.value!r}는 "
+                f"{self.required_input} input이 채워져야 쓸 수 있습니다. "
+                f"(채워진 input: {', '.join(self.bound_inputs) or '없음'})")
+
+    def context(self):
+        return {
+            "operator": self.operator,
+            "param": self.param,
+            "value": self.value,
+            "required_input": self.required_input,
+            "bound_inputs": list(self.bound_inputs),
+        }
+
+
+@dataclass(frozen=True)
+class ParamValueRequiresInput:
+    """``param``이 ``values`` 중 하나이면 ``input_name`` port가 채워져야 한다.
+
+    enum은 Tool이 받는 값 전체를 적고, 그중 일부가 다른 input에 따라서만
+    합법이면 이 제약으로 따로 적는다. 항상 안전한 부분집합만 enum에 남기면
+    합법인 계획까지 막게 된다.
+    """
+
+    param: str
+    values: frozenset[str]
+    input_name: str
+    reason: str
+
+    def violation(self, operator, params, bound_inputs):
+        value = params.get(self.param)
+        if value not in self.values or self.input_name in bound_inputs:
+            return None
+        return OperatorContractViolation(
+            kind=PARAM_VALUE_REQUIRES_INPUT,
+            operator=operator,
+            param=self.param,
+            value=value,
+            required_input=self.input_name,
+            bound_inputs=tuple(sorted(bound_inputs)),
+            reason=self.reason,
+        )
+
+
 @dataclass(frozen=True)
 class OperatorSpec:
     """semantic operator 하나의 전체 계약.
@@ -121,9 +182,24 @@ class OperatorSpec:
     output: OperatorOutput | None = None
     params: frozenset[str] = frozenset()
     param_enums: dict[str, frozenset[str]] = field(default_factory=dict)
+    #: param 값과 input binding 사이의 계약. factor끼리의 공기 제약과 달리
+    #: 특정 Tool의 성질이므로 factor 어휘가 아니라 operator가 갖는다.
+    input_constraints: tuple[ParamValueRequiresInput, ...] = ()
 
     def allowed_values(self, param):
         return self.param_enums.get(param)
+
+    def contract_violations(self, params, bound_inputs):
+        """param 값과 실제로 채워진 input port 사이의 계약 위반.
+
+        합성(operator mapping)과 Validator G4가 이 함수 하나를 쓴다. 규칙을
+        두 곳에 따로 적으면 한쪽만 고쳐져 조용히 어긋난다.
+        """
+        bound = frozenset(bound_inputs)
+        return tuple(
+            violation for constraint in self.input_constraints
+            if (violation := constraint.violation(self.name, params, bound)) is not None
+        )
 
     def missing_companions(self, param, present):
         """``param``과 함께 있어야 하는데 빠진 parameter 이름.
@@ -160,6 +236,22 @@ class OperatorSpec:
             if spec.concept == CoreConcept.EVENT
             for subtype in spec.subtypes
         )
+
+
+def check_input_constraints(spec):
+    """input 제약이 spec의 나머지와 맞는지 등록할 때 확인한다."""
+    for constraint in spec.input_constraints:
+        allowed = spec.param_enums.get(constraint.param)
+        port = spec.inputs.get(constraint.input_name)
+        if allowed is None or not constraint.values <= allowed:
+            raise RuntimeError(
+                f"{spec.name}: {constraint.param} 제약의 값이 enum 밖입니다."
+            )
+        if port is None or port.required:
+            # 필수 port라면 늘 채워져 있으므로 제약이 아무것도 막지 않는다.
+            raise RuntimeError(
+                f"{spec.name}: {constraint.input_name}은 선택 input port여야 합니다."
+            )
 
 
 def _inputs(*specs):
@@ -353,13 +445,29 @@ _SPECS: tuple[OperatorSpec, ...] = (
             "aggregation", "bucket", "rollup",
         }),
         param_enums={
-            "dimension": frozenset({"dayofweek", "sido"}),
+            # vendor schema(get_operation_metrics.dimension)의 enum 전체.
+            "dimension": frozenset({"h3", "sido", "sigungu", "emd", "dayofweek"}),
             "taxi_type": frozenset({"private", "corporate", "all"}),
             "order": frozenset({"top", "bottom"}),
             "aggregation": frozenset({"max", "min", "sum", "avg", "med"}),
             "bucket": frozenset({"week", "month"}),
             "rollup": frozenset({"max", "min", "sum", "avg", "med"}),
         },
+        # vendor schema: "scope가 설정되지 않은 경우는 sido, dayofweek만 가능함".
+        # mock도 같은 규칙으로 거절한다. 전에는 enum을 {dayofweek, sido}로
+        # 좁혀 이 규칙을 대신했지만, 그러면 지역이 있는 합법한 계획도 막혔다.
+        #
+        # "dimension과 bucket은 함께 쓸 수 없다"는 mock에만 있고 vendor schema에는
+        # 없다. 근거가 생기기 전에는 계약으로 올리지 않는다.
+        input_constraints=(
+            ParamValueRequiresInput(
+                param="dimension",
+                values=frozenset({"h3", "sigungu", "emd"}),
+                input_name="area",
+                reason="시군구·읍면동·H3 단위로 나눠 보려면 분석할 지역을 함께 "
+                       "지정해야 합니다.",
+            ),
+        ),
     ),
     OperatorSpec(
         name=Operator.SCOPE_NAME,
@@ -399,6 +507,7 @@ for _spec in _SPECS:
             f"{_spec.name}: params에 없는 parameter 제약입니다: "
             f"{sorted(_unknown_params)}"
         )
+    check_input_constraints(_spec)
     OPERATORS[_spec.name] = _spec
 
 
