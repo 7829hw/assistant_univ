@@ -52,6 +52,8 @@ class FactorSpec:
     pattern: Any = None
     #: 이 조건이 무엇을 정하는지. Prompt 설명의 단일 기준이다. 같은 설명을
     #: Prompt에 손으로 적어 두면 어휘가 바뀔 때 조용히 어긋난다.
+    #: 다른 factor는 ``{이름}``으로 가리킨다. 어휘마다 부르는 이름이 다르기
+    #: 때문이다(raw grounding의 bucket은 aggregation_plan 안에 있다).
     meaning: str = ""
 
     def coerce(self, value):
@@ -144,7 +146,7 @@ FACTOR_SPECS: dict[str, FactorSpec] = {
             values=frozenset({"h3", "sido", "sigungu", "emd", "dayofweek"}),
             meaning=(
                 "결과를 나눌 그룹 기준. 지정하면 단일 값이 아니라 그룹별 "
-                "분포를 얻는다. bucket과 함께 쓸 수 없다."
+                "분포를 얻는다. {bucket}과 함께 쓸 수 없다."
             ),
         ),
         FactorSpec(
@@ -164,24 +166,6 @@ FACTOR_SPECS: dict[str, FactorSpec] = {
 
 #: 구조를 정하는 factor. Tool 인자가 아니라 어떤 subtype을 만들지를 정한다.
 STRUCTURAL_FACTORS = frozenset({"vicinity"})
-
-#: 시간 구간을 나눌 때 집계가 두 단계로 나뉜다는 사실. 어느 factor 하나에
-#: 속하는 설명이 아니라 셋의 관계이므로 따로 둔다.
-#:
-#: 실측에서 모델이 반복해 틀린 지점이다. 질문의 집계어("평균", "최대값")를
-#: aggregation에 넣어 버리고 rollup에는 시간 단위("week", "month")를 복사했다.
-#: 집계어가 어디에 속하는지는 시간 구간 표현의 유무가 정한다.
-FACTOR_STAGE_NOTE = """구간을 나누는 질문에서는 집계가 두 단계다.
-
-    원시 값 --aggregation--> 구간별 값 --rollup--> 최종 값
-
-- 질문에 "주 단위로", "월 단위로" 같은 구간 표현이 있으면, 함께 나온 집계어는
-  구간별 값들을 합치는 rollup이다.
-  - "월 단위로 나눈 영업시간의 합은?" → bucket=month, rollup=sum
-- 구간 표현이 없으면 집계어는 aggregation이다.
-  - "평균 영업시간은?" → aggregation=avg (bucket과 rollup은 넣지 않는다)
-- rollup에 week나 month 같은 시간 단위를 넣지 않는다. rollup은 합치는
-  방식이다."""
 
 
 @dataclass(frozen=True)
@@ -244,7 +228,15 @@ def describe_factor(name):
     return f"{name}: 문자열"
 
 
-def describe_factor_semantics(names=None):
+def render_meaning(name, references=None):
+    """factor 설명. 다른 factor를 가리키는 ``{이름}``을 그 어휘의 이름으로 채운다."""
+    text = FACTOR_SPECS[name].meaning
+    for other in FACTOR_SPECS:
+        text = text.replace("{" + other + "}", (references or {}).get(other, other))
+    return text
+
+
+def describe_factor_semantics(names=None, *, references=None):
     """factor가 무엇을 정하는지 설명하는 Prompt 조각을 만든다.
 
     허용값만 보여 주는 것으로는 부족했다. 실측에서 모델이 rollup의 허용값을
@@ -257,15 +249,17 @@ def describe_factor_semantics(names=None):
         if spec is None or not spec.meaning:
             continue
         lines.append(f"- {describe_factor(name)}")
-        lines.append(f"    {spec.meaning}")
+        lines.append(f"    {render_meaning(name, references)}")
     return "\n".join(lines)
 
 
-def describe_constraints():
+def describe_constraints(names=None):
     """factor 공기 규칙을 Prompt에 넣을 문장으로 만든다.
 
     같은 규칙을 Prompt에 손으로 또 적어 두면 한쪽만 고쳐져 어긋난다.
-    설명 문구까지 이 표에서 만들어 붙인다.
+    설명 문구까지 이 표에서 만들어 붙인다. ``names``를 주면 그 어휘 안에서
+    성립하는 규칙만 적는다. raw grounding은 bucket·rollup을 직접 적지 않으므로
+    그 짝 규칙은 lowering 뒤의 방어선으로만 남는다.
     """
     return "\n".join(
         f"- {item.factor}를 넣으면 {', '.join(item.requires)}도 함께 "
@@ -273,6 +267,7 @@ def describe_constraints():
         for item in sorted(
             FACTOR_CONSTRAINTS.values(), key=lambda item: item.factor
         )
+        if names is None or {item.factor, *item.requires} <= set(names)
     )
 
 

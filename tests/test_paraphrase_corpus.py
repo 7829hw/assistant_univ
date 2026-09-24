@@ -14,6 +14,7 @@ import yaml
 
 os.environ.setdefault("ASSISTANT_TOOL_PROVIDER", "mock")
 
+import aggregation_plan
 import evaluate_planner as E
 import paraphrase_corpus as P
 from geoflow.composer import MacroComposer
@@ -227,8 +228,8 @@ class _ContractChecks:
             if not item["id"].endswith("_p0"):
                 continue
             intent = next(i for i in self.INTENTS if i["intent"] == item["intent_id"])
-            planner = GeoFlowPlanner(client=_Client(json.dumps(intent["golden"],
-                                                               ensure_ascii=False)))
+            raw = aggregation_plan.raw_grounding(intent["golden"])
+            planner = GeoFlowPlanner(client=_Client(json.dumps(raw, ensure_ascii=False)))
             with self.subTest(intent=item["intent_id"]):
                 record = E.evaluate_once(planner, self.composer, item)
                 self.assertTrue(record["correct"], record["status"])

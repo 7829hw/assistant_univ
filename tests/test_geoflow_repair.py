@@ -560,29 +560,39 @@ class RepairPatchApplyTest(unittest.TestCase):
 
 
 class FactorCompletionReproducerTest(unittest.TestCase):
-    """E. b24 형태를 LLM 없이 재현한다."""
+    """E. b24 형태를 LLM 없이 재현한다.
+
+    raw grounding은 이제 aggregation_plan으로 집계를 적으므로 모델 출력으로는
+    bucket만 있는 grounding이 나오지 않는다. 재질의는 lowering된 flat factor를
+    다루는 층이고, 그 층의 동작은 그대로 남아 있어야 한다. 그래서 lowering 뒤의
+    grounding에서 바로 재질의를 부른다.
+    """
 
     QUESTION = "월 단위로 집계한 개인택시 수입의 최대값은?"
     CONCEPTS = [event("e", "operation"), measure("m", "AMOUNT", "revenue")]
     FACTORS = {"bucket": "month", "aggregation": "max", "taxi_type": "private"}
 
+    def _repair(self, patch):
+        from geoflow.compiler import compile_plan
+        from geoflow.planner import PlannerOutput
+
+        previous = PlannerOutput(grounding=ground(self.CONCEPTS, self.FACTORS, self.QUESTION))
+        error = failure_of(self.CONCEPTS, self.FACTORS, self.QUESTION)
+        client = ScriptedClient([patch])
+        planner = GeoFlowPlanner(client=client)
+        output = planner.repair_planning_error(
+            self.QUESTION, previous, error=error, decision=decide(error))
+        plan = MacroComposer().compose(output.grounding)
+        return compile_plan(plan), client
+
     def test_bucket_only_is_repaired_by_a_factor_patch(self):
-        pipeline, client = new_pipeline([
-            payload(self.CONCEPTS, self.FACTORS),
-            factor_patch(rollup="max"),
-        ])
-        run = pipeline.run(self.QUESTION)
-        self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
-        self.assertEqual(len(client.calls), 2)
-        self.assertEqual(
-            run.repairs["factor_completion"],
-            {"attempted": 1, "succeeded": 1},
-        )
-        step = run.execution_plan["steps"][0]
-        self.assertEqual(step["arguments"]["bucket"], "month")
-        self.assertEqual(step["arguments"]["rollup"], "max")
+        execution_plan, client = self._repair(factor_patch(rollup="max"))
+        self.assertEqual(len(client.calls), 1)
+        step = execution_plan.steps[0]
+        self.assertEqual(step.arguments["bucket"], "month")
+        self.assertEqual(step.arguments["rollup"], "max")
         # 기존 조건은 그대로 살아 있다.
-        self.assertEqual(step["arguments"]["taxi_type"], "private")
+        self.assertEqual(step.arguments["taxi_type"], "private")
 
     def test_wrong_rollup_value_is_rejected(self):
         """bucket 단위를 rollup에 넣는 혼동은 값 검증이 막는다.
@@ -590,30 +600,70 @@ class FactorCompletionReproducerTest(unittest.TestCase):
         실측에서 모델이 rollup에 "month"를 넣은 적이 있다. 적용 결과를 다시
         읽어 들이므로 factor 값 검증이 그대로 적용된다.
         """
-        pipeline, _client = new_pipeline([
-            payload(self.CONCEPTS, self.FACTORS),
-            factor_patch(rollup="month"),
-        ])
-        run = pipeline.run(self.QUESTION)
-        self.assertIsNotNone(run.runtime_error)
-        error = run.attempts[-1]["repair_error"]
-        self.assertEqual(error["code"], "INVALID_FACTOR")
-        self.assertIn("rollup", error["detail"])
-        # 계획은 만들어지지 않았고 Tool도 부르지 않았다.
-        self.assertEqual(run.hop_log, [])
+        with self.assertRaises(PlannerError) as caught:
+            self._repair(factor_patch(rollup="month"))
+        self.assertEqual(caught.exception.code, "INVALID_FACTOR")
+        self.assertIn("rollup", caught.exception.detail)
 
     def test_repair_request_states_the_allowed_values(self):
         """허용값은 factor 정의에서 만들어 요청문에 넣는다."""
         from geoflow.factors import describe_factor
 
-        pipeline, client = new_pipeline([
-            payload(self.CONCEPTS, self.FACTORS),
-            factor_patch(rollup="max"),
-        ])
-        pipeline.run(self.QUESTION)
+        _plan, client = self._repair(factor_patch(rollup="max"))
         instruction = client.calls[-1][-1]["content"]
         self.assertIn(describe_factor("rollup"), instruction)
         self.assertNotIn("concepts", instruction)
+
+
+class LoweredFactorRepairTest(unittest.TestCase):
+    """aggregation_plan을 내린 뒤에도 재질의는 flat factor만 고친다."""
+
+    QUESTION = "대구에서 통행량 합이 가장 많은 3곳은?"
+    CONCEPTS = [place("a", "대구"), event("e", "passage"),
+                measure("m", "AMOUNT", "passage_count")]
+    FACTORS = {"order": "top", "limit": 3,
+               "aggregation_plan": {"result": {"reducer": "sum"}}}
+
+    def test_missing_dimension_is_repaired_on_the_lowered_factors(self):
+        pipeline, client = new_pipeline([
+            payload(self.CONCEPTS, self.FACTORS), factor_patch(dimension="h3"),
+        ])
+        run = pipeline.run(self.QUESTION)
+        self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
+        self.assertEqual(run.repairs["factor_completion"], {"attempted": 1, "succeeded": 1})
+        # 재질의에 보여 준 직전 grounding은 lowering된 모양이다.
+        shown = json.loads(client.calls[-1][-2]["content"])
+        self.assertEqual(shown["factors"], {"order": "top", "limit": 3, "aggregation": "sum"})
+        step = run.execution_plan["steps"][-1]
+        self.assertEqual(step["arguments"]["dimension"], "h3")
+
+    def test_a_patch_cannot_rewrite_the_aggregation_plan(self):
+        for patch in (
+            {"factors": {"dimension": "h3",
+                         "aggregation_plan": {"result": {"reducer": "max"}}}},
+            {"factors": {"dimension": "h3", "aggregation": "max"}},
+            {"factors": {"dimension": "h3", "rollup": "max"}},
+        ):
+            with self.subTest(patch=patch):
+                pipeline, _client = new_pipeline([payload(self.CONCEPTS, self.FACTORS), patch])
+                run = pipeline.run(self.QUESTION)
+                self.assertIsNotNone(run.runtime_error)
+                self.assertEqual(run.attempts[-1]["repair_error"]["code"],
+                                 "REPAIR_OUT_OF_SCOPE")
+                self.assertEqual(run.hop_log, [])
+
+    def test_an_invalid_plan_is_refused_without_repair(self):
+        """H2 전용 재질의는 없다. 구조가 틀린 계획은 거부로 끝난다."""
+        factors = {"aggregation_plan": {"bucket": {"unit": "month"},
+                                        "result": {"reducer": "avg"}}}
+        pipeline, client = new_pipeline([
+            payload([event("e", "operation"), measure("m", "AMOUNT", "revenue")], factors),
+        ])
+        run = pipeline.run("월 단위 수입의 평균은?")
+        self.assertEqual(run.stage, Stage.PLANNER)
+        self.assertEqual(run.error["code"], "INVALID_AGGREGATION_PLAN")
+        self.assertEqual(run.repair_count, 0)
+        self.assertEqual(len(client.calls), 1)
 
 
 class PlanningRepairPipelineTest(unittest.TestCase):
@@ -639,11 +689,11 @@ class PlanningRepairPipelineTest(unittest.TestCase):
 
     def test_factor_repair_succeeds_and_executes(self):
         pipeline, client = new_pipeline([
-            payload([event("e", "operation"),
-                     measure("m", "AMOUNT", "revenue")], {"bucket": "week"}),
-            factor_patch(rollup="avg"),
+            payload([place("a", "대구"), event("e", "passage"),
+                     measure("m", "AMOUNT", "passage_count")], {"order": "top"}),
+            factor_patch(dimension="h3"),
         ])
-        run = pipeline.run("주 단위로 집계한 택시 수입의 평균은?")
+        run = pipeline.run("대구에서 통행량이 가장 많은 곳은?")
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
         self.assertEqual(
             run.repairs["factor_completion"],

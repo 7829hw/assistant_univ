@@ -39,13 +39,17 @@ class FactorialArmTest(unittest.TestCase):
                 self.assertEqual(arm(name).repair_sha256, A.PINNED_REPAIR_SHA256[name])
 
     def test_corner_arms_are_the_two_commits(self):
-        """F00은 87ca968, F11은 50fae72(= 현재 production)의 factor 계약이다."""
+        """F00은 87ca968, F11은 50fae72(= c8ef8ab까지의 production)의 factor 계약이다."""
         self.assertEqual(arm("F00").sha256, A.PINNED_SHA256["C"])
         self.assertEqual(arm("F00").repair_sha256, A.PINNED_REPAIR_SHA256["C"])
         self.assertEqual(arm("F11").sha256, A.PINNED_SHA256["D_PRE"])
         self.assertEqual(arm("F11").repair_sha256, A.PINNED_REPAIR_SHA256["D_PRE"])
+        self.assertEqual(arm("F11").prompt, A._h0_prompt())
+        # 그 뒤 production은 집계 계약을 H2로 바꿨다. 네 arm 모두 flat 계약이다.
         production = GeoFlowPlanner(client=A._StubClient()).system_prompt()
-        self.assertEqual(arm("F11").prompt, production)
+        self.assertNotEqual(arm("F11").prompt, production)
+        for name in ("F00", "F10", "F01", "F11"):
+            self.assertEqual(arm(name).aggregation_contract, "flat")
 
     def test_each_arm_differs_in_one_axis_only(self):
         f00, f10, f01, f11 = (arm(n) for n in ("F00", "F10", "F01", "F11"))

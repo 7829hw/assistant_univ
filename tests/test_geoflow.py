@@ -49,6 +49,7 @@ from geoflow.executor import (  # noqa: E402
     execute_plan,
     resolve_refs,
 )
+from geoflow.aggregation import lower_raw_grounding  # noqa: E402
 from geoflow.grounding import parse_grounding  # noqa: E402
 from geoflow.macros import MacroLibrary  # noqa: E402
 from geoflow.operator_registry import Operator, operator_names  # noqa: E402
@@ -158,12 +159,17 @@ def od_grounding(origin="동성로", destination="신천동"):
     ])
 
 
+def parse_raw(payload, question):
+    """Planner가 받은 raw grounding을 제품 경로처럼 내린 뒤 읽는다."""
+    return parse_grounding(lower_raw_grounding(payload), question)
+
+
 def fare_grounding(name, region=""):
     return grounding_payload([
         place_concept("place_1", name, region),
         event_concept("trip", "trip"),
         measure_concept("fare", "AMOUNT", "fare"),
-    ], {"aggregation": "avg"})
+    ], {"aggregation_plan": {"result": {"reducer": "avg"}}})
 
 
 OD_GROUNDING = od_grounding()
@@ -865,10 +871,11 @@ class PlannerTest(unittest.TestCase):
 
     def test_prompt_states_the_factor_pairs_from_one_source(self):
         """짝 규칙 문구를 Prompt에 손으로 또 적어 두지 않는다."""
+        from geoflow.aggregation import grounding_factor_names
         from geoflow.factors import describe_constraints
 
         prompt = self._planner("{}").system_prompt()
-        self.assertIn(describe_constraints(), prompt)
+        self.assertIn(describe_constraints(grounding_factor_names()), prompt)
 
     def test_prompt_makes_the_od_qualifier_explicit(self):
         prompt = self._planner("{}").system_prompt()
@@ -1209,29 +1216,38 @@ class PipelineScenarioTest(unittest.TestCase):
         self.assertEqual(analysis_tools(run.hop_log), ["get_scope_name"])
         self.assertIn("대구", run.final_answer)
 
-    def test_bucket_requires_rollup(self):
-        """혼자 쓸 수 없는 조건은 조각을 고르기 전에 거부한다."""
-        for factors in (
-            {"bucket": "week"},
-            {"rollup": "avg"},
+    def test_bucket_without_result_is_rejected_while_grounding(self):
+        """구간만 있고 최종 집계가 없는 계획은 조각을 고르기 전에 거부한다."""
+        for plan in (
+            {"bucket": {"unit": "week", "reducer": "unspecified"}},
+            {"bucket": {"unit": "week"}, "result": {"reducer": "avg"}},
         ):
+            with self.subTest(plan=plan):
+                pipeline, _client = new_pipeline([grounding_payload([
+                    event_concept("operation", "operation"),
+                    measure_concept("revenue", "AMOUNT", "revenue"),
+                ], {"aggregation_plan": plan})])
+                run = pipeline.run("주 단위 수입은?")
+                self.assertEqual(run.stage, Stage.PLANNER)
+                self.assertEqual(run.error["code"], "INVALID_AGGREGATION_PLAN")
+
+    def test_flat_aggregation_factors_are_not_the_grounding_contract(self):
+        for factors in ({"bucket": "week"}, {"rollup": "avg"}):
             with self.subTest(factors=factors):
                 pipeline, _client = new_pipeline([grounding_payload([
                     event_concept("operation", "operation"),
                     measure_concept("revenue", "AMOUNT", "revenue"),
                 ], factors)])
                 run = pipeline.run("주 단위 수입은?")
-                self.assertEqual(run.stage, Stage.COMPOSITION)
-                self.assertEqual(
-                    run.error["code"], "INVALID_FACTOR_COMBINATION",
-                )
-                self.assertIn("함께", run.error["detail"])
+                self.assertEqual(run.stage, Stage.PLANNER)
+                self.assertEqual(run.error["code"], "FLAT_AGGREGATION_FACTOR")
 
     def test_bucket_rollup_is_passed_and_shown(self):
         pipeline, _client = new_pipeline([grounding_payload([
             event_concept("operation", "operation"),
             measure_concept("revenue", "AMOUNT", "revenue"),
-        ], {"bucket": "week", "rollup": "avg"})])
+        ], {"aggregation_plan": {"bucket": {"unit": "week", "reducer": "unspecified"},
+                                 "result": {"reducer": "avg"}}})])
         run = pipeline.run("주 단위로 집계한 택시 수입의 평균은?")
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
         arguments = run.hop_log[0]["arguments"]
@@ -1257,7 +1273,7 @@ class PipelineScenarioTest(unittest.TestCase):
             place_concept("place_1", "대구"),
             event_concept("passage", "passage"),
             measure_concept("speed", "AMOUNT", "speed"),
-        ], {"date": "last_month", "aggregation": "avg"})])
+        ], {"date": "last_month", "aggregation_plan": {"result": {"reducer": "avg"}}})])
         run = pipeline.run("지난달 대구 지역 평균 속도는?")
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
         self.assertIn("지난달", run.final_answer)
@@ -1296,7 +1312,7 @@ class PipelineScenarioTest(unittest.TestCase):
             measure_concept("speed", "AMOUNT", "speed"),
         ], {
             "date": "20260530", "time": "120000-130000",
-            "aggregation": "avg", "vicinity": True,
+            "aggregation_plan": {"result": {"reducer": "avg"}}, "vicinity": True,
         })])
         run = pipeline.run(VICINITY_QUESTION)
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
@@ -1319,7 +1335,7 @@ class PipelineScenarioTest(unittest.TestCase):
             place_concept("place_1", "대구"),
             event_concept("passage", "passage"),
             measure_concept("speed", "AMOUNT", "speed"),
-        ], {"aggregation": "avg"})])
+        ], {"aggregation_plan": {"result": {"reducer": "avg"}}})])
         run = pipeline.run(PLACE_QUESTION)
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
         self.assertEqual(
@@ -1341,7 +1357,7 @@ class PipelineScenarioTest(unittest.TestCase):
             measure_concept("speed", "AMOUNT", "speed"),
         ], {
             "date": "20260530", "time": "120000-130000",
-            "aggregation": "avg",
+            "aggregation_plan": {"result": {"reducer": "avg"}},
         })])
         run = pipeline.run(DIRECT_QUESTION)
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
@@ -1539,7 +1555,7 @@ class RepairTest(unittest.TestCase):
         )
 
     def _grounding(self, payload, question):
-        return parse_grounding(payload, question)
+        return parse_raw(payload, question)
 
     def test_repair_cannot_invent_a_region(self):
         """업체 지적: 재계획이 발화에 없는 상위 지역을 만들어 붙이는 문제."""
@@ -1636,7 +1652,7 @@ class GroundingAccuracyHarnessTest(unittest.TestCase):
         ))
 
     def test_unjudgeable_grounding_returns_none(self):
-        grounding = parse_grounding(
+        grounding = parse_raw(
             fare_grounding("대구"), "대구시의 평균 택시 요금은?",
         )
         self.assertIsNone(check_concept_roles(

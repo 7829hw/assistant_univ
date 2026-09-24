@@ -684,9 +684,30 @@ Planner가 반환하는 것은 질문 표현의 의미 grounding뿐임.
     {"id": "speed", "concept": "AMOUNT", "subtype": "speed",
      "role": "MEASURE", "source": "implicit"}
   ],
-  "factors": {"date": "20260530", "aggregation": "avg", "vicinity": true}
+  "factors": {"date": "20260530",
+              "aggregation_plan": {"result": {"reducer": "avg"}},
+              "vicinity": true}
 }
 ```
+
+집계는 `aggregation_plan` 하나로 적음. 최종 집계는 구간 유무와 관계없이 늘
+`result.reducer`이고, "월 단위로" 같은 구간이 있으면 `bucket`에 단위와 구간 안
+집계를 적음(질문에 없으면 `unspecified`).
+
+```json
+"aggregation_plan": {
+  "bucket": {"unit": "month", "reducer": "sum"},
+  "result": {"reducer": "avg"}
+}
+```
+
+`geoflow/aggregation.py`가 LLM 호출 없이 이것을 내부 factor
+(`bucket`·`aggregation`·`rollup`)로 내리고, 그 뒤 composer·operator·validator·
+compiler는 내부 factor만 봄. `unspecified`는 aggregation을 생략하는 것으로 내려가
+Tool 기본값이 적용됨. 모델이 내부 factor를 직접 적으면 `FLAT_AGGREGATION_FACTOR`,
+두 표현을 섞으면 `DUPLICATE_AGGREGATION_SOURCE`, 구조가 틀리면
+`INVALID_AGGREGATION_PLAN`으로 거부함. 근거 측정:
+`evaluation/prompt_ab/20260924_032103_aggregation_holdout_h0_h2_r2`.
 
 Planner 출력은 모두 untrusted input으로 취급하며, JSON 파싱 실패·미등록 concept·
 미정의 factor·형식 불일치는 모두 planner 오류로 처리함.

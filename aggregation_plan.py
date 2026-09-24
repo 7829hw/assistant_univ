@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
-"""두 단계 집계: 의미 golden, 구조화 grounding 표현(H2), 결정적 lowering. 평가 전용.
+"""두 단계 집계: 의미 golden과 채점. 평가 전용.
 
-제품 grounding 계약(H0)은 flat factor 셋으로 집계를 적는다.
+H2 표현의 parser와 lowering은 production(``geoflow.aggregation``)이 갖고, 여기서는
+그것을 그대로 부른다. 평가와 제품이 같은 코드로 내린다.
+
+이전 grounding 계약(H0)은 flat factor 셋으로 집계를 적었다.
 
     bucket 없음: aggregation = 최종 집계
     bucket 있음: aggregation = 구간 안 집계, rollup = 최종 집계
@@ -15,9 +18,9 @@
       "result": {"reducer": "avg"}
     }
 
-H2는 grounding 층의 표현이다. ``lower_payload``가 LLM을 부르지 않고 H0의 flat
-factor로 바꾸고, 그 뒤는 제품 경로(parse_grounding → composer → operator → G1~G6
-→ compiler → executor)를 그대로 탄다.
+H2는 grounding 층의 표현이다. ``lower_payload``가 LLM을 부르지 않고 flat factor로
+바꾸고, 그 뒤는 제품 경로(parse_grounding → composer → operator → G1~G6 → compiler
+→ executor)를 그대로 탄다.
 
 corpus의 의미 golden은 한 곳에만 적는다.
 
@@ -28,16 +31,20 @@ corpus의 의미 golden은 한 곳에만 적는다.
 H0 golden, H2 golden, 기대 Tool 인자는 모두 여기서 유도한다.
 """
 
-REDUCERS = ("avg", "max", "med", "min", "sum")
-UNSPECIFIED = "unspecified"
-UNITS = ("month", "week")
-FLAT_KEYS = ("bucket", "aggregation", "rollup")
-PLAN_KEY = "aggregation_plan"
+from geoflow import aggregation as GA
+from geoflow.errors import PlannerError
 
-#: H2 arm이 grounding을 거부하는 이유. 제품 오류 taxonomy에는 넣지 않는다.
-DUPLICATE_AGGREGATION_SOURCE = "DUPLICATE_AGGREGATION_SOURCE"
-FLAT_AGGREGATION_FACTOR = "FLAT_AGGREGATION_FACTOR"
-LOWERING_ERROR = "LOWERING_ERROR"
+REDUCERS = tuple(sorted(GA.result_reducers()))
+UNSPECIFIED = GA.UNSPECIFIED
+UNITS = tuple(sorted(GA.bucket_units()))
+FLAT_KEYS = GA.LOWERED_FACTORS
+PLAN_KEY = GA.PLAN_KEY
+
+#: grounding을 거부하는 이유. 제품 code와 같다.
+DUPLICATE_AGGREGATION_SOURCE = GA.DUPLICATE_AGGREGATION_SOURCE
+FLAT_AGGREGATION_FACTOR = GA.FLAT_AGGREGATION_FACTOR
+#: H2 측정(c8ef8ab) 때 이름은 LOWERING_ERROR였다. 그 run에는 이 code가 없다.
+LOWERING_ERROR = GA.INVALID_AGGREGATION_PLAN
 
 
 class PlanError(ValueError):
@@ -110,58 +117,38 @@ def expected_tool_args(semantic):
             "rollup": semantic["final"]}
 
 
-# -- H2 lowering -----------------------------------------------------------
+# -- H2 lowering (제품 코드) -----------------------------------------------
 
 
 def lower_plan(plan):
     """aggregation_plan → flat factor. 형식이 어긋나면 PlanError."""
-    if not isinstance(plan, dict):
-        raise PlanError(LOWERING_ERROR, "aggregation_plan은 객체여야 한다")
-    unknown = set(plan) - {"bucket", "result"}
-    if unknown:
-        raise PlanError(LOWERING_ERROR, f"aggregation_plan의 모르는 key: {sorted(unknown)}")
-    result = plan.get("result")
-    if not isinstance(result, dict) or set(result) != {"reducer"} \
-            or result["reducer"] not in REDUCERS:
-        raise PlanError(LOWERING_ERROR, f"result.reducer는 {'|'.join(REDUCERS)} 중 하나다")
-    if "bucket" not in plan:
-        return {"aggregation": result["reducer"]}
-    bucket = plan["bucket"]
-    if not isinstance(bucket, dict) or set(bucket) != {"unit", "reducer"}:
-        raise PlanError(LOWERING_ERROR, "bucket은 unit과 reducer를 모두 적는다")
-    if bucket["unit"] not in UNITS:
-        raise PlanError(LOWERING_ERROR, f"bucket.unit은 {'|'.join(UNITS)} 중 하나다")
-    if bucket["reducer"] not in (*REDUCERS, UNSPECIFIED):
-        raise PlanError(LOWERING_ERROR, "bucket.reducer 값이 올바르지 않다")
-    flat = {"bucket": bucket["unit"], "rollup": result["reducer"]}
-    if bucket["reducer"] != UNSPECIFIED:
-        flat["aggregation"] = bucket["reducer"]
-    return flat
+    try:
+        return GA.parse_aggregation_plan(plan).lower()
+    except PlannerError as error:
+        raise PlanError(error.code, error.detail) from error
 
 
 def lower_payload(payload):
-    """H2 grounding payload를 H0 모양으로 바꾼다. 원본은 건드리지 않는다.
+    """H2 grounding payload를 flat factor 모양으로 바꾼다. 원본은 건드리지 않는다."""
+    try:
+        return GA.lower_raw_grounding(payload)
+    except PlannerError as error:
+        raise PlanError(error.code, error.detail) from error
 
-    H2에서는 aggregation_plan만 집계의 출처다. flat factor가 섞여 있으면 어느
-    쪽을 믿을지 정하지 않고 거부한다.
+
+def raw_grounding(payload):
+    """flat 집계로 적은 내부 grounding(corpus golden)을 raw grounding 모양으로 바꾼다.
+
+    golden을 모델 응답으로 흉내 낼 때 쓴다. lowering하면 원래 golden으로 돌아온다.
     """
-    if not isinstance(payload, dict) or payload.get("unsupported"):
+    if not isinstance(payload, dict) or not isinstance(payload.get("factors"), dict):
         return payload
-    factors = payload.get("factors")
-    if not isinstance(factors, dict):
+    factors = payload["factors"]
+    if not any(key in factors for key in FLAT_KEYS):
         return payload
-    flat = [key for key in FLAT_KEYS if key in factors]
-    if flat and PLAN_KEY in factors:
-        raise PlanError(DUPLICATE_AGGREGATION_SOURCE,
-                        f"aggregation_plan과 {', '.join(flat)}을 함께 적었다")
-    if flat:
-        raise PlanError(FLAT_AGGREGATION_FACTOR,
-                        f"집계는 aggregation_plan에 적는다: {', '.join(flat)}")
-    if PLAN_KEY not in factors:
-        return payload
-    lowered = {key: value for key, value in factors.items() if key != PLAN_KEY}
-    lowered.update(lower_plan(factors[PLAN_KEY]))
-    return {**payload, "factors": lowered}
+    raw = {key: value for key, value in factors.items() if key not in FLAT_KEYS}
+    raw[PLAN_KEY] = semantic_to_plan(flat_to_semantic(factors))
+    return {**payload, "factors": raw}
 
 
 # -- 채점 ------------------------------------------------------------------

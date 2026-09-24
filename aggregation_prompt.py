@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""H2 arm의 system prompt. production prompt에서 집계 계약 부분만 바꾼다. 평가 전용.
+"""H2 arm의 system prompt. H0 prompt에서 집계 계약 부분만 바꾼다. 평가 전용.
+
+측정(c8ef8ab) 뒤 production이 이 계약을 렌더링하게 되었다. 이 파일은 측정한
+arm의 정의로 남기고, production prompt가 이 결과와 byte 단위로 같다는 것을
+테스트가 확인한다(tests/test_aggregation_production.py).
 
 바꾸는 곳은 다섯 군데다. 각 조각은 production 문자열과 정확히 한 번 일치해야
 하고, 그렇지 않으면 멈춘다. 나머지는 byte 단위로 같다.
@@ -85,7 +89,7 @@ REPLACEMENTS = (
 
 
 def h2_prompt(production):
-    """production prompt에서 집계 계약만 바꾼 H2 prompt."""
+    """H0 prompt에서 집계 계약만 바꾼 H2 prompt."""
     prompt = production
     for old, new in REPLACEMENTS:
         count = prompt.count(old)
