@@ -27,6 +27,7 @@ os.environ.setdefault("ASSISTANT_TOOL_PROVIDER", "mock")
 
 import yaml
 
+import aggregation_plan as AP
 import evaluate_planner as E
 import evaluate_prompt_ab as A
 from agent_graph import extract_scopes
@@ -55,6 +56,8 @@ STAGE_CODES = {
         "DUPLICATE_CONCEPT_ID", "UNSUPPORTED_MEASURE", "SCOPE_EXTRACTION_FAILED",
         # factor 공기 불변식. 합성 전에 grounding만 보고 판정한다.
         "INVALID_FACTOR_COMBINATION",
+        # aggregation_plan의 구조와 출처
+        AP.DUPLICATE_AGGREGATION_SOURCE, AP.FLAT_AGGREGATION_FACTOR, AP.LOWERING_ERROR,
     ),
     "RELATION_INVARIANT": ("MISSING_RELATION_QUALIFIER", "AMBIGUOUS_LOCATION_RELATION"),
     "MACRO_COMPOSITION": ("UNUSED_CONCEPT", "AMBIGUOUS_PORT", "NO_MACRO"),
@@ -178,6 +181,14 @@ def structural_families(payload, golden, expected_concepts):
         tags.append("wrong_event")
 
     pred_factors, gold_factors = _factors(payload), _factors(golden)
+    tags += aggregation_families(pred_factors, gold_factors)
+    if AP.PLAN_KEY in pred_factors:
+        # golden은 lowering된 flat factor로 적혀 있다. 같은 층에서 비교한다.
+        plan = pred_factors.pop(AP.PLAN_KEY)
+        try:
+            pred_factors.update(AP.lower_plan(plan))
+        except AP.PlanError:
+            tags.append("invalid_aggregation_plan")
     pred_places, gold_places = _locations(pred), _locations(gold)
     gold_names = {_place_name(item) for item in gold_places}
     for item in pred_places:
@@ -233,6 +244,27 @@ def structural_families(payload, golden, expected_concepts):
     return list(dict.fromkeys(tags))
 
 
+#: 구간 단위("월별", "주마다")가 흔히 잘못 들어가는 다른 factor.
+_BUCKET_UNIT_SLOTS = ("dimension", "date", "time")
+
+
+def aggregation_families(pred_factors, gold_factors):
+    """집계 단계의 구조 차이. raw 표현(flat 또는 aggregation_plan)을 의미로 읽어 비교한다."""
+    tags = []
+    if AP.PLAN_KEY in pred_factors:
+        predicted = AP.plan_to_semantic(pred_factors[AP.PLAN_KEY])
+    else:
+        predicted = AP.flat_to_semantic(pred_factors)
+    gold = AP.flat_to_semantic(gold_factors)
+    if gold and "bucket" in gold and predicted and AP.STAGE_SWAPPED in \
+            AP.aggregation_errors(predicted, gold):
+        tags.append("stage_swapped")
+    units = set(AP.UNITS)
+    if any(pred_factors.get(key) in units for key in _BUCKET_UNIT_SLOTS):
+        tags.append("bucket_unit_in_other_factor")
+    return tags
+
+
 def families_of(row, golden):
     payload = _payload(row.get("raw_text"))
     tags = list(row.get("initial_issues") or [])
@@ -260,8 +292,10 @@ FAMILY_GROUPS = {
         "missing_rollup", "rollup_without_bucket", "bucket_as_rollup",
         "extra_factor:aggregation", "missing_factor:aggregation", "wrong_factor:aggregation",
         "missing_factor:rollup", "wrong_factor:rollup", "extra_factor:rollup",
-        "collapsed_two_stage_aggregation",
+        "collapsed_two_stage_aggregation", "stage_swapped", "invalid_aggregation_plan",
     },
+    # 구간 단위를 aggregation 밖의 factor(dimension·date·time)에도 적음
+    "bucket_unit_elsewhere": {"bucket_unit_in_other_factor"},
     # 택시 유형 조건을 factor가 아닌 자리에 적거나 빠뜨림
     "taxi_type_grounding": {
         "missing_factor:taxi_type", "wrong_factor:taxi_type", "extra_factor:taxi_type",
@@ -301,10 +335,10 @@ class ReplayClient:
         return {"message": {"content": self.contents.pop(0)}}
 
 
-def replay(row, item, composer, executor):
+def replay(row, item, composer, executor, variant=None):
     """관측을 결정적으로 다시 돌려 실행 결과를 얻는다."""
     contents = [call.get("content") or "" for call in row.get("llm_calls") or []]
-    variant = A.build_variant(row["variant"])
+    variant = variant or A.build_variant(row["variant"])
     planner = A.FixedPromptPlanner(client=ReplayClient(contents), variant=variant)
     plans = A.RecordingComposer(composer)
     again = E.evaluate_once(planner, plans, item)
@@ -336,17 +370,20 @@ def goldens():
     return table
 
 
-def annotate(rows, items):
+def annotate(rows, items, meta=None):
     from tests.test_geoflow_composition import new_tool_executor
 
     composer = MacroComposer(MacroLibrary.from_directory())
     executor = new_tool_executor()
     by_id = {item["id"]: item for item in items}
     gold = goldens()
+    # 관측 당시의 계약으로 재생한다. production이 그 뒤 바뀌었을 수 있다.
+    variants = {arm["variant"]: A.recorded_variant(arm)
+                for arm in (meta or {}).get("arms", [])}
     out = []
     for row in rows:
         item = by_id[row["id"]]
-        row = {**row, **replay(row, item, composer, executor)}
+        row = {**row, **replay(row, item, composer, executor, variants.get(row["variant"]))}
         row["expected_concepts"] = list(item.get("expected_concepts") or [])
         repaired = bool(row.get("repair_attempted"))
         # 최종 Tool 인자까지 맞아야 정답이다. 재질의는 첫 합성이 실패했을 때만
@@ -439,7 +476,7 @@ def main(argv=None):
     meta, rows, report = A.load_run(args.run_dir)
     if not report.clean:
         raise SystemExit(f"무결성 문제로 분석하지 않는다: {dataclasses.asdict(report)}")
-    annotated = annotate(rows, A.census_items())
+    annotated = annotate(rows, A.census_items(), meta)
     summary = summarize(annotated)
     summary["integrity"] = dataclasses.asdict(report) | {"clean": report.clean}
     summary["run_id"] = meta["run_id"]

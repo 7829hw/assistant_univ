@@ -1737,7 +1737,8 @@ def arm_labels(names):
 
 def cmd_run(args):
     variants = [build_variant(name) for name in args.arms.split(",")]
-    if len(variants) < 2:
+    min_arms = 1 if args.single_arm else 2
+    if len(variants) < min_arms:
         raise SystemExit("--arms에는 변형을 둘 이상 쉼표로 적는다 (같은 이름 두 번이면 자기 비교)")
     labels = arm_labels([variant.name for variant in variants])
     corpus = None
@@ -1793,6 +1794,7 @@ def cmd_run(args):
         "corpus": corpus,
         "query_ids": [item["id"] for item in items],
         "repetitions": args.repetitions,
+        "single_arm": bool(args.single_arm),
         "expected_observations": len(items) * args.repetitions * len(variants),
     }
     client = OllamaClient(args.host, args.model, {"temperature": 0},
@@ -1809,7 +1811,7 @@ def cmd_run(args):
     run_protocol(items, list(zip(labels, variants)), repetitions=args.repetitions,
                  reset=reset, client=client, composer=composer, run_dir=run_dir,
                  meta=meta, max_invalid=args.max_invalid,
-                 log=lambda text: print(text, flush=True))
+                 log=lambda text: print(text, flush=True), min_arms=min_arms)
     if len(variants) == 2 and corpus is None:
         cmd_analyze(argparse.Namespace(run_dir=run_dir, allow_incomplete=False))
     else:
@@ -1986,6 +1988,8 @@ def main(argv=None):
     run.add_argument("--factor-subset", action="store_true",
                      help="factor 관련 Tool 인자를 기대하는 intent만 쓴다")
     run.add_argument("--repetitions", type=int, default=5)
+    run.add_argument("--single-arm", action="store_true",
+                     help="비교가 아니라 한 arm의 동작 확인. 판정에 쓰지 않는다")
     run.add_argument("--label", required=True)
     run.add_argument("--host", default=DEFAULT_HOST)
     run.add_argument("--model", default=DEFAULT_MODEL)

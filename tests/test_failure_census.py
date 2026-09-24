@@ -104,6 +104,61 @@ class FamilyTest(unittest.TestCase):
         self.assertEqual(C.structural_families({"unsupported": True}, {"unsupported": True}, []), [])
 
 
+class AggregationPlanFamilyTest(unittest.TestCase):
+    """raw aggregation_plan은 내려서 flat golden과 같은 층에서 비교한다."""
+
+    GOLDEN = FamilyTest.GOLDEN_TWO_STAGE
+
+    def _plan(self, plan, **others):
+        return {"concepts": [OPERATION, REVENUE],
+                "factors": {**others, "aggregation_plan": plan}}
+
+    def test_a_correct_plan_has_no_tag(self):
+        plan = {"bucket": {"unit": "month", "reducer": "sum"}, "result": {"reducer": "avg"}}
+        self.assertEqual(C.structural_families(self._plan(plan), self.GOLDEN, []), [])
+
+    def test_explicit_inner_left_unspecified(self):
+        plan = {"bucket": {"unit": "month", "reducer": "unspecified"}, "result": {"reducer": "avg"}}
+        tags = C.structural_families(self._plan(plan), self.GOLDEN, [])
+        self.assertEqual(tags, ["collapsed_two_stage_aggregation"])
+        self.assertIn("aggregation_stage", C.groups_of(tags))
+
+    def test_stage_swap_in_either_representation(self):
+        flat = {"concepts": [OPERATION, REVENUE],
+                "factors": {"bucket": "month", "aggregation": "avg"}}
+        self.assertIn("stage_swapped", C.structural_families(flat, self.GOLDEN, []))
+        plan = {"bucket": {"unit": "month", "reducer": "avg"}, "result": {"reducer": "sum"}}
+        self.assertIn("stage_swapped", C.structural_families(self._plan(plan), self.GOLDEN, []))
+
+    def test_bucket_unit_written_in_another_factor(self):
+        plan = {"bucket": {"unit": "month", "reducer": "sum"}, "result": {"reducer": "avg"}}
+        tags = C.structural_families(self._plan(plan, dimension="month"), self.GOLDEN, [])
+        self.assertIn("bucket_unit_in_other_factor", tags)
+        self.assertEqual(C.groups_of(tags), ["bucket_unit_elsewhere"])
+
+    def test_an_unreadable_plan_is_tagged(self):
+        tags = C.structural_families(self._plan({"bucket": {"unit": "month"}}), self.GOLDEN, [])
+        self.assertIn("invalid_aggregation_plan", tags)
+
+
+class RecordedVariantTest(unittest.TestCase):
+    def test_an_old_production_run_replays_under_the_flat_contract(self):
+        import evaluate_prompt_ab as A
+
+        arm = {"variant": "PRODUCTION", "prompt_sha256": A.PINNED_SHA256["H0_AGG"],
+               "repair_contract_sha256": A.PINNED_REPAIR_SHA256["H0_AGG"]}
+        variant = A.recorded_variant(arm)
+        self.assertEqual(variant.sha256, A.PINNED_SHA256["H0_AGG"])
+        self.assertEqual(variant.aggregation_contract, "flat")
+        current = A.build_variant("PRODUCTION")
+        arm = {"variant": "PRODUCTION", "prompt_sha256": current.sha256,
+               "repair_contract_sha256": current.repair_sha256}
+        self.assertEqual(A.recorded_variant(arm).aggregation_contract, "plan")
+        with self.assertRaises(A.BenchmarkAborted):
+            A.recorded_variant({"variant": "PRODUCTION", "prompt_sha256": "0" * 64,
+                                "repair_contract_sha256": "0" * 64})
+
+
 class ReplayTest(unittest.TestCase):
     def test_replay_client_refuses_to_invent_responses(self):
         client = C.ReplayClient(["{}"])
