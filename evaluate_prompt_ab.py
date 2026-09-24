@@ -55,6 +55,7 @@ import httpx
 
 import aggregation_plan
 import aggregation_prompt
+import aggregation_refinement
 import evaluate_planner as E
 import paraphrase_corpus
 from paraphrase_corpus import final_tool_call, tool_arg_mismatches, tool_defaults
@@ -238,10 +239,19 @@ class PromptVariant:
     #: 모델 출력을 제품 grounding 모양으로 바꾸는 평가 전용 변환. None이면 그대로다.
     #: "aggregation_plan"은 H2의 구조화 집계를 flat factor로 내린다.
     grounding_adapter: str | None = None
+    #: L1: H0 grounding 뒤 구간 집계일 때만 부르는 집계 전용 호출의 system prompt.
+    #: None이면 보정하지 않는다. 첫 grounding 호출은 prompt 그대로다.
+    aggregation_refiner: str | None = None
 
     @property
     def sha256(self):
         return hashlib.sha256(self.prompt.encode("utf-8")).hexdigest()
+
+    @property
+    def refiner_sha256(self):
+        if self.aggregation_refiner is None:
+            return None
+        return hashlib.sha256(self.aggregation_refiner.encode("utf-8")).hexdigest()
 
     @functools.cached_property
     def repair_sha256(self):
@@ -285,6 +295,8 @@ PINNED_SHA256 = {
     # 두 단계 집계 grounding. H0 = 이 실험 시점의 production, H2 = 집계 계약만 바꿈.
     "H0_AGG": "64bbceb4e171085f38de782ceb413b3ee814c9df8c7f9576479a9324e123d45d",
     "H2_AGG": "04d7baed2220c1d5dc748b2b9593b15e28921ef1c0ff2411feeb30ab307224bc",
+    # 국소 집계 보정. 첫 grounding은 H0 production 그대로다.
+    "L1_AGG": "64bbceb4e171085f38de782ceb413b3ee814c9df8c7f9576479a9324e123d45d",
 }
 PINNED_REPAIR_SHA256 = {
     "C": "a5d9baa0bbbf73d1adb43f6a389dd8cef024bfee78c51d9fcc3ade518ed12850",
@@ -298,6 +310,11 @@ PINNED_REPAIR_SHA256 = {
     "F11": "5af4c744a448f008fa9e1fa92848f4b08e24870bcd156852e4c71369e80e67c4",
     "H0_AGG": "5af4c744a448f008fa9e1fa92848f4b08e24870bcd156852e4c71369e80e67c4",
     "H2_AGG": "5af4c744a448f008fa9e1fa92848f4b08e24870bcd156852e4c71369e80e67c4",
+    "L1_AGG": "5af4c744a448f008fa9e1fa92848f4b08e24870bcd156852e4c71369e80e67c4",
+}
+#: 집계 전용 호출의 system prompt. 한 번 쓰고 고정했다(aggregation_refinement.py).
+PINNED_REFINER_SHA256 = {
+    "L1_AGG": "22c501ffe6ccf97c307b6163cb1fdcf8094ef2597e497f9d048bc0dc850ecf7f",
 }
 
 VARIANT_DIR = RESULT_DIR / "variants"
@@ -396,6 +413,9 @@ _BUILDERS = {
     "H2_AGG": (lambda: {"prompt": aggregation_prompt.h2_prompt(_production_prompt()),
                         "grounding_adapter": "aggregation_plan"},
                "H2: aggregation_plan(bucket.reducer, result.reducer)"),
+    "L1_AGG": (lambda: {"prompt": _production_prompt(),
+                        "aggregation_refiner": aggregation_refinement.system_prompt()},
+               "L1: H0 grounding + bucket이 있을 때만 집계 전용 호출"),
 }
 
 
@@ -410,6 +430,7 @@ def build_variant(name, *, pinned=None, pinned_repair=None):
         ("factor 재질의 문구", None,
          (PINNED_REPAIR_SHA256 if pinned_repair is None else pinned_repair).get(name)),
     )
+    checks += (("집계 보정 prompt", variant.refiner_sha256, PINNED_REFINER_SHA256.get(name)),)
     for what, actual, expected in checks:
         if expected is None:
             continue
@@ -484,9 +505,38 @@ class FixedPromptPlanner(GeoFlowPlanner):
 
     def plan(self, question):
         _set_phase(self.client, "initial")
-        return super().plan(question)
+        output = super().plan(question)
+        self.refinement = None
+        if self.variant.aggregation_refiner is None:
+            return output
+        return self._refine(question, output)
+
+    def _refine(self, question, output):
+        """L1. 보정이 적용되지 않으면 H0 결과를 그대로 돌려준다(fallback 포함)."""
+        if not aggregation_refinement.triggered(output.grounding):
+            self.refinement = {"outcome": aggregation_refinement.NOT_TRIGGERED}
+            return output
+        _set_phase(self.client, "aggregation_refinement")
+        started = time.perf_counter()
+        result, refined = aggregation_refinement.refine(
+            lambda messages: self._call(messages)[0], question, output.grounding,
+            parse_json=parse_planner_json, prompt=self.variant.aggregation_refiner,
+        )
+        result["duration_ms"] = round((time.perf_counter() - started) * 1000, 1)
+        self.refinement = result
+        if refined is None:
+            return output
+        return planner_module.PlannerOutput(
+            grounding=refined, raw_text=output.raw_text, duration_ms=output.duration_ms,
+            model=output.model, attempts=output.attempts,
+        )
 
     def repair_planning_error(self, question, previous, *, error, decision):
+        refinement = getattr(self, "refinement", None) or {}
+        if refinement.get("outcome") == aggregation_refinement.APPLIED:
+            # 보정이 이 관측의 재질의 1회 예산을 썼다. 더 묻지 않는다.
+            raise PlannerError("집계 보정 뒤에는 재질의하지 않습니다.",
+                               code=aggregation_refinement.REPAIR_BUDGET_USED)
         _set_phase(self.client, "repair")
         return super().repair_planning_error(
             question, previous, error=error, decision=decision,
@@ -771,6 +821,12 @@ def observe(item, *, arm, variant, repetition, position, pair_index,
         if len(discarded) > MAX_FRESH_RESTARTS:
             break
     record.update(base)
+    record["refiner_sha256"] = variant.refiner_sha256
+    record["aggregation_refinement"] = getattr(planner, "refinement", None)
+    if record.get("repair_error") == aggregation_refinement.REPAIR_BUDGET_USED:
+        # 호출하지 않았다. 재질의를 시도한 것으로 세지 않는다.
+        record["repair_attempted"] = False
+        record["repair_skipped"] = "refinement_used_budget"
     record["expected_macros"] = list(item.get("expected_macros") or [])
     record["fresh_restarts"] = len(discarded)
     record["discarded_attempts"] = discarded
@@ -1779,7 +1835,8 @@ def cmd_run(args):
         "order_rule": "arm 목록을 (query_index + repetition) % arm 수만큼 돌린 순서",
         "arms": [{"label": label, "variant": variant.name, "note": variant.note,
                   "prompt_sha256": variant.sha256, "prompt_chars": len(variant.prompt),
-                  "repair_contract_sha256": variant.repair_sha256}
+                  "repair_contract_sha256": variant.repair_sha256,
+                  "refiner_sha256": variant.refiner_sha256}
                  for label, variant in zip(labels, variants)],
         "corpus": corpus,
         "query_ids": [item["id"] for item in items],
