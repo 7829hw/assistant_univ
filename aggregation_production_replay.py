@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""flat 집계 계약(H0) census의 raw 응답을 production(H2) 경로로 다시 돌린다. LLM 호출 없음.
+"""flat 집계 계약(H0) census의 raw 응답을 H2 경로로 다시 돌린다. LLM 호출 없음.
 
 집계 factor가 없는 응답은 두 계약에서 같은 grounding이어야 하므로 결과가 같아야 한다.
 flat 집계 factor를 적은 응답은 새 계약에서 거부되는 것이 맞다. 행동 회귀로 세지 않고
@@ -44,9 +44,10 @@ def replay_run(run_dir):
     if not report.clean:
         raise SystemExit("무결성 문제로 재생하지 않는다")
     h0 = A.recorded_variant(meta["arms"][0])
-    if h0.aggregation_contract != "flat":
+    if h0.grounding_adapter is not None:
         raise SystemExit(f"flat 계약 run이 아니다: {h0.name}")
-    h2 = A.build_variant("PRODUCTION")
+    # 422b952의 production과 같은 계약(prompt 04d7baed, 같은 lowering 규칙)
+    h2 = A.build_variant("H2_AGG")
     items = {item["id"]: item for item in A.census_items()}
     composer = MacroComposer(MacroLibrary.from_directory())
     same, changed, legacy = [], [], []

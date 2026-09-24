@@ -1450,27 +1450,18 @@ class FactorSemanticsTest(ComposerCase):
         )
 
     def test_grounding_prompt_carries_the_semantics(self):
-        from geoflow.aggregation import (
-            GROUNDING_REFERENCES,
-            LOWERED_FACTORS,
-            describe_aggregation_contract,
+        from geoflow.factors import (
+            FACTOR_STAGE_NOTE,
+            describe_factor_semantics,
         )
-        from geoflow.factors import FACTOR_SPECS, describe_factor_semantics
         from geoflow.planner import GeoFlowPlanner
 
         class Client:
             model = "x"
 
         prompt = GeoFlowPlanner(client=Client()).system_prompt()
-        for name in sorted(set(FACTOR_SPECS) - set(LOWERED_FACTORS)):
-            with self.subTest(factor=name):
-                self.assertIn(describe_factor_semantics(
-                    [name], references=GROUNDING_REFERENCES), prompt)
-        self.assertIn(describe_aggregation_contract(), prompt)
-        # 집계 단계 factor는 raw 어휘에 없으므로 개별 설명도 싣지 않는다.
-        for name in self.GROUPED:
-            with self.subTest(factor=name):
-                self.assertNotIn(FACTOR_SPECS[name].meaning, prompt)
+        self.assertIn(describe_factor_semantics(), prompt)
+        self.assertIn(FACTOR_STAGE_NOTE, prompt)
 
     def test_repair_prompt_carries_the_same_semantics(self):
         """grounding과 재질의 설명이 어긋날 수 없다."""

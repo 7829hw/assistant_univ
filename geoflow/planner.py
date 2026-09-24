@@ -20,18 +20,10 @@ import yaml
 
 from build import BuildError, build_prompt
 
-from geoflow.aggregation import (
-    GROUNDING_REFERENCES,
-    PLAN_KEY,
-    PLAN_SHAPE,
-    describe_aggregation_contract,
-    describe_plan_meaning,
-    grounding_factor_names,
-    lower_raw_grounding,
-)
 from geoflow.errors import PlannerError
 from geoflow.factors import (
     FACTOR_SPECS,
+    FACTOR_STAGE_NOTE,
     describe_constraints,
     describe_factor,
     describe_factor_semantics,
@@ -184,16 +176,9 @@ def describe_vocabulary():
 
 
 def describe_factors():
-    """LLM이 적을 수 있는 factor 이름과 값 형식을 정의에서 만든다.
-
-    집계는 flat factor 셋이 아니라 aggregation_plan 하나로 적는다.
-    """
+    """사용 가능한 factor 이름과 값 형식을 정의에서 만든다."""
     lines = []
-    for name in grounding_factor_names():
-        if name == PLAN_KEY:
-            lines.append(f"- {name}: {PLAN_SHAPE}")
-            continue
-        spec = FACTOR_SPECS[name]
+    for name, spec in sorted(FACTOR_SPECS.items()):
         if spec.values:
             shape = " | ".join(sorted(spec.values))
         elif spec.kind == "boolean":
@@ -204,18 +189,6 @@ def describe_factors():
             shape = spec.pattern.pattern if spec.pattern else "문자열"
         lines.append(f"- {name}: {shape}")
     return "\n".join(lines)
-
-
-def describe_grounding_semantics():
-    """[조건이 뜻하는 것]. 재질의는 lowering된 factor를 다루므로 이 설명을 쓰지 않는다."""
-    lines = []
-    for name in grounding_factor_names():
-        if name == PLAN_KEY:
-            lines.append(f"- {name}: {PLAN_SHAPE}\n    {describe_plan_meaning()}")
-        else:
-            lines.append(describe_factor_semantics(
-                [name], references=GROUNDING_REFERENCES))
-    return "\n".join(line for line in lines if line)
 
 
 class GeoFlowPlanner:
@@ -251,10 +224,9 @@ class GeoFlowPlanner:
             self.base_prompt,
             f"{_VOCABULARY_HEADING}\n{describe_vocabulary()}",
             f"{_FACTOR_HEADING}\n{describe_factors()}",
-            f"{_SEMANTICS_HEADING}\n{describe_grounding_semantics()}"
-            f"\n\n{describe_aggregation_contract()}",
-            f"{_CONSTRAINT_HEADING}\n"
-            f"{describe_constraints(grounding_factor_names())}",
+            f"{_SEMANTICS_HEADING}\n{describe_factor_semantics()}"
+            f"\n\n{FACTOR_STAGE_NOTE}",
+            f"{_CONSTRAINT_HEADING}\n{describe_constraints()}",
         ])
 
     def messages(self, question):
@@ -412,17 +384,8 @@ class GeoFlowPlanner:
         last_error.context["attempts"] = self.max_attempts
         raise last_error
 
-    def _lower_raw_grounding(self, payload, text):
-        """raw 집계 표현(aggregation_plan)을 내부 flat factor로 내린다."""
-        return lower_raw_grounding(payload, raw_text=text)
-
     def _validate_payload(self, payload, text, question):
-        """Planner 출력이 grounding 계약을 만족하는지 확인한다.
-
-        집계를 먼저 내린다. 그 뒤의 검사와 ``parse_grounding``은 내부 flat
-        factor만 본다.
-        """
-        payload = self._lower_raw_grounding(payload, text)
+        """Planner 출력이 grounding 계약을 만족하는지 확인한다."""
         unknown = sorted(
             set(payload)
             - {"concepts", "factors", UNSUPPORTED_KEY}

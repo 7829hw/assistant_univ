@@ -21,10 +21,6 @@ Planner LLM의 새 책임은 "질문을 어떤 유형으로 분류할 것인가"
 Planner 출력은 전부 untrusted input이다. 여기서 형식을 확인하고, 그 뒤
 composer가 만든 graph를 Validator가 다시 확인한다.
 
-이 모듈이 읽는 factor는 내부 어휘다. Planner LLM은 집계를 ``aggregation_plan``
-으로 적고, ``geoflow.aggregation.lower_raw_grounding``이 먼저 위의 flat factor
-(bucket·aggregation·rollup)로 내린다. 재질의가 만든 grounding도 이 어휘다.
-
 factor의 어휘와 공기(co-occurrence) 불변식은 ``geoflow/factors.py``가 갖는다.
 개념이 아니라 조건에 속하는 규칙이고, 특정 Tool이나 질문 유형과 무관하기
 때문이다. 이 모듈은 그 어휘로 값의 형식만 읽는다. 조건끼리의 공기 불변식은

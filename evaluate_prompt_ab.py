@@ -53,15 +53,15 @@ from pathlib import Path
 
 import httpx
 
+import aggregation_plan
 import aggregation_prompt
 import evaluate_planner as E
 import paraphrase_corpus
 from paraphrase_corpus import final_tool_call, tool_arg_mismatches, tool_defaults
-from geoflow import aggregation as GA
 from geoflow import factors as F
 from geoflow import planner as planner_module
 from geoflow.composer import MacroComposer
-from geoflow.errors import GeoFlowError
+from geoflow.errors import GeoFlowError, PlannerError
 from geoflow.grounding import OD_ROLE, parse_grounding
 from geoflow.macros import MacroLibrary
 from geoflow.planner import GeoFlowPlanner, parse_planner_json
@@ -235,11 +235,9 @@ class PromptVariant:
     #: factor 재질의의 {allowed} 렌더링. "semantics"는 현재(의미 포함),
     #: "values"는 87ca968(허용값만).
     allowed_renderer: str = "semantics"
-    #: 집계를 적는 raw grounding 계약. "plan"은 production(aggregation_plan을
-    #: 제품 lowering이 내린다). "flat"은 그 이전 측정의 계약으로, 모델이 적은
-    #: bucket·aggregation·rollup을 그대로 parse_grounding에 넘긴다. 제품에는 없는
-    #: 경로이며 이력 변형을 재현할 때만 쓴다.
-    aggregation_contract: str = "plan"
+    #: 모델 출력을 제품 grounding 모양으로 바꾸는 평가 전용 변환. None이면 그대로다.
+    #: "aggregation_plan"은 H2의 구조화 집계를 flat factor로 내린다.
+    grounding_adapter: str | None = None
 
     @property
     def sha256(self):
@@ -259,22 +257,14 @@ def _production_prompt():
     return GeoFlowPlanner(client=_StubClient()).system_prompt()
 
 
-#: flat 집계 계약 시절의 production system prompt(64bbceb4). 95f18b7~c8ef8ab의
-#: 렌더링 결과를 그대로 저장했다. 그 계약 위에서 잰 변형은 모두 이 문자열에서 만든다.
-H0_PROMPT_PATH = RESULT_DIR / "variants" / "h0_flat_aggregation_system_prompt.txt"
-
-
-def _h0_prompt():
-    return H0_PROMPT_PATH.read_text(encoding="utf-8")
-
-
 def _prompt_with_meaning(factor, meaning):
-    """H0 prompt에서 factor 설명 하나만 바꾼다."""
-    prompt = _h0_prompt()
-    old = f"- {F.describe_factor(factor)}\n    {F.FACTOR_SPECS[factor].meaning}\n"
-    if prompt.count(old) != 1:
-        raise ValueError(f"H0 prompt에서 {factor} 설명을 한 번 찾지 못했다")
-    return prompt.replace(old, f"- {F.describe_factor(factor)}\n    {meaning}\n")
+    """factor 설명 하나만 바꾼 prompt. 제품 상태는 반드시 되돌린다."""
+    original = F.FACTOR_SPECS[factor]
+    F.FACTOR_SPECS[factor] = dataclasses.replace(original, meaning=meaning)
+    try:
+        return _production_prompt()
+    finally:
+        F.FACTOR_SPECS[factor] = original
 
 
 #: 이름은 특정 계약 하나를 가리킨다. 제품 prompt가 바뀌면 T0는 검증에서
@@ -376,7 +366,7 @@ def _c_variant():
         encoding="utf-8",
     )
     return {
-        "prompt": E._without_semantics(_h0_prompt()),
+        "prompt": E._without_semantics(_production_prompt()),
         "repair_templates": {RepairKind.FACTOR_COMPLETION: template},
         "allowed_renderer": "values",
     }
@@ -400,26 +390,20 @@ _BUILDERS = {
     "F10": (lambda: _factorial(True, False), "S1 R0 = system 의미 절만"),
     "F01": (lambda: _factorial(False, True), "S0 R1 = 재질의 의미만"),
     "F11": (lambda: _factorial(True, True), "S1 R1 = 50fae72의 factor 계약"),
-    "H0_AGG": (lambda: {"prompt": _h0_prompt()},
-               "H0: flat bucket·aggregation·rollup (c8ef8ab까지의 production)"),
-    # 재질의 문구는 H0와 같다. H2 전용 재질의는 만들지 않는다. 측정 뒤 production이
-    # 되었다. production prompt가 이 문자열과 같다는 것은 테스트가 확인한다.
-    "H2_AGG": (lambda: {"prompt": aggregation_prompt.h2_prompt(_h0_prompt())},
+    "H0_AGG": (lambda: {"prompt": _production_prompt()},
+               "H0: flat bucket·aggregation·rollup (production)"),
+    # 재질의 문구는 H0와 같다. H2 전용 재질의는 만들지 않는다.
+    "H2_AGG": (lambda: {"prompt": aggregation_prompt.h2_prompt(_production_prompt()),
+                        "grounding_adapter": "aggregation_plan"},
                "H2: aggregation_plan(bucket.reducer, result.reducer)"),
 }
-
-#: flat 집계 계약 위에서 잰 변형.
-FLAT_AGGREGATION_VARIANTS = frozenset({
-    "C", "D_PRE", "T0", "T1", "T2", "F00", "F10", "F01", "F11", "H0_AGG",
-})
 
 
 def build_variant(name, *, pinned=None, pinned_repair=None):
     if name not in _BUILDERS:
         raise KeyError(f"모르는 prompt 변형: {name} (가능: {', '.join(sorted(_BUILDERS))})")
     builder, note = _BUILDERS[name]
-    contract = "flat" if name in FLAT_AGGREGATION_VARIANTS else "plan"
-    variant = PromptVariant(name=name, note=note, aggregation_contract=contract, **builder())
+    variant = PromptVariant(name=name, note=note, **builder())
     checks = (
         ("system prompt", variant.sha256,
          (PINNED_SHA256 if pinned is None else pinned).get(name)),
@@ -444,7 +428,7 @@ def recorded_variant(arm):
 
     PRODUCTION은 고정하지 않은 이름이라 production이 바뀌면 다른 계약을 가리킨다.
     그때는 기록된 hash와 같은 고정 변형을 찾는다(prompt와 재질의 문구가 모두 같으면
-    계약이 같다).
+    계약이 같다). 예: 422b952(되돌림)의 production은 H2_AGG와 같은 계약이다.
     """
     wanted = (arm["prompt_sha256"], arm["repair_contract_sha256"])
     variant = build_variant(arm["variant"])
@@ -472,11 +456,17 @@ class FixedPromptPlanner(GeoFlowPlanner):
     def system_prompt(self):
         return self._fixed_prompt
 
-    def _lower_raw_grounding(self, payload, text):
-        """flat 계약 변형은 모델이 적은 flat factor를 그대로 넘긴다."""
-        if self.variant.aggregation_contract == "flat":
-            return payload
-        return super()._lower_raw_grounding(payload, text)
+    def _validate_payload(self, payload, text, question):
+        """H2는 구조화 집계를 flat factor로 내린 뒤 제품 검증을 그대로 탄다."""
+        if self.variant.grounding_adapter == "aggregation_plan":
+            try:
+                payload = aggregation_plan.lower_payload(payload)
+            except aggregation_plan.PlanError as error:
+                raise PlannerError(
+                    f"집계 계획을 읽을 수 없습니다: {error.detail}",
+                    code=error.code, context={"raw_text": text},
+                ) from error
+        return super()._validate_payload(payload, text, question)
 
     def variant_repair_values(self, decision):
         """재질의 문구의 자리 채움 중 변형이 다르게 정하는 것."""
@@ -624,7 +614,7 @@ def initial_issues(record):
         for key in factors:
             if key in _CONCEPT_ATTRIBUTES:
                 issues.append("relation_attribute_as_factor")
-            elif key not in F.FACTOR_SPECS and key != GA.PLAN_KEY:
+            elif key not in F.FACTOR_SPECS:
                 issues.append("invalid_factor")
         concepts = payload.get("concepts") if isinstance(payload.get("concepts"), list) else []
         for concept in concepts:
@@ -1814,7 +1804,7 @@ def cmd_run(args):
                  log=lambda text: print(text, flush=True), min_arms=min_arms)
     if len(variants) == 2 and corpus is None:
         cmd_analyze(argparse.Namespace(run_dir=run_dir, allow_incomplete=False))
-    else:
+    elif len(labels) >= 2:
         print(f"분석: python evaluate_prompt_ab.py analyze-corpus {run_dir} "
               f"--pairs {labels[0]}:{labels[1]}", flush=True)
     print("PROMPT AB DONE", flush=True)

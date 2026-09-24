@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-"""H2 arm: 집계 계약만 바꾼 prompt와, 구조화 집계를 flat factor로 내리는 경로.
-
-측정 뒤 H2가 production이 되었다. H0 arm은 그 이전 production을 저장한 문자열에서 만든다.
-"""
+"""H2 arm: 집계 계약만 바꾼 prompt와, 구조화 집계를 flat factor로 내리는 경로."""
 
 import difflib
 import json
@@ -54,13 +51,9 @@ class PromptTest(unittest.TestCase):
         cls.h0 = A.build_variant("H0_AGG")
         cls.h2 = A.build_variant("H2_AGG")
 
-    def test_h0_is_the_previous_production_contract(self):
-        self.assertEqual(self.h0.prompt, A._h0_prompt())
-        self.assertEqual(self.h0.aggregation_contract, "flat")
-
-    def test_h2_is_the_current_production_contract(self):
-        self.assertEqual(self.h2.prompt, self.production)
-        self.assertEqual(self.h2.aggregation_contract, "plan")
+    def test_h0_is_the_production_contract(self):
+        self.assertEqual(self.h0.prompt, self.production)
+        self.assertIsNone(self.h0.grounding_adapter)
 
     def test_both_arms_share_the_repair_contract(self):
         self.assertEqual(self.h0.repair_sha256, self.h2.repair_sha256)
@@ -68,7 +61,7 @@ class PromptTest(unittest.TestCase):
 
     def test_h2_changes_only_the_aggregation_contract(self):
         changed = [line[1:] for line in difflib.unified_diff(
-            self.h0.prompt.splitlines(), self.h2.prompt.splitlines(), lineterm="", n=0)
+            self.production.splitlines(), self.h2.prompt.splitlines(), lineterm="", n=0)
             if line[:1] in "+-" and not line.startswith(("+++", "---"))]
         self.assertTrue(changed)
         for line in changed:
@@ -85,7 +78,7 @@ class PromptTest(unittest.TestCase):
 
     def test_every_replacement_matches_exactly_once(self):
         with self.assertRaises(ValueError):
-            aggregation_prompt.h2_prompt(self.h0.prompt.replace(
+            aggregation_prompt.h2_prompt(self.production.replace(
                 "집계가 두 단계다.", "집계는 두 단계다."))
 
 

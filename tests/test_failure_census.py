@@ -142,18 +142,19 @@ class AggregationPlanFamilyTest(unittest.TestCase):
 
 
 class RecordedVariantTest(unittest.TestCase):
-    def test_an_old_production_run_replays_under_the_flat_contract(self):
+    def test_a_production_run_replays_under_its_recorded_contract(self):
         import evaluate_prompt_ab as A
 
-        arm = {"variant": "PRODUCTION", "prompt_sha256": A.PINNED_SHA256["H0_AGG"],
-               "repair_contract_sha256": A.PINNED_REPAIR_SHA256["H0_AGG"]}
-        variant = A.recorded_variant(arm)
-        self.assertEqual(variant.sha256, A.PINNED_SHA256["H0_AGG"])
-        self.assertEqual(variant.aggregation_contract, "flat")
         current = A.build_variant("PRODUCTION")
         arm = {"variant": "PRODUCTION", "prompt_sha256": current.sha256,
                "repair_contract_sha256": current.repair_sha256}
-        self.assertEqual(A.recorded_variant(arm).aggregation_contract, "plan")
+        self.assertEqual(A.recorded_variant(arm).sha256, current.sha256)
+        # 422b952(되돌림)가 production이던 때의 run은 H2_AGG 계약으로 재생한다.
+        arm = {"variant": "PRODUCTION", "prompt_sha256": A.PINNED_SHA256["H2_AGG"],
+               "repair_contract_sha256": A.PINNED_REPAIR_SHA256["H2_AGG"]}
+        variant = A.recorded_variant(arm)
+        self.assertEqual(variant.name, "H2_AGG")
+        self.assertEqual(variant.grounding_adapter, "aggregation_plan")
         with self.assertRaises(A.BenchmarkAborted):
             A.recorded_variant({"variant": "PRODUCTION", "prompt_sha256": "0" * 64,
                                 "repair_contract_sha256": "0" * 64})
