@@ -1,6 +1,6 @@
 # 두 단계 집계 grounding: H1 재생 결과와 H2 설계 질문
 
-상태: **설계 검토. 제품 구현 없음.**
+상태: **H2는 production에 넣었다가 되돌렸다(8절). 현재 production은 H0.**
 근거 run: `evaluation/prompt_ab/20260924_005520_census_head` (production, isolated_state_v1, 211 질문)
 재생: `python aggregation_replay.py <run_dir>` → `aggregation_h1_replay.json`
 
@@ -127,3 +127,50 @@ paraphrase 4개는 두 arm 모두에서 뺐다(65 × 2).
 - "주마다"를 month로 읽은 3건. H0에도 같은 관측이 있다.
 - 지원 범위 밖 질의를 계획으로 만든 5건. 두 arm 모두 같은 관측이다.
 - "월별", "달마다" 같은 구간 표현을 dimension·date·time에도 적어 INVALID_FACTOR로 거부된 경우(H0 8, H2 9). 안전한 거부지만 두 arm에 공통인 새 family다.
+
+## 8. production 통합과 되돌림 (422b952 → 244dabf)
+
+422b952가 H2를 production grounding 계약으로 옮겼다(`geoflow/aggregation.py`, lowering 뒤
+기존 경로). production system prompt는 측정한 H2_AGG와 byte 단위로 같았다(04d7baed).
+재질의 문구는 그대로였다(5af4c744). 측정 뒤 acceptance guard E에 걸려 244dabf로 되돌렸다.
+지금 production은 H0(64bbceb4)다.
+
+통합 확인 (LLM 호출 없음):
+
+- H0 census(20260924_005520)의 raw 응답 중 집계 factor가 없는 109건을 H2 경로로 재생하니 모두 같았다.
+  flat 집계 factor가 있는 102건은 새 계약에서 `FLAT_AGGREGATION_FACTOR`로 거부된다. 계약이
+  바뀐 결과이고 행동 회귀로 세지 않는다(`h0_raw_replay_under_h2.json`).
+- corpus 네 개의 집계 golden 38개 모두 flat golden과 H2로 적어 내린 것의 Tool 호출이 같았다.
+
+LLM 측정 (isolated_state_v1, 한 번씩, 판정용 아님):
+
+| | 값 |
+|---|---|
+| aggregation corpus, production H2 (20260925_015316) | 유효 68/68 관측이 H2 arm과 같음(status, strict, silent, 예측 계획). 무효 a21_p1은 두 run 모두 같음 |
+| census H0 → H2 (20260925_011212, 유효 209쌍) | strict 189 → 182, 첫 응답 strict 165 → 176, 조용한 오답 11 → 8, 조용한 오답 intent 7 → 5 |
+| 단계 뒤바뀜 | 17 → 0 |
+| 재질의 | 30 → 6 |
+| 계획 없이 거부한 지원 질의 | 9 → 18 (INVALID_SUBTYPE 6 → 10, taxi_type을 개념으로 적음) |
+| 실행 NOT_FOUND | 16 → 16 |
+
+되돌린 이유는 H0 census에 없던 조용한 오답 구조가 H2 census에 생겼기 때문이다(guard E).
+모두 질문 문자열이 아니라 grounding 구조로 판정했다.
+
+| 관측 | 질문 | H2 grounding | H0 |
+|---|---|---|---|
+| f12_p0 | 지난주 영업 시간의 최소값은? | date=last_week + bucket week/unspecified + result min | 정답 |
+| f04_p2 | 동대구역 평균 속도를 평일 기준으로 알려줘 | dimension=dayofweek, date 없음 | 정답 |
+| h05_p2 | 공차율을 지난달 법인택시 기준으로 알려줘 | date=20260501-20260531 | 정답 |
+| h06_p0 | 동대구역 주변 개인택시 통행량은? | taxi_type 없음 (기존 family) | 정답 |
+
+H2에서만 조용한 오답인 intent는 네 개이고 모두 paraphrase 한 개다. H0에서만 조용한
+오답이던 intent는 여섯 개가 해소됐다(b24, f13, f14, f15, h04, h12). 같은 prompt의 isolated
+관측은 결정적이었다(aggregation corpus 68/68 일치). 그래서 이 차이는 표본 흔들림이 아니라
+prompt가 바뀐 결과로 본다. f12_p0은 [집계 계획]의 구간 설명과 직접 관련된다. 나머지 둘은
+날짜 조건이 흔들린 것이고 원인을 확정하지 않았다.
+
+그대로 남은 것:
+
+- f01 ×4: 질문에 적힌 구간 안 집계(합산)를 unspecified로 둔다. holdout과 같은 한계다.
+- 구간 단위를 dimension·date·time에도 적는 경우는 census에 0건이다. aggregation corpus에서는
+  14건(거부 11, 지원 범위 밖 거부 3)으로 측정 때와 같다. 모두 안전한 거부다.

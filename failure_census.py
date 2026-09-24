@@ -476,8 +476,12 @@ def main(argv=None):
     meta, rows, report = A.load_run(args.run_dir)
     if not report.clean:
         raise SystemExit(f"무결성 문제로 분석하지 않는다: {dataclasses.asdict(report)}")
+    # 무효 관측(isolated로 잴 수 없었던 것)은 세지 않는다. 목록만 남긴다.
+    excluded = [row["id"] for row in rows if row.get("measurement") != A.VALID]
+    rows = [row for row in rows if row.get("measurement") == A.VALID]
     annotated = annotate(rows, A.census_items(), meta)
     summary = summarize(annotated)
+    summary["excluded_invalid"] = excluded
     summary["integrity"] = dataclasses.asdict(report) | {"clean": report.clean}
     summary["run_id"] = meta["run_id"]
     run_dir = Path(args.run_dir)
