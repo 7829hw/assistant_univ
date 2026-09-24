@@ -33,6 +33,8 @@ _INTENT_KEYS = frozenset({
     # 두 단계 집계의 의미 golden. 있으면 golden factor와 기대 Tool 인자의 집계
     # 부분을 여기서 유도한다(aggregation_plan.py).
     "aggregation",
+    # 정답 grounding이 L1 집계 보정을 부르는가. aggregation과 맞아야 한다.
+    "trigger_expected",
 })
 #: label 관련 key가 없다. paraphrase마다 정답을 바꿀 수 없게 한다.
 _PARAPHRASE_KEYS = frozenset({"id", "question", "note"})
@@ -86,6 +88,9 @@ def expand_aggregation(document):
         problems += [f"{where}: aggregation {issue}" for issue in issues]
         if issues:
             continue
+        if "trigger_expected" in intent and intent["trigger_expected"] is not bool(
+                isinstance(semantic, dict) and "bucket" in semantic):
+            problems.append(f"{where}: trigger_expected는 aggregation에 bucket이 있을 때만 true다")
         golden = intent.get("golden")
         args = dict(intent.get("expected_tool_args") or {})
         if set(args) & set(aggregation_plan.FLAT_KEYS):

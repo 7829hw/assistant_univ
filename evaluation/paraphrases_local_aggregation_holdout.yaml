@@ -1,0 +1,441 @@
+# 국소 집계 보정(H0 vs L1) 검증용 fresh holdout corpus.
+#
+# L1 보정 prompt(22c501ff)를 고정한 cb2d0e0 뒤, 어떤 L1 측정 결과도 보기 전에 작성했다.
+# 사람이 썼다(qwen 사용 안 함). 어순·조사·수식어 위치만 바꿨다. 결과를 보고 문구를
+# 고치지 않는다.
+#
+# 집계 의미는 intent마다 aggregation 하나에만 적는다(aggregation_plan.py).
+#
+#   aggregation: {final: avg}                                   구간 없음
+#   aggregation: {bucket: month, inner: sum, final: avg}        두 단계
+#   aggregation: {bucket: week, inner: unspecified, final: max} 구간 안 집계를 말하지 않음
+#   aggregation: null                                           집계 없음 또는 지원 범위 밖
+#
+# trigger_expected: 정답 grounding에 bucket이 있는가. 정답대로 읽으면 L1 보정이 불리는가.
+# false인 intent가 대조군이다. 대조군에서는 L1이 H0와 같게 동작해야 한다.
+
+version: 1
+parents: [evaluation/local_aggregation_holdout_parents.yaml]
+
+intents:
+
+  # --- A. 구간 안 집계와 최종 집계를 모두 말한다 -----------------------------
+
+  - intent: l01_week_sum_then_avg_revenue
+    cohorts: [aggregation_stage]
+    trigger_expected: true
+    aggregation: {bucket: week, inner: sum, final: avg}
+    expected_tool_args: {metric: revenue}
+    must_include: [["주마다"], ["합친"], ["평균"], ["수입"]]
+    golden:
+      concepts:
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: revenue, concept: AMOUNT, subtype: revenue, role: MEASURE, source: implicit}
+      factors: {}
+    paraphrases:
+      - {id: l01_p0, question: "주마다 번 수입을 합친 금액의 평균은?", note: "원문"}
+      - {id: l01_p1, question: "수입을 주마다 합친 금액을 평균 내면?", note: "측정값이 앞"}
+      - {id: l01_p2, question: "주마다 합친 택시 수입 금액의 평균은 얼마인가요?", note: "절"}
+
+  - intent: l02_month_sum_then_max_count
+    cohorts: [aggregation_stage]
+    trigger_expected: true
+    aggregation: {bucket: month, inner: sum, final: max}
+    expected_tool_args: {metric: operating_count}
+    must_include: [["월마다", "월별"], ["합산"], ["최댓값"], ["영업 횟수"]]
+    golden:
+      concepts:
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: count, concept: AMOUNT, subtype: operating_count, role: MEASURE, source: implicit}
+      factors: {}
+    paraphrases:
+      - {id: l02_p0, question: "월마다 영업 횟수를 합산하면 그중 최댓값은?", note: "원문"}
+      - {id: l02_p1, question: "영업 횟수의 월별 합산값 가운데 최댓값은?", note: "명사구"}
+      - {id: l02_p2, question: "월마다 합산한 택시 영업 횟수의 최댓값은 얼마인가요?", note: "절"}
+
+  - intent: l03_month_avg_then_min_hours
+    cohorts: [aggregation_stage]
+    trigger_expected: true
+    aggregation: {bucket: month, inner: avg, final: min}
+    expected_tool_args: {metric: hours}
+    must_include: [["달마다", "달별"], ["평균"], ["가장 짧은", "제일 짧은"], ["영업 시간"]]
+    golden:
+      concepts:
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: hours, concept: AMOUNT, subtype: hours, role: MEASURE, source: implicit}
+      factors: {}
+    paraphrases:
+      - {id: l03_p0, question: "달마다 평균 낸 영업 시간 중 가장 짧은 값은?", note: "원문"}
+      - {id: l03_p1, question: "영업 시간을 달마다 평균 냈을 때 가장 짧은 값은?", note: "측정값이 앞"}
+      - {id: l03_p2, question: "달별 평균 영업 시간 가운데 제일 짧은 것은?", note: "명사구"}
+
+  - intent: l04_week_min_then_avg_hours
+    cohorts: [aggregation_stage]
+    trigger_expected: true
+    aggregation: {bucket: week, inner: min, final: avg}
+    expected_tool_args: {metric: hours}
+    must_include: [["주마다", "주별"], ["가장 짧았던", "최단"], ["평균"], ["영업 시간"]]
+    golden:
+      concepts:
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: hours, concept: AMOUNT, subtype: hours, role: MEASURE, source: implicit}
+      factors: {}
+    paraphrases:
+      - {id: l04_p0, question: "주마다 가장 짧았던 영업 시간을 평균하면?", note: "원문"}
+      - {id: l04_p1, question: "영업 시간이 주마다 가장 짧았던 값들의 평균은?", note: "측정값이 앞"}
+      - {id: l04_p2, question: "주별 최단 영업 시간의 평균값은?", note: "명사구"}
+
+  - intent: l05_month_max_then_sum_revenue
+    cohorts: [aggregation_stage]
+    trigger_expected: true
+    aggregation: {bucket: month, inner: max, final: sum}
+    expected_tool_args: {metric: revenue}
+    must_include: [["매달", "달마다", "월별"], ["가장 높았던", "최고"], ["합하면", "더하면", "합계"],
+                   ["수입"]]
+    golden:
+      concepts:
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: revenue, concept: AMOUNT, subtype: revenue, role: MEASURE, source: implicit}
+      factors: {}
+    paraphrases:
+      - {id: l05_p0, question: "매달 가장 높았던 수입을 모두 합하면?", note: "원문"}
+      - {id: l05_p1, question: "달마다 최고 수입을 구해서 전부 더하면 얼마인가요?", note: "절"}
+      - {id: l05_p2, question: "월별 최고 수입의 합계는?", note: "명사구"}
+
+  # --- B. 구간과 최종 집계만 말한다 --------------------------------------------
+
+  - intent: l06_week_unspecified_min_revenue
+    cohorts: [aggregation_stage]
+    trigger_expected: true
+    aggregation: {bucket: week, inner: unspecified, final: min}
+    expected_tool_args: {metric: revenue}
+    must_include: [["주별", "주 단위"], ["최솟값", "가장 적은"], ["수입"]]
+    golden:
+      concepts:
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: revenue, concept: AMOUNT, subtype: revenue, role: MEASURE, source: implicit}
+      factors: {}
+    paraphrases:
+      - {id: l06_p0, question: "주별 택시 수입의 최솟값은?", note: "원문"}
+      - {id: l06_p1, question: "택시 수입을 주별로 보면 최솟값은?", note: "측정값이 앞"}
+      - {id: l06_p2, question: "주 단위 택시 수입 중 가장 적은 값은?", note: "단위 표현"}
+
+  - intent: l07_month_unspecified_avg_hours
+    cohorts: [aggregation_stage]
+    trigger_expected: true
+    aggregation: {bucket: month, inner: unspecified, final: avg}
+    expected_tool_args: {metric: hours}
+    must_include: [["월 단위"], ["평균"], ["영업 시간"]]
+    golden:
+      concepts:
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: hours, concept: AMOUNT, subtype: hours, role: MEASURE, source: implicit}
+      factors: {}
+    paraphrases:
+      - {id: l07_p0, question: "월 단위 영업 시간의 평균은?", note: "원문"}
+      - {id: l07_p1, question: "영업 시간을 월 단위로 보면 평균은?", note: "측정값이 앞"}
+      - {id: l07_p2, question: "월 단위로 본 택시 영업 시간 평균은 얼마인가요?", note: "절"}
+
+  # --- C. 최종 집계어가 구간 표현보다 앞에 온다 --------------------------------
+
+  - intent: l08_month_sum_then_avg_count_final_first
+    cohorts: [aggregation_stage]
+    trigger_expected: true
+    aggregation: {bucket: month, inner: sum, final: avg}
+    expected_tool_args: {metric: operating_count}
+    must_include: [["평균"], ["한 달"], ["합계", "합하면"], ["영업 횟수"]]
+    golden:
+      concepts:
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: count, concept: AMOUNT, subtype: operating_count, role: MEASURE, source: implicit}
+      factors: {}
+    paraphrases:
+      - {id: l08_p0, question: "평균적으로 한 달 영업 횟수 합계는 얼마인가요?", note: "원문"}
+      - {id: l08_p1, question: "한 달 영업 횟수 합계를 평균으로 보면?", note: "구간이 앞"}
+      - {id: l08_p2, question: "평균 잡아 한 달에 영업 횟수를 합하면 몇 회인가요?", note: "절"}
+
+  - intent: l09_week_unspecified_max_ratio
+    cohorts: [aggregation_stage]
+    trigger_expected: true
+    aggregation: {bucket: week, inner: unspecified, final: max}
+    expected_tool_args: {metric: operating_ratio}
+    must_include: [["주별"], ["가장 높"], ["운행률"]]
+    golden:
+      concepts:
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: ratio, concept: PROPORTION, subtype: operating_ratio, role: MEASURE,
+           source: implicit}
+      factors: {}
+    paraphrases:
+      - {id: l09_p0, question: "가장 높았던 주별 운행률은?", note: "원문"}
+      - {id: l09_p1, question: "주별 운행률 중 가장 높은 값은?", note: "구간이 앞"}
+      - {id: l09_p2, question: "운행률을 주별로 봤을 때 가장 높은 값은?", note: "측정값이 앞"}
+
+  # --- D. 택시 유형 + 구간 -----------------------------------------------------
+
+  - intent: l10_corporate_month_sum_then_min_hours
+    cohorts: [aggregation_stage, taxi_type]
+    trigger_expected: true
+    aggregation: {bucket: month, inner: sum, final: min}
+    expected_tool_args: {metric: hours, taxi_type: corporate}
+    must_include: [["법인"], ["달별"], ["합"], ["최솟값"], ["영업 시간"]]
+    must_exclude: ["개인"]
+    golden:
+      concepts:
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: hours, concept: AMOUNT, subtype: hours, role: MEASURE, source: implicit}
+      factors: {taxi_type: corporate}
+    paraphrases:
+      - {id: l10_p0, question: "법인택시의 달별 영업 시간 합계 중 최솟값은?", note: "원문"}
+      - {id: l10_p1, question: "달별로 합한 법인택시 영업 시간의 최솟값은?", note: "구간이 앞"}
+      - {id: l10_p2, question: "법인택시 영업 시간을 달별로 합했을 때 최솟값은?", note: "절"}
+
+  - intent: l11_private_week_unspecified_max_revenue
+    cohorts: [aggregation_stage, taxi_type]
+    trigger_expected: true
+    aggregation: {bucket: week, inner: unspecified, final: max}
+    expected_tool_args: {metric: revenue, taxi_type: private}
+    must_include: [["개인"], ["주별"], ["최댓값", "가장 큰"], ["수입"]]
+    must_exclude: ["법인"]
+    golden:
+      concepts:
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: revenue, concept: AMOUNT, subtype: revenue, role: MEASURE, source: implicit}
+      factors: {taxi_type: private}
+    paraphrases:
+      - {id: l11_p0, question: "개인택시 주별 수입의 최댓값은?", note: "원문"}
+      - {id: l11_p1, question: "주별로 본 개인택시 수입의 최댓값은?", note: "구간이 앞"}
+      - {id: l11_p2, question: "개인택시 수입을 주별로 보면 가장 큰 값은?", note: "절"}
+
+  # --- E. 장소 + 구간 ----------------------------------------------------------
+
+  - intent: l12_daegu_week_unspecified_avg_count
+    cohorts: [aggregation_stage]
+    trigger_expected: true
+    aggregation: {bucket: week, inner: unspecified, final: avg}
+    expected_tool_args: {metric: operating_count}
+    must_include: [["대구"], ["주별"], ["평균"], ["영업 횟수"]]
+    golden:
+      concepts:
+        - {id: daegu, concept: LOCATION, subtype: place, role: SUBCOND, source: user,
+           value: {name: 대구, region: ""}}
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: count, concept: AMOUNT, subtype: operating_count, role: MEASURE, source: implicit}
+      factors: {}
+    paraphrases:
+      - {id: l12_p0, question: "대구의 주별 영업 횟수 평균은?", note: "원문"}
+      - {id: l12_p1, question: "주별로 본 대구 영업 횟수의 평균은?", note: "구간이 앞"}
+      - {id: l12_p2, question: "대구 영업 횟수를 주별로 보면 평균은 얼마인가요?", note: "절"}
+
+  - intent: l13_busan_month_avg_then_max_hours
+    cohorts: [aggregation_stage]
+    trigger_expected: true
+    aggregation: {bucket: month, inner: avg, final: max}
+    expected_tool_args: {metric: hours}
+    must_include: [["부산"], ["달마다"], ["평균"], ["최댓값", "가장 긴"], ["영업 시간"]]
+    golden:
+      concepts:
+        - {id: busan, concept: LOCATION, subtype: place, role: SUBCOND, source: user,
+           value: {name: 부산, region: ""}}
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: hours, concept: AMOUNT, subtype: hours, role: MEASURE, source: implicit}
+      factors: {}
+    paraphrases:
+      - {id: l13_p0, question: "부산에서 달마다 평균 낸 영업 시간의 최댓값은?", note: "원문"}
+      - {id: l13_p1, question: "부산 영업 시간을 달마다 평균 냈을 때 최댓값은?", note: "절"}
+      - {id: l13_p2, question: "달마다 평균한 부산 택시 영업 시간 중 가장 긴 값은?", note: "구간이 앞"}
+
+  # --- F. 대조군: 지난주 + 한 단계 집계 ----------------------------------------
+
+  - intent: l14_last_week_max_revenue
+    cohorts: [factor_stage]
+    trigger_expected: false
+    aggregation: {final: max}
+    expected_tool_args: {metric: revenue, date: last_week}
+    must_include: [["지난주"], ["최댓값", "가장 컸던"], ["수입"]]
+    must_exclude: ["주별", "주마다", "단위"]
+    golden:
+      concepts:
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: revenue, concept: AMOUNT, subtype: revenue, role: MEASURE, source: implicit}
+      factors: {date: last_week}
+    paraphrases:
+      - {id: l14_p0, question: "지난주 택시 수입의 최댓값은?", note: "원문"}
+      - {id: l14_p1, question: "택시 수입 최댓값을 지난주 기준으로 보면?", note: "기간이 뒤"}
+      - {id: l14_p2, question: "지난주에 택시 수입이 가장 컸던 값은?", note: "절"}
+
+  - intent: l15_last_week_min_count
+    cohorts: [factor_stage]
+    trigger_expected: false
+    aggregation: {final: min}
+    expected_tool_args: {metric: operating_count, date: last_week}
+    must_include: [["지난주"], ["최솟값", "가장 적은"], ["영업 횟수"]]
+    must_exclude: ["주별", "주마다", "단위"]
+    golden:
+      concepts:
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: count, concept: AMOUNT, subtype: operating_count, role: MEASURE, source: implicit}
+      factors: {date: last_week}
+    paraphrases:
+      - {id: l15_p0, question: "지난주 영업 횟수의 최솟값은?", note: "원문"}
+      - {id: l15_p1, question: "영업 횟수 최솟값을 지난주만 놓고 보면?", note: "기간이 뒤"}
+      - {id: l15_p2, question: "지난주의 택시 영업 횟수 중 가장 적은 값은?", note: "조사 '의'"}
+
+  # --- G. 대조군: 평일·주말 날짜 조건 ------------------------------------------
+
+  - intent: l16_weekday_busan_avg_speed
+    cohorts: [factor_stage]
+    trigger_expected: false
+    aggregation: {final: avg}
+    expected_tool_args: {metric: speed, date: weekday}
+    must_include: [["평일"], ["부산"], ["평균"], ["속도"]]
+    must_exclude: ["주말", "요일", "단위"]
+    golden:
+      concepts:
+        - {id: busan, concept: LOCATION, subtype: place, role: SUBCOND, source: user,
+           value: {name: 부산, region: ""}}
+        - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+        - {id: speed, concept: AMOUNT, subtype: speed, role: MEASURE, source: implicit}
+      factors: {date: weekday}
+    paraphrases:
+      - {id: l16_p0, question: "평일 부산의 평균 택시 속도는?", note: "원문"}
+      - {id: l16_p1, question: "부산 택시 평균 속도를 평일로 한정하면?", note: "기간이 뒤"}
+      - {id: l16_p2, question: "부산에서 평일 평균 속도는 얼마인가요?", note: "장소가 앞"}
+
+  - intent: l17_weekend_dongdaegu_max_speed
+    cohorts: [factor_stage]
+    trigger_expected: false
+    aggregation: {final: max}
+    expected_tool_args: {metric: speed, date: weekend}
+    must_include: [["주말"], ["동대구역"], ["최고", "최댓값"], ["속도"]]
+    must_exclude: ["평일", "요일", "단위"]
+    golden:
+      concepts:
+        - {id: station, concept: LOCATION, subtype: place, role: SUBCOND, source: user,
+           value: {name: 동대구역, region: ""}}
+        - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+        - {id: speed, concept: AMOUNT, subtype: speed, role: MEASURE, source: implicit}
+      factors: {date: weekend}
+    paraphrases:
+      - {id: l17_p0, question: "주말 동대구역의 최고 속도는?", note: "원문"}
+      - {id: l17_p1, question: "동대구역 속도의 주말 최댓값은?", note: "기간이 가운데"}
+      - {id: l17_p2, question: "주말에 동대구역에서 속도 최댓값은 얼마인가요?", note: "절"}
+
+  # --- H. 대조군: 지난달 -------------------------------------------------------
+
+  - intent: l18_last_month_private_vacant_ratio
+    cohorts: [factor_stage, taxi_type]
+    trigger_expected: false
+    aggregation: null
+    expected_tool_args: {metric: vacant_ratio, taxi_type: private, date: last_month}
+    must_include: [["지난달"], ["개인"], ["공차율"]]
+    must_exclude: ["법인"]
+    golden:
+      concepts:
+        - {id: drive, concept: EVENT, subtype: drive, role: SUPPORT, source: implicit}
+        - {id: ratio, concept: PROPORTION, subtype: vacant_ratio, role: MEASURE, source: implicit}
+      factors: {taxi_type: private, date: last_month}
+    paraphrases:
+      - {id: l18_p0, question: "지난달 개인택시의 공차율은?", note: "원문"}
+      - {id: l18_p1, question: "개인택시 공차율을 지난달 기준으로 보면?", note: "기간이 뒤"}
+      - {id: l18_p2, question: "지난달에 개인택시 공차율은 얼마였나요?", note: "절"}
+
+  - intent: l19_last_month_revenue_sum
+    cohorts: [factor_stage]
+    trigger_expected: false
+    aggregation: {final: sum}
+    expected_tool_args: {metric: revenue, date: last_month}
+    must_include: [["지난달"], ["총합", "합하면"], ["수입"]]
+    must_exclude: ["달마다", "월별", "단위"]
+    golden:
+      concepts:
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: revenue, concept: AMOUNT, subtype: revenue, role: MEASURE, source: implicit}
+      factors: {date: last_month}
+    paraphrases:
+      - {id: l19_p0, question: "지난달 택시 수입의 총합은?", note: "원문"}
+      - {id: l19_p1, question: "택시 수입 총합을 지난달만 보면?", note: "기간이 뒤"}
+      - {id: l19_p2, question: "지난달에 번 택시 수입을 모두 합하면?", note: "절"}
+
+  # --- I. 대조군: 택시 유형 + 한 단계 ------------------------------------------
+
+  - intent: l20_private_avg_hours
+    cohorts: [taxi_type]
+    trigger_expected: false
+    aggregation: {final: avg}
+    expected_tool_args: {metric: hours, taxi_type: private}
+    must_include: [["개인"], ["평균"], ["영업"]]
+    must_exclude: ["법인"]
+    golden:
+      concepts:
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: hours, concept: AMOUNT, subtype: hours, role: MEASURE, source: implicit}
+      factors: {taxi_type: private}
+    paraphrases:
+      - {id: l20_p0, question: "개인택시의 평균 영업 시간은?", note: "원문"}
+      - {id: l20_p1, question: "영업 시간 평균을 개인택시만 보면?", note: "측정값이 앞"}
+      - {id: l20_p2, question: "개인택시는 평균 몇 시간 영업하나요?", note: "절"}
+
+  # 주변 여부는 장소 resolve 단계의 인자라 최종 인자로는 확인하지 않는다.
+  - intent: l21_corporate_vicinity_passage_count
+    cohorts: [taxi_type]
+    trigger_expected: false
+    aggregation: null
+    expected_tool_args: {taxi_type: corporate, scope: "@place:동성로"}
+    must_include: [["동성로"], ["주변", "근처"], ["법인"], ["통행량"]]
+    must_exclude: ["개인"]
+    golden:
+      concepts:
+        - {id: street, concept: LOCATION, subtype: place, role: SUBCOND, source: user,
+           value: {name: 동성로, region: ""}}
+        - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+        - {id: count, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+      factors: {vicinity: true, taxi_type: corporate}
+    paraphrases:
+      - {id: l21_p0, question: "동성로 주변 법인택시 통행량은?", note: "원문"}
+      - {id: l21_p1, question: "법인택시의 동성로 주변 통행량은?", note: "유형이 앞"}
+      - {id: l21_p2, question: "동성로 근처에서 법인택시 통행량은 얼마인가요?", note: "근처"}
+
+  # --- J. 대조군: 집계 없음 / 지원 범위 밖 -------------------------------------
+
+  - intent: l22_suseong_operating_ratio
+    cohorts: [factor_stage]
+    trigger_expected: false
+    aggregation: null
+    expected_tool_args: {metric: operating_ratio}
+    must_include: [["수성구"], ["운행률"]]
+    golden:
+      concepts:
+        - {id: suseong, concept: LOCATION, subtype: place, role: SUBCOND, source: user,
+           value: {name: 수성구, region: ""}}
+        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: ratio, concept: PROPORTION, subtype: operating_ratio, role: MEASURE,
+           source: implicit}
+      factors: {}
+    paraphrases:
+      - {id: l22_p0, question: "수성구 택시 운행률은?", note: "원문"}
+      - {id: l22_p1, question: "택시 운행률을 수성구에서 보면?", note: "측정값이 앞"}
+      - {id: l22_p2, question: "수성구의 택시 운행률은 얼마인가요?", note: "절"}
+
+  - intent: l23_revenue_forecast
+    cohorts: [factor_stage]
+    trigger_expected: false
+    aggregation: null
+    must_include: [["다음 달"], ["수입"]]
+    golden: {unsupported: true}
+    paraphrases:
+      - {id: l23_p0, question: "다음 달 택시 수입을 예측해줘", note: "원문"}
+      - {id: l23_p1, question: "택시 수입이 다음 달에 얼마일지 예상해줘", note: "측정값이 앞"}
+      - {id: l23_p2, question: "다음 달 수입 전망을 알려줘", note: "명사구"}
+
+  - intent: l24_week_over_week_change
+    cohorts: [factor_stage]
+    trigger_expected: false
+    aggregation: null
+    must_include: [["이번 주"], ["지난주"], ["수입"]]
+    golden: {unsupported: true}
+    paraphrases:
+      - {id: l24_p0, question: "이번 주 수입이 지난주보다 얼마나 늘었나요?", note: "원문"}
+      - {id: l24_p1, question: "지난주 대비 이번 주 택시 수입 증가량은?", note: "명사구"}
+      - {id: l24_p2, question: "택시 수입이 지난주에 비해 이번 주에 얼마나 늘었는지 알려줘",
+         note: "측정값이 앞"}
