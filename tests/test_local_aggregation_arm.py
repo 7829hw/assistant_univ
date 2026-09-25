@@ -153,6 +153,15 @@ class ObservationTest(unittest.TestCase):
                     "factors", "raw_text", "planner_calls", "repair_attempted"):
             self.assertEqual(l1[key], h0[key], key)
 
+    def test_rejected_first_grounding_is_recorded_as_not_triggered(self):
+        content = grounding({"bucket": "month", "dimension": "month"})
+        h0, _ = observe("H0_AGG", [content])
+        l1, llm = observe("L1_AGG", [content])
+        self.assertEqual(l1["status"], "INVALID_FACTOR")
+        self.assertEqual(llm.calls, 1)
+        self.assertEqual(l1["aggregation_refinement"], {"outcome": R.NOT_TRIGGERED})
+        self.assertIsNone(h0["aggregation_refinement"])
+
     def test_applied_patch_moves_the_final_reducer(self):
         """b24_p3 모양: 최종 집계를 aggregation에 적고 rollup이 없다."""
         h0, _ = observe("H0_AGG", [grounding({"bucket": "month", "aggregation": "max"}),

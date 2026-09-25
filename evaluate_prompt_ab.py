@@ -505,8 +505,10 @@ class FixedPromptPlanner(GeoFlowPlanner):
 
     def plan(self, question):
         _set_phase(self.client, "initial")
+        # 첫 grounding이 거부되면 보정까지 가지 않는다. 그 경우도 not_triggered로 남긴다.
+        self.refinement = (None if self.variant.aggregation_refiner is None else
+                           {"outcome": aggregation_refinement.NOT_TRIGGERED})
         output = super().plan(question)
-        self.refinement = None
         if self.variant.aggregation_refiner is None:
             return output
         return self._refine(question, output)
