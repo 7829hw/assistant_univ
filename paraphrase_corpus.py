@@ -35,6 +35,8 @@ _INTENT_KEYS = frozenset({
     "aggregation",
     # 정답 grounding이 L1 집계 보정을 부르는가. aggregation과 맞아야 한다.
     "trigger_expected",
+    # 의미 검증기 holdout. 분석에서만 쓰고 검증기에는 보여 주지 않는다.
+    "family", "control",
 })
 #: label 관련 key가 없다. paraphrase마다 정답을 바꿀 수 없게 한다.
 _PARAPHRASE_KEYS = frozenset({"id", "question", "note"})

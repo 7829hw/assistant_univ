@@ -1,0 +1,159 @@
+# 의미 검증기(H0 vs V0) 검증용 fresh holdout 부모 질의.
+#
+# V0 검증 prompt(cad71775)를 고정한 663959e 뒤, V0 holdout 결과를 보기 전에 작성했다.
+# 사람이 썼다(qwen 사용 안 함). 결과를 보고 문구를 고치지 않는다. development corpus와
+# stub 질의의 문장·intent를 쓰지 않았다. family마다 H0가 틀리기 쉬운 질의 셋과 올바른 계획
+# 대조군 하나를 둔다.
+#
+# expected_macros: [NONE] 은 "실행 가능한 계획이 만들어지면 안 됨"을 뜻한다.
+
+# --- A. 집계 단계 ---
+- id: v01_week_sum_then_max_hours
+  question: "주마다 더한 영업 시간 가운데 가장 큰 값은?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/hours:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: v02_month_min_then_avg_revenue
+  question: "월별로 가장 적었던 하루 수입의 평균은?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/revenue:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: v03_month_unspecified_med_hours
+  question: "월별 영업 시간의 중간값은?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/hours:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: v04_control_min_count
+  question: "택시 영업 횟수의 최솟값은?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/operating_count:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+# --- B. 택시 유형 ---
+- id: v05_private_avg_operating_ratio
+  question: "개인택시 운행률의 평균은?"
+  expected_concepts: [EVENT/operation:SUPPORT, PROPORTION/operating_ratio:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: v06_corporate_min_vacant_ratio
+  question: "법인택시 공차율의 최솟값은?"
+  expected_concepts: [EVENT/drive:SUPPORT, PROPORTION/vacant_ratio:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [DRIVE_METRIC]
+
+- id: v07_private_last_month_sum_hours
+  question: "지난달 개인택시 영업 시간 합계는?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/hours:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: v08_control_max_hours
+  question: "택시 영업 시간의 최댓값은?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/hours:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+# --- C. 날짜·시간 ---
+- id: v09_last_week_suseong_avg_speed
+  question: "지난주 수성구 평균 속도는?"
+  expected_concepts: [LOCATION/place:SUBCOND, EVENT/passage:SUPPORT, AMOUNT/speed:MEASURE]
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, PASSAGE_METRIC]
+
+- id: v10_weekend_sum_count
+  question: "주말 영업 횟수의 합계는?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/operating_count:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: v11_evening_dongseongro_avg_speed
+  question: "오후 6시부터 8시까지 동성로 평균 속도는?"
+  expected_concepts: [LOCATION/place:SUBCOND, EVENT/passage:SUPPORT, AMOUNT/speed:MEASURE]
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, PASSAGE_METRIC]
+
+- id: v12_control_dongseongro_avg_speed
+  question: "동성로 택시 평균 속도는?"
+  expected_concepts: [LOCATION/place:SUBCOND, EVENT/passage:SUPPORT, AMOUNT/speed:MEASURE]
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, PASSAGE_METRIC]
+
+# --- D. 승하차 관계 ---
+- id: v13_duryu_to_sincheon_trip_count
+  question: "두류동에서 출발해 신천동에 도착한 택시 실차 건수는?"
+  expected_concepts: [LOCATION/place:SUBCOND, LOCATION/place:SUBCOND, EVENT/trip:SUPPORT, AMOUNT/trip_count:MEASURE]
+  expected_macros: [PLACE_TO_SCOPE, PLACE_TO_SCOPE, OD_EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, RESOLVE_PLACE_SCOPE, TRIP_COUNT]
+
+- id: v14_choeup_to_gwangan_trip_count
+  question: "광안동으로 간 초읍동 출발 실차 건수는?"
+  expected_concepts: [LOCATION/place:SUBCOND, LOCATION/place:SUBCOND, EVENT/trip:SUPPORT, AMOUNT/trip_count:MEASURE]
+  expected_macros: [PLACE_TO_SCOPE, PLACE_TO_SCOPE, OD_EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, RESOLVE_PLACE_SCOPE, TRIP_COUNT]
+
+- id: v15_dongin_to_taepyeong_trip_count
+  question: "동인동 출발, 태평로동 도착 실차 건수는?"
+  expected_concepts: [LOCATION/place:SUBCOND, LOCATION/place:SUBCOND, EVENT/trip:SUPPORT, AMOUNT/trip_count:MEASURE]
+  expected_macros: [PLACE_TO_SCOPE, PLACE_TO_SCOPE, OD_EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, RESOLVE_PLACE_SCOPE, TRIP_COUNT]
+
+- id: v16_control_jungang_pickup_count
+  question: "중앙로동에서 출발한 실차 건수는?"
+  expected_concepts: [LOCATION/place:SUBCOND, EVENT/trip:SUPPORT, AMOUNT/trip_count:MEASURE]
+  expected_macros: [PLACE_TO_SCOPE, OD_EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, TRIP_COUNT]
+
+# --- E. 지원 범위 밖 질의를 값 하나로 뭉갬 ---
+- id: v17_morning_afternoon_comparison
+  question: "오전과 오후 중 동대구역 통행량이 더 많은 때는?"
+  expected_concepts: []
+  expected_macros: [NONE]
+  expected_operators: []
+
+- id: v18_speed_by_hour_list
+  question: "시간대마다 동대구역 평균 속도를 나눠 보여줘"
+  expected_concepts: []
+  expected_macros: [NONE]
+  expected_operators: []
+
+- id: v19_two_district_comparison
+  question: "수성구와 달서구 중 영업 횟수가 더 많은 곳은?"
+  expected_concepts: []
+  expected_macros: [NONE]
+  expected_operators: []
+
+- id: v20_control_hours_by_day
+  question: "요일별 택시 영업 시간 평균은?"
+  expected_concepts: [EVENT/operation:SUPPORT, AMOUNT/hours:MEASURE]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+# --- F. 장소 분해 ---
+- id: v21_busan_suyeong_avg_speed
+  question: "부산 수영구 택시 평균 속도는?"
+  expected_concepts: [LOCATION/place:SUBCOND, EVENT/passage:SUPPORT, AMOUNT/speed:MEASURE]
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, PASSAGE_METRIC]
+
+- id: v22_daegu_jung_vacant_ratio
+  question: "대구 중구 택시 공차율은?"
+  expected_concepts: [LOCATION/place:SUBCOND, EVENT/drive:SUPPORT, PROPORTION/vacant_ratio:MEASURE]
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, DRIVE_METRIC]
+
+- id: v23_daegu_dalseo_passage_count
+  question: "대구 달서구 택시 통행량은?"
+  expected_concepts: [LOCATION/place:SUBCOND, EVENT/passage:SUPPORT, AMOUNT/passage_count:MEASURE]
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, PASSAGE_COUNT]
+
+- id: v24_control_suseong_avg_fare
+  question: "수성구 택시 요금 평균은?"
+  expected_concepts: [LOCATION/place:SUBCOND, EVENT/trip:SUPPORT, AMOUNT/fare:MEASURE]
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, TRIP_METRIC]
+
