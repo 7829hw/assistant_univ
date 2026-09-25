@@ -174,3 +174,36 @@ prompt가 바뀐 결과로 본다. f12_p0은 [집계 계획]의 구간 설명과
 - f01 ×4: 질문에 적힌 구간 안 집계(합산)를 unspecified로 둔다. holdout과 같은 한계다.
 - 구간 단위를 dimension·date·time에도 적는 경우는 census에 0건이다. aggregation corpus에서는
   14건(거부 11, 지원 범위 밖 거부 3)으로 측정 때와 같다. 모두 안전한 거부다.
+
+## 9. 국소 집계 보정 L1 (evaluation-only, Case B로 폐기)
+
+전역 H2의 비집계 부작용(8절)을 구조적으로 막으려고, 첫 grounding은 H0(64bbceb4) 그대로 두고
+H0 grounding에 bucket이 있을 때만 집계 전용 호출(22c501ff)로 `inner_reducer`·`final_reducer`를
+받아 aggregation·rollup만 고치는 L1을 쟀다(cb2d0e0, `aggregation_refinement.py`).
+
+- trigger 재생(LLM 없음): H0 census 211 중 32 trigger, 단계 뒤바뀜 17/17, f12_p0·f04_p2·h05_p2·h06_p0 trigger 없음.
+- fresh holdout `20260925_121002_local_aggregation_holdout_h0_l1` (24 intent × 3, 무효 쌍 l08_p2·l23_p1 제외 70쌍).
+  첫 grounding 원문 70/70 동일. 보정 적용 33, fallback 0, scope 위반 0.
+
+| | H0 | L1 |
+|---|---|---|
+| 최종 strict | 38 | 47 |
+| 조용한 오답 | 19 | 14 |
+| 조용한 오답 intent | 10 | 8 |
+| strict 정답 intent | 10 | 12 |
+| 집계 단계 조용한 오답 | 15 | 10 |
+| 단계 뒤바뀜 | 5 | 0 |
+| 명시된 구간 안 집계를 비움 | 7 | 0 |
+| 구간 안 집계를 지어냄 | 4 | 9 |
+| 계획 없이 거부한 지원 질의 | 13 | 9 |
+| LLM 호출 / 총 지연 | 89 / 683초 | 104 / 677초 |
+
+사전 등록 판정은 **Case B**(A·B 실패)다.
+
+- A 실패: L1에서만 조용한 오답인 intent 2개. l09_p0("가장 높았던 주별 운행률")에서 구간 안 집계를
+  max로, l12_p0·l12_p2("대구의 주별 영업 횟수 평균")에서 sum으로 지어냈다. H0는 셋 다 정답이었다.
+- B 실패: 지원 범위 밖 대조군 l24_p1("지난주 대비 이번 주 수입 증가량")을 H0가 bucket으로 읽어
+  보정이 불렸고 최종 인자가 바뀌었다. 두 arm 모두 조용한 오답이다.
+
+L1은 명시된 두 단계(stage swap, 비워 둔 구간 안 집계)를 고쳤지만, 질문이 구간 안 집계를 말하지
+않을 때 값을 지어내는 새 실패를 만들었다. production은 H0로 둔다.
