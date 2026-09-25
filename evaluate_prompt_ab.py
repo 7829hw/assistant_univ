@@ -1827,14 +1827,39 @@ def _git_state():
 
 
 def _server_info(host, model):
+    version, digest, _details = _server_details(host, model)
+    return version, digest
+
+
+def _server_details(host, model):
     version = httpx.get(f"{host}/api/version", timeout=5.0).json().get("version")
-    digest = None
     for item in httpx.get(f"{host}/api/tags", timeout=5.0).json().get("models", []):
         if item.get("name") == model:
-            digest = item.get("digest")
-    if digest is None:
-        raise BenchmarkAborted(f"설치된 모델에 {model}이 없다")
-    return version, digest
+            details = item.get("details") or {}
+            return version, item.get("digest"), {
+                key: details.get(key) for key in
+                ("family", "parameter_size", "quantization_level", "format")}
+    raise BenchmarkAborted(f"설치된 모델에 {model}이 없다")
+
+
+def unload_all_models(host, *, http=httpx, timeout=60.0):
+    """run 시작 전에 올라가 있는 모든 모델을 내린다. 다른 모델이 GPU에 남지 않게 한다.
+
+    내린 모델 이름을 돌려준다.
+    """
+    before = [item["name"] for item in
+              http.get(f"{host}/api/ps", timeout=5.0).json().get("models", [])]
+    for name in before:
+        http.post(f"{host}/api/generate", json={"model": name, "keep_alive": 0},
+                  timeout=timeout)
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        loaded = [m["name"] for m in http.get(f"{host}/api/ps", timeout=5.0).json()
+                  .get("models", [])]
+        if not loaded:
+            return before
+        time.sleep(1.0)
+    raise BenchmarkAborted(f"모델을 모두 내리지 못했다: {loaded}")
 
 
 def arm_labels(names):
@@ -1974,18 +1999,27 @@ def cmd_census(args):
     """current production 한 arm으로 사람이 검토한 평가셋 전체를 한 번씩 잰다."""
     variant = build_variant("PRODUCTION")
     items = census_items()
-    version, digest = _server_info(args.host, args.model)
+    if args.only:
+        wanted = args.only.split(",")
+        unknown = sorted(set(wanted) - {item["id"] for item in items})
+        if unknown:
+            raise SystemExit(f"census에 없는 id: {unknown}")
+        items = [item for item in items if item["id"] in wanted]
+    version, digest, details = _server_details(args.host, args.model)
     run_id = f"{E._now_local().strftime('%Y%m%d_%H%M%S')}_{args.label}"
     files = [*CENSUS_CORPORA, *CENSUS_QUERY_FILES]
     meta = {
         "protocol": PROTOCOL,
-        "purpose": "failure census. variant 비교가 아니다",
+        "purpose": ("canary. 같은 질문 부분집합을 다시 재서 결정성을 본다" if args.only
+                    else "failure census. variant 비교가 아니다"),
+        "only": args.only.split(",") if args.only else None,
         "run_id": run_id,
         "created_at": E._now_local().isoformat(),
         "git": _git_state(),
         "host": args.host,
         "model": args.model,
         "model_digest": digest,
+        "model_details": details,
         "ollama_version": version,
         "options": {"temperature": 0},
         "chat_timeout": args.chat_timeout,
@@ -1994,6 +2028,7 @@ def cmd_census(args):
                       "사라졌는지 확인, 관측 첫 호출의 load_duration으로 cold load 확인",
             "cold_load_min_ms": COLD_LOAD_MIN_MS,
             "max_invalid": args.max_invalid,
+            "unloaded_before_run": unload_all_models(args.host),
         },
         "order_rule": "census_items 순서. 한 arm, 한 번",
         "arms": [{"label": "A", "variant": variant.name, "note": variant.note,
@@ -2132,6 +2167,7 @@ def main(argv=None):
     census.add_argument("--chat-timeout", type=float, default=300)
     census.add_argument("--max-invalid", type=int, default=DEFAULT_MAX_INVALID)
     census.add_argument("--out", default=str(RESULT_DIR))
+    census.add_argument("--only", help="census id 부분집합, 쉼표로 (canary)")
     census.set_defaults(func=cmd_census)
     floor = sub.add_parser("floor")
     floor.add_argument("run_dirs", nargs="+")
