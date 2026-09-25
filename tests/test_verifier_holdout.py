@@ -33,8 +33,10 @@ class VerifierHoldoutTest(unittest.TestCase):
         cls.items = P.load_corpus_items(HOLDOUT)
 
     def test_registered_and_pinned(self):
+        """H0 vs V0 판정에 한 번 썼으므로 이제 development다."""
         entry = next(e for e in REGISTRY["corpora"] if e["path"].endswith(HOLDOUT.name))
-        self.assertEqual(entry["role"], "fresh_holdout")
+        self.assertEqual(entry["role"], "development")
+        self.assertTrue(any("20260925_144240" in line for line in entry["history"]))
         self.assertEqual(entry["sha256"], hashlib.sha256(HOLDOUT.read_bytes()).hexdigest())
 
     def test_size_and_families(self):

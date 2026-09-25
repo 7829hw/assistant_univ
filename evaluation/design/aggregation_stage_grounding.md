@@ -207,3 +207,30 @@ H0 grounding에 bucket이 있을 때만 집계 전용 호출(22c501ff)로 `inner
 
 L1은 명시된 두 단계(stage swap, 비워 둔 구간 안 집계)를 고쳤지만, 질문이 구간 안 집계를 말하지
 않을 때 값을 지어내는 새 실패를 만들었다. production은 H0로 둔다.
+
+## 10. reject-only 의미 검증기 V0 (evaluation-only, Case C로 폐기)
+
+H0 계획을 고치지 않고, 검증을 통과한 최종 계획의 의미 서명과 질문만 보고 명확한 불일치일 때만
+거부하는 V0를 쟀다(663959e, `semantic_verifier.py`, prompt cad71775). V0의 결과는 H0 계획
+그대로이거나 계획 없음이다.
+
+fresh holdout `20260925_144240_verifier_holdout_v0` (24 intent × 3, 무효 0, cold load 72/72):
+
+| | 값 |
+|---|---|
+| 검증 호출 | 61 (거부된 H0 관측 11에는 부르지 않음) |
+| TP / FP / FN / TN | 5 / 2 / 0 / 54 |
+| 거부 precision | 0.71 |
+| 조용한 오답 recall | 1.0 (5/5) |
+| 잡은 intent / family | 4 / 집계 단계, 범위 밖 뭉갬 |
+| 정답을 거부한 intent | 2 (v03_p1 월별 중간값의 올바른 계획, v10_p1 주말 합계의 올바른 계획) |
+| 조용한 오답 H0 → V0 | 5 → 0 |
+| strict H0 → V0 | 64 → 63 |
+| 계획 없이 거부한 지원 질의 | 3 → 9 |
+| fallback | 0 |
+| 검증 호출 지연 | 중앙값 1.8초, 최대 3.2초. 생성 대비 +18% |
+
+사전 등록 판정은 **Case C**(B·E 실패: 정답 거부 intent 2 > 1, precision 0.71 < 0.9)다.
+이 holdout에서 H0는 택시 유형·날짜·승하차·장소 family에서 조용한 오답을 내지 않아, 그 family의
+탐지력은 재지 못했다. development 형식 확인(c4b650f)에서도 H0 정답 계획 236개 중 41개를
+inconsistent로 판정했다. production은 H0로 둔다.
