@@ -56,11 +56,13 @@ import httpx
 import aggregation_plan
 import aggregation_prompt
 import aggregation_refinement
+import semantic_verifier
 import evaluate_planner as E
 import paraphrase_corpus
 from paraphrase_corpus import final_tool_call, tool_arg_mismatches, tool_defaults
 from geoflow import factors as F
 from geoflow import planner as planner_module
+from geoflow.compiler import compile_plan
 from geoflow.composer import MacroComposer
 from geoflow.errors import GeoFlowError, PlannerError
 from geoflow.grounding import OD_ROLE, parse_grounding
@@ -242,10 +244,19 @@ class PromptVariant:
     #: L1: H0 grounding 뒤 구간 집계일 때만 부르는 집계 전용 호출의 system prompt.
     #: None이면 보정하지 않는다. 첫 grounding 호출은 prompt 그대로다.
     aggregation_refiner: str | None = None
+    #: V0: 최종 계획이 만들어진 뒤 부르는 reject-only 의미 검증기의 system prompt.
+    #: None이면 검증하지 않는다. 첫 grounding과 재질의는 그대로다.
+    semantic_verifier: str | None = None
 
     @property
     def sha256(self):
         return hashlib.sha256(self.prompt.encode("utf-8")).hexdigest()
+
+    @property
+    def verifier_sha256(self):
+        if self.semantic_verifier is None:
+            return None
+        return hashlib.sha256(self.semantic_verifier.encode("utf-8")).hexdigest()
 
     @property
     def refiner_sha256(self):
@@ -297,6 +308,8 @@ PINNED_SHA256 = {
     "H2_AGG": "04d7baed2220c1d5dc748b2b9593b15e28921ef1c0ff2411feeb30ab307224bc",
     # 국소 집계 보정. 첫 grounding은 H0 production 그대로다.
     "L1_AGG": "64bbceb4e171085f38de782ceb413b3ee814c9df8c7f9576479a9324e123d45d",
+    # reject-only 의미 검증. grounding과 재질의는 H0 production 그대로다.
+    "V0_VERIFY": "64bbceb4e171085f38de782ceb413b3ee814c9df8c7f9576479a9324e123d45d",
 }
 PINNED_REPAIR_SHA256 = {
     "C": "a5d9baa0bbbf73d1adb43f6a389dd8cef024bfee78c51d9fcc3ade518ed12850",
@@ -311,10 +324,15 @@ PINNED_REPAIR_SHA256 = {
     "H0_AGG": "5af4c744a448f008fa9e1fa92848f4b08e24870bcd156852e4c71369e80e67c4",
     "H2_AGG": "5af4c744a448f008fa9e1fa92848f4b08e24870bcd156852e4c71369e80e67c4",
     "L1_AGG": "5af4c744a448f008fa9e1fa92848f4b08e24870bcd156852e4c71369e80e67c4",
+    "V0_VERIFY": "5af4c744a448f008fa9e1fa92848f4b08e24870bcd156852e4c71369e80e67c4",
 }
 #: 집계 전용 호출의 system prompt. 한 번 쓰고 고정했다(aggregation_refinement.py).
 PINNED_REFINER_SHA256 = {
     "L1_AGG": "22c501ffe6ccf97c307b6163cb1fdcf8094ef2597e497f9d048bc0dc850ecf7f",
+}
+#: 의미 검증기의 system prompt. 한 번 쓰고 고정했다(semantic_verifier.py).
+PINNED_VERIFIER_SHA256 = {
+    "V0_VERIFY": "cad71775aec07708f00bc96dd7e4e94d5ca914e4cbd3df2fdde3ec0583abf112",
 }
 
 VARIANT_DIR = RESULT_DIR / "variants"
@@ -416,6 +434,9 @@ _BUILDERS = {
     "L1_AGG": (lambda: {"prompt": _production_prompt(),
                         "aggregation_refiner": aggregation_refinement.system_prompt()},
                "L1: H0 grounding + bucket이 있을 때만 집계 전용 호출"),
+    "V0_VERIFY": (lambda: {"prompt": _production_prompt(),
+                           "semantic_verifier": semantic_verifier.SYSTEM_PROMPT},
+                  "V0: H0 최종 계획 + reject-only 의미 검증"),
 }
 
 
@@ -430,7 +451,8 @@ def build_variant(name, *, pinned=None, pinned_repair=None):
         ("factor 재질의 문구", None,
          (PINNED_REPAIR_SHA256 if pinned_repair is None else pinned_repair).get(name)),
     )
-    checks += (("집계 보정 prompt", variant.refiner_sha256, PINNED_REFINER_SHA256.get(name)),)
+    checks += (("집계 보정 prompt", variant.refiner_sha256, PINNED_REFINER_SHA256.get(name)),
+               ("의미 검증 prompt", variant.verifier_sha256, PINNED_VERIFIER_SHA256.get(name)))
     for what, actual, expected in checks:
         if expected is None:
             continue
@@ -890,7 +912,46 @@ def observe(item, *, arm, variant, repetition, position, pair_index,
         None if record["measurement"] == INVALID
         else record["final_category"] in ("correct", "unsupported_correct")
     )
+    if variant.semantic_verifier is not None:
+        record.update(verify_observation(record, plans.last_plan, variant, client, item))
     return record
+
+
+def planned_tool_calls(plan):
+    return len(compile_plan(plan).steps) if plan is not None else 0
+
+
+def verify_observation(record, plan, variant, client, item):
+    """V0. H0 관측이 끝난 뒤 최종 계획을 검증한다. H0 기록은 바꾸지 않는다.
+
+    검증 호출은 관측 안의 의도한 두 번째 호출이다(모델이 올라간 상태). 실패해도
+    H0 측정의 유효성과 무관하므로 관측을 다시 시작하지 않고 fallback으로 남긴다.
+    """
+    h0_steps = planned_tool_calls(plan) if record.get("validated") else 0
+    if not record.get("validated") or plan is None:
+        result = {"outcome": semantic_verifier.NOT_CALLED}
+    else:
+        recorder = RecordingClient(client)
+        recorder.phase = "semantic_verifier"
+
+        def chat(messages):
+            return semantic_verifier.message_content(recorder.chat(messages))
+
+        result = semantic_verifier.verify(chat, item["question"], plan,
+                                          parse_json=parse_planner_json,
+                                          prompt=variant.semantic_verifier)
+        result["calls"] = recorder.calls
+    rejected = semantic_verifier.rejects(result)
+    return {
+        "verifier_sha256": variant.verifier_sha256,
+        "semantic_verification": result,
+        "v0_rejected": rejected,
+        "h0_tool_calls": h0_steps,
+        "v0_tool_calls": 0 if rejected else h0_steps,
+        # V0의 최종 결과는 H0 계획 그대로이거나 계획 없음이다.
+        "v0_final_tool": None if rejected else record.get("final_tool"),
+        "v0_final_tool_args": None if rejected else record.get("final_tool_args"),
+    }
 
 
 # -- 실행 ------------------------------------------------------------------
@@ -1838,7 +1899,8 @@ def cmd_run(args):
         "arms": [{"label": label, "variant": variant.name, "note": variant.note,
                   "prompt_sha256": variant.sha256, "prompt_chars": len(variant.prompt),
                   "repair_contract_sha256": variant.repair_sha256,
-                  "refiner_sha256": variant.refiner_sha256}
+                  "refiner_sha256": variant.refiner_sha256,
+                  "verifier_sha256": variant.verifier_sha256}
                  for label, variant in zip(labels, variants)],
         "corpus": corpus,
         "query_ids": [item["id"] for item in items],
