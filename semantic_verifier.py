@@ -227,6 +227,14 @@ class VerifierError(ValueError):
         self.detail = detail
 
 
+def _field_name(value):
+    """서명 문장이 항목을 [이름]으로 보여 주므로 괄호째 옮긴 것은 같은 이름으로 본다."""
+    if isinstance(value, str) and len(value) > 2 and value[0] == "[" and value[-1] == "]" \
+            and value[1:-1] in FIELDS:
+        return value[1:-1]
+    return value
+
+
 def parse_verdict(payload, question):
     """검증기 출력을 확인한다. 어긋나면 VerifierError(→ fallback)."""
     if not isinstance(payload, dict):
@@ -249,6 +257,7 @@ def parse_verdict(payload, question):
             raise VerifierError(VERIFIER_INVALID_OUTPUT, f"issue 형식: {issue!r}")
         if issue["kind"] not in KINDS:
             raise VerifierError(VERIFIER_INVALID_OUTPUT, f"kind 값: {issue['kind']!r}")
+        issue = {**issue, "plan_field": _field_name(issue["plan_field"])}
         if issue["plan_field"] not in FIELDS:
             raise VerifierError(VERIFIER_INVALID_OUTPUT, f"plan_field 값: {issue['plan_field']!r}")
         evidence = issue["question_evidence"]

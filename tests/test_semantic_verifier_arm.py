@@ -186,6 +186,16 @@ class VerdictTest(unittest.TestCase):
         self.assertEqual(V.parse_verdict({"verdict": "inconsistent", "issues": [extra]},
                                          self.Q)[0], "inconsistent")
 
+    def test_bracketed_field_name_is_the_same_field(self):
+        issue = {"kind": "missing_constraint", "question_evidence": "개인택시",
+                 "plan_field": "[taxi_type]"}
+        _verdict, issues = V.parse_verdict({"verdict": "inconsistent", "issues": [issue]}, self.Q)
+        self.assertEqual(issues[0]["plan_field"], "taxi_type")
+        for field in ("[taxi_type] 택시 유형: 전체", "[tool]", "taxi_type]"):
+            with self.assertRaises(V.VerifierError):
+                V.parse_verdict({"verdict": "inconsistent",
+                                 "issues": [{**issue, "plan_field": field}]}, self.Q)
+
     def test_invalid_outputs(self):
         good = {"kind": "missing_constraint", "question_evidence": "개인택시",
                 "plan_field": "taxi_type"}
