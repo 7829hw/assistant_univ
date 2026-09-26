@@ -893,23 +893,28 @@ python assistant_cli.py --agent-mode geoflow --aggregation-grounding structured 
 닫힌 어휘·문법으로 읽어 날짜와 택시 유형을 다시 정하고, 장소명의 근거를 확인함
 (`geoflow/conditions.py`). prompt는 바꾸지 않음. 기본은 끔.
 
-* 날짜: "지난달"→`last_month`처럼 지원 표현을 찾으면 그 값이 date가 됨. LLM이 절대 날짜로
-  잘못 바꿨거나 형식을 틀렸으면 코드의 해석으로 바꾸고 원래 값을 기록함. 상대 날짜는
-  Asia/Seoul 기준일로 해석 범위를 기록하되, TIMS에는 기존대로 상대 토큰을 넘김(TIMS의
-  상대 날짜 해석은 계약에 없음). "최근 한 달", "최근 7일", "이번 달" 등은 지원하지 않음으로,
-  연도 없는 "8월"과 명시 날짜·상대 표현의 충돌은 확인 필요로 돌려줌. 질문에 날짜 단서가 전혀
-  없는데 LLM이 날짜를 붙였으면 적용하지 않음.
-* 택시 유형: "개인(용)택시", "법인(용)/회사택시", "전체/모든 택시". 부정("제외", "빼고")과
-  여러 유형은 지원하지 않음. 단서가 전혀 없을 때만 LLM이 붙인 개인/법인을 지움.
-* 장소: 장소명이 질문에 있는지(정규화 포함)만 확인함. **장소 누락은 탐지하지 않음.**
-* 답변에 "적용 조건" 줄을 붙이고, run 기록에 조건별 근거 → 해석 → 적용 변환 → 실행 인자를
-  남김(`condition_audit`, `condition_trace`).
+* 조건마다 상태를 남김: `interpreted`(읽고 정함), `conflict`(LLM 값과 달라 질문 표현으로 보정),
+  `ambiguous`(확인 요청), `unverifiable`(단서는 있으나 읽지 못해 LLM 값을 보류, 검증 안 됨),
+  `absent`(표현도 단서도 없음). 삭제는 LLM 값의 근거 표현이 질문에 없고 그 조건의 단서도 없을
+  때만 함. 판단 근거는 `basis`에 남음.
+* 날짜: 해석은 Asia/Seoul 기준일로 함. **실행은 요청 인자의 기간 의미가 TIMS 계약으로 확인될
+  때만 함.** 확인된 것은 단일 날짜(`YYYYMMDD`)뿐이라 상대 기간(`last_month`)·날짜 범위는
+  해석이 맞아도 `DATE_EXECUTION_UNVERIFIED`(지원 불가)로 멈춤. 범위 계약(`range_inclusive`)이
+  확인되면 명시 범위로, 기록 계약(`day_records:<tool>`)과 sum·max·min이면 하루 단위 합성으로
+  바꿔 실행함. 기본 경로(끔)는 기존대로 토큰을 넘기고 확인 상태만 `date_semantics`에 기록함.
+* 택시 유형: "개인(용)택시", "법인(용)/회사택시", "전체/모든 택시". `all`은 조건 없음과 실행
+  의미가 같음(schema "all=조건 미적용"). 사용자가 "전체"라고 말했는지는 `stated`로 따로 남김.
+* 장소: 이름이 질문에 있는지만 확인함. 지역 의미, **장소 누락**, 출발/도착 의미는 확인하지 않음.
+  그래서 검증 요약(`verification`)의 `complete`는 언제나 거짓.
+* 답변에 "적용 조건"과 "검증 범위" 줄을 붙임. run 기록에 `condition_audit`, `condition_trace`,
+  `verification`을 남김.
 
 ```bash
 python assistant_cli.py --agent-mode geoflow --condition-check \
-  --model qwen3:8b --query "지난달 대구 개인택시 평균 수입은?"
+  --model qwen3:8b --query "2026년 9월 24일 대구 개인택시 수입 합계는?"
 ```
 
+설계와 측정 기록: `evaluation/design/condition_verification_scope.md`(이번 정비),
 설계와 측정 기록: `evaluation/design/condition_preservation.md`.
 
 ### 질문에 없는 조건

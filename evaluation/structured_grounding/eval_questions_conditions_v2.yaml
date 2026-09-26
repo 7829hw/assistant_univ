@@ -1,0 +1,150 @@
+# 조건 보존 확인 평가 셋 v2. 2026-09-26 작성, 모델 실행 전 고정. 결과를 보고 고치지 않는다.
+#
+# 목적: flat vs flat+condition_check(기본 production 집계 계약)의 확인 평가.
+#
+# 독립성
+# - 기존 셋(eval_questions_v1, eval_questions_conditions_v1), 개발 질문, census corpus의 문장을
+#   쓰지 않았다. 문장 틀을 바꿨다(어순 도치 d31·d33·d34·d36, "합하면/전부 더한 값" 등).
+# - 분리하지 못한 것: mock gazetteer에 있는 지명만 쓸 수 있어 지명 일부가 v1과 겹친다(수성구 등).
+#   측정값 어휘(수입·영업 시간·영업 횟수·운행률·공차율·속도·실차 건수)도 같다.
+# - d06("지난주 금요일")은 이 셋을 쓰는 중에 조건 계층의 결함(요일이 남아도 last_week로 확정)을
+#   알아채고 코드를 고친 뒤 고정했다. d06은 독립 관측이 아니다.
+# - 조건 규칙 밖 표현(문법 공백)을 일부러 넣었다: d05 점 표기 날짜, d13 "유형 구분 없이",
+#   d16 "개인사업자 택시", d17 "법인이 아닌".
+#
+# expected (손으로 정함. 조건 계층 코드로 만들지 않았다)
+#   outcome              질문 의미로 정한 결과. answered | unsupported | needs_clarification
+#   contract_executable  확인된 TIMS 계약(단일 날짜 YYYYMMDD 또는 기간 없음)만으로 실행할 수 있는가.
+#                        범위·상대 기간은 range_inclusive·relative_date_reference가 확인되지 않아 false.
+#   plan                 집계 의미. null은 집계어가 없음.
+#   conditions.date      accept = 같은 뜻으로 인정하는 pt_date 표현(기준일 2026-09-25 금, Asia/Seoul로
+#                        손으로 셈), request = mock 정답 판정에 쓰는 요청 인자.
+#   conditions.taxi_type 실행 의미(all은 조건 없음과 같게 적지 않고 생략한다).
+#   conditions.taxi_stated explicit_all | explicit_private | explicit_corporate | not_stated
+#   conditions.od        {pickup, dropoff}
+version: 2
+role: fresh_holdout
+reference_date: "2026-09-25"
+questions:
+  # A. 단일 날짜(계약상 실행 가능)
+  - {id: d01, family: single_day, question: "2026년 9월 3일 하루 동안 수영구 개인택시가 올린 수입을 모두 합하면?",
+     expected: {outcome: answered, contract_executable: true, plan: {final: sum},
+                conditions: {date: {accept: ["20260903"]}, taxi_type: private, taxi_stated: explicit_private, place: 수영구}}}
+  - {id: d02, family: single_day, question: "20260910 두류동 택시 운행률 평균 알려줘",
+     expected: {outcome: answered, contract_executable: true, plan: {final: avg},
+                conditions: {date: {accept: ["20260910"]}, taxi_stated: not_stated, place: 두류동}}}
+  - {id: d03, family: single_day, question: "어제 하루 신천동에서 영업한 법인택시의 영업 시간 최댓값은?",
+     expected: {outcome: answered, contract_executable: true, plan: {final: max},
+                conditions: {date: {accept: ["20260924"]}, taxi_type: corporate, taxi_stated: explicit_corporate, place: 신천동}}}
+  - {id: d04, family: single_day, question: "오늘 중구 개인택시 수입 중 가장 작은 값은?",
+     expected: {outcome: answered, contract_executable: true, plan: {final: min},
+                conditions: {date: {accept: ["20260925"]}, taxi_type: private, taxi_stated: explicit_private, place: 중구}}}
+  - {id: d05, family: grammar_gap, question: "2026.09.14 동구 택시 영업 횟수 합계는?",
+     expected: {outcome: answered, contract_executable: true, plan: {final: sum},
+                conditions: {date: {accept: ["20260914"]}, taxi_stated: not_stated, place: 동구}}}
+  - {id: d06, family: single_day, question: "지난주 금요일 수영구 법인택시 영업 횟수 합계",
+     expected: {outcome: answered, contract_executable: true, plan: {final: sum},
+                conditions: {date: {accept: ["20260918"]}, taxi_type: corporate, taxi_stated: explicit_corporate, place: 수영구}}}
+  # B. 기간 없음
+  - {id: d07, family: no_date, question: "두산동 개인택시 영업 횟수를 전부 더한 값은?",
+     expected: {outcome: answered, contract_executable: true, plan: {final: sum},
+                conditions: {taxi_type: private, taxi_stated: explicit_private, place: 두산동}}}
+  - {id: d08, family: no_date, question: "동대구역 근처 택시 평균 속도는?",
+     expected: {outcome: answered, contract_executable: true, plan: {final: avg},
+                conditions: {taxi_stated: not_stated, place: 동대구역}}}
+  - {id: d09, family: no_date, question: "태평로동 택시 운행률의 최댓값을 보여줘",
+     expected: {outcome: answered, contract_executable: true, plan: {final: max},
+                conditions: {taxi_stated: not_stated, place: 태평로동}}}
+  # C. 명시적 전체 대 유형 미지정(최소 대조)
+  - {id: d10, family: explicit_all, question: "2026년 9월 3일 수성구 모든 택시의 수입 합계는?",
+     expected: {outcome: answered, contract_executable: true, plan: {final: sum},
+                conditions: {date: {accept: ["20260903"]}, taxi_stated: explicit_all, place: 수성구}}}
+  - {id: d11, family: explicit_all, question: "2026년 9월 3일 수성구 택시의 수입 합계는?",
+     expected: {outcome: answered, contract_executable: true, plan: {final: sum},
+                conditions: {date: {accept: ["20260903"]}, taxi_stated: not_stated, place: 수성구}}}
+  - {id: d12, family: explicit_all, question: "2026년 9월 3일 수성구 택시 전체 수입을 합하면?",
+     expected: {outcome: answered, contract_executable: true, plan: {final: sum},
+                conditions: {date: {accept: ["20260903"]}, taxi_stated: explicit_all, place: 수성구}}}
+  - {id: d13, family: grammar_gap, question: "택시 유형 구분 없이 2026년 9월 3일 수성구 수입 합계를 알려줘",
+     expected: {outcome: answered, contract_executable: true, plan: {final: sum},
+                conditions: {date: {accept: ["20260903"]}, taxi_stated: explicit_all, place: 수성구}}}
+  # D. 택시 유형 표현
+  - {id: d14, family: taxi, question: "2026년 9월 3일 수성구 개인 택시 수입 합계",
+     expected: {outcome: answered, contract_executable: true, plan: {final: sum},
+                conditions: {date: {accept: ["20260903"]}, taxi_type: private, taxi_stated: explicit_private, place: 수성구}}}
+  - {id: d15, family: taxi, question: "2026년 9월 3일 수성구 회사 택시들의 수입 합계는?",
+     expected: {outcome: answered, contract_executable: true, plan: {final: sum},
+                conditions: {date: {accept: ["20260903"]}, taxi_type: corporate, taxi_stated: explicit_corporate, place: 수성구}}}
+  - {id: d16, family: grammar_gap, question: "2026년 9월 3일 수성구 개인사업자 택시 수입 합계",
+     expected: {outcome: answered, contract_executable: true, plan: {final: sum},
+                conditions: {date: {accept: ["20260903"]}, taxi_type: private, taxi_stated: explicit_private, place: 수성구}}}
+  - {id: d17, family: grammar_gap, question: "2026년 9월 3일 수성구에서 법인이 아닌 택시의 수입 합계",
+     expected: {outcome: unsupported, contract_executable: false, plan: {final: sum},
+                conditions: {date: {accept: ["20260903"]}, place: 수성구}}}
+  # E. 상대 기간(의미는 분명, 계약상 실행 불가)
+  - {id: d18, family: relative, question: "저번 주 태평로동 개인택시 수입 합계를 알려줘",
+     expected: {outcome: answered, contract_executable: false, plan: {final: sum},
+                conditions: {date: {accept: [last_week, 20260914-20260920], request: last_week},
+                             taxi_type: private, taxi_stated: explicit_private, place: 태평로동}}}
+  - {id: d19, family: relative, question: "지난달 한 달 동안 신천동 법인택시 영업 시간을 합치면?",
+     expected: {outcome: answered, contract_executable: false, plan: {final: sum},
+                conditions: {date: {accept: [last_month, 20260801-20260831], request: last_month},
+                             taxi_type: corporate, taxi_stated: explicit_corporate, place: 신천동}}}
+  - {id: d20, family: relative, question: "작년 한 해 두류동 택시 영업 횟수 합계",
+     expected: {outcome: answered, contract_executable: false, plan: {final: sum},
+                conditions: {date: {accept: [last_year, 20250101-20251231], request: last_year},
+                             taxi_stated: not_stated, place: 두류동}}}
+  - {id: d21, family: relative, question: "지난달 동구 택시 운행률 평균은?",
+     expected: {outcome: answered, contract_executable: false, plan: {final: avg},
+                conditions: {date: {accept: [last_month, 20260801-20260831], request: last_month},
+                             taxi_stated: not_stated, place: 동구}}}
+  # F. 명시 범위(계약상 실행 불가: 양 끝 포함 미확인)
+  - {id: d22, family: range, question: "2026년 9월 1일부터 7일까지 동구 법인택시 영업 횟수 합계",
+     expected: {outcome: answered, contract_executable: false, plan: {final: sum},
+                conditions: {date: {accept: [20260901-20260907]}, taxi_type: corporate, taxi_stated: explicit_corporate, place: 동구}}}
+  - {id: d23, family: range, question: "2026년 8월 한 달간 중구 개인택시 수입 평균",
+     expected: {outcome: answered, contract_executable: false, plan: {final: avg},
+                conditions: {date: {accept: [20260801-20260831]}, taxi_type: private, taxi_stated: explicit_private, place: 중구}}}
+  # G. 지원하지 않는 기간 표현
+  - {id: d24, family: unsupported_date, question: "최근 3일간 수영구 택시 수입 합계",
+     expected: {outcome: unsupported, contract_executable: false, plan: {final: sum}, conditions: {place: 수영구}}}
+  - {id: d25, family: unsupported_date, question: "이번 주 중구 개인택시 영업 시간 합계는?",
+     expected: {outcome: unsupported, contract_executable: false, plan: {final: sum},
+                conditions: {taxi_type: private, place: 중구}}}
+  - {id: d26, family: unsupported_date, question: "지난 주말 두류동 택시 수입 평균",
+     expected: {outcome: unsupported, contract_executable: false, plan: {final: avg}, conditions: {place: 두류동}}}
+  - {id: d27, family: unsupported_date, question: "올해 1분기 동구 법인택시 수입 합계",
+     expected: {outcome: unsupported, contract_executable: false, plan: {final: sum},
+                conditions: {taxi_type: corporate, place: 동구}}}
+  # H. 모호한 기간
+  - {id: d28, family: ambiguous_date, question: "8월 동구 개인택시 수입 합계는?",
+     expected: {outcome: needs_clarification, contract_executable: false, plan: {final: sum},
+                conditions: {taxi_type: private, place: 동구}}}
+  - {id: d29, family: ambiguous_date, question: "9월 3일 두산동 법인택시 영업 횟수 합계는?",
+     expected: {outcome: needs_clarification, contract_executable: false, plan: {final: sum},
+                conditions: {taxi_type: corporate, place: 두산동}}}
+  # I. 여러 장소
+  - {id: d30, family: places, question: "2026년 9월 3일 동성로에서 타서 동대구역에서 내린 실차 건수는?",
+     expected: {outcome: answered, contract_executable: true, plan: null,
+                conditions: {date: {accept: ["20260903"]}, place: [동대구역, 동성로],
+                             od: {pickup: 동성로, dropoff: 동대구역}}}}
+  - {id: d31, family: places, question: "2026년 9월 3일 초량동으로 들어온 실차 구간 중 초읍동에서 출발한 것은 몇 건?",
+     expected: {outcome: answered, contract_executable: true, plan: null,
+                conditions: {date: {accept: ["20260903"]}, place: [초량동, 초읍동],
+                             od: {pickup: 초읍동, dropoff: 초량동}}}}
+  - {id: d32, family: places, question: "2026년 9월 3일 수성구와 달서구 개인택시 수입 합계는?",
+     expected: {outcome: unsupported, contract_executable: false, plan: {final: sum},
+                conditions: {date: {accept: ["20260903"]}, taxi_type: private, place: [달서구, 수성구]}}}
+  # J. 문장 구조 변형
+  - {id: d33, family: structure, question: "개인택시만 놓고 보면, 2026년 9월 10일 중구의 영업 횟수 합계는 얼마였어?",
+     expected: {outcome: answered, contract_executable: true, plan: {final: sum},
+                conditions: {date: {accept: ["20260910"]}, taxi_type: private, taxi_stated: explicit_private, place: 중구}}}
+  - {id: d34, family: structure, question: "동구에서 2026년 9월 10일에 법인택시들이 벌어들인 돈을 전부 더하면?",
+     expected: {outcome: answered, contract_executable: true, plan: {final: sum},
+                conditions: {date: {accept: ["20260910"]}, taxi_type: corporate, taxi_stated: explicit_corporate, place: 동구}}}
+  - {id: d35, family: structure, question: "어제 동인동 개인택시들의 운행률 중 가장 낮은 값은?",
+     expected: {outcome: answered, contract_executable: true, plan: {final: min},
+                conditions: {date: {accept: ["20260924"]}, taxi_type: private, taxi_stated: explicit_private, place: 동인동}}}
+  - {id: d36, family: structure, question: "2026년 9월 10일 공차율이 수성구 법인택시에서 평균 얼마였지?",
+     expected: {outcome: answered, contract_executable: true, plan: {final: avg},
+                conditions: {date: {accept: ["20260910"]}, taxi_type: corporate, taxi_stated: explicit_corporate, place: 수성구}}}

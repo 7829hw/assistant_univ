@@ -37,6 +37,16 @@ production 기본값은 바꾸지 않았다(flat grounding, prompt sha256 앞 8�
 | 빈 구간을 빼는지 0으로 넣는지 | 알 수 없음 | 없음 |
 | null·결측 반환 | 알 수 없음 | 반환은 "스칼라값"뿐 |
 | 상대 날짜의 기준 시각·시간대 | 알 수 없음 | "현재 시점을 기준으로 하는 상대 날짜"뿐 |
+| weekday/weekend/holiday 토큰의 기간 | 알 수 없음 | 토큰 이름만 있음(2026-09-26 추가) |
+| taxi_type=all ≡ 유형 조건 없음 | 계약으로 확인됨 | pt_taxi_type "all=조건 미적용", default all(2026-09-26 추가) |
+| `day_records:get_operation_metrics` aggregation이 하루 안 기록(택시·일)에 바로 적용 | 구현·라벨에서만 관찰됨 | "일 단위 택시 영업" 기록임은 적혀 있으나 기간 집계가 그 기록에 바로 적용되는지는 없음. "운행률은 기간으로 합산하면 평균 운행일" 문장은 택시별 중간 집계의 여지를 남김(2026-09-26 추가) |
+| `day_records:<trip·passage·drive tool>` | 알 수 없음 | 날짜 귀속 규칙(자정을 넘는 기록) 없음(2026-09-26 추가) |
+
+2026-09-26 정정: 아래 `daily_partition`은 `single_date`만 요구했지만, 하루 값들을 합쳐 구간 값을
+만들려면 기록이 하루에만 속하고 aggregation이 그 기록에 바로 적용되어야 한다(`day_records`).
+이 항목은 확인되지 않았다. 기본 경로는 동작을 바꾸지 않고 step `assumptions`에
+`day_records:<tool>`을 더해 가정으로 기록한다. condition_check 경로는 이 항목을 요구하므로
+구간별 집계를 `UNVERIFIED_TIMS_CONTRACT`로 멈춘다(`condition_verification_scope.md`).
 
 ## 3. lowering 경로
 
