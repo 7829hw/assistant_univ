@@ -937,6 +937,29 @@ ASSISTANT_TOOL_PROVIDER=reference python assistant_cli.py --agent-mode geoflow \
 설계와 측정 기록: `evaluation/design/condition_verification_scope.md`(이번 정비),
 설계와 측정 기록: `evaluation/design/condition_preservation.md`.
 
+### 질문–graph 예시 검색(선택)
+
+structured grounding에 검토된 질문–의미 graph 예시를 해석 문맥으로 붙이는 선택 기능
+(논문 §3.4·부록 E.1의 example retrieval 첫 단계). 기본은 끔이며 끄면 prompt가 기존과 byte 단위로 같음.
+
+* 예시 저장소 `geoflow_examples/question_graph_examples.yaml`(16개): 질문, 검토한 grounding, 조건 값 없는
+  graph 직렬화, macro, 결과 형태, 집계 칸, 출처. 등록 검증은 `python example_retrieval.py verify`
+  (grounding ↔ graph ↔ macro 일치, G1–G5, reference 예시의 실제 계산).
+* 검색은 질문 원문 하나로 top-3를 고름(cosine, 점수 내림차순·id 오름차순). 이 환경에는 임베딩 실행
+  환경이 없어 **lexical(문자 n-gram TF-IDF) index**를 씀. 임베딩 검색이 아님. 저장소가 바뀌었는데 index가
+  그대로면 `RETRIEVAL_INDEX_STALE`로 거부(`python example_retrieval.py build`로 다시 만듦).
+* 예시는 prompt에만 들어감. composer는 현재 질문의 grounding만 받고, 예시 graph를 실행하거나 예시의
+  조건·값을 옮기는 경로는 없음. 검증·조건 보존·provider 계약은 그대로.
+* 실행 기록 `retrieval`에 예시 id·점수·순서·절 hash가 남음.
+
+```bash
+ASSISTANT_TOOL_PROVIDER=reference python assistant_cli.py --agent-mode geoflow \
+  --aggregation-grounding structured --condition-check --example-retrieval lexical \
+  --query "지난달 가람구 개인택시 주별 매출 평균 중 가장 큰 값은?"
+```
+
+설계·검증·비교 결과: `evaluation/design/question_graph_retrieval.md`.
+
 ### 질문에 없는 조건
 
 조각이 optional port를 채우지 못하면 그 인자 없이 실행함.
@@ -1482,7 +1505,8 @@ LLM 호출 감소는 model hop마다 다음 Tool을 묻지 않기 때문임. Geo
   (`UNSUPPORTED_QUESTION`, `NO_OPERATOR`, `MISSING_REQUIRED_INPUT`, `AMBIGUOUS_PORT`).
 * 조각 합성은 현재 TIMS 도메인에 필요한 범위의 역방향 탐색임. 일반적인 AI
   planning solver가 아니며, 후보가 여럿이면 순위를 매기지 않고 포기함.
-  question-graph retrieval은 인터페이스만 두었고 vector DB는 구축하지 않음.
+  question-graph 예시 검색은 선택 기능으로 붙였음(lexical index, 임베딩 아님. 기본 끔). vector DB는
+  구축하지 않음.
 * `gemma4:12b`는 새 계약의 출력 길이를 감당하지 못해 축소 셋으로만 측정했고
   경계 셋은 측정하지 못함. 정확도가 아니라 생성 길이 문제이며, 응답한 질의의
   grounding은 전 항목 100%였음.

@@ -182,7 +182,7 @@ compiler, 로컬 분석 연산을 그대로 쓴다. 질문별 분기는 없다.
 | 이미 구현되어 있던 것 | core concept·role(LOCATION/EVENT/AMOUNT, SUBCOND/SUPPORT/MEASURE), G ↔ G′ 인수분해(semantic operator ↔ Tool, factor = params), G1–G5와 G7 검증, macro 조합(PLACE_TO_SCOPE, EVENT_TO_(GROUPED_)MEASURE ≈ FILTER-AGGREGATE-MEASURE), 위상 순서 실행과 trace |
 | 이번에 실제 계산으로 검증한 것 | 두 단계 집계 graph(구간 안 → REDUCE/SELECT)가 lowering 후에도 같은 값을 내는지를 독립 기준 결과와 비교. 조건이 모든 호출에 보존되는지. 단계 뒤바뀜을 탐지하는지. 부록 F의 trace가 의미 단계와 실제 호출·로컬 연산을 잇는지. 답변이 계산 결과(Σ_M)에 근거하는지 |
 | 프로젝트가 더한 설계 | provider 계약(확인/관찰/미확인)과 계약별 lowering 전략, 실행 프로필, 조건 provenance와 검증 범위, 빈 날·빈 구간 정책, 합성 데이터 표기 |
-| 아직 없는 것 | 질문–그래프 예시 검색(부록 E.1), LLM이 graph를 직접 drafting하는 단계(지금은 grounding → 고정 macro 조합), SFT/DPO, 부록 E의 다른 템플릿(경로·최적화·방위 등)과 GIS 연산 |
+| 아직 없는 것 | 질문–그래프 예시 검색(부록 E.1, 이후 선택 기능으로 추가: `question_graph_retrieval.md`. 임베딩이 아닌 lexical 검색), LLM이 graph를 직접 drafting하는 단계(지금은 grounding → 고정 macro 조합), SFT/DPO, 부록 E의 다른 템플릿(경로·최적화·방위 등)과 GIS 연산 |
 
 ## 9. vendor 확인이 필요한 질문(TIMS)
 
@@ -195,7 +195,7 @@ compiler, 로컬 분석 연산을 그대로 쓴다. 질문별 분기는 없다.
 
 ## 10. 남은 차이와 다음 작업
 
-- reference provider는 매출 하나, 단일 집계와 주 단위 두 단계 집계만 다룬다. month 구간, dimension 목록, OD, 다른 metric은 지원하지 않는다(구조화된 미지원).
+- reference provider는 매출 하나와 단일 집계를 다룬다. 주·월 구간의 두 단계 집계는 로컬 분할(range_partition, `geoflow/periods.py`의 주·달력 월 규칙)로 실행된다. dimension 목록, OD, 다른 metric은 지원하지 않는다(구조화된 미지원). (정정 2026-09-26: 이전 판은 month 구간도 지원하지 않는다고 적었으나, 월 구간은 주 구간과 같은 로컬 분할로 계산되며 `tests/test_example_retrieval.py`가 독립 SQL과 대조한다.)
 - LLM 기능 확인에서 실패는 모두 질문 해석(grounding) 단계에서 났다. 실행 단계 오류는 없었다. 실패 유형은 기간 오변환, 택시 유형 누락, "가장 큰 값"을 구간 선택으로 해석한 것이다(§6).
 - 다음 최소 작업은 다음과 같다.
   1. vendor 답변으로 TIMS 항목을 확인하면 그 항목만 CONFIRMED로 올린다(인용 필요).
