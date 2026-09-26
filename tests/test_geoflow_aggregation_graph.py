@@ -437,7 +437,9 @@ class LoweringStrategyTest(Case):
         execution = compile_plan(plan, reference_date=REFERENCE)
         calls = [step for step in execution.tool_steps if step.group is not None]
         self.assertEqual([step.arguments["date"] for step in calls], AUGUST_DAYS)
-        self.assertTrue(all(step.assumptions == ["single_date"] for step in calls))
+        # 기본 경로는 하루 합성의 데이터 조건(기록이 하루에만 속함)을 가정으로 적는다.
+        self.assertTrue(all(step.assumptions == [
+            "single_date", "day_records:get_operation_metrics"] for step in calls))
         collect = next(s for s in execution.steps if s.operator == "COLLECT_GROUPS")
         self.assertEqual([len(keys) for keys in collect.arguments["members"]],
                          [2, 7, 7, 7, 7, 1])

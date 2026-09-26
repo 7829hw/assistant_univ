@@ -20,7 +20,7 @@ Planner도 template도 Tool argument 이름을 직접 지정하지 않는다.
 
 from geoflow import analysis_ops, periods, tims_contract
 from geoflow.errors import CompilerError
-from geoflow.operator_registry import get_operator
+from geoflow.operator_registry import TOOL_DEFAULT_REDUCER, get_operator
 from geoflow.types import (
     STEP_LOCAL,
     WHOLE_RESULT,
@@ -30,6 +30,15 @@ from geoflow.types import (
     ToolStep,
     ValueRef,
 )
+
+#: 기간 인자 처리 방식.
+#: - legacy: 의미 graph의 기간 값을 그대로 요청 인자로 쓴다. provider 의미 확인 상태는
+#:   ``date_semantics``에 기록만 한다(기본 경로, 기존 동작).
+#: - guaranteed: 요청 인자의 기간 의미가 TIMS 계약으로 확인될 때만 실행한다. 확인되지
+#:   않으면 계약이 허용하는 다른 요청(명시 범위, 하루 단위 합성)으로 바꾸고, 그것도
+#:   없으면 ``DATE_EXECUTION_UNVERIFIED``로 멈춘다(condition_check 경로).
+DATE_POLICY_LEGACY = "legacy"
+DATE_POLICY_GUARANTEED = "guaranteed"
 
 #: 실행 시점에 Tool이 채우는 node source.
 PRODUCED_SOURCES = frozenset({NodeSource.TOOL, NodeSource.DERIVED})
@@ -77,14 +86,18 @@ def topological_order(plan: GeoFlowPlan):
 
 
 def compile_plan(plan: GeoFlowPlan, *, reference_date=None,
-                 contract=tims_contract.DEFAULT_CONTRACT):
+                 contract=tims_contract.DEFAULT_CONTRACT,
+                 date_policy=DATE_POLICY_LEGACY):
     """검증을 통과한 plan을 topological order의 실행 단계로 만든다.
 
     ``reference_date``는 상대 기간(last_month 등)을 날짜로 풀 기준일이다. 기간을
     로컬에서 나눠야 할 때만 쓰며, 없으면 그런 계획은 만들지 않는다.
     ``contract``는 TIMS 계약의 확인 상태다. 구간별 집계를 어떤 호출로 내릴지는
     이 계약이 허용하는 전략 중에서만 고른다(``geoflow/tims_contract.py``).
+    ``date_policy``는 위 ``DATE_POLICY_*`` 설명을 따른다.
     """
+    if date_policy not in (DATE_POLICY_LEGACY, DATE_POLICY_GUARANTEED):
+        raise ValueError(f"알 수 없는 date_policy: {date_policy!r}")
     order, cycle = topological_order(plan)
     if cycle:
         raise CompilerError(
@@ -120,12 +133,17 @@ def compile_plan(plan: GeoFlowPlan, *, reference_date=None,
             continue
         output = nodes.get(transformation.outputs[0]) if transformation.outputs else None
         if not analysis_ops.is_grouped(output):
-            execution.steps.append(_compile_step(transformation, nodes, plan))
+            execution.steps.extend(_lower_period(
+                transformation, _compile_step(transformation, nodes, plan), output, plan,
+                execution, reference_date=reference_date, contract=contract,
+                date_policy=date_policy,
+            ))
             continue
         combine = _single_combiner(transformation, output, consumers, plan)
         spec = get_operator(transformation.operator)
         strategy, rejected = choose_group_strategy(
             transformation, output, combine, spec, contract,
+            require_day_records=date_policy == DATE_POLICY_GUARANTEED,
         )
         execution.lowering[transformation.id] = {
             "strategy": None if strategy is None else strategy.name,
@@ -165,6 +183,125 @@ def compile_plan(plan: GeoFlowPlan, *, reference_date=None,
     return execution
 
 
+def _interpreted_range(value, reference_date):
+    """기간 값을 코드의 해석(Asia/Seoul 달력, 양 끝 포함)으로 푼다. 풀 수 없으면 None."""
+    kind = tims_contract.date_argument_kind(value)
+    if kind not in (tims_contract.DATE_SINGLE, tims_contract.DATE_RANGE,
+                    tims_contract.DATE_RELATIVE):
+        return None
+    if kind == tims_contract.DATE_RELATIVE and reference_date is None:
+        return None
+    return periods.resolve_period(value, reference_date=reference_date)
+
+
+def _lower_period(transformation, step, output, plan, execution, *, reference_date,
+                  contract, date_policy):
+    """한 단계 집계 호출의 기간 인자를 정책에 따라 내린다. 실행 단계 목록을 돌려준다.
+
+    기록(``execution.date_semantics``)은 네 층을 나눈다: 의미 graph의 기간 값, 코드가 푼
+    범위, 실제 요청 인자, 그 요청 인자의 provider 의미가 계약으로 확인되었는지.
+    """
+    spec = get_operator(transformation.operator)
+    if spec is None or not spec.accepts_period:
+        return [step]
+    value = transformation.params.get(spec.PERIOD_PARAM)
+    semantics = tims_contract.date_argument_semantics(value, contract)
+    try:
+        span = _interpreted_range(value, reference_date)
+    except CompilerError:
+        span = None
+    record = {
+        "value": value,
+        "kind": semantics["kind"],
+        "interpreted_range": None if span is None else periods.describe_period(*span),
+        "reference_date": (None if reference_date is None
+                           or semantics["kind"] != tims_contract.DATE_RELATIVE
+                           else reference_date.strftime("%Y%m%d")),
+        "policy": date_policy,
+        "lowering": "passthrough",
+        "request": [value] if value is not None else [],
+        "provider": semantics["status"],
+        "requires": semantics["requires"],
+        "missing": semantics["missing"],
+    }
+    execution.date_semantics[transformation.id] = record
+    if (date_policy == DATE_POLICY_LEGACY
+            or semantics["status"] != tims_contract.SEMANTICS_UNVERIFIED):
+        return [step]
+
+    def unverified(reason):
+        return CompilerError(
+            f"{transformation.id}: 기간 {value!r}의 실행 의미를 TIMS 계약으로 확인할 수 "
+            f"없습니다. {reason}",
+            code="DATE_EXECUTION_UNVERIFIED",
+            user_message=(
+                "질문의 기간을 해석했지만, TIMS가 이 기간을 같은 뜻으로 조회한다는 계약이 "
+                "확인되지 않아 계산하지 않았습니다."
+                + (f" (해석한 기간: {record['interpreted_range']})"
+                   if record["interpreted_range"] else "")
+            ),
+            context={"template": plan.template, "date_semantics": dict(record),
+                     "reason": reason},
+        )
+
+    if span is None:
+        raise unverified("연속 기간으로 풀 수 없는 값이라 다른 요청으로 바꿀 수 없습니다.")
+    start, end = span
+    if contract.satisfied("range_inclusive"):
+        explicit = periods.describe_period(start, end)
+        step.arguments[spec.PERIOD_PARAM] = explicit
+        record.update(lowering="explicit_range", request=[explicit],
+                      provider=tims_contract.SEMANTICS_CONFIRMED,
+                      requires=["range_inclusive"], missing=[])
+        return [step]
+    days = (end - start).days + 1
+    reducer = (step.arguments.get(spec.REDUCER_PARAM) if spec.accepts_reducer
+               else spec.inherent_reducer)
+    if reducer is None and spec.accepts_reducer:
+        reducer = TOOL_DEFAULT_REDUCER
+    listed = [name for name in ("dimension", "order", "limit")
+              if step.arguments.get(name) is not None]
+    ok, reason, requires = tims_contract.daily_composition(
+        spec.tool_name, reducer, grouped_arguments=listed, days=days, contract=contract,
+    )
+    record["composition"] = {"reducer": reducer, "days": days, "ok": ok,
+                             "reason": reason, "requires": requires}
+    if not ok:
+        raise unverified(
+            f"명시 범위에는 range_inclusive가, 하루 단위 합성에는 {reason}")
+    steps, keys = [], []
+    for index, day in enumerate(periods.days_of({
+            "start": start.strftime("%Y%m%d"), "end": end.strftime("%Y%m%d"),
+            "label": record["interpreted_range"]}), start=1):
+        daily = ToolStep(
+            id=f"{transformation.id}#d{index}", operator=step.operator,
+            tool_name=step.tool_name, arguments=dict(step.arguments),
+            output_bindings={spec.output.extraction: f"{output.id}#d{index}"},
+            covers=[transformation.id],
+            argument_sources=dict(step.argument_sources),
+            assumptions=list(requires),
+        )
+        daily.arguments[spec.PERIOD_PARAM] = day["start"]
+        daily.argument_sources[spec.PERIOD_PARAM] = (
+            f"{transformation.id}.params.{spec.PERIOD_PARAM}[{day['start']}]")
+        steps.append(daily)
+        keys.append(f"{output.id}#d{index}")
+    steps.append(ToolStep(
+        id=f"{transformation.id}.combine_days", operator=analysis_ops.COMBINE_DAYS,
+        tool_name=f"local:{analysis_ops.COMBINE_DAYS}",
+        arguments={"reducer": tims_contract.COMPOSABLE_REDUCERS[reducer],
+                   "days": [item.arguments[spec.PERIOD_PARAM] for item in steps]},
+        output_bindings={WHOLE_RESULT: output.id}, kind=STEP_LOCAL,
+        covers=[transformation.id], inputs=keys,
+        argument_sources={"reducer": f"{transformation.id}.params.{spec.REDUCER_PARAM}"},
+    ))
+    record.update(lowering="daily_composition",
+                  request=[item.arguments[spec.PERIOD_PARAM] for item in steps[:-1]],
+                  provider=tims_contract.SEMANTICS_CONFIRMED, requires=requires,
+                  missing=[])
+    return steps
+
+
 #: 의미 graph가 정한 구간의 정의. 호출 하나로 합치려면 TIMS의 확인된 값이 이것과
 #: 같아야 한다. 상대 기간은 compiler가 Asia/Seoul 기준일로 푼다(pipeline clock).
 SEMANTIC_GROUP_DEFINITION = {
@@ -175,11 +312,16 @@ SEMANTIC_GROUP_DEFINITION = {
 }
 
 
-def choose_group_strategy(transformation, output, combine, spec, contract):
+def choose_group_strategy(transformation, output, combine, spec, contract, *,
+                          require_day_records=False):
     """구간별 집계를 내릴 전략과, 쓰지 않은 전략의 이유를 돌려준다.
 
     순서: 호출 하나로 합침 → 구간 범위 호출 → 일 단위 호출. 앞의 것일수록 호출
     수가 적다. 전략마다 필요한 계약 항목이 확인되지 않으면 쓰지 않는다.
+
+    ``require_day_records``가 참이면(condition_check 경로) 일 단위 전략은 Tool의 기록이
+    하루 하나에만 속한다는 계약(``day_records:<tool>``)도 요구한다. 기본 경로는 이 항목을
+    가정으로만 기록한다(기존 동작).
     """
     rejected = []
 
@@ -221,6 +363,10 @@ def choose_group_strategy(transformation, output, combine, spec, contract):
         reject(daily, "확인되지 않은 계약: " + ", ".join(missing))
     elif inner not in tims_contract.DECOMPOSABLE_INNER:
         reject(daily, f"구간 안 집계 {inner}는 하루 값들로 정확히 다시 만들 수 없습니다")
+    elif require_day_records and not tims_contract.daily_composition(
+            spec.tool_name, inner, contract=contract)[0]:
+        reject(daily, tims_contract.daily_composition(
+            spec.tool_name, inner, contract=contract)[1])
     else:
         return daily, rejected
     return None, rejected
@@ -335,7 +481,8 @@ def _partition_steps(transformation, output, spec, nodes, plan, execution, *,
             )
             step.output_bindings = {spec.output.extraction: key}
             step.group = dict(group)
-            step.assumptions = list(strategy.requires)
+            step.assumptions = list(strategy.requires) + (
+                [tims_contract.day_records_key(spec.tool_name)] if daily else [])
             steps.append(step)
             keys.append(key)
         members.append(keys)
@@ -533,11 +680,13 @@ def verify_lowering(plan, execution, *, reference_date=None,
                             transformation=transformation.id)
         grouped = analysis_ops.is_grouped(output)
         partitioned = grouped and any(step.group is not None for step in tools)
+        date_record = execution.date_semantics.get(transformation.id) or {}
+        relowered = date_record.get("lowering", "passthrough") != "passthrough"
         for step in tools:
             for name, value in transformation.params.items():
                 if value is None:
                     continue
-                if partitioned and name == "date":
+                if (partitioned or relowered) and name == "date":
                     continue
                 if step.arguments.get(name) != value:
                     raise _mismatch(
@@ -554,7 +703,10 @@ def verify_lowering(plan, execution, *, reference_date=None,
                     raise _mismatch(f"{step.id}에 {port} 입력이 없습니다.", plan,
                                     step=step.id, port=port)
         if not grouped:
-            if len(tools) != 1:
+            if relowered:
+                _verify_relowered_period(transformation, date_record, tools, covering,
+                                         plan, reference_date, contract)
+            elif len(tools) != 1:
                 raise _mismatch(f"{transformation.id}가 여러 호출로 나뉘었습니다.",
                                 plan, transformation=transformation.id)
             continue
@@ -579,6 +731,40 @@ def verify_lowering(plan, execution, *, reference_date=None,
                 raise _mismatch(f"{transformation.id}의 호출이 전략과 다릅니다.", plan,
                                 transformation=transformation.id)
             _verify_fused(transformation, output, tools, plan)
+
+
+def _verify_relowered_period(transformation, record, tools, covering, plan,
+                             reference_date, contract):
+    """기간 인자를 명시 범위나 하루 단위로 바꾼 호출이 원래 기간과 같은지 다시 본다."""
+    value = transformation.params.get("date")
+    start, end = periods.resolve_period(value, reference_date=reference_date)
+    actual = [step.arguments.get("date") for step in tools]
+    lowering = record.get("lowering")
+    if lowering == "explicit_range":
+        if not contract.satisfied("range_inclusive") or actual != [
+                periods.describe_period(start, end)]:
+            raise _mismatch(f"{transformation.id}의 명시 범위 요청이 기간 {value}와 "
+                            f"다릅니다: {actual}", plan, transformation=transformation.id)
+        return
+    if lowering != "daily_composition":
+        raise _mismatch(f"{transformation.id}의 기간 lowering {lowering!r}을 알 수 없습니다.",
+                        plan, transformation=transformation.id)
+    expected = [day["start"] for day in periods.days_of({
+        "start": start.strftime("%Y%m%d"), "end": end.strftime("%Y%m%d"), "label": value})]
+    if actual != expected:
+        raise _mismatch(f"{transformation.id}의 하루 단위 호출이 기간 {value}를 빈틈없이 "
+                        f"덮지 않습니다: {actual}", plan, transformation=transformation.id)
+    spec = get_operator(transformation.operator)
+    reducer = (transformation.params.get(spec.REDUCER_PARAM) if spec.accepts_reducer
+               else spec.inherent_reducer) or TOOL_DEFAULT_REDUCER
+    ok, reason, _ = tims_contract.daily_composition(
+        spec.tool_name, reducer, days=len(expected), contract=contract)
+    combine = [step for step in covering if step.operator == analysis_ops.COMBINE_DAYS]
+    keys = [key for step in tools for key in step.output_bindings.values()]
+    if not ok or len(combine) != 1 or combine[0].inputs != keys or combine[0].arguments.get(
+            "reducer") != tims_contract.COMPOSABLE_REDUCERS.get(reducer):
+        raise _mismatch(f"{transformation.id}의 하루 값 합성이 계약·집계와 맞지 않습니다. "
+                        f"{reason}", plan, transformation=transformation.id)
 
 
 def _verify_fused(transformation, output, tools, plan):

@@ -23,6 +23,8 @@ from geoflow.errors import ExecutionError
 REDUCE_GROUPS = "REDUCE_GROUPS"
 SELECT_GROUP = "SELECT_GROUP"
 COLLECT_GROUPS = "COLLECT_GROUPS"
+#: 하루 단위로 나눠 부른 한 단계 집계의 값들 → 기간 값 (lowering 전용, sum·max·min만)
+COMBINE_DAYS = "COMBINE_DAYS"
 
 #: 구간별 값을 담은 node의 속성 key. 값은 {"bucket": "week"} 형태다.
 GROUP_BY = "group_by"
@@ -44,6 +46,7 @@ ANALYSIS_OPERATORS = {
         AnalysisOperatorSpec(REDUCE_GROUPS, frozenset({"reducer"})),
         AnalysisOperatorSpec(SELECT_GROUP, frozenset({"select"})),
         AnalysisOperatorSpec(COLLECT_GROUPS, frozenset(), semantic=False),
+        AnalysisOperatorSpec(COMBINE_DAYS, frozenset(), semantic=False),
     )
 }
 
@@ -119,6 +122,18 @@ def reduce_values(values, reducer):
 
 def run(step, state):
     """로컬 step 하나를 실행하고 결과를 돌려준다."""
+    if step.operator == COMBINE_DAYS:
+        reducer = step.arguments.get("reducer")
+        if reducer not in ("sum", "max", "min"):
+            raise ExecutionError(f"{step.id}: 하루 값으로 합칠 수 없는 집계입니다: {reducer!r}",
+                                 code="UNKNOWN_REDUCER")
+        values = []
+        for key in step.inputs:
+            if key not in state:
+                raise ExecutionError(f"{step.id}: 하루 값이 아직 없습니다: {key}",
+                                     code="UNRESOLVED_REF", context={"node_id": key})
+            values.append(_number(state[key], where=f"{step.id}[{key}]"))
+        return reduce_values(values, reducer)
     if step.operator == COLLECT_GROUPS:
         groups = step.arguments.get("groups") or []
         members = step.arguments.get("members") or [[key] for key in step.inputs]

@@ -336,6 +336,8 @@ class ExecutionPlan:
     periods: dict[str, Any] = field(default_factory=dict)
     #: 구간별 집계마다 고른 lowering 전략과, 쓰지 않은 전략의 이유.
     lowering: dict[str, Any] = field(default_factory=dict)
+    #: transformation id → 기간 인자의 해석·요청 인자·provider 의미 확인 상태.
+    date_semantics: dict[str, Any] = field(default_factory=dict)
 
     @property
     def tool_steps(self):
@@ -352,6 +354,7 @@ class ExecutionPlan:
             "unobserved": dict(self.unobserved),
             "periods": dict(self.periods),
             "lowering": dict(self.lowering),
+            "date_semantics": dict(self.date_semantics),
         }
 
 

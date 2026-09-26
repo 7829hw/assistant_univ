@@ -20,6 +20,7 @@ provider가 없고(``tool_handlers``는 mock만 허용), mock 동작은 계약�
 단계마다 ``assumptions``로 남는다.
 """
 
+import re
 from dataclasses import dataclass, field, replace
 
 CONFIRMED = "confirmed"
@@ -108,6 +109,46 @@ ITEMS = {
             "relative_date_reference", "last_week/last_month의 기준 시각과 시간대",
             UNKNOWN, f"{_PROMPT} '현재 시점을 기준으로 하는 상대 날짜'. 시간대와 경계는 없다",
         ),
+        ContractItem(
+            "calendar_token_period", "weekday/weekend/holiday 토큰이 어느 기간의 요일을 뜻하는가",
+            UNKNOWN, f"{_COMMON} pt_date에 토큰 이름만 있다. 기간과 휴일 달력은 없다",
+        ),
+        ContractItem(
+            "taxi_type_all_unrestricted", "taxi_type=all이 택시 유형 조건 없음과 같은가",
+            CONFIRMED, f"{_COMMON} pt_taxi_type: 'all=조건 미적용', default: all",
+            value="all ≡ 생략", source="schemas/_common.yaml", quote="all=조건 미적용",
+        ),
+        # 하루 단위 호출을 합쳐 기간 값을 만들려면(sum·max·min) aggregation이 하루 안에
+        # 속하는 기록에 바로 적용되어야 한다. 기록이 여러 날에 걸치거나(자정을 넘는 trip),
+        # 기간 전체에서 택시별 값을 먼저 만든 뒤 집계하면 하루 값들로 다시 만들 수 없다.
+        ContractItem(
+            "day_records:get_operation_metrics",
+            "aggregation이 하루 안에 속하는 기록(택시·일)에 바로 적용되는가", OBSERVED,
+            f"{_SCHEMA}: '일 단위 택시 영업(operation) 관련 통계값'으로 기록이 하루 단위임은 "
+            "적혀 있다. 그러나 기간 집계가 그 기록에 바로 적용되는지는 없고, metric 설명의 "
+            "'운행률은 기간으로 합산하면 평균 운행일이 산출됨'은 택시별 중간 집계가 있을 "
+            "여지를 남긴다",
+        ),
+        ContractItem(
+            "day_records:get_trip_metrics", "trip 기록이 하루 하나에만 속하는가", UNKNOWN,
+            "schemas/tims.yaml get_trip_metrics에 날짜 귀속(자정을 넘는 trip) 규칙이 없다",
+        ),
+        ContractItem(
+            "day_records:get_trip_count", "trip 기록이 하루 하나에만 속하는가", UNKNOWN,
+            "schemas/tims.yaml get_trip_count에 날짜 귀속 규칙이 없다",
+        ),
+        ContractItem(
+            "day_records:get_passage_count", "passage 기록이 하루 하나에만 속하는가", UNKNOWN,
+            "schemas/tims.yaml get_passage_count에 날짜 귀속 규칙이 없다",
+        ),
+        ContractItem(
+            "day_records:get_passage_metrics", "passage 기록이 하루 하나에만 속하는가", UNKNOWN,
+            "schemas/tims.yaml get_passage_metrics에 날짜 귀속 규칙이 없다",
+        ),
+        ContractItem(
+            "day_records:get_drive_metrics", "drive 기록이 하루 하나에만 속하는가", UNKNOWN,
+            "schemas/tims.yaml get_drive_metrics에 날짜 귀속 규칙이 없다",
+        ),
     )
 }
 
@@ -192,6 +233,115 @@ class TimsContract:
 
 
 DEFAULT_CONTRACT = TimsContract()
+
+
+# -- 날짜 인자의 실행 의미 -----------------------------------------------------
+
+
+DATE_SINGLE = "single"
+DATE_RANGE = "range"
+DATE_RELATIVE = "relative"
+DATE_CALENDAR = "calendar"
+DATE_NONE = "none"
+
+#: 요청 인자가 뜻하는 기간을 TIMS 계약으로 확인했는가.
+SEMANTICS_CONFIRMED = "confirmed"
+SEMANTICS_UNVERIFIED = "unverified"
+#: 질문에 기간이 없어 인자도 없다. provider의 기본 기간은 문서에 없다.
+SEMANTICS_NOT_REQUESTED = "not_requested"
+
+_DATE_REQUIRES = {
+    DATE_SINGLE: ("single_date",),
+    DATE_RANGE: ("range_inclusive",),
+    DATE_RELATIVE: ("relative_date_reference",),
+    DATE_CALENDAR: ("calendar_token_period",),
+}
+
+
+def date_argument_kind(value):
+    if value in (None, ""):
+        return DATE_NONE
+    text = str(value)
+    if re.fullmatch(r"\d{8}", text):
+        return DATE_SINGLE
+    if re.fullmatch(r"\d{8}-\d{8}", text):
+        return DATE_RANGE
+    if text in ("last_week", "last_month", "last_year"):
+        return DATE_RELATIVE
+    if text in ("weekday", "weekend", "holiday"):
+        return DATE_CALENDAR
+    return None
+
+
+def date_argument_semantics(value, contract=DEFAULT_CONTRACT):
+    """요청 인자 하나가 뜻하는 기간을 계약으로 확인할 수 있는가.
+
+    요청 인자가 질문의 해석과 글자로 같다는 것(보존)과, provider가 그 인자를 그 기간으로
+    읽는다는 것(실행 의미)은 다르다. 이 함수는 뒤의 것만 본다.
+    """
+    kind = date_argument_kind(value)
+    if kind == DATE_NONE:
+        return {"kind": kind, "status": SEMANTICS_NOT_REQUESTED, "requires": [],
+                "missing": []}
+    requires = _DATE_REQUIRES.get(kind, ())
+    missing = [key for key in requires if not contract.satisfied(key)]
+    if kind is None:
+        missing = ["date_format"]
+    if kind == DATE_RELATIVE and not missing:
+        # 확인되었더라도 기준(시간대·달력)이 의미 graph의 정의와 같아야 한다.
+        if contract.items["relative_date_reference"].value != "Asia/Seoul calendar":
+            missing = ["relative_date_reference(value)"]
+    return {"kind": kind, "status": SEMANTICS_UNVERIFIED if missing else SEMANTICS_CONFIRMED,
+            "requires": list(requires), "missing": missing}
+
+
+# -- 하루 단위 호출의 합성 -----------------------------------------------------
+
+#: 하루 값들로 기간 값을 다시 만들 수 있는 집계. avg·med는 표본 수나 원시 값이 없어서
+#: 안 된다. 고유 개수(distinct)나 비율의 비율도 하루 값으로 합칠 수 없지만, 지금 Tool 중
+#: 결과가 고유 개수인 것은 없다(개수 Tool은 사건 수, inherent_reducer=sum).
+COMPOSABLE_REDUCERS = {"sum": "sum", "max": "max", "min": "min"}
+
+
+def day_records_key(tool_name):
+    return f"day_records:{tool_name}"
+
+
+def daily_composition(tool_name, reducer, *, grouped_arguments=(), days=None,
+                      contract=DEFAULT_CONTRACT):
+    """기간 값을 하루 단위 호출의 합성으로 정확히 만들 수 있는가. (가능 여부, 이유, 필요 항목).
+
+    수학 조건: 집계가 sum·max·min이다. 데이터 조건: 그 Tool의 기록이 하루 하나에만 속하고
+    aggregation이 그 기록에 바로 적용된다(``day_records:<tool>``). 목록을 돌려주는 호출
+    (dimension·order·limit)은 항목별로 합친 뒤 다시 정렬·절단해야 하므로 다루지 않는다.
+    """
+    requires = ["single_date", day_records_key(tool_name)]
+    if reducer not in COMPOSABLE_REDUCERS:
+        return False, f"집계 {reducer}는 하루 값들로 다시 만들 수 없습니다", requires
+    if grouped_arguments:
+        return False, ("목록 결과(" + ", ".join(grouped_arguments)
+                       + ")는 하루 단위로 합치지 않습니다"), requires
+    if days is not None and days > MAX_DAILY_CALLS:
+        return False, f"하루 단위 호출 {days}번은 상한 {MAX_DAILY_CALLS}을 넘습니다", requires
+    missing = [key for key in requires
+               if key not in contract.items or not contract.satisfied(key)]
+    if missing:
+        return False, "확인되지 않은 계약: " + ", ".join(missing), requires
+    return True, "", requires
+
+
+# -- mock provider의 명시적 계약 ------------------------------------------------
+
+#: 평가에 쓰는 mock의 동작. TIMS 계약이 아니며 compiler는 이것을 쓰지 않는다.
+#: mock은 인자를 해석하지 않고 인자 전체의 hash로 값을 만든다. 따라서 mock 기준 정답은
+#: "기대한 요청 인자와 같은 요청을 보냈다"는 뜻일 뿐 날짜 의미의 보장이 아니며, 하루
+#: 단위로 나눈 호출의 합은 기간 호출의 mock 값과 비교할 수 없다.
+MOCK_PROVIDER_CONTRACT = {
+    "source": "mock_responses.py _rng",
+    "quote": "재현 가능한 난수기를 만든다",
+    "date_semantics": "opaque: 날짜 문자열을 해석하지 않음",
+    "compositional": False,
+}
 
 
 def evidence_problems(contract=DEFAULT_CONTRACT, base_dir=None):
