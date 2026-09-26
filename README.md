@@ -897,11 +897,10 @@ python assistant_cli.py --agent-mode geoflow --aggregation-grounding structured 
   `ambiguous`(확인 요청), `unverifiable`(단서는 있으나 읽지 못해 LLM 값을 보류, 검증 안 됨),
   `absent`(표현도 단서도 없음). 삭제는 LLM 값의 근거 표현이 질문에 없고 그 조건의 단서도 없을
   때만 함. 판단 근거는 `basis`에 남음.
-* 날짜: 해석은 Asia/Seoul 기준일로 함. **실행은 요청 인자의 기간 의미가 TIMS 계약으로 확인될
-  때만 함.** 확인된 것은 단일 날짜(`YYYYMMDD`)뿐이라 상대 기간(`last_month`)·날짜 범위는
-  해석이 맞아도 `DATE_EXECUTION_UNVERIFIED`(지원 불가)로 멈춤. 범위 계약(`range_inclusive`)이
-  확인되면 명시 범위로, 기록 계약(`day_records:<tool>`)과 sum·max·min이면 하루 단위 합성으로
-  바꿔 실행함. 기본 경로(끔)는 기존대로 토큰을 넘기고 확인 상태만 `date_semantics`에 기록함.
+* 날짜: 해석은 Asia/Seoul 기준일로 함. 실행 방식은 condition_check가 아니라 **실행 프로필**이
+  정함(아래 "실행 프로필"). 기본(mock legacy)은 상대 토큰·범위를 가정으로 넘기고 검증 요약에
+  미검증으로 남김. `--tims-execution strict`면 확인된 TIMS 계약(단일 날짜)만 실행하고 나머지는
+  `DATE_EXECUTION_UNVERIFIED`로 멈춤.
 * 택시 유형: "개인(용)택시", "법인(용)/회사택시", "전체/모든 택시". `all`은 조건 없음과 실행
   의미가 같음(schema "all=조건 미적용"). 사용자가 "전체"라고 말했는지는 `stated`로 따로 남김.
 * 장소: 이름이 질문에 있는지만 확인함. 지역 의미, **장소 누락**, 출발/도착 의미는 확인하지 않음.
@@ -913,6 +912,27 @@ python assistant_cli.py --agent-mode geoflow --aggregation-grounding structured 
 python assistant_cli.py --agent-mode geoflow --condition-check \
   --model qwen3:8b --query "2026년 9월 24일 대구 개인택시 수입 합계는?"
 ```
+
+**실행 프로필(provider별 계약).** 실행 가능한 연산과 lowering 전략은 provider의 계약이 정함
+(`geoflow/providers.py`). condition_check·구조화 grounding은 질문 해석 옵션이라 실행 계약을 바꾸지 않음.
+
+* 기본: mock + `--tims-execution legacy`. 기존 동작 그대로. 미확인 TIMS 항목(상대 토큰, 범위 양 끝,
+  구간별 하루 분할의 기록 계약)을 가정하고, 가정은 `execution_profile`·`date_semantics`·step
+  `assumptions`에 남김.
+* `--tims-execution strict`: 확인된 TIMS 계약만 실행. `0f2daaa`까지의 `--condition-check`가 이 동작이었음
+  (그 결과를 재현하려면 `--condition-check --tims-execution strict`).
+* `ASSISTANT_TOOL_PROVIDER=reference`: 작은 **합성 데이터**를 실제로 필터링·집계하는 reference provider
+  (`reference_provider.py`, `reference_data/`). 자체 계약(양 끝 포함 범위, 택시·일 기록, null=기록 없음,
+  평균 분모=레코드 수)을 따르며 TIMS 계약과 별개. 지원하지 않는 인자·도구는 mock으로 넘기지 않고
+  `UNSUPPORTED_BY_PROVIDER`. 답변에 합성 데이터와 적용 기간·계산 의미를 표시함. 실제 교통 데이터나
+  TIMS 결과가 아님.
+
+```bash
+ASSISTANT_TOOL_PROVIDER=reference python assistant_cli.py --agent-mode geoflow \
+  --aggregation-grounding structured --query "지난달 가람구 개인택시의 매출 합계가 가장 컸던 주는 언제야?"
+```
+
+설계와 검증: `evaluation/design/reference_provider.md`.
 
 설계와 측정 기록: `evaluation/design/condition_verification_scope.md`(이번 정비),
 설계와 측정 기록: `evaluation/design/condition_preservation.md`.

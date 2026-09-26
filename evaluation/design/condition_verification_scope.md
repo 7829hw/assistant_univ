@@ -1,5 +1,10 @@
 # condition_check 검증 범위 정비
 
+> **2026-09-26 이후 변경.** 이 문서의 "condition_check 경로 = guaranteed 정책"은 `0f2daaa`까지의 동작이다.
+> 이후 실행 계약은 provider 실행 프로필이 정하고 condition_check는 해석 옵션만 맡는다
+> (`reference_provider.md` §1). 이 문서의 결과는 지금 `--condition-check --tims-execution strict`
+> 조합과 같다(재생으로 확인).
+
 상태: 2026-09-26. HEAD `120c462` 위의 작업. 이번 단계는 **검증 범위를 정비하는 작업**이다. 정확도를
 올리는 작업이 아니다. 기본 설정(condition_check 끔, flat 집계)은 바꾸지 않았다. 모델, prompt,
 TIMS 계약도 바꾸지 않았다. mock 평가 수치는 실제 TIMS 정답률이 아니다.
