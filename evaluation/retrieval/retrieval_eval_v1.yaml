@@ -1,0 +1,104 @@
+# 질문–graph 예시 검색 비교 평가 셋 v1. 2026-09-26 작성, 모델 실행 전 고정(preregistration_v1.md).
+#
+# - 예시 저장소 v1(store sha256 75b83c3b…)과 development 6문항(reference_questions_v1)을 고정한 뒤 썼다.
+# - 저장소 질문, 그 paraphrase, 지역명만 바꾼 변형을 넣지 않았다. 답할 수 있는 문항의 의미 서명
+#   (측정값, bucket, inner, outer, select)은 저장소 예시와 development 6문항 어느 것과도 겹치지 않고,
+#   문항끼리도 겹치지 않는다(tests/test_example_retrieval.py가 저장소와의 겹침을 확인한다).
+# - 값/구간 최소 대조쌍 4개(pair)를 넣었다. 두 문항은 결과가 값인지 구간인지만 다르다.
+# - 모두 reference provider(합성 데이터)로 실행한다. 지명(가람구, 나래구)과 데이터는 가상이다.
+# - answer는 CSV를 독립 SQL(sqlite)로 센 값이다. 제품 코드로 만들지 않았다.
+# - ambiguity: 답이 하나로 정해지지 않는 문항은 inner_unspecified(구간 안 집계가 없음)로 따로 분류한다.
+# - retrieval_tags는 채점용이다(붙인 예시가 필요한 의미 구분을 설명했는지). 검색 입력이나 filter로
+#   쓰지 않는다.
+version: 1
+role: fresh_holdout
+reference_date: "2026-09-25"
+provider: reference
+questions:
+  # A. 값 vs 구간 최소 대조쌍 — 월 구간
+  - {id: e01, family: value_from_buckets, pair: p1, question: "2026년 7월부터 8월까지 가람구 개인택시의 월별 매출 합계 중 가장 큰 값은?",
+     signature: [revenue, month, sum, max, null], retrieval_tags: [value_not_group],
+     expected: {outcome: answered, contract_executable: true, plan: {bucket: month, inner: sum, final: max},
+                conditions: {date: {accept: [20260701-20260831]}, taxi_type: private, taxi_stated: explicit_private, place: 가람구},
+                answer: {value: 1240000}}}
+  - {id: e02, family: bucket_select, pair: p1, question: "2026년 7월부터 8월까지 가람구 개인택시의 매출 합계가 가장 컸던 달은?",
+     signature: [revenue, month, sum, null, max], retrieval_tags: [bucket_select],
+     expected: {outcome: answered, contract_executable: true, plan: {bucket: month, inner: sum, select: max},
+                conditions: {date: {accept: [20260701-20260831]}, taxi_type: private, taxi_stated: explicit_private, place: 가람구},
+                answer: {value: 1240000, groups: [20260801-20260831]}}}
+  - {id: e03, family: value_from_buckets, pair: p2, question: "2026년 7월부터 8월까지 가람구 개인택시 월별 매출 평균 중 가장 낮은 값은 얼마야?",
+     signature: [revenue, month, avg, min, null], retrieval_tags: [value_not_group],
+     expected: {outcome: answered, contract_executable: true, plan: {bucket: month, inner: avg, final: min},
+                conditions: {date: {accept: [20260701-20260831]}, taxi_type: private, taxi_stated: explicit_private, place: 가람구},
+                answer: {value: 103333.33333333333}}}
+  - {id: e04, family: bucket_select, pair: p2, question: "2026년 7월부터 8월까지 가람구 개인택시의 매출 평균이 가장 낮았던 달은 언제야?",
+     signature: [revenue, month, avg, null, min], retrieval_tags: [bucket_select],
+     expected: {outcome: answered, contract_executable: true, plan: {bucket: month, inner: avg, select: min},
+                conditions: {date: {accept: [20260701-20260831]}, taxi_type: private, taxi_stated: explicit_private, place: 가람구},
+                answer: {value: 103333.33333333333, groups: [20260801-20260831]}}}
+  # B. 값 vs 구간 최소 대조쌍 — 주 구간, 구간 안 집계가 max/min
+  - {id: e05, family: value_from_buckets, pair: p3, question: "지난달 나래구 개인택시의 주별 최고 매출 중 가장 낮은 값은?",
+     signature: [revenue, week, max, min, null], retrieval_tags: [value_not_group],
+     expected: {outcome: answered, contract_executable: true, plan: {bucket: week, inner: max, final: min},
+                conditions: {date: {accept: [last_month, 20260801-20260831], request: last_month}, taxi_type: private, taxi_stated: explicit_private, place: 나래구},
+                answer: {value: 30000}}}
+  - {id: e06, family: bucket_select, pair: p3, question: "지난달 나래구 개인택시의 최고 매출이 가장 낮았던 주는?",
+     signature: [revenue, week, max, null, min], retrieval_tags: [bucket_select],
+     expected: {outcome: answered, contract_executable: true, plan: {bucket: week, inner: max, select: min},
+                conditions: {date: {accept: [last_month, 20260801-20260831], request: last_month}, taxi_type: private, taxi_stated: explicit_private, place: 나래구},
+                answer: {value: 30000, groups: [20260831-20260831]}}}
+  - {id: e07, family: value_from_buckets, pair: p4, question: "지난달 가람구 개인택시의 주별 최저 매출 중 가장 높은 값은 얼마야?",
+     signature: [revenue, week, min, max, null], retrieval_tags: [value_not_group],
+     expected: {outcome: answered, contract_executable: true, plan: {bucket: week, inner: min, final: max},
+                conditions: {date: {accept: [last_month, 20260801-20260831], request: last_month}, taxi_type: private, taxi_stated: explicit_private, place: 가람구},
+                answer: {value: 200000}}}
+  - {id: e08, family: bucket_select, pair: p4, question: "지난달 가람구 개인택시의 최저 매출이 가장 높았던 주는 언제야?",
+     signature: [revenue, week, min, null, max], retrieval_tags: [bucket_select],
+     expected: {outcome: answered, contract_executable: true, plan: {bucket: week, inner: min, select: max},
+                conditions: {date: {accept: [last_month, 20260801-20260831], request: last_month}, taxi_type: private, taxi_stated: explicit_private, place: 가람구},
+                answer: {value: 200000, groups: [20260824-20260830]}}}
+  # C. 구간 없는 값(bucket·dimension·order·limit을 지어내지 않아야 한다)
+  - {id: e09, family: scalar, question: "2026년 8월 가람구 전체 택시 매출의 중앙값은?",
+     signature: [revenue, null, med, null, null], retrieval_tags: [overall_average, overall_total],
+     expected: {outcome: answered, contract_executable: true, plan: {final: med},
+                conditions: {date: {accept: [20260801-20260831]}, taxi_type: all, taxi_stated: explicit_all, place: 가람구},
+                answer: {value: 90000}}}
+  - {id: e10, family: scalar, question: "지난달 나래구 개인택시의 가장 높은 매출은 얼마였어?",
+     signature: [revenue, null, max, null, null], retrieval_tags: [overall_average, overall_total],
+     expected: {outcome: answered, contract_executable: true, plan: {final: max},
+                conditions: {date: {accept: [last_month, 20260801-20260831], request: last_month}, taxi_type: private, taxi_stated: explicit_private, place: 나래구},
+                answer: {value: 80000}}}
+  - {id: e11, family: scalar, question: "2026년 8월 1일부터 15일까지 나래구 전체 택시의 매출 최솟값은?",
+     signature: [revenue, null, min, null, null], retrieval_tags: [overall_average, overall_total],
+     expected: {outcome: answered, contract_executable: true, plan: {final: min},
+                conditions: {date: {accept: [20260801-20260815]}, taxi_type: all, taxi_stated: explicit_all, place: 나래구},
+                answer: {value: 20000}}}
+  # D. 두 단계 값(구간 안/밖 집계 혼동)
+  - {id: e12, family: two_stage_value, question: "지난달 가람구 개인택시의 주별 매출 평균들을 다시 평균 내면?",
+     signature: [revenue, week, avg, avg, null], retrieval_tags: [avg_of_bucket_sums, avg_of_bucket_avgs],
+     expected: {outcome: answered, contract_executable: true, plan: {bucket: week, inner: avg, final: avg},
+                conditions: {date: {accept: [last_month, 20260801-20260831], request: last_month}, taxi_type: private, taxi_stated: explicit_private, place: 가람구},
+                answer: {value: 113333.33333333333}}}
+  - {id: e13, family: two_stage_value, question: "지난달 가람구 개인택시의 주별 최고 매출을 평균 내면 얼마야?",
+     signature: [revenue, week, max, avg, null], retrieval_tags: [avg_of_bucket_sums, avg_of_bucket_avgs],
+     expected: {outcome: answered, contract_executable: true, plan: {bucket: week, inner: max, final: avg},
+                conditions: {date: {accept: [last_month, 20260801-20260831], request: last_month}, taxi_type: private, taxi_stated: explicit_private, place: 가람구},
+                answer: {value: 123333.33333333333}}}
+  # E. 구간별 값 목록(현재 grounding 계약으로 표현할 수 없음 → 지원하지 않음이 정답)
+  - {id: e14, family: list, question: "2026년 8월 가람구 전체 택시의 주별 매출 평균을 주마다 각각 보여줘",
+     retrieval_tags: [grouped_values_list],
+     expected: {outcome: unsupported, contract_executable: false, plan: null,
+                conditions: {date: {accept: [20260801-20260831]}, taxi_type: all, taxi_stated: explicit_all, place: 가람구}}}
+  - {id: e15, family: list, question: "지난달 나래구 개인택시 매출의 주별 최댓값을 하나씩 나열해줘",
+     retrieval_tags: [grouped_values_list],
+     expected: {outcome: unsupported, contract_executable: false, plan: null,
+                conditions: {date: {accept: [last_month, 20260801-20260831], request: last_month}, taxi_type: private, taxi_stated: explicit_private, place: 나래구}}}
+  # F. 모호함(구간 안 집계가 질문에 없음 → 사용자 확인이 정답). 따로 분류해 센다.
+  - {id: e16, family: ambiguous, ambiguity: inner_unspecified, question: "지난달 가람구 개인택시 주별 매출의 최솟값은?",
+     retrieval_tags: [ambiguous_inner],
+     expected: {outcome: needs_clarification, contract_executable: false, plan: {bucket: week, inner: unspecified, final: min},
+                conditions: {date: {accept: [last_month, 20260801-20260831], request: last_month}, taxi_type: private, taxi_stated: explicit_private, place: 가람구}}}
+  - {id: e17, family: ambiguous, ambiguity: inner_unspecified, question: "지난달 나래구 개인택시의 매출이 가장 많았던 주는?",
+     retrieval_tags: [ambiguous_inner],
+     expected: {outcome: needs_clarification, contract_executable: false, plan: {bucket: week, inner: unspecified, select: max},
+                conditions: {date: {accept: [last_month, 20260801-20260831], request: last_month}, taxi_type: private, taxi_stated: explicit_private, place: 나래구}}}

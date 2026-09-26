@@ -580,5 +580,131 @@ class EvalArmTest(unittest.TestCase):
                 parse_arm(bad)
 
 
+# -- 5. 검색 평가 셋 gold(모델 실행 전 검토) ---------------------------------------------
+
+EVAL_PATH = ROOT / "evaluation" / "retrieval" / "retrieval_eval_v1.yaml"
+DEV_PATH = ROOT / "evaluation" / "reference" / "reference_questions_v1.yaml"
+SCOPES = {"가람구": GARAM, "나래구": NARAE}
+
+
+def _plan_signature(plan):
+    if not plan:
+        return None
+    if "bucket" not in plan:
+        return ("revenue", None, plan["final"], None, None)
+    return ("revenue", plan["bucket"], plan["inner"], plan.get("final"), plan.get("select"))
+
+
+def _structured_plan(plan):
+    if "bucket" not in plan:
+        return {"result": {"reducer": plan["final"]}}
+    result = {"select": plan["select"]} if plan.get("select") else {"reducer": plan["final"]}
+    return {"bucket": {"unit": plan["bucket"], "reducer": plan["inner"]}, "result": result}
+
+
+def _gold_grounding(item):
+    expected = item["expected"]
+    if expected["outcome"] == "unsupported":
+        return {"unsupported": True}
+    conditions = expected["conditions"]
+    date_value = conditions["date"].get("request") or conditions["date"]["accept"][0]
+    return grounding(_structured_plan(expected["plan"]), where=conditions["place"],
+                     period=str(date_value), taxi=conditions["taxi_type"])
+
+
+def _sql_answer(item):
+    """CSV를 sqlite로 읽어 파이썬 집계로 센 값. 제품 코드를 쓰지 않는다."""
+    import statistics
+    from datetime import timedelta
+
+    expected = item["expected"]
+    conditions, plan = expected["conditions"], expected["plan"]
+    period = str(conditions["date"]["accept"][-1])
+    start, end = (date(int(x[:4]), int(x[4:6]), int(x[6:8])) for x in period.split("-"))
+    query = ("SELECT service_date, revenue_krw FROM ops WHERE scope=? AND revenue_krw IS NOT NULL "
+             "AND service_date BETWEEN ? AND ?")
+    args = [SCOPES[conditions["place"]], start.isoformat(), end.isoformat()]
+    if conditions["taxi_type"] != "all":
+        query += " AND taxi_type=?"
+        args.append(conditions["taxi_type"])
+    rows = sql_db().execute(query, args).fetchall()
+    how = {"sum": sum, "avg": lambda v: sum(v) / len(v), "max": max, "min": min,
+           "med": statistics.median}
+    if "bucket" not in plan:
+        return {"value": how[plan["final"]]([value for _d, value in rows])}
+    spans, cursor = [], start
+    while cursor <= end:
+        if plan["bucket"] == "week":
+            last = cursor + timedelta(days=6 - cursor.weekday())
+        else:
+            last = date(cursor.year + cursor.month // 12, cursor.month % 12 + 1, 1) - timedelta(1)
+        last = min(last, end)
+        spans.append((cursor, last))
+        cursor = last + timedelta(days=1)
+    groups = []
+    for first, last in spans:
+        values = [v for d, v in rows if first.isoformat() <= d <= last.isoformat()]
+        groups.append((f"{first:%Y%m%d}-{last:%Y%m%d}", how[plan["inner"]](values)))
+    if plan.get("final"):
+        return {"value": how[plan["final"]]([value for _l, value in groups])}
+    best = (max if plan["select"] == "max" else min)(value for _l, value in groups)
+    return {"value": best, "groups": [label for label, value in groups if value == best]}
+
+
+class RetrievalEvalGoldTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.items = yaml.safe_load(EVAL_PATH.read_text(encoding="utf-8"))["questions"]
+
+    def test_signatures_are_declared_unique_and_disjoint_from_development(self):
+        dev = {_plan_signature(item["expected"]["plan"]) for item in
+               yaml.safe_load(DEV_PATH.read_text(encoding="utf-8"))["questions"]}
+        declared = []
+        for item in self.items:
+            if item["expected"]["outcome"] != "answered":
+                self.assertNotIn("signature", item)
+                continue
+            signature = tuple(item["signature"])
+            self.assertEqual(signature, _plan_signature(item["expected"]["plan"]), item["id"])
+            self.assertNotIn(signature, dev, item["id"])
+            declared.append(signature)
+        self.assertEqual(len(declared), len(set(declared)))
+
+    def test_answers_match_independent_sql(self):
+        for item in self.items:
+            if item["expected"]["outcome"] != "answered":
+                continue
+            with self.subTest(item["id"]):
+                want, got = item["expected"]["answer"], _sql_answer(item)
+                self.assertAlmostEqual(got["value"], want["value"])
+                self.assertEqual(got.get("groups"), [str(g) for g in want["groups"]]
+                                 if "groups" in want else None)
+
+    def test_gold_grounding_reaches_the_gold_outcome_and_value(self):
+        for item in self.items:
+            expected = item["expected"]
+            for condition_check in (False, True):
+                with self.subTest(item["id"], cc=condition_check):
+                    executor = ToolExecutor(tools=TOOLS, handlers=get_tool_handlers(REFERENCE),
+                                            provider=REFERENCE)
+                    run = GeoFlowPipeline.create(
+                        client=_Scripted(_gold_grounding(item)), tool_executor=executor,
+                        aggregation_grounding="structured", clock=lambda: REF_DATE,
+                        condition_check=condition_check,
+                        execution_profile=profile_for(REFERENCE)).run(item["question"])
+                    self.assertEqual(run.outcome, expected["outcome"], run.error)
+                    if expected["outcome"] != "answered":
+                        continue
+                    value = run.execution["final_value"]
+                    if isinstance(value, dict):
+                        self.assertEqual([g["label"] for g in value["groups"]],
+                                         [str(g) for g in expected["answer"]["groups"]])
+                        value = value["value"]
+                    self.assertAlmostEqual(value, expected["answer"]["value"])
+                    if condition_check:
+                        self.assertFalse((run.condition_audit or {}).get("corrections"),
+                                         item["id"])
+
+
 if __name__ == "__main__":
     unittest.main()
