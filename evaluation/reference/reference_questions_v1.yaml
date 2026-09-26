@@ -1,0 +1,43 @@
+# reference provider(합성 데이터) 기능 확인 질문. 2026-09-26 작성, 모델 실행 전 고정.
+# 성능 평가가 아니다. 대표 질문 네 개와 조건만 바꾼 두 개가 LLM grounding → 의미 graph → 실제
+# 계산까지 이어지는지 본다. 지명(가람구, 나래구)과 데이터는 가상이다.
+# expected.answer는 손으로 센 값(evaluation/design/reference_provider.md 표, 독립 SQL과 대조)이다.
+version: 1
+role: functional_check
+reference_date: "2026-09-25"
+provider: reference
+questions:
+  - {id: r1, question: "지난달 가람구 개인택시의 전체 매출 평균은 얼마야?",
+     expected: {outcome: answered, contract_executable: true, plan: {final: avg},
+                conditions: {date: {accept: [last_month, 20260801-20260831], request: last_month},
+                             taxi_type: private, taxi_stated: explicit_private, place: 가람구},
+                answer: {value: 103333.33333333333}}}
+  - {id: r2, question: "지난달 가람구 개인택시의 주별 매출 합계를 평균 내면?",
+     expected: {outcome: answered, contract_executable: true,
+                plan: {bucket: week, inner: sum, final: avg},
+                conditions: {date: {accept: [last_month, 20260801-20260831], request: last_month},
+                             taxi_type: private, taxi_stated: explicit_private, place: 가람구},
+                answer: {value: 206666.66666666666}}}
+  - {id: r3, question: "지난달 가람구 개인택시 주별 매출 평균 중 가장 큰 값은?",
+     expected: {outcome: answered, contract_executable: true,
+                plan: {bucket: week, inner: avg, final: max},
+                conditions: {date: {accept: [last_month, 20260801-20260831], request: last_month},
+                             taxi_type: private, taxi_stated: explicit_private, place: 가람구},
+                answer: {value: 200000}}}
+  - {id: r4, question: "지난달 가람구 개인택시의 매출 합계가 가장 컸던 주는 언제야?",
+     expected: {outcome: answered, contract_executable: true,
+                plan: {bucket: week, inner: sum, select: max},
+                conditions: {date: {accept: [last_month, 20260801-20260831], request: last_month},
+                             taxi_type: private, taxi_stated: explicit_private, place: 가람구},
+                answer: {value: 300000, groups: [20260803-20260809, 20260810-20260816]}}}
+  - {id: r5, question: "지난달 나래구 개인택시의 매출 합계가 가장 컸던 주는 언제야?",
+     expected: {outcome: answered, contract_executable: true,
+                plan: {bucket: week, inner: sum, select: max},
+                conditions: {date: {accept: [last_month, 20260801-20260831], request: last_month},
+                             taxi_type: private, taxi_stated: explicit_private, place: 나래구},
+                answer: {value: 100000, groups: [20260810-20260816]}}}
+  - {id: r6, question: "지난달 가람구 법인택시의 전체 매출 평균은 얼마야?",
+     expected: {outcome: answered, contract_executable: true, plan: {final: avg},
+                conditions: {date: {accept: [last_month, 20260801-20260831], request: last_month},
+                             taxi_type: corporate, taxi_stated: explicit_corporate, place: 가람구},
+                answer: {value: 62500}}}

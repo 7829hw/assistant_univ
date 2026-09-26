@@ -171,6 +171,93 @@ class InterpretationTest(unittest.TestCase):
         self.assertFalse(wrong_plan["contract_refusal"])
 
 
+class StructureTest(unittest.TestCase):
+    """v2.4: dimension·order·limit과 값/구간 반환을 판정한다."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.gold = gold(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_list_query_is_not_a_correct_scalar_answer(self):
+        g = grounding("20260924", final="sum")
+        g["factors"].update(dimension="emd", order="bottom")
+        row = cs.judge(record("q3", g, dates=["20260924"]), self.gold["q3"])
+        self.assertEqual(row["structure"]["wrong"], ["dimension", "order"])
+        self.assertFalse(row["plan_ok"])
+        self.assertTrue(row["silent_semantic_error"])
+        plain = cs.judge(record("q3", grounding("20260924", final="sum"), dates=["20260924"]),
+                         self.gold["q3"])
+        self.assertTrue(plain["structure"]["ok"])
+        self.assertTrue(plain["correct_answer"])
+
+    def test_declared_structure_and_group_selection(self):
+        gold = dict(self.gold["q3"], structure={"dimension": "emd", "order": "top", "limit": 3})
+        g = grounding("20260924", final="sum")
+        g["factors"].update(dimension="emd", order="top", limit=3)
+        self.assertTrue(cs.judge(record("q3", g), gold)["structure"]["ok"])
+        g["factors"]["limit"] = 5
+        self.assertEqual(cs.judge(record("q3", g), gold)["structure"]["wrong"], ["limit"])
+        select_gold = dict(self.gold["q3"], plan={"bucket": "week", "inner": "sum",
+                                                   "select": "max"})
+        value_answer = dict(grounding("20260924"), aggregation={
+            "bucket": "week", "inner": "sum", "outer": "max"})
+        row = cs.judge(record("q3", value_answer), select_gold)
+        self.assertEqual((row["returns"], row["returns_ok"], row["plan_ok"]),
+                         ("value", False, False))
+
+
+class ReferenceAnswerTest(unittest.TestCase):
+    """v2.5: reference 관측은 계산 값과 reference 계약으로 판정한다."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        base = gold(self.tmp.name)["q1"]
+        self.value_gold = dict(base, answer={"value": 103333.33333333333})
+        self.group_gold = dict(base, plan={"bucket": "week", "inner": "sum", "select": "max"},
+                               answer={"value": 300000,
+                                       "groups": ["20260803-20260809", "20260810-20260816"]})
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def reference_record(self, g, final_value, dates=("20260801-20260831",)):
+        row = record("q1", g, dates=list(dates), taxis=["private"])
+        row.update(final_value=final_value, execution_profile={"provider": "reference"})
+        return row
+
+    def test_value_and_reference_contract(self):
+        row = cs.judge(self.reference_record(grounding("last_month", "private"), 1240000 / 12),
+                       self.value_gold)
+        self.assertTrue(row["answer_correct"])
+        self.assertTrue(row["provider"]["date_confirmed"])  # reference 계약: 범위 확인
+        self.assertEqual(row["mock_correct"], "not_applicable")
+        wrong = cs.judge(self.reference_record(grounding("last_month", "private"), 680000 / 6),
+                         self.value_gold)
+        self.assertFalse(wrong["answer_correct"])
+
+    def test_weekly_range_calls_that_tile_the_period_preserve_the_date(self):
+        weeks = ["20260801-20260802", "20260803-20260809", "20260810-20260816",
+                 "20260817-20260823", "20260824-20260830", "20260831-20260831"]
+        row = cs.judge(self.reference_record(grounding("last_month", "private"), 1, weeks),
+                       self.value_gold)
+        self.assertTrue(row["request"]["date_ok"])
+        gap = cs.judge(self.reference_record(grounding("last_month", "private"), 1,
+                                             weeks[:2] + weeks[3:]), self.value_gold)
+        self.assertFalse(gap["request"]["date_ok"])
+
+    def test_selected_groups_must_match_including_ties(self):
+        g = dict(grounding("last_month", "private"),
+                 aggregation={"bucket": "week", "inner": "sum", "select": "max"})
+        both = {"select": "max", "value": 300000, "groups": [
+            {"label": "20260803-20260809"}, {"label": "20260810-20260816"}]}
+        self.assertTrue(cs.judge(self.reference_record(g, both), self.group_gold)["answer_correct"])
+        one = dict(both, groups=both["groups"][:1])
+        self.assertFalse(cs.judge(self.reference_record(g, one), self.group_gold)["answer_correct"])
+
+
 class RecordProtectionTest(unittest.TestCase):
     def test_existing_results_are_never_overwritten(self):
         with tempfile.TemporaryDirectory() as tmp:

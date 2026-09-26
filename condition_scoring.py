@@ -32,7 +32,16 @@ import yaml
 from evaluation_records import write_analysis
 
 SCORER_NAME = "condition_scoring"
-SCORER_VERSION = "v2.3"
+SCORER_VERSION = "v2.6"
+# v2.6: 구간마다 부른 범위 호출(range_partition)이 gold 기간을 빈틈과 겹침 없이 덮으면 요청
+#       인자 보존으로 인정한다. v2.5까지는 범위 호출이 여러 개면 보존 실패로 셌다.
+# v2.5: gold에 answer가 있으면 계산 값(와 선택 구간)을 비교한다(reference provider용).
+#       관측의 실행 프로필이 reference이면 provider 의미는 reference 계약(단일 날짜·양 끝 포함
+#       범위 확인)으로 판정하고 mock 정답은 해당 없음으로 둔다.
+# v2.4: 결과 형태 구조(group key=dimension, order, limit)를 판정한다. gold에 structure가 없으면
+#       셋 다 "없음"이 기대값이다. 이전 판(v2.3)은 이를 보지 않아, 목록 질의가 된 답(cond_v2
+#       d35: dimension=emd, order=bottom)을 정답으로 셌다. 값 반환/구간 선택(select)과 구간
+#       단위(bucket)·구간 안/밖 reducer는 이전부터 plan 비교에 들어 있다.
 # v2.3: 계약상 실행 가능한 질문에서의 정답 수(correct_contract_executable)를 요약에 더한다.
 # v2.2: 여러 날짜 호출을 합친 답(하루 단위 합성)은 기록이 하루에만 속한다는 계약이 TIMS에
 #       없으므로 provider 의미 미확인으로 센다(날짜 하나하나가 단일 날짜여도).
@@ -53,6 +62,8 @@ AGGREGATION_CODES = frozenset({
     "UNSUPPORTED_PERIOD_FOR_GROUPING", "UNRESOLVED_PERIOD",
 })
 VERIFIED_STATUSES = frozenset({"interpreted", "conflict", "absent"})
+#: 결과의 형태를 바꾸는 factor. 값 하나인지, 어떤 key로 나눈 목록인지, 몇 개를 어떤 순서로인지.
+STRUCTURE_KEYS = ("dimension", "order", "limit")
 
 
 # -- gold ------------------------------------------------------------------
@@ -101,6 +112,9 @@ def load_gold(questions_path, addendum_path=None):
                 expected["outcome"] == "answered" and (date is None or (
                     isinstance(date, str) and bool(_SINGLE.fullmatch(date))))),
             "family": item.get("family") or item.get("class"),
+            "structure": {key: (expected.get("structure") or {}).get(key)
+                          for key in STRUCTURE_KEYS},
+            "answer": expected.get("answer"),
         }
     return document, gold
 
@@ -189,7 +203,11 @@ def request_level(record, gold):
         return {"recorded": True, "called": False}
     dates = executed.get("dates") or []
     daily = len(dates) > 1 and all(_SINGLE.fullmatch(d) for d in dates)
-    if daily:
+    tiled = len(dates) > 1 and all(_RANGE.fullmatch(d) for d in dates)
+    if tiled:
+        ranges = [a for a in gold["date_accept"] if _RANGE.fullmatch(a)]
+        date_ok = any(_tiles(dates, item) for item in ranges)
+    elif daily:
         # 하루 단위 합성: 호출 날짜가 gold의 범위를 빈틈없이 덮어야 한다.
         ranges = [a for a in gold["date_accept"] if re.fullmatch(r"\d{8}-\d{8}", a)]
         date_ok = any(_covers(dates, item) for item in ranges)
@@ -205,6 +223,26 @@ def request_level(record, gold):
             "ok": date_ok and taxi_ok and places_ok}
 
 
+def _tiles(spans, span):
+    """범위 목록이 span을 빈틈·겹침 없이 덮는가."""
+    days = []
+    for item in spans:
+        days += _days(item)
+    return days == _days(span)
+
+
+def _days(span):
+    from datetime import date, timedelta
+    head, _, tail = span.partition("-")
+    start = date(int(head[:4]), int(head[4:6]), int(head[6:]))
+    end = date(int(tail[:4]), int(tail[4:6]), int(tail[6:])) if tail else start
+    out = []
+    while start <= end:
+        out.append(start.strftime("%Y%m%d"))
+        start += timedelta(days=1)
+    return out
+
+
 def _covers(dates, span):
     from datetime import date, timedelta
     head, tail = span.split("-")
@@ -217,14 +255,31 @@ def _covers(dates, span):
     return sorted(dates) == days
 
 
+_RANGE = re.compile(r"\d{8}-\d{8}")
+
+
+def _provider_of(record):
+    return (record.get("execution_profile") or {}).get("provider") or "mock"
+
+
 def provider_level(record):
-    """나간 측정 호출의 기간 인자가 TIMS 계약상 확인된 의미인가(장소는 판정하지 않음)."""
+    """나간 측정 호출의 기간 인자가 그 provider의 계약상 확인된 의미인가(장소는 판정하지 않음).
+
+    mock은 TIMS 계약(단일 날짜만 확인), reference는 reference 계약(단일 날짜·양 끝 포함 범위,
+    기록이 하루에만 속하므로 하루 합성도 확인)으로 본다.
+    """
     executed = record.get("executed")
     if executed is None:
         return {"recorded": False}
     if not executed.get("measure_calls"):
         return {"recorded": True, "called": False}
     dates = executed.get("dates") or []
+    if _provider_of(record) == "reference":
+        confirmed = all(_SINGLE.fullmatch(v) or _RANGE.fullmatch(v) for v in dates)
+        return {"recorded": True, "called": True, "date_confirmed": confirmed,
+                "composition_unverified": False, "contract": "reference",
+                "unverified_arguments": [v for v in dates
+                                         if not (_SINGLE.fullmatch(v) or _RANGE.fullmatch(v))]}
     single = all(_SINGLE.fullmatch(value) for value in dates)
     composed = len(dates) > 1
     return {"recorded": True, "called": True, "date_confirmed": single and not composed,
@@ -234,6 +289,8 @@ def provider_level(record):
 
 def mock_level(record, gold, plan_ok, request):
     """mock 기준 정답: gold 요청 인자와 같은 인자로 계산했는가."""
+    if _provider_of(record) != "mock":
+        return "not_applicable"
     if record.get("outcome") != "answered" or not request.get("recorded"):
         return None
     if request.get("daily"):
@@ -296,9 +353,48 @@ def block_cause(record, plan_ok=True):
     return "other"
 
 
+def structure_level(record, gold):
+    """dimension·order·limit이 질문 의미와 같은가. grounding이 없으면 판정 불가(None)."""
+    grounding = record.get("grounding")
+    if not grounding:
+        return {"judgeable": False, "ok": None}
+    factors = grounding.get("factors") or {}
+    got = {key: factors.get(key) for key in STRUCTURE_KEYS}
+    want = gold.get("structure") or {key: None for key in STRUCTURE_KEYS}
+    wrong = [key for key in STRUCTURE_KEYS if got.get(key) != want.get(key)]
+    return {"judgeable": True, "ok": not wrong, "wrong": wrong, "got": got}
+
+
+def answer_level(record, gold):
+    """gold answer와 계산 결과 비교. gold에 answer가 없으면 None."""
+    want = gold.get("answer")
+    if not want:
+        return None
+    if record.get("outcome") != "answered":
+        return False
+    value = record.get("final_value")
+    if isinstance(value, dict) and "groups" in value:
+        labels = [group.get("label") for group in value.get("groups") or []]
+        return bool(labels == [str(g) for g in want.get("groups") or []]
+                    and _close(value.get("value"), want.get("value")))
+    return not want.get("groups") and _close(value, want.get("value"))
+
+
+def _close(a, b):
+    return isinstance(a, (int, float)) and isinstance(b, (int, float)) and abs(a - b) < 1e-6
+
+
+def returns_kind(plan):
+    """값을 돌려주는가, 구간을 골라 돌려주는가."""
+    if isinstance(plan, dict) and plan.get("select"):
+        return "group"
+    return "value"
+
+
 def judge(record, gold):
     plan = grounding_plan(record.get("grounding"))
-    plan_ok = plan == gold["plan"]
+    structure = structure_level(record, gold)
+    plan_ok = plan == gold["plan"] and structure["ok"] is not False
     interp = interpretation(record, gold)
     request = request_level(record, gold)
     provider = provider_level(record)
@@ -316,9 +412,12 @@ def judge(record, gold):
     contract_refusal = refused and not gold["contract_executable"] and cause == "contract"
     return {
         "outcome": outcome, "code": (record.get("error") or {}).get("code"),
-        "plan": plan, "plan_ok": plan_ok,
+        "plan": plan, "plan_ok": plan_ok, "structure": structure,
+        "returns": returns_kind(plan), "returns_ok": returns_kind(plan) == returns_kind(
+            gold["plan"]),
         "interpretation": interp, "request": request, "provider": provider,
         "mock_correct": mock_level(record, gold, plan_ok, request),
+        "answer_correct": answer_level(record, gold),
         "real_data_correct": "not_measured",
         "semantic_source": semantic_source,
         "correct_answer": answered and want == "answered" and semantic_ok,
@@ -393,6 +492,11 @@ def summarize(judged, arms):
             "verified_ok": sum(c[k]["verified_ok"] for c in claims for k in c),
             "verified_wrong": sum(c[k]["verified_wrong"] for c in claims for k in c),
             "unverified_conditions": sum(c[k]["unverified"] for c in claims for k in c),
+            "structure_wrong": sum(r["structure"]["ok"] is False for r in mine),
+            "answer_correct": sum(r["answer_correct"] is True for r in mine),
+            "answer_judged": sum(r["answer_correct"] is not None for r in mine),
+            "returns_wrong": sum(not r["returns_ok"] for r in mine
+                                 if r["interpretation"]["judgeable"]),
             "outcomes": dict(Counter(r["outcome"] for r in mine)),
             "tool_calls_total": sum(r.get("tool_calls") or 0 for r in mine),
             "llm_calls_total": sum(r.get("llm_calls") or 0 for r in mine),

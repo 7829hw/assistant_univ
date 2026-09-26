@@ -41,6 +41,7 @@ from evaluation_records import write_analysis, write_new  # noqa: E402
 from geoflow import structured_grounding  # noqa: E402
 from geoflow.aggregation import UNSPECIFIED  # noqa: E402
 from geoflow.pipeline import GeoFlowPipeline  # noqa: E402
+from geoflow.providers import profile_for  # noqa: E402
 from ollama_client import OllamaClient, chat_options  # noqa: E402
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -83,15 +84,18 @@ def _sha(text):
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def _tool_executor():
-    from tests.test_geoflow_composition import new_tool_executor
-    return new_tool_executor()
+def _tool_executor(provider="mock"):
+    from tests.test_geoflow_composition import TOOLS
+    from tool_executor import ToolExecutor
+    from tool_handlers import get_tool_handlers
+    return ToolExecutor(tools=TOOLS, handlers=get_tool_handlers(provider), provider=provider)
 
 
 # -- 관측 -------------------------------------------------------------------
 
 
-def observe(item, arm, *, host, model, timeout, reset):
+def observe(item, arm, *, host, model, timeout, reset, provider="mock",
+            tims_execution="legacy"):
     outcome = reset.reset() if reset is not None else None
     record = {"id": item["id"], "arm": arm, "question": item["question"],
               "reset": None if outcome is None else {
@@ -102,10 +106,11 @@ def observe(item, arm, *, host, model, timeout, reset):
     client = RecordingClient(OllamaClient(host, model, chat_options(OPTIONS, None),
                                           chat_timeout=timeout))
     mode, condition_check = parse_arm(arm)
-    pipeline = GeoFlowPipeline.create(client=client, tool_executor=_tool_executor(),
+    pipeline = GeoFlowPipeline.create(client=client, tool_executor=_tool_executor(provider),
                                       model=model, aggregation_grounding=mode,
                                       clock=lambda: REFERENCE_DATE,
-                                      condition_check=condition_check)
+                                      condition_check=condition_check,
+                                      execution_profile=profile_for(provider, tims_execution))
     record["prompt_sha256"] = _sha(pipeline.planner.system_prompt())
     started = time.perf_counter()
     try:
@@ -120,6 +125,10 @@ def observe(item, arm, *, host, model, timeout, reset):
             verification=run.verification,
             date_semantics=(run.execution_plan or {}).get("date_semantics"),
             executed=executed_conditions(run),
+            execution_profile=run.execution_profile,
+            final_value=run.execution["final_value"] if isinstance(run.execution, dict)
+            and "final_value" in run.execution else None,
+            hop_log=run.hop_log,
         )
     except Exception as error:  # noqa: BLE001 - 관측 결과로 남긴다
         record.update(outcome="crash", error={"code": "CRASH",
@@ -137,7 +146,7 @@ def observe(item, arm, *, host, model, timeout, reset):
 
 
 def run(questions_path, *, name, host, model, timeout, reset_state=True, repeat=1,
-        arms=ARMS):
+        arms=ARMS, provider="mock", tims_execution="legacy"):
     document, questions = load_questions(questions_path)
     arms = tuple(arms)
     stamp = datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y%m%d_%H%M%S")
@@ -156,8 +165,8 @@ def run(questions_path, *, name, host, model, timeout, reset_state=True, repeat=
         "arms": list(arms),
         "order": "question i: arms를 i만큼 회전한 순서(2 arm이면 짝수 flat 먼저)",
         "repeat": repeat, "reset_state": reset_state,
-        "provider": os.environ.get("ASSISTANT_TOOL_PROVIDER"),
-        "tims_contract": "DEFAULT_CONTRACT(geoflow/tims_contract.py)",
+        "provider": provider,
+        "execution_profile": profile_for(provider, tims_execution).to_dict(),
         "code_sha256": {path: _sha(Path(BASE_DIR / path).read_text(encoding="utf-8"))
                         for path in ("geoflow/conditions.py", "geoflow/compiler.py",
                                      "geoflow/tims_contract.py", "geoflow/pipeline.py",
@@ -172,7 +181,8 @@ def run(questions_path, *, name, host, model, timeout, reset_state=True, repeat=
                 order = arms[shift:] + arms[:shift]
                 for position, arm in enumerate(order):
                     record = observe(item, arm, host=host, model=model, timeout=timeout,
-                                     reset=reset)
+                                     reset=reset, provider=provider,
+                                     tims_execution=tims_execution)
                     record.update(repetition=repetition, question_index=index,
                                   position=position)
                     handle.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
@@ -444,6 +454,8 @@ def main(argv=None):
     run_parser.add_argument("--timeout", type=float, default=300.0)
     run_parser.add_argument("--repeat", type=int, default=1)
     run_parser.add_argument("--no-reset", action="store_true")
+    run_parser.add_argument("--provider", choices=("mock", "reference"), default="mock")
+    run_parser.add_argument("--tims-execution", choices=("legacy", "strict"), default="legacy")
     run_parser.add_argument("--arms", default=",".join(ARMS),
                             help="쉼표로 구분. 예: flat,flat+cc,structured,structured+cc")
     score_parser = sub.add_parser("score")
@@ -466,7 +478,8 @@ def main(argv=None):
     if args.command == "run":
         out = run(args.questions, name=args.name, host=args.host, model=args.model,
                   timeout=args.timeout, reset_state=not args.no_reset, repeat=args.repeat,
-                  arms=args.arms.split(","))
+                  arms=args.arms.split(","), provider=args.provider,
+                  tims_execution=args.tims_execution)
         print(out)
         summary, _ = score(out)
     else:
