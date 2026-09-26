@@ -706,5 +706,23 @@ class RetrievalEvalGoldTest(unittest.TestCase):
                                          item["id"])
 
 
+class CliOptionTest(unittest.TestCase):
+    def runtime(self, retrieval, grounding_mode):
+        import assistant_cli
+        from unittest import mock
+        with mock.patch.dict(os.environ, {"ASSISTANT_TOOL_PROVIDER": REFERENCE}), \
+                mock.patch.object(assistant_cli, "AGENT_MODE", assistant_cli.AGENT_MODE_GEOFLOW), \
+                mock.patch.object(assistant_cli, "AGGREGATION_GROUNDING", grounding_mode), \
+                mock.patch.object(assistant_cli, "EXAMPLE_RETRIEVAL", retrieval):
+            return assistant_cli._new_runtime(TOOLS, "system")
+
+    def test_default_off_and_lexical_opt_in(self):
+        self.assertIsNone(self.runtime("off", "structured").geoflow.planner.example_selector)
+        selector = self.runtime("lexical", "structured").geoflow.planner.example_selector
+        self.assertEqual(selector.describe()["embedder"]["kind"], "lexical")
+        with self.assertRaises(SystemExit):
+            self.runtime("lexical", "flat")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -63,6 +63,9 @@ CONDITION_CHECK = False
 #: mock(TIMS schema) 경로의 실행 모드. legacy=미확인 TIMS 항목을 가정하는 기존 동작(기본),
 #: strict=확인된 TIMS 계약만 실행. reference provider에는 적용되지 않는다.
 TIMS_EXECUTION = "legacy"
+#: structured grounding에 검토된 질문–graph 예시를 붙이는 선택 기능. off(기본) | lexical.
+#: lexical은 문자 n-gram 검색이며 임베딩 검색이 아니다(geoflow/retrieval.py).
+EXAMPLE_RETRIEVAL = "off"
 
 ARRAY_PREVIEW_LIMIT = 3
 INLINE_RESULT_LIMIT = 8
@@ -526,6 +529,10 @@ def _new_runtime(tools, system_prompt, *, tool_handlers=None, agent_mode=None):
     geoflow = None
     if selected_mode == AGENT_MODE_GEOFLOW:
         try:
+            selector = None
+            if EXAMPLE_RETRIEVAL == "lexical":
+                from geoflow.retrieval import ExampleRetriever
+                selector = ExampleRetriever.load()
             geoflow = GeoFlowPipeline.create(
                 client=client,
                 tool_executor=tool_executor,
@@ -533,9 +540,10 @@ def _new_runtime(tools, system_prompt, *, tool_handlers=None, agent_mode=None):
                 aggregation_grounding=AGGREGATION_GROUNDING,
                 condition_check=CONDITION_CHECK,
                 execution_profile=providers.profile_for(provider_name, TIMS_EXECUTION),
+                example_selector=selector,
             )
-        except GeoFlowError as error:
-            raise SystemExit(f"GeoFlow 구성 실패: {error.detail}") from error
+        except (GeoFlowError, ValueError) as error:
+            raise SystemExit(f"GeoFlow 구성 실패: {getattr(error, 'detail', error)}") from error
     return AssistantRuntime(
         client=client,
         tools=tools,
@@ -1009,6 +1017,16 @@ def parse_args(argv=None):
             "계약만 실행. condition_check와 무관하다. reference provider에는 적용되지 않는다."
         ),
     )
+    parser.add_argument(
+        "--example-retrieval",
+        choices=("off", "lexical"),
+        default="off",
+        help=(
+            "structured grounding에 검토된 질문–graph 예시(geoflow_examples/)를 해석 문맥으로 "
+            "붙인다. lexical=문자 n-gram 검색(임베딩 아님). --aggregation-grounding structured "
+            "에서만 쓴다. 기본은 끔."
+        ),
+    )
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--query", help="실행할 단일 자연어 Query")
     source.add_argument("--query-file", help="실행할 Query YAML 경로")
@@ -1089,7 +1107,10 @@ def main(argv=None):
         raise SystemExit(str(error)) from error
 
     configure_agent_mode(args.agent_mode)
-    global AGGREGATION_GROUNDING, CONDITION_CHECK, TIMS_EXECUTION
+    global AGGREGATION_GROUNDING, CONDITION_CHECK, TIMS_EXECUTION, EXAMPLE_RETRIEVAL
+    if args.example_retrieval != "off" and args.aggregation_grounding != structured_grounding.STRUCTURED:
+        raise SystemExit("--example-retrieval은 --aggregation-grounding structured에서만 쓸 수 있습니다.")
+    EXAMPLE_RETRIEVAL = args.example_retrieval
     AGGREGATION_GROUNDING = args.aggregation_grounding
     CONDITION_CHECK = args.condition_check
     TIMS_EXECUTION = args.tims_execution
@@ -1103,6 +1124,7 @@ def main(argv=None):
     grounding_note = (
         f"/ aggregation grounding: {AGGREGATION_GROUNDING} "
         f"/ condition check: {'on' if CONDITION_CHECK else 'off'} "
+        f"/ example retrieval: {EXAMPLE_RETRIEVAL} "
         f"/ provider: {selected_provider()} "
         f"/ tims execution: "
         f"{TIMS_EXECUTION if selected_provider() == providers.MOCK else '해당 없음'} "
