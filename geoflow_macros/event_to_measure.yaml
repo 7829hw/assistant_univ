@@ -6,13 +6,18 @@
 # (EVENT subtype, 출력 concept/subtype)으로 결정한다. 그래서 이 조각 하나가
 # 기존 통행 통계/통행량/요금/공차율/영업 통계 template을 모두 대신한다.
 #
-# 집계·그룹화·순위(aggregation, dimension, order, limit, bucket, rollup)는
-# 별도 조각이 아니라 이 변환의 factor다. TIMS Tool이 같은 호출의 인자로
-# 받기 때문에, 조각을 나누면 대응하는 operator가 없는 node가 생긴다.
+# 원시 값을 한 번 집계하는 경우(aggregation=scalar)만 다룬다. 공간 그룹화와
+# 순위(dimension, order, limit)는 이 변환의 factor다. 결과가 곧 그룹별 분포이고
+# 그 뒤에 다시 합치는 단계가 없어서, 한 변환으로 표현해도 계산 순서를 잃지 않는다.
+#
+# 시간 구간으로 나눈 뒤 다시 합치거나 고르는 두 단계 집계는 이 조각이 아니라
+# EVENT_TO_GROUPED_MEASURE가 중간 개념(구간별 값)을 두고 표현한다. 예전에는
+# bucket·rollup도 이 변환의 factor였고, 계산 순서가 Tool 인자 셋으로 압축되었다.
 
 name: EVENT_TO_MEASURE
 description: 사건(passage/trip/drive/operation)에서 통계값을 구한다. 공간 조건이 있으면 그 범위로 한정한다.
 priority: 10
+aggregation: scalar
 
 inputs:
   event:

@@ -6,6 +6,10 @@ count, 또는 분포 목록이라 LLM 없이 정확하게 표현할 수 있고, 
 수치가 섞여 들어갈 여지를 아예 없앨 수 있기 때문이다.
 """
 
+from geoflow import analysis_ops
+from geoflow.aggregation import BUCKET_LABELS, REDUCER_LABELS, SELECT_LABELS
+from geoflow.operator_registry import TOOL_DEFAULT_REDUCER, get_operator
+from geoflow.periods import BOUNDARY_RULES
 from geoflow.types import CoreConcept, GeoFlowPlan, Subtype
 
 #: template의 answer.kind 값.
@@ -124,16 +128,40 @@ def answer_spec_for_plan(plan: GeoFlowPlan):
 
 
 def format_answer(plan: GeoFlowPlan, execution_result, *, answer=None,
-                  labels=None):
+                  labels=None, execution_plan=None):
     """실행 결과만 근거로 사용자 답변 문자열을 만든다.
 
     ``labels``는 scope → 장소명 매핑이며, 없으면 scope를 그대로 보여준다.
+    구간별 집계 계획이면 계산 순서와 실제 계산 경로를 함께 적는다.
     """
     settings = dict(
         answer_spec_for_plan(plan) if answer is None else answer
     )
     labels = dict(labels or {})
+    stages = grouped_stages(plan)
+    if stages is not None:
+        return _grouped_answer(plan, execution_result, settings, labels,
+                               stages, execution_plan)
     subject = _subject(plan, settings, labels)
+    text = _single_stage_answer(plan, execution_result, settings, labels, subject)
+    note = _default_reducer_note(plan)
+    return f"{text}\n{note}" if note else text
+
+
+def _default_reducer_note(plan):
+    """집계 방식을 받는 Tool에 질문이 집계를 정하지 않았으면 적용된 기본값을 밝힌다."""
+    producer = next(
+        (item for item in plan.transformations if plan.final_node in item.outputs),
+        None,
+    )
+    spec = get_operator(producer.operator) if producer is not None else None
+    if spec is None or not spec.accepts_reducer or "aggregation" in producer.params:
+        return ""
+    label = _AGGREGATION_LABEL.get(TOOL_DEFAULT_REDUCER, TOOL_DEFAULT_REDUCER)
+    return f"- 집계: 질문에 집계 방식이 없어 TIMS 기본값({label})이 적용되었습니다."
+
+
+def _single_stage_answer(plan, execution_result, settings, labels, subject):
     value = execution_result.final_value
     label = _METRIC_LABEL.get(
         plan.slots.get("metric"), settings.get("label") or "결과",
@@ -157,8 +185,12 @@ def format_answer(plan: GeoFlowPlan, execution_result, *, answer=None,
     return "\n".join(lines)
 
 
-def _subject(plan, settings, labels=None):
-    """slot에 실제로 들어 있는 조건만 모아 답변 앞머리를 만든다."""
+def _subject(plan, settings, labels=None, *, grouped=False, period=None):
+    """slot에 실제로 들어 있는 조건만 모아 답변 앞머리를 만든다.
+
+    ``grouped``이면 집계 표현은 계획의 단계에서 따로 만들므로 여기서 뺀다.
+    ``period``는 로컬에서 날짜로 푼 기간이다. 상대 기간 옆에 함께 보여 준다.
+    """
     labels = labels or {}
     slots = plan.slots
     parts = []
@@ -182,7 +214,10 @@ def _subject(plan, settings, labels=None):
 
     date = slots.get("date")
     if date:
-        parts.append(_DATE_LABEL.get(date, str(date)))
+        shown = _DATE_LABEL.get(date, str(date))
+        if period and period != date:
+            shown = f"{shown}({period})"
+        parts.append(shown)
     if slots.get("time"):
         parts.append(str(slots["time"]))
     taxi_type = slots.get("taxi_type")
@@ -198,6 +233,8 @@ def _subject(plan, settings, labels=None):
     limit = slots.get("limit")
     if limit:
         parts.append(f"{limit}개")
+    if grouped:
+        return " ".join(parts)
     # bucket/rollup 2단계 집계는 "주 단위 평균"처럼 순서대로 보여준다.
     bucket = slots.get("bucket")
     if bucket:
@@ -281,3 +318,126 @@ def _scalar_text(value, unit):
         # Provider가 이미 단위를 붙여 반환한 경우 단위를 중복해 붙이지 않는다.
         return value
     return str(value)
+
+
+# -- 구간별 집계 ---------------------------------------------------------------
+
+
+def grouped_stages(plan):
+    """구간별 집계의 세 단계(구간 안 집계, 구간별 node, 합치기/고르기)를 찾는다.
+
+    구간별 계획이 아니면 None이다. 답변은 Tool 인자가 아니라 이 단계에서
+    집계 표현을 만든다. 호출 하나로 합쳐졌든 나눠 불렀든 질문의 뜻은 같다.
+    """
+    grouped = next(
+        (node for node in plan.concepts if analysis_ops.is_grouped(node)), None,
+    )
+    if grouped is None:
+        return None
+    produce = next(
+        (item for item in plan.transformations if grouped.id in item.outputs), None,
+    )
+    combine = next(
+        (
+            item for item in plan.transformations
+            if any(ref.node_id == grouped.id for ref in item.inputs.values())
+        ),
+        None,
+    )
+    if produce is None or combine is None:
+        return None
+    return {
+        "bucket": grouped.attributes[analysis_ops.GROUP_BY]["bucket"],
+        "inner": produce.params.get("aggregation"),
+        "reducer": combine.params.get("reducer"),
+        "select": combine.params.get("select"),
+        "produce": produce.id,
+        "combine": combine.id,
+        "groups_node": grouped.id,
+    }
+
+
+def describe_stages(stages):
+    """"주별 합계의 평균", "주별 합계가 가장 큰 주"."""
+    unit = BUCKET_LABELS.get(stages["bucket"], stages["bucket"])
+    inner = REDUCER_LABELS.get(stages["inner"], stages["inner"])
+    if stages["select"]:
+        return (f"{unit}별 {_josa(inner, '이', '가')} "
+                f"{SELECT_LABELS[stages['select']]} {unit}")
+    return f"{unit}별 {inner}의 {REDUCER_LABELS.get(stages['reducer'])}"
+
+
+def _grouped_answer(plan, execution_result, settings, labels, stages,
+                    execution_plan):
+    period = None
+    detail = None
+    if execution_plan is not None:
+        detail = execution_plan.periods.get(stages["produce"])
+        if detail:
+            period = detail["resolved"]
+    subject = _subject(plan, settings, labels, grouped=True, period=period)
+    label = _METRIC_LABEL.get(
+        plan.slots.get("metric"), settings.get("label") or "결과",
+    )
+    unit = settings.get("unit") or ""
+    value = execution_result.final_value
+    phrase = describe_stages(stages)
+
+    if stages["select"]:
+        groups = (value or {}).get("groups") or []
+        shown = ", ".join(_group_text(group) for group in groups) or "결과 없음"
+        tie = " (동률)" if len(groups) > 1 else ""
+        body = f"{shown}{tie}, {_scalar_text((value or {}).get('value'), unit)}"
+    else:
+        body = _scalar_text(value, unit)
+    lines = [f"{subject} {label} — {phrase}: {body}".strip()]
+    lines.append(f"- 계산: {_route_text(stages, execution_plan, detail)}")
+    rows = execution_result.state.get(stages["groups_node"])
+    if isinstance(rows, list):
+        inner = REDUCER_LABELS.get(stages["inner"], stages["inner"])
+        lines.append(f"- 구간별 {inner}:")
+        for row in rows[:_MAX_LISTED_ROWS]:
+            lines.append(
+                f"  - {_group_text(row['group'])}: {_scalar_text(row['value'], unit)}"
+            )
+    return "\n".join(lines)
+
+
+def _josa(word, with_batchim, without_batchim):
+    """마지막 글자의 받침에 맞는 조사를 붙인다."""
+    last = word[-1] if word else ""
+    has = "가" <= last <= "힣" and (ord(last) - ord("가")) % 28 != 0
+    return f"{word}{with_batchim if has else without_batchim}"
+
+
+def _group_text(group):
+    text = group.get("label", "")
+    if group.get("complete") is False:
+        text += "(부분 구간)"
+    return text
+
+
+def _route_text(stages, execution_plan, detail):
+    """실제로 어떻게 계산했는지. 같은 뜻이라도 경로에 따라 구간 경계가 다르다."""
+    unit = BUCKET_LABELS.get(stages["bucket"], stages["bucket"])
+    inner = REDUCER_LABELS.get(stages["inner"], stages["inner"])
+    if detail:
+        last = (
+            f"{SELECT_LABELS[stages['select']]} {_josa(unit, '을', '를')} 골랐습니다"
+            if stages["select"]
+            else f"구간별 값의 "
+                 f"{_josa(REDUCER_LABELS.get(stages['reducer']), '을', '를')} 계산했습니다"
+        )
+        return (
+            f"기간 {detail['resolved']}을 {unit} 구간 {len(detail['groups'])}개"
+            f"({BOUNDARY_RULES[stages['bucket']]})로 나눠 구간마다 "
+            f"{_josa(inner, '을', '를')} 조회한 뒤 로컬에서 {last}."
+        )
+    if execution_plan is not None and stages["groups_node"] in execution_plan.unobserved:
+        return (
+            f"TIMS가 {unit} 구간마다 {_josa(inner, '을', '를')} 구한 뒤 그 값들의 "
+            f"{_josa(REDUCER_LABELS.get(stages['reducer']), '을', '를')} 한 번에 계산했습니다 "
+            f"(bucket={stages['bucket']}, aggregation={stages['inner']}, "
+            f"rollup={stages['reducer']}). 구간 경계는 TIMS 정의를 따릅니다."
+        )
+    return describe_stages(stages)

@@ -129,7 +129,9 @@ class CorpusRegistryTest(unittest.TestCase):
         self.assertTrue(1 <= len(unsupported) <= 2)
 
     def test_fresh_holdout_golden_meets_the_label(self):
+        import evaluate_planner as E
         from geoflow.composer import MacroComposer
+        from geoflow.errors import CompositionError
         from geoflow.grounding import parse_grounding
         from geoflow.macros import MacroLibrary
         composer = MacroComposer(MacroLibrary.from_directory())
@@ -139,8 +141,16 @@ class CorpusRegistryTest(unittest.TestCase):
             if P.NONE_LABEL in parent["expected_macros"]:
                 continue
             with self.subTest(intent=intent["intent"]):
-                plan = composer.compose(parse_grounding(intent["golden"], parent["question"]))
-                self.assertEqual(list(plan.applied_macros), parent["expected_macros"])
+                grounding = parse_grounding(intent["golden"], parent["question"])
+                if P.golden_inner_unspecified(grounding):
+                    # golden과 제품 계약의 충돌. P.golden_inner_unspecified 참고.
+                    with self.assertRaises(CompositionError) as caught:
+                        composer.compose(grounding)
+                    self.assertEqual(caught.exception.code,
+                                     P.INNER_UNSPECIFIED_REFUSAL)
+                    continue
+                plan = composer.compose(grounding)
+                self.assertEqual(E.corpus_labels(plan)[0], parent["expected_macros"])
                 tool, args = P.final_tool_call(plan)
                 self.assertEqual(P.tool_arg_mismatches(
                     intent["expected_tool_args"], args, P.tool_defaults(tool)), [])

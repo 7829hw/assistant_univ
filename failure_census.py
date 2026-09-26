@@ -30,9 +30,11 @@ import yaml
 import aggregation_plan as AP
 import evaluate_planner as E
 import evaluate_prompt_ab as A
+import paraphrase_corpus as P
 from agent_graph import extract_scopes
 from geoflow.compiler import compile_plan
 from geoflow.composer import MacroComposer
+from geoflow.errors import GeoFlowError
 from geoflow.executor import STATUS_OK, execute_plan
 from geoflow.macros import MacroLibrary
 from geoflow.planner import parse_planner_json
@@ -58,9 +60,27 @@ STAGE_CODES = {
         "INVALID_FACTOR_COMBINATION",
         # aggregation_plan의 구조와 출처
         AP.DUPLICATE_AGGREGATION_SOURCE, AP.FLAT_AGGREGATION_FACTOR, AP.LOWERING_ERROR,
+        "INVALID_AGGREGATION_PLAN",
     ),
     "RELATION_INVARIANT": ("MISSING_RELATION_QUALIFIER", "AMBIGUOUS_LOCATION_RELATION"),
-    "MACRO_COMPOSITION": ("UNUSED_CONCEPT", "AMBIGUOUS_PORT", "NO_MACRO"),
+    "MACRO_COMPOSITION": ("UNUSED_CONCEPT", "AMBIGUOUS_PORT", "NO_MACRO",
+                          "UNCONSUMED_CONDITION"),
+    # 집계 의미를 계획으로 표현할 수 없음(구간 안 집계 미지정, 지원하지 않는 형태).
+    "AGGREGATION_SEMANTICS": (
+        "AMBIGUOUS_INNER_AGGREGATION", "UNSUPPORTED_AGGREGATION",
+        "UNSUPPORTED_GROUPED_MEASURE", "UNSUPPORTED_AGGREGATION_COMBINATION",
+        "MISSING_OUTER_AGGREGATION",
+    ),
+    # 의미 graph를 실행 단계로 내리지 못함(기간 해석, lowering 대조).
+    "LOWERING": (
+        "UNRESOLVED_PERIOD", "UNSUPPORTED_PERIOD_FOR_GROUPING", "INVALID_PERIOD",
+        "UNSUPPORTED_BUCKET", "UNCONSUMED_GROUPS", "LOWERING_MISMATCH",
+    ),
+    # 로컬 분석 단계의 실행 실패.
+    "LOCAL_COMPUTATION": (
+        "EMPTY_GROUP_VALUE", "NON_SCALAR_GROUP_VALUE", "EMPTY_GROUPS",
+        "NOT_GROUPED_INPUT", "GROUP_ARITY", "UNKNOWN_REDUCER",
+    ),
     "OPERATOR_MAPPING": (
         "NO_OPERATOR", "MISSING_REQUIRED_INPUT", "INVALID_PARAM_VALUE",
         "PARAM_VALUE_REQUIRES_INPUT", "MISSING_COMPANION_PARAM", "AMBIGUOUS_OPERATOR",
@@ -350,8 +370,17 @@ def replay(row, item, composer, executor, variant=None):
         "exec_status": None, "exec_code": None, "exec_retryable": None,
     }
     if again["validated"] and plans.last_plan is not None:
-        executed = execute_plan(compile_plan(plans.last_plan), executor,
-                                known_scopes=set(extract_scopes(item["question"])))
+        try:
+            executed = execute_plan(
+                compile_plan(plans.last_plan, reference_date=P.EVALUATION_REFERENCE_DATE),
+                executor, known_scopes=set(extract_scopes(item["question"])),
+            )
+        except GeoFlowError as error:
+            # 검증은 통과했지만 실행 단계로 내리지 못했다(기간 해석 등). 계획 없이
+            # 끝난 것이므로 Tool 호출도 없다.
+            result.update(exec_status="COMPILE_ERROR", exec_code=error.code,
+                          exec_retryable=False)
+            return result
         error = executed.error or {}
         result.update(exec_status=executed.status, exec_code=error.get("code"),
                       exec_retryable=bool((error.get("context") or {}).get("retryable")))

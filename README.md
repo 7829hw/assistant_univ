@@ -711,7 +711,8 @@ Planner 출력은 모두 untrusted input으로 취급하며, JSON 파싱 실패�
 | --- | --- | --- | --- |
 | `PLACE_TO_SCOPE` | `place` LOCATION/place | `scope` LOCATION/scope\|vicinity_scope | 장소명 → 공간 범위 |
 | `SCOPE_TO_PLACE` | `scope` LOCATION/scope\|vicinity_scope | `place` LOCATION/place | 공간 범위 → 장소명 |
-| `EVENT_TO_MEASURE` | `event` EVENT/*, `area` LOCATION/scope(선택) | `measure` AMOUNT\|PROPORTION/* | 사건 → 통계값 |
+| `EVENT_TO_MEASURE` | `event` EVENT/*, `area` LOCATION/scope(선택) | `measure` AMOUNT\|PROPORTION/* | 사건 → 통계값 (한 단계 집계) |
+| `EVENT_TO_GROUPED_MEASURE` | `event` EVENT/*, `area` LOCATION/scope(선택) | `measure` AMOUNT\|PROPORTION/* | 사건 → 구간별 값 → 통계값/구간 (두 단계 집계) |
 | `OD_EVENT_TO_MEASURE` | `event` EVENT/trip, `pickup`·`dropoff` LOCATION/scope(선택) | `measure` AMOUNT/trip_count | 승하차 구분 사건 → 통계값 |
 
 조각은 다음 세 가지를 갖지 않음.
@@ -754,7 +755,7 @@ Planner 출력은 모두 untrusted input으로 취급하며, JSON 파싱 실패�
 장소명으로 주어졌는지만 다르며, 측정 조각은 동일함.
 
 "근처/주변" 같은 표현은 조각을 가르지 않고 `vicinity` factor로 출력 subtype을
-정함. 그룹화·순위(`dimension`, `order`, `limit`)도 별도 조각이 아니라 측정 변환의
+정함. 공간 그룹화·순위(`dimension`, `order`, `limit`)도 별도 조각이 아니라 측정 변환의
 factor임. TIMS Tool이 같은 호출의 인자로 받기 때문에, 조각을 나누면 대응하는
 operator가 없는 node가 생김.
 
@@ -824,8 +825,49 @@ metric           ← 측정값 concept의 subtype
 include_vicinity ← 만들려는 scope subtype이 vicinity_scope인가
 ```
 
-나머지 인자는 grounding의 factor 중 그 operator가 지원하는 것만 전달함. 지원하지
-않아 빠진 factor는 `plan.unused_factors`에 남겨 실행 기록에서 확인할 수 있음.
+나머지 인자는 grounding의 factor 중 그 operator가 지원하는 것만 전달함. 조건을
+거는 factor를 받는 변환이 하나도 없으면 계획을 만들지 않음(`UNCONSUMED_CONDITION`).
+예전에는 `plan.unused_factors`에 적고 실행해서 "법인택시 평균 속도"가 전체 택시로
+계산됐음. `taxi_type=all`처럼 조건을 걸지 않는 값과, 개수 Tool에 붙은 `aggregation=sum`
+(개수 자체가 합)은 예외임.
+
+### 두 단계 집계: 의미 graph와 실행 계획
+
+집계는 Tool 인자가 아니라 계산 단계로 표현함(`geoflow/aggregation.py`).
+
+```text
+지난달 주별 매출 합계의 평균      bucket=week, inner=sum, outer=avg
+지난달 주별 매출 평균의 최댓값    bucket=week, inner=avg, outer=max
+지난달 전체 매출의 평균           inner=avg
+지난달 매출 합계가 가장 큰 주     bucket=week, inner=sum, select=max
+```
+
+구간이 있으면 `EVENT_TO_GROUPED_MEASURE`가 중간 개념을 둠. 이 개념은 새 core concept가
+아니라 측정값과 같은 `AMOUNT/revenue`이며 `group_by={"bucket": "week"}` 속성과 SUPPORT
+role을 가짐.
+
+```text
+operation --measure_groups(OPERATION_METRIC, aggregation=sum, 기간·범위·택시 유형)--> revenue_groups
+          --combine_groups(REDUCE_GROUPS avg | SELECT_GROUP max)--> revenue
+```
+
+compiler가 이것을 실행 단계로 내림.
+
+* TIMS가 받으면 호출 하나로 합침. `get_operation_metrics(bucket=week, aggregation=sum, rollup=avg)`.
+  인자마다 어느 의미 단계에서 왔는지 `argument_sources`에 남음.
+* 받지 않으면 기간을 명시 날짜 구간으로 나눠 구간마다 같은 조건으로 호출한 뒤 로컬에서
+  합치거나 고름. "가장 큰 주"(rollup은 구간을 돌려주지 않음)와 bucket이 없는 Tool이 여기에
+  해당함. 상대 기간은 pipeline의 기준일(`clock`)로 풀고, 풀 수 없으면 거부함.
+* `verify_lowering`이 실행 단계를 의미 graph와 대조함. 조건 누락, 구간 누락, 구간 안/밖
+  뒤바뀜은 `LOWERING_MISMATCH`로 거부함.
+
+구간 안 집계가 질문에 없으면(`bucket=week, rollup=avg`) Tool 기본값(avg)으로 채우지 않고
+`AMBIGUOUS_INNER_AGGREGATION`으로 되물음. 재질의로 채우지도 않음. 구간이 없는 한 단계
+질문은 기존대로 기본값을 쓰고, 답변에 그 사실을 밝힘.
+
+답변에는 기간(로컬에서 푼 날짜 포함), 범위, 택시 유형, 집계 뜻, 실제 계산 경로(호출 하나 /
+기간 분할과 구간 경계), 구간별 값이 나옴. trace의 모든 항목은 `covers`로 의미 단계와
+연결됨. 설계와 측정 기록: `evaluation/design/semantic_aggregation_graph.md`.
 
 ### 질문에 없는 조건
 
@@ -876,6 +918,8 @@ G3 TYPE_COMPATIBILITY operator input/output의 semantic type이 맞을 것
 G4 EXECUTABILITY      operator가 registry에 있고 Tool도 사용 가능할 것
 G5 CONNECTIVITY       final_node까지 입력이 모두 연결되어 있을 것
 G6 SCOPE_PROVENANCE   scope는 source=user 또는 source=tool만 허용
+G7 AGGREGATION_SEMANTICS 구간별 값은 구간 안 집계를 명시한 Tool 변환이 만들고
+                      분석 연산자 하나가 소비함. bucket/rollup은 의미 graph에 둘 수 없음
 ```
 
 `G6`는 기존 scope 정책을 IR 수준에서 다시 강제함. `source=user`인 scope는 실제
@@ -1360,7 +1404,11 @@ LLM 호출 감소는 model hop마다 다음 Tool을 묻지 않기 때문임. Geo
 
 ### 현재 제한
 
-* 조각 4개로 `stub_query.yaml`과 `stub_query_boundary.yaml`의 지원 범위 질의가
+* production grounding(flat factor)은 "합계가 가장 큰 주"처럼 구간을 답하는 질문을
+  표현할 수 없음. 구조화 집계 표기(`aggregation_plan`)는 정답 grounding 테스트와 이후
+  측정할 arm에서만 읽음. 구간 안 집계를 `unspecified`로 둔 기존 corpus golden
+  (b21, b24, f03, f13, h12 등)은 새 규칙에서 거부되며 corpus는 고치지 않았음.
+* 조각 5개로 `stub_query.yaml`과 `stub_query_boundary.yaml`의 지원 범위 질의가
   모두 처리되지만, 두 계획을 만들어 비교해야 하는 질의(지역 간 비교 등)는 아직
   표현할 수 없음. 지원하지 않는 질의는 오답 대신 계획 생성을 포기함
   (`UNSUPPORTED_QUESTION`, `NO_OPERATOR`, `MISSING_REQUIRED_INPUT`, `AMBIGUOUS_PORT`).

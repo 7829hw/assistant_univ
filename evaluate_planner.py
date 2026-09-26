@@ -31,8 +31,10 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from agent_graph import extract_scopes
+import paraphrase_corpus as P
 from build import build
 from geoflow import validator as geoflow_validator
+from geoflow import analysis_ops
 from geoflow.compiler import compile_plan
 from geoflow.composer import MacroComposer
 from geoflow.errors import GeoFlowError
@@ -77,6 +79,13 @@ REFUSAL_CODES = frozenset({
     "AMBIGUOUS_PORT",
     "AMBIGUOUS_OPERATOR",
     "UNUSED_CONCEPT",
+    # 질문의 조건이나 집계를 계획이 온전히 표현할 수 없어 합성을 포기한 경우.
+    "UNCONSUMED_CONDITION",
+    "AMBIGUOUS_INNER_AGGREGATION",
+    "UNSUPPORTED_AGGREGATION",
+    "UNSUPPORTED_GROUPED_MEASURE",
+    "UNSUPPORTED_AGGREGATION_COMBINATION",
+    "MISSING_OUTER_AGGREGATION",
 })
 
 
@@ -285,10 +294,11 @@ def evaluate_once(planner, composer, item, *, attempt=1,
         plan = _compose_with_repair(
             composer, planner, item["question"], output, record,
         )
-        record["macros"] = list(plan.applied_macros)
-        record["operators"] = [
+        record["semantic_macros"] = list(plan.applied_macros)
+        record["semantic_operators"] = [
             item.operator for item in plan.transformations
         ]
+        record["macros"], record["operators"] = corpus_labels(plan)
         record["macro_score"] = score_sequence(
             record["macros"], expected_macros,
         )
@@ -312,7 +322,7 @@ def evaluate_once(planner, composer, item, *, attempt=1,
             # 넘겨야 한다. 파이프라인이 하는 것과 같은 처리이며,
             # 빠뜨리면 provenance gate가 정상 질의를 막는다.
             result = execute_plan(
-                compile_plan(plan),
+                compile_plan(plan, reference_date=P.EVALUATION_REFERENCE_DATE),
                 tool_executor,
                 known_scopes=set(extract_scopes(item["question"])),
             )
@@ -373,6 +383,31 @@ _BUCKET_UNITS = frozenset({"week", "month"})
 
 #: 의미 실패가 아니라 전송/모델 지연으로 끝난 경우. 정확도와 분리해 센다.
 _TIMEOUT_MARKERS = ("Timeout", "timed out", "ReadTimeout")
+
+
+#: 구간별 조각이 생기기 전의 라벨. corpus의 expected_macros/operators는
+#: EVENT_TO_MEASURE 하나가 bucket·rollup 인자로 두 단계 집계를 맡던 때 적었다.
+_LEGACY_MACRO_LABELS = {"EVENT_TO_GROUPED_MEASURE": "EVENT_TO_MEASURE"}
+
+
+def corpus_labels(plan):
+    """계획을 corpus 라벨의 어휘로 옮긴 ``(macros, operators)``.
+
+    예전 library가 표현할 수 있던 계획만 옮긴다. 구간별 값을 REDUCE_GROUPS 하나로
+    합치는 계획은 TIMS 호출 하나(bucket·aggregation·rollup)와 같은 계산이고, 예전
+    라벨은 바로 그 호출을 가리켰다. 구간을 고르는 SELECT_GROUP이나 다른 로컬
+    연산이 있는 계획은 옮기지 않는다. 예전 라벨로는 표현할 수 없던 계산이다.
+    Tool 인자 비교(strict)는 이 투영과 무관하게 실제 호출로 한다.
+    """
+    macros = list(plan.applied_macros)
+    operators = [item.operator for item in plan.transformations]
+    local = [name for name in operators if analysis_ops.is_analysis_operator(name)]
+    if local != [analysis_ops.REDUCE_GROUPS]:
+        return macros, operators
+    return (
+        [_LEGACY_MACRO_LABELS.get(name, name) for name in macros],
+        [name for name in operators if name != analysis_ops.REDUCE_GROUPS],
+    )
 
 
 def _annotate_record(record):

@@ -25,6 +25,7 @@ from geoflow.composer import MacroComposer
 from geoflow.compiler import compile_plan
 from geoflow.errors import CompositionError, GeoFlowError
 from geoflow.grounding import parse_grounding
+from geoflow.aggregation import AggregationSpec
 from geoflow.macros import MacroLibrary
 from geoflow.operator_registry import OPERATORS, Operator
 from geoflow.types import ConceptNode, CoreConcept, FunctionalRole, NodeSource
@@ -76,15 +77,26 @@ class CandidateMultiplicityTest(unittest.TestCase):
         self.assertEqual(multi, {})
 
     def test_only_trip_count_has_two_producing_macros(self):
+        """목표 후보는 집계 형태(한 단계/구간별)가 맞는 조각만이다.
+
+        EVENT_TO_GROUPED_MEASURE는 모든 측정값을 만들 수 있지만 구간별 집계에서만
+        후보가 된다. 형태별로 보면 후보가 둘인 것은 여전히 trip_count 하나다.
+        """
         library = MacroLibrary.from_directory()
-        multi = {}
-        for key in _outputs():
-            names = [macro.name for macro in library.producing(*key)]
-            if len(names) > 1:
-                multi[(key[0].value, key[1])] = names
-        self.assertEqual(multi, {
-            ("AMOUNT", "trip_count"): ["EVENT_TO_MEASURE", "OD_EVENT_TO_MEASURE"],
-        })
+        for spec, expected in (
+            (AggregationSpec(), {
+                ("AMOUNT", "trip_count"): ["EVENT_TO_MEASURE", "OD_EVENT_TO_MEASURE"],
+            }),
+            (AggregationSpec(bucket="week", inner="sum", outer="avg"), {}),
+        ):
+            multi = {}
+            for key in _outputs():
+                names = [macro.name for macro in library.producing(*key)
+                         if macro.accepts_aggregation(spec)]
+                if len(names) > 1:
+                    multi[(key[0].value, key[1])] = names
+            with self.subTest(grouped=spec.grouped):
+                self.assertEqual(multi, expected)
 
 
 class ResolverViabilityTest(unittest.TestCase):
@@ -197,7 +209,9 @@ class MacroOrderTest(unittest.TestCase):
         for key, calls in baseline.items():
             with self.subTest(key=key):
                 self.assertEqual(reversed_order[key], calls)
-        self.assertGreater(sum(calls is not None for calls in baseline.values()), 80)
+        # dimension을 받지 않는 Tool에 dimension을 준 조합은 예전에는 조건을 버린
+        # 채 성공했고(80개 초과), 지금은 UNCONSUMED_CONDITION으로 거부된다(74개).
+        self.assertGreater(sum(calls is not None for calls in baseline.values()), 70)
         # 두 macro가 모두 관여하는 trip_count 계획이 비교 대상에 들어 있다.
         self.assertGreater(sum(calls is not None for key, calls in baseline.items()
                                if key[0] == "trip_count"), 10)

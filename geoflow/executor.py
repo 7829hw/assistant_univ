@@ -11,6 +11,7 @@ import time
 from agent_graph import extract_scopes, scope_arguments
 from tool_executor import invalid_argument_result
 
+from geoflow import analysis_ops
 from geoflow.errors import ExecutionError
 from geoflow.operator_registry import extract_output
 from geoflow.types import ExecutionPlan, ExecutionResult, ValueRef
@@ -87,6 +88,15 @@ def execute_plan(
                 trace=trace,
                 final_node=execution_plan.final_node,
             )
+
+        if step.is_local:
+            failure = _run_local(step, index, state, trace, emit, position)
+            if failure is not None:
+                return _failure(
+                    execution_plan, state, trace, step, index, failure.to_dict(),
+                    emit, detail=failure.detail, already_traced=True,
+                )
+            continue
 
         try:
             arguments = resolve_refs(step.arguments, state)
@@ -183,6 +193,34 @@ def execute_plan(
     )
 
 
+def _run_local(step, index, state, trace, emit, position):
+    """로컬 분석 step을 실행한다. 실패하면 ``ExecutionError``를 돌려준다.
+
+    Tool을 부르지 않으므로 scope provenance와 무관하다. 입력은 앞선 Tool 결과가
+    state에 남긴 값뿐이다.
+    """
+    started_at = time.perf_counter()
+    emit("local_step", hop=index, operator=step.operator, **position)
+    try:
+        result = analysis_ops.run(step, state)
+    except ExecutionError as error:
+        trace.append(_trace_entry(
+            index, step, _local_arguments(step), None,
+            _duration_ms(started_at), error=error.detail,
+        ))
+        return error
+    trace.append(_trace_entry(
+        index, step, _local_arguments(step), result, _duration_ms(started_at),
+    ))
+    for node_id in step.output_bindings.values():
+        state[node_id] = result
+    return None
+
+
+def _local_arguments(step):
+    return {**step.arguments, "inputs": list(step.inputs)}
+
+
 def _bind_outputs(step, result, state):
     for selector, node_id in step.output_bindings.items():
         state[node_id] = extract_output(
@@ -203,6 +241,12 @@ def _trace_entry(index, step, arguments, result, duration_ms, error=None):
         "result": result,
         "duration_ms": duration_ms,
     }
+    # 어떤 의미 단계를 수행한 기록인지 남긴다(부록 F의 trace F).
+    entry["phase"] = "local" if step.is_local else "tool"
+    entry["covers"] = list(step.covers)
+    if step.group is not None:
+        entry["group"] = dict(step.group)
+    entry["output_nodes"] = list(step.output_bindings.values())
     if error is not None:
         entry["error"] = error
     return entry

@@ -174,7 +174,10 @@ class ObservationTest(unittest.TestCase):
         refinement = l1["aggregation_refinement"]
         self.assertEqual(refinement["outcome"], R.APPLIED)
         self.assertEqual(refinement["factors_after"], {"bucket": "month", "rollup": "max"})
-        self.assertTrue(l1["strict_correct"], l1["arg_mismatches"])
+        # b24 golden은 구간 안 집계가 없다. 예전에는 Tool 기본값으로 실행되어 strict
+        # 정답이었고, 지금은 질문에 없는 구간 안 집계를 채우지 않아 거부된다.
+        self.assertEqual(l1["status"], "AMBIGUOUS_INNER_AGGREGATION")
+        self.assertFalse(l1["strict_correct"])
         self.assertFalse(l1["repair_attempted"])
         self.assertEqual([c["phase"] for c in l1["llm_calls"]],
                          ["initial", "aggregation_refinement"])

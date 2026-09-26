@@ -563,15 +563,30 @@ class NoInventionTest(ComposerCase):
                     )
                 self.assertEqual(caught.exception.code, "INVALID_FACTOR")
 
-    def test_unsupported_factor_is_recorded_not_silently_dropped(self):
-        """Tool이 받지 않는 조건은 버리되 기록에 남긴다."""
-        plan = self.compose(
-            "법인택시의 평균 속도는?",
-            [place("p", "대구"), measure("m", "AMOUNT", "speed")],
-            {"taxi_type": "corporate"},
-        )
+    def test_unsupported_factor_is_rejected_not_silently_dropped(self):
+        """Tool이 받지 않는 조건이 있으면 계획을 만들지 않는다.
+
+        예전에는 unused_factors에 적고 택시 유형 없이 계산했다. 그 답은 "법인택시"
+        가 아니라 전체 택시의 평균 속도였다.
+        """
+        with self.assertRaises(CompositionError) as caught:
+            self.compose(
+                "법인택시의 평균 속도는?",
+                [place("p", "대구"), measure("m", "AMOUNT", "speed")],
+                {"taxi_type": "corporate"},
+            )
         # get_passage_metrics는 taxi_type을 받지 않는다.
-        self.assertEqual(plan.unused_factors, {"taxi_type": "corporate"})
+        self.assertEqual(caught.exception.code, "UNCONSUMED_CONDITION")
+        self.assertEqual(caught.exception.context["unconsumed"], ["taxi_type"])
+        self.assertIn("택시 유형", caught.exception.user_message)
+
+    def test_non_restrictive_value_may_be_absent_from_the_tool(self):
+        """taxi_type=all은 조건을 걸지 않으므로 받는 Tool이 없어도 계산이 같다."""
+        plan = self.compose(
+            "대구 택시의 평균 속도는?",
+            [place("p", "대구"), measure("m", "AMOUNT", "speed")],
+            {"taxi_type": "all"},
+        )
         for step in compile_plan(plan).steps:
             self.assertNotIn("taxi_type", step.arguments)
 
@@ -769,6 +784,7 @@ class ValidatorRegressionTest(ComposerCase):
                         Rule.ACYCLICITY, Rule.ROLE_ORDERING,
                         Rule.TYPE_COMPATIBILITY, Rule.EXECUTABILITY,
                         Rule.CONNECTIVITY, Rule.SCOPE_PROVENANCE,
+                        Rule.AGGREGATION_SEMANTICS,
                     ],
                 )
 
@@ -1316,10 +1332,23 @@ class FactorConstraintTest(ComposerCase):
         return grounding
 
     def test_bucket_with_rollup_is_valid(self):
-        grounding = self._ground({"bucket": "week", "rollup": "avg"})
+        grounding = self._ground(
+            {"bucket": "week", "aggregation": "sum", "rollup": "avg"},
+        )
         self.assertEqual(grounding.factors["bucket"], "week")
         plan = self.composer.compose(grounding)
-        self.assertEqual(plan.transformations[0].params["rollup"], "avg")
+        # 두 단계는 Tool 인자가 아니라 변환 둘로 표현된다.
+        produce, combine = plan.transformations
+        self.assertEqual(produce.params["aggregation"], "sum")
+        self.assertNotIn("rollup", produce.params)
+        self.assertEqual(combine.operator, "REDUCE_GROUPS")
+        self.assertEqual(combine.params, {"reducer": "avg"})
+
+    def test_bucket_without_inner_aggregation_is_rejected(self):
+        """구간 안 집계가 질문에 없으면 Tool 기본값(avg)으로 채우지 않는다."""
+        with self.assertRaises(CompositionError) as caught:
+            self._ground({"bucket": "week", "rollup": "avg"})
+        self.assertEqual(caught.exception.code, "AMBIGUOUS_INNER_AGGREGATION")
 
     def test_validation_runs_before_composition(self):
         """조각을 고르기 전에 걸린다. 계획이 만들어지지 않는다."""
@@ -1525,10 +1554,10 @@ class FactorSemanticsTest(ComposerCase):
                     "주 단위로 나눈 택시 수입은?",
                     [event("e", "operation"),
                      measure("m", "AMOUNT", "revenue")],
-                    {"bucket": "week", "rollup": value},
+                    {"bucket": "week", "aggregation": "sum", "rollup": value},
                 )
                 self.assertEqual(
-                    plan.transformations[0].params["rollup"], value,
+                    plan.transformations[-1].params["reducer"], value,
                 )
 
     def test_invalid_factor_is_still_not_repairable(self):
@@ -1540,11 +1569,12 @@ class FactorSemanticsTest(ComposerCase):
         self.assertFalse(decide(error).repairable)
 
     def test_correct_two_stage_factors_compose(self):
-        """b21/b24의 올바른 조건 구조가 실제로 합성된다."""
+        """구간 안 집계까지 적은 두 단계 조건이 구간별 node로 합성된다."""
         for factors, expected in (
-            ({"bucket": "week", "rollup": "avg"}, ("week", "avg")),
-            ({"bucket": "month", "rollup": "max", "taxi_type": "private"},
-             ("month", "max")),
+            ({"bucket": "week", "aggregation": "sum", "rollup": "avg"},
+             ("week", "sum", "avg")),
+            ({"bucket": "month", "aggregation": "avg", "rollup": "max",
+              "taxi_type": "private"}, ("month", "avg", "max")),
         ):
             with self.subTest(factors=factors):
                 plan = self.compose(
@@ -1553,11 +1583,33 @@ class FactorSemanticsTest(ComposerCase):
                      measure("m", "AMOUNT", "revenue")],
                     factors,
                 )
-                params = plan.transformations[0].params
+                groups = next(
+                    node for node in plan.concepts if node.attributes.get("group_by")
+                )
+                produce, combine = plan.transformations
                 self.assertEqual(
-                    (params["bucket"], params["rollup"]), expected,
+                    (groups.attributes["group_by"]["bucket"],
+                     produce.params["aggregation"], combine.params["reducer"]),
+                    expected,
                 )
                 self.assert_valid(plan)
+
+    def test_b21_b24_structure_without_inner_is_now_rejected(self):
+        """b21/b24 golden(구간 안 집계 없음)은 예전에는 Tool 기본값으로 실행됐다."""
+        for factors in (
+            {"bucket": "week", "rollup": "avg"},
+            {"bucket": "month", "rollup": "max", "taxi_type": "private"},
+        ):
+            with self.subTest(factors=factors):
+                with self.assertRaises(CompositionError) as caught:
+                    self.compose(
+                        "구간을 나눈 수입은?",
+                        [event("e", "operation"),
+                         measure("m", "AMOUNT", "revenue")],
+                        factors,
+                    )
+                self.assertEqual(caught.exception.code,
+                                 "AMBIGUOUS_INNER_AGGREGATION")
 
 
 class LegacyIsolationTest(unittest.TestCase):

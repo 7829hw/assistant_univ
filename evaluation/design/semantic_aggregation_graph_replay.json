@@ -1,0 +1,898 @@
+{
+  "purpose": "의미 graph/lowering 변경(c547e5c → 작업 트리) 전후를 기록된 census LLM 응답으로 재판정. LLM 호출 없음. development census이며 holdout이 아니다.",
+  "command": "python geoflow_replay_compare.py <run_dir> --out X.json (기준선은 c547e5c worktree에서 같은 스크립트) 후 --diff",
+  "reference_date": "20260925",
+  "runs": {
+    "20260925_171514_model_M0_census": {
+      "model": "qwen3:8b",
+      "recorded_at_commit": "c547e5cb1f4561f783b0e201cf1d3891416d3d57",
+      "observations": 210,
+      "before": {
+        "SUPPORTED_REJECTION": 9,
+        "CORRECT": 159,
+        "SILENT_WRONG_PLAN": 11,
+        "RECOVERABLE_REJECTION": 16,
+        "SAFE_REJECTION": 15
+      },
+      "after": {
+        "SUPPORTED_REJECTION": 20,
+        "CORRECT": 153,
+        "SILENT_WRONG_PLAN": 6,
+        "RECOVERABLE_REJECTION": 16,
+        "SAFE_REJECTION": 15
+      },
+      "transitions": {
+        "CORRECT -> SUPPORTED_REJECTION": 6,
+        "SILENT_WRONG_PLAN -> SUPPORTED_REJECTION": 5
+      },
+      "changed": [
+        {
+          "id": "b21_p4",
+          "intent_id": "b21_bucket_rollup",
+          "question": "택시 수입의 주 단위 집계 평균은?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "week",
+              "metric": "revenue",
+              "rollup": "avg"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "b24_p5",
+          "intent_id": "b24_bucket_rollup_month",
+          "question": "월 단위로 집계하면 개인택시 수입의 최대값은 얼마인가요?",
+          "before": {
+            "outcome": "SILENT_WRONG_PLAN",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "month",
+              "metric": "revenue",
+              "rollup": "max"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "f01_p0",
+          "intent_id": "f01_month_sum_then_avg_revenue",
+          "question": "월 단위로 합산한 택시 수입의 평균은?",
+          "before": {
+            "outcome": "SILENT_WRONG_PLAN",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "month",
+              "metric": "revenue",
+              "rollup": "avg"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "f01_p1",
+          "intent_id": "f01_month_sum_then_avg_revenue",
+          "question": "택시 수입을 월 단위로 합산했을 때 평균은?",
+          "before": {
+            "outcome": "SILENT_WRONG_PLAN",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "month",
+              "metric": "revenue",
+              "rollup": "avg"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "f01_p2",
+          "intent_id": "f01_month_sum_then_avg_revenue",
+          "question": "월 단위로 합산한 수입들의 평균은 얼마인가요?",
+          "before": {
+            "outcome": "SILENT_WRONG_PLAN",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "month",
+              "metric": "revenue",
+              "rollup": "avg"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "f01_p3",
+          "intent_id": "f01_month_sum_then_avg_revenue",
+          "question": "월 단위로 합산하면 택시 수입의 평균은 얼마인가요?",
+          "before": {
+            "outcome": "SILENT_WRONG_PLAN",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "month",
+              "metric": "revenue",
+              "rollup": "avg"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "f02_p1",
+          "intent_id": "f02_week_avg_then_max_hours",
+          "question": "영업 시간을 주 단위로 평균 냈을 때 최대값은?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "week",
+              "metric": "hours",
+              "rollup": "max"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "f03_p0",
+          "intent_id": "f03_month_sum_operating_count",
+          "question": "월 단위 영업 횟수의 합계는?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "month",
+              "metric": "operating_count",
+              "rollup": "sum"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "f03_p1",
+          "intent_id": "f03_month_sum_operating_count",
+          "question": "영업 횟수를 월 단위로 집계했을 때 합계는?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "month",
+              "metric": "operating_count",
+              "rollup": "sum"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "f03_p2",
+          "intent_id": "f03_month_sum_operating_count",
+          "question": "월 단위로 집계한 영업 횟수 합계는?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "month",
+              "metric": "operating_count",
+              "rollup": "sum"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "f03_p3",
+          "intent_id": "f03_month_sum_operating_count",
+          "question": "월 단위로 집계하면 영업 횟수의 합계는 얼마인가요?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "month",
+              "metric": "operating_count",
+              "rollup": "sum"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        }
+      ],
+      "silent_wrong_after": [
+        {
+          "id": "b24_p3",
+          "question": "수입의 최대값을 월 단위로 개인택시 기준 집계하면?",
+          "final_tool_args": {
+            "aggregation": "max",
+            "metric": "revenue",
+            "taxi_type": "private",
+            "bucket": "month",
+            "rollup": "sum"
+          },
+          "expected_tool_args": {
+            "metric": "revenue",
+            "taxi_type": "private",
+            "bucket": "month",
+            "rollup": "max"
+          }
+        },
+        {
+          "id": "h04_p3",
+          "question": "부산에서 개인택시 공차율은 얼마인가요?",
+          "final_tool_args": {
+            "scope": "@place:부산",
+            "metric": "vacant_ratio"
+          },
+          "expected_tool_args": {
+            "metric": "vacant_ratio",
+            "taxi_type": "private"
+          }
+        },
+        {
+          "id": "h12_p1",
+          "question": "개인택시 수입을 주 단위로 집계했을 때 최소값은?",
+          "final_tool_args": {
+            "aggregation": "min",
+            "metric": "revenue",
+            "bucket": "week",
+            "rollup": "min"
+          },
+          "expected_tool_args": {
+            "metric": "revenue",
+            "taxi_type": "private",
+            "bucket": "week",
+            "rollup": "min"
+          }
+        },
+        {
+          "id": "f13_p0",
+          "question": "주 단위로 집계한 법인택시 영업 횟수의 평균은?",
+          "final_tool_args": {
+            "aggregation": "avg",
+            "metric": "operating_count",
+            "bucket": "week",
+            "rollup": "avg"
+          },
+          "expected_tool_args": {
+            "metric": "operating_count",
+            "bucket": "week",
+            "rollup": "avg",
+            "taxi_type": "corporate"
+          }
+        },
+        {
+          "id": "f14_p1",
+          "question": "택시 수입은 지난주와 지난달 중 어느 쪽이 더 많은가요?",
+          "final_tool_args": {
+            "date": "last_month",
+            "metric": "revenue"
+          },
+          "expected_tool_args": {}
+        },
+        {
+          "id": "f15_p2",
+          "question": "대구 택시 통행량을 시간대별로 알려줘",
+          "final_tool_args": {
+            "scope": "@place:대구",
+            "time": "000000-235959"
+          },
+          "expected_tool_args": {}
+        }
+      ]
+    },
+    "20260925_180607_model_M2_census": {
+      "model": "qwen3.8:27b",
+      "recorded_at_commit": "c547e5cb1f4561f783b0e201cf1d3891416d3d57",
+      "observations": 211,
+      "before": {
+        "CORRECT": 180,
+        "RECOVERABLE_REJECTION": 13,
+        "SAFE_REJECTION": 10,
+        "SILENT_WRONG_PLAN": 8
+      },
+      "after": {
+        "CORRECT": 156,
+        "SUPPORTED_REJECTION": 24,
+        "RECOVERABLE_REJECTION": 13,
+        "SAFE_REJECTION": 10,
+        "SILENT_WRONG_PLAN": 8
+      },
+      "transitions": {
+        "CORRECT -> SUPPORTED_REJECTION": 24
+      },
+      "changed": [
+        {
+          "id": "b21_p0",
+          "intent_id": "b21_bucket_rollup",
+          "question": "주 단위로 집계한 택시 수입의 평균은?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "week",
+              "metric": "revenue",
+              "rollup": "avg"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "b21_p1",
+          "intent_id": "b21_bucket_rollup",
+          "question": "택시 수입을 주 단위로 집계했을 때 평균은?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "week",
+              "metric": "revenue",
+              "rollup": "avg"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "b21_p2",
+          "intent_id": "b21_bucket_rollup",
+          "question": "주 단위 택시 수입의 평균은?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "week",
+              "metric": "revenue",
+              "rollup": "avg"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "b21_p3",
+          "intent_id": "b21_bucket_rollup",
+          "question": "수입의 평균을 주 단위로 집계하면?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "week",
+              "metric": "revenue",
+              "rollup": "avg"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "b21_p4",
+          "intent_id": "b21_bucket_rollup",
+          "question": "택시 수입의 주 단위 집계 평균은?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "week",
+              "metric": "revenue",
+              "rollup": "avg"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "b21_p5",
+          "intent_id": "b21_bucket_rollup",
+          "question": "주 단위로 집계하면 택시 수입의 평균은 얼마인가요?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "week",
+              "metric": "revenue",
+              "rollup": "avg"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "b24_p0",
+          "intent_id": "b24_bucket_rollup_month",
+          "question": "월 단위로 집계한 개인택시 수입의 최대값은?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "month",
+              "metric": "revenue",
+              "rollup": "max",
+              "taxi_type": "private"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "b24_p1",
+          "intent_id": "b24_bucket_rollup_month",
+          "question": "개인택시 수입을 월 단위로 집계했을 때 최대값은?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "month",
+              "metric": "revenue",
+              "rollup": "max",
+              "taxi_type": "private"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "b24_p2",
+          "intent_id": "b24_bucket_rollup_month",
+          "question": "월 단위 개인택시 수입 중 최대값은?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "month",
+              "metric": "revenue",
+              "rollup": "max",
+              "taxi_type": "private"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "b24_p3",
+          "intent_id": "b24_bucket_rollup_month",
+          "question": "수입의 최대값을 월 단위로 개인택시 기준 집계하면?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "month",
+              "metric": "revenue",
+              "rollup": "max",
+              "taxi_type": "private"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "b24_p4",
+          "intent_id": "b24_bucket_rollup_month",
+          "question": "개인택시의 월 단위 수입 최대값은?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "month",
+              "metric": "revenue",
+              "rollup": "max",
+              "taxi_type": "private"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "b24_p5",
+          "intent_id": "b24_bucket_rollup_month",
+          "question": "월 단위로 집계하면 개인택시 수입의 최대값은 얼마인가요?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "month",
+              "metric": "revenue",
+              "rollup": "max",
+              "taxi_type": "private"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "f03_p0",
+          "intent_id": "f03_month_sum_operating_count",
+          "question": "월 단위 영업 횟수의 합계는?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "month",
+              "metric": "operating_count",
+              "rollup": "sum"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "f03_p1",
+          "intent_id": "f03_month_sum_operating_count",
+          "question": "영업 횟수를 월 단위로 집계했을 때 합계는?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "month",
+              "metric": "operating_count",
+              "rollup": "sum"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "f03_p2",
+          "intent_id": "f03_month_sum_operating_count",
+          "question": "월 단위로 집계한 영업 횟수 합계는?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "month",
+              "metric": "operating_count",
+              "rollup": "sum"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "f03_p3",
+          "intent_id": "f03_month_sum_operating_count",
+          "question": "월 단위로 집계하면 영업 횟수의 합계는 얼마인가요?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "month",
+              "metric": "operating_count",
+              "rollup": "sum"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "f13_p0",
+          "intent_id": "f13_week_avg_corporate_operating_count",
+          "question": "주 단위로 집계한 법인택시 영업 횟수의 평균은?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "week",
+              "metric": "operating_count",
+              "rollup": "avg",
+              "taxi_type": "corporate"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "f13_p1",
+          "intent_id": "f13_week_avg_corporate_operating_count",
+          "question": "법인택시 영업 횟수를 주 단위로 집계했을 때 평균은?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "week",
+              "metric": "operating_count",
+              "rollup": "avg",
+              "taxi_type": "corporate"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "f13_p2",
+          "intent_id": "f13_week_avg_corporate_operating_count",
+          "question": "법인택시의 주 단위 영업 횟수 평균은?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "week",
+              "metric": "operating_count",
+              "rollup": "avg",
+              "taxi_type": "corporate"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "f13_p3",
+          "intent_id": "f13_week_avg_corporate_operating_count",
+          "question": "주 단위로 집계하면 법인택시 영업 횟수의 평균은 얼마인가요?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "week",
+              "metric": "operating_count",
+              "rollup": "avg",
+              "taxi_type": "corporate"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "h12_p0",
+          "intent_id": "h12_private_revenue_week_min",
+          "question": "주 단위로 집계한 개인택시 수입의 최소값은?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "week",
+              "metric": "revenue",
+              "rollup": "min",
+              "taxi_type": "private"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "h12_p1",
+          "intent_id": "h12_private_revenue_week_min",
+          "question": "개인택시 수입을 주 단위로 집계했을 때 최소값은?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "week",
+              "metric": "revenue",
+              "rollup": "min",
+              "taxi_type": "private"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "h12_p2",
+          "intent_id": "h12_private_revenue_week_min",
+          "question": "개인택시의 주 단위 수입 최소값은?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "week",
+              "metric": "revenue",
+              "rollup": "min",
+              "taxi_type": "private"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "h12_p3",
+          "intent_id": "h12_private_revenue_week_min",
+          "question": "최소 수입은 주 단위로 개인택시 기준 집계하면 얼마인가요?",
+          "before": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "bucket": "week",
+              "metric": "revenue",
+              "rollup": "min",
+              "taxi_type": "private"
+            }
+          },
+          "after": {
+            "outcome": "SUPPORTED_REJECTION",
+            "status": "AMBIGUOUS_INNER_AGGREGATION",
+            "final_tool_args": null
+          }
+        }
+      ],
+      "silent_wrong_after": [
+        {
+          "id": "h15_p1",
+          "question": "법인택시와 개인택시 중 수입이 더 많은 쪽은?",
+          "final_tool_args": {
+            "aggregation": "max",
+            "metric": "revenue",
+            "taxi_type": "all"
+          },
+          "expected_tool_args": {}
+        },
+        {
+          "id": "h15_p3",
+          "question": "개인택시와 법인택시의 수입을 비교하면 어느 쪽이 더 많은가요?",
+          "final_tool_args": {
+            "metric": "revenue"
+          },
+          "expected_tool_args": {}
+        },
+        {
+          "id": "f01_p3",
+          "question": "월 단위로 합산하면 택시 수입의 평균은 얼마인가요?",
+          "final_tool_args": {
+            "aggregation": "avg",
+            "metric": "revenue",
+            "bucket": "month",
+            "rollup": "sum"
+          },
+          "expected_tool_args": {
+            "metric": "revenue",
+            "bucket": "month",
+            "aggregation": "sum",
+            "rollup": "avg"
+          }
+        },
+        {
+          "id": "f14_p1",
+          "question": "택시 수입은 지난주와 지난달 중 어느 쪽이 더 많은가요?",
+          "final_tool_args": {
+            "date": "last_week",
+            "metric": "revenue"
+          },
+          "expected_tool_args": {}
+        },
+        {
+          "id": "f14_p2",
+          "question": "지난달과 지난주 중 택시 수입이 더 많은 쪽은?",
+          "final_tool_args": {
+            "aggregation": "sum",
+            "date": "last_month",
+            "metric": "revenue"
+          },
+          "expected_tool_args": {}
+        },
+        {
+          "id": "f15_p0",
+          "question": "대구의 시간대별 택시 통행량은?",
+          "final_tool_args": {
+            "scope": "@place:대구"
+          },
+          "expected_tool_args": {}
+        },
+        {
+          "id": "f15_p1",
+          "question": "시간대별 대구 택시 통행량은?",
+          "final_tool_args": {
+            "scope": "@place:대구",
+            "dimension": "h3"
+          },
+          "expected_tool_args": {}
+        },
+        {
+          "id": "f15_p2",
+          "question": "대구 택시 통행량을 시간대별로 알려줘",
+          "final_tool_args": {
+            "scope": "@place:대구"
+          },
+          "expected_tool_args": {}
+        }
+      ]
+    }
+  },
+  "runs_skipped": {
+    "20260925_195755_model_M1_census": "run_status completed=false, 무효 관측 11건으로 중단된 run. 무결성 검사에서 재생하지 않는다."
+  }
+}

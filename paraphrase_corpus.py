@@ -6,6 +6,7 @@
 """
 
 import functools
+from datetime import date
 import re
 import unicodedata
 from pathlib import Path
@@ -289,14 +290,37 @@ def validate(document, parents):
 # -- expected_tool_args 해석 ------------------------------------------------
 
 
+#: 평가에서 상대 기간을 날짜로 풀 기준일. 기간을 로컬에서 나누는 계획에만 쓰인다.
+#: 실행 날짜에 따라 기록이 달라지지 않게 고정한다.
+EVALUATION_REFERENCE_DATE = date(2026, 9, 25)
+
+
+#: 구간 안 집계가 없는 두 단계 golden이 받는 거부 code.
+INNER_UNSPECIFIED_REFUSAL = "AMBIGUOUS_INNER_AGGREGATION"
+
+
+def golden_inner_unspecified(grounding):
+    """golden이 구간을 나누면서 구간 안 집계를 적지 않았는가.
+
+    이 corpus들이 적힐 때는 aggregation을 생략해 Tool 기본값(avg)이 구간 안 집계가
+    되는 계획이 정답이었다. 지금 제품은 질문에 없는 구간 안 집계를 기본값으로
+    채우지 않고 AMBIGUOUS_INNER_AGGREGATION으로 거부한다. golden과 제품 계약이
+    충돌하는 intent이며, corpus 파일(sha256 고정)은 고치지 않는다. 판정은 golden
+    grounding의 구조로만 한다.
+    """
+    aggregation = grounding.aggregation
+    return aggregation.grouped and not aggregation.inner_specified
+
+
 def final_tool_call(plan):
     """측정 Tool 호출과 인자. scope 참조는 그것을 만든 장소 이름으로 푼다.
 
     기존 채점은 macro/operator/검증만 본다. 그래서 승하차가 뒤바뀌거나 factor
     값이 틀려도 정답으로 센다. 최종 Tool 인자를 보면 그것이 드러난다.
     """
-    execution = compile_plan(plan)
-    step = execution.steps[-1]
+    execution = compile_plan(plan, reference_date=EVALUATION_REFERENCE_DATE)
+    # 로컬 계산 단계는 Tool 호출이 아니다. 마지막 TIMS 호출을 본다.
+    step = execution.tool_steps[-1]
     producers = {output: item for item in plan.transformations for output in item.outputs}
     concepts = {concept.id: concept for concept in plan.concepts}
 

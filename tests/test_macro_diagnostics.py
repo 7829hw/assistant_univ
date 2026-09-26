@@ -175,7 +175,9 @@ class OrderIndependenceTest(_Case):
             reversed_order = [self._result_of(c, f) for c, f in grid]
         failures = sum(isinstance(outcome, tuple) for outcome in normal)
         self.assertGreater(failures, 400)
-        self.assertGreater(len(normal) - failures, 40)
+        # 조건을 받지 않는 Tool 조합은 UNCONSUMED_CONDITION으로 거부되므로 성공
+        # 수가 줄었다(예전 40개 초과 → 40개).
+        self.assertGreater(len(normal) - failures, 35)
         for (concepts, factors), a, b in zip(grid, normal, reversed_order):
             with self.subTest(concepts=[c["id"] + ":" + c["subtype"] for c in concepts],
                               factors=factors):

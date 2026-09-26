@@ -10,6 +10,7 @@ from typing import Any
 
 from agent_graph import extract_scopes
 
+from geoflow import analysis_ops
 from geoflow.compiler import topological_order
 from geoflow.errors import ValidationError
 from geoflow.operator_registry import (
@@ -36,6 +37,10 @@ class Rule:
     EXECUTABILITY = "G4_EXECUTABILITY"
     CONNECTIVITY = "G5_CONNECTIVITY"
     SCOPE_PROVENANCE = "G6_SCOPE_PROVENANCE"
+    #: 구간별 값이 의미대로 만들어지고 소비되는가. 논문의 G1~G5에 없는 이
+    #: 프로젝트의 규칙이다. G3(타입)만으로는 "주별 합계"와 "합계"가 같은
+    #: AMOUNT/revenue라서 두 단계 집계의 누락·뒤섞임을 볼 수 없다.
+    AGGREGATION_SEMANTICS = "G7_AGGREGATION_SEMANTICS"
 
 
 ALL_RULES = (
@@ -45,7 +50,12 @@ ALL_RULES = (
     Rule.EXECUTABILITY,
     Rule.CONNECTIVITY,
     Rule.SCOPE_PROVENANCE,
+    Rule.AGGREGATION_SEMANTICS,
 )
+
+#: 의미 graph에 둘 수 없는 Tool parameter. 두 단계 집계는 node와 변환으로
+#: 표현하고, 이 인자는 compiler의 lowering만 만든다.
+LOWERING_ONLY_PARAMS = frozenset({"bucket", "rollup"})
 
 #: 실행 계획이 만들어지는 node source. 나머지는 실행 전에 이미 값이 있어야 한다.
 _PRODUCED_SOURCES = frozenset({NodeSource.TOOL, NodeSource.DERIVED})
@@ -117,6 +127,7 @@ def validate(plan: GeoFlowPlan, *, available_tools=None, user_scopes=None):
     _check_connectivity(plan, nodes, producers, report)
     _check_role_ordering(plan, nodes, report)
     _check_scope_provenance(plan, nodes, report, user_scopes)
+    _check_aggregation_semantics(plan, nodes, producers, report)
     return report
 
 
@@ -169,6 +180,9 @@ def _check_executability(plan, report, available_tools):
     """G4. operator가 registry에 있고 실제 Tool도 사용 가능해야 한다."""
     known_tools = None if available_tools is None else set(available_tools)
     for transformation in plan.transformations:
+        if analysis_ops.is_analysis_operator(transformation.operator):
+            # 로컬 계산이다. 계약은 G7이 본다.
+            continue
         spec = get_operator(transformation.operator)
         if spec is None:
             report.add(
@@ -258,6 +272,8 @@ def _check_param_contract(transformation, spec, report):
 def _check_types(plan, nodes, report):
     """G3. operator port와 output의 semantic type이 맞아야 한다."""
     for transformation in plan.transformations:
+        if analysis_ops.is_analysis_operator(transformation.operator):
+            continue
         spec = get_operator(transformation.operator)
         if spec is None:
             continue
@@ -494,4 +510,119 @@ def _check_scope_provenance(plan, nodes, report, user_scopes):
                 "scope 값을 직접 생성할 수 없습니다.",
                 node=node.id,
                 scope=node.value,
+            )
+
+
+def _check_aggregation_semantics(plan, nodes, producers, report):
+    """G7. 구간별 값이 의미대로 만들어지고 합쳐지는지 본다.
+
+    1. 분석 연산자는 구간별 node 하나를 받아 같은 (concept, subtype)의 구간 없는
+       node를 만든다. 원시 값이나 다른 측정값에서 구간 값을 "재구성"하지 않는다.
+    2. 구간별 node는 구간 안 집계를 명시한 TIMS 변환이 만든다. 명시하지 않으면
+       Tool 기본값이 조용히 구간 안 집계가 된다.
+    3. 구간별 node는 분석 연산자 하나가 소비하며 최종 답이 될 수 없다.
+    4. bucket·rollup은 의미 graph의 Tool parameter로 둘 수 없다(lowering 전용).
+    """
+    consumers = {}
+    for transformation in plan.transformations:
+        for ref in transformation.inputs.values():
+            consumers.setdefault(ref.node_id, []).append(transformation)
+        compressed = sorted(set(transformation.params) & LOWERING_ONLY_PARAMS)
+        if compressed and not analysis_ops.is_analysis_operator(
+            transformation.operator
+        ):
+            report.add(
+                Rule.AGGREGATION_SEMANTICS,
+                f"{transformation.id}: {', '.join(compressed)}는 의미 graph의 "
+                "parameter가 아닙니다. 구간별 집계는 구간별 node와 분석 연산자로 "
+                "표현합니다.",
+                transformation=transformation.id,
+            )
+        if not analysis_ops.is_analysis_operator(transformation.operator):
+            continue
+        spec = analysis_ops.ANALYSIS_OPERATORS[transformation.operator]
+        if not spec.semantic:
+            report.add(
+                Rule.AGGREGATION_SEMANTICS,
+                f"{transformation.id}: {transformation.operator}는 lowering 전용 "
+                "연산자입니다.",
+                transformation=transformation.id,
+            )
+            continue
+        for problem in analysis_ops.param_problems(
+            transformation.operator, transformation.params,
+        ):
+            report.add(Rule.AGGREGATION_SEMANTICS,
+                       f"{transformation.id}: {problem}",
+                       transformation=transformation.id)
+        inputs = [nodes.get(ref.node_id) for ref in transformation.inputs.values()]
+        outputs = [nodes.get(item) for item in transformation.outputs]
+        if (
+            len(inputs) != 1 or len(outputs) != 1
+            or not analysis_ops.is_grouped(inputs[0])
+            or outputs[0] is None or analysis_ops.is_grouped(outputs[0])
+            or (inputs[0].concept, inputs[0].subtype)
+            != (outputs[0].concept, outputs[0].subtype)
+        ):
+            report.add(
+                Rule.AGGREGATION_SEMANTICS,
+                f"{transformation.id}: {transformation.operator}는 구간별 값 하나를 "
+                "받아 같은 개념의 값 하나를 만들어야 합니다.",
+                transformation=transformation.id,
+            )
+            continue
+        returns_group = (
+            outputs[0].attributes.get(analysis_ops.RETURNS)
+            == analysis_ops.RETURNS_GROUP
+        )
+        if returns_group != (transformation.operator == analysis_ops.SELECT_GROUP):
+            report.add(
+                Rule.AGGREGATION_SEMANTICS,
+                f"{transformation.id}: 구간을 고르는 연산만 구간을 답으로 "
+                "돌려줍니다.",
+                transformation=transformation.id,
+            )
+
+    by_id = {item.id: item for item in plan.transformations}
+    for node in plan.concepts:
+        if not analysis_ops.is_grouped(node):
+            continue
+        if node.id == plan.final_node:
+            report.add(
+                Rule.AGGREGATION_SEMANTICS,
+                f"{node.id}: 구간별 값은 최종 답이 될 수 없습니다. 구간별 목록을 "
+                "돌려주는 계산은 지원하지 않습니다.",
+                node=node.id,
+            )
+        bucket = node.attributes[analysis_ops.GROUP_BY].get("bucket")
+        if bucket not in ("week", "month"):
+            report.add(Rule.AGGREGATION_SEMANTICS,
+                       f"{node.id}: 구간 단위가 올바르지 않습니다: {bucket!r}",
+                       node=node.id)
+        users = consumers.get(node.id, [])
+        if len(users) != 1 or not analysis_ops.is_analysis_operator(
+            users[0].operator
+        ):
+            report.add(
+                Rule.AGGREGATION_SEMANTICS,
+                f"{node.id}: 구간별 값은 분석 연산자 하나가 소비해야 합니다.",
+                node=node.id,
+            )
+        producer = by_id.get(producers.get(node.id))
+        if producer is None:
+            continue
+        spec = get_operator(producer.operator)
+        if spec is None or not spec.accepts_reducer:
+            report.add(
+                Rule.AGGREGATION_SEMANTICS,
+                f"{producer.id}: {producer.operator}는 구간 안 집계를 받지 않아 "
+                "구간별 값을 만들 수 없습니다.",
+                transformation=producer.id,
+            )
+        elif producer.params.get(spec.REDUCER_PARAM) is None:
+            report.add(
+                Rule.AGGREGATION_SEMANTICS,
+                f"{producer.id}: 구간 안 집계가 지정되지 않았습니다. Tool 기본값을 "
+                "구간 안 집계로 쓰지 않습니다.",
+                transformation=producer.id,
             )

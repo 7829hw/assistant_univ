@@ -640,10 +640,11 @@ class PlanningRepairPipelineTest(unittest.TestCase):
     def test_factor_repair_succeeds_and_executes(self):
         pipeline, client = new_pipeline([
             payload([event("e", "operation"),
-                     measure("m", "AMOUNT", "revenue")], {"bucket": "week"}),
+                     measure("m", "AMOUNT", "revenue")],
+                    {"bucket": "week", "aggregation": "sum"}),
             factor_patch(rollup="avg"),
         ])
-        run = pipeline.run("주 단위로 집계한 택시 수입의 평균은?")
+        run = pipeline.run("주 단위로 합산한 택시 수입의 평균은?")
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
         self.assertEqual(
             run.repairs["factor_completion"],
@@ -659,7 +660,7 @@ class PlanningRepairPipelineTest(unittest.TestCase):
         ])
         run = pipeline.run(OD_QUESTION)
         self.assertEqual(run.validation["status"], "OK")
-        self.assertEqual(len(run.validation["checked_rules"]), 6)
+        self.assertEqual(len(run.validation["checked_rules"]), 7)
         self.assertTrue(run.execution_plan["steps"])
 
     def test_second_planning_failure_is_not_repaired_again(self):

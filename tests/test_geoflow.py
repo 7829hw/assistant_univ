@@ -1231,14 +1231,27 @@ class PipelineScenarioTest(unittest.TestCase):
         pipeline, _client = new_pipeline([grounding_payload([
             event_concept("operation", "operation"),
             measure_concept("revenue", "AMOUNT", "revenue"),
-        ], {"bucket": "week", "rollup": "avg"})])
-        run = pipeline.run("주 단위로 집계한 택시 수입의 평균은?")
+        ], {"bucket": "week", "aggregation": "sum", "rollup": "avg"})])
+        run = pipeline.run("주 단위로 합산한 택시 수입의 평균은?")
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
         arguments = run.hop_log[0]["arguments"]
         self.assertEqual(arguments["bucket"], "week")
+        self.assertEqual(arguments["aggregation"], "sum")
         self.assertEqual(arguments["rollup"], "avg")
-        self.assertIn("주 단위", run.final_answer)
+        self.assertIn("주별 합계의 평균", run.final_answer)
         self.assertIn("영업 수익", run.final_answer)
+
+    def test_bucket_without_inner_aggregation_is_refused(self):
+        """구간 안 집계가 없으면 Tool 기본값(avg)으로 실행하지 않고 되묻는다."""
+        pipeline, _client = new_pipeline([grounding_payload([
+            event_concept("operation", "operation"),
+            measure_concept("revenue", "AMOUNT", "revenue"),
+        ], {"bucket": "week", "rollup": "avg"})])
+        run = pipeline.run("주 단위로 집계한 택시 수입의 평균은?")
+        self.assertIsNone(run.final_answer)
+        self.assertEqual(run.hop_log, [])
+        self.assertEqual(run.error["code"], "AMBIGUOUS_INNER_AGGREGATION")
+        self.assertIn("합계, 평균", run.error["user_message"])
 
     def test_order_requires_dimension(self):
         pipeline, _client = new_pipeline([grounding_payload([

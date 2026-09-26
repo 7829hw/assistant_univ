@@ -87,17 +87,19 @@ class TimeExpressionGroundingTest(unittest.TestCase):
         grounding = ground(REVENUE,
                            {"bucket": "week", "rollup": "avg", "aggregation": "avg"},
                            "주 단위로 집계한 택시 수입의 평균은?")
-        params = self.composer.compose(grounding).transformations[-1].params
-        self.assertEqual(params["bucket"], "week")
-        self.assertEqual(params["rollup"], "avg")
+        plan = self.composer.compose(grounding)
+        groups = next(n for n in plan.concepts if n.attributes.get("group_by"))
+        self.assertEqual(groups.attributes["group_by"], {"bucket": "week"})
+        self.assertEqual(plan.transformations[-1].params, {"reducer": "avg"})
 
     def test_month_unit_is_a_bucket_with_a_rollup(self):
         grounding = ground(REVENUE,
                            {"bucket": "month", "rollup": "max", "aggregation": "max"},
                            "월 단위로 집계한 수입의 최대값은?")
-        params = self.composer.compose(grounding).transformations[-1].params
-        self.assertEqual(params["bucket"], "month")
-        self.assertEqual(params["rollup"], "max")
+        plan = self.composer.compose(grounding)
+        groups = next(n for n in plan.concepts if n.attributes.get("group_by"))
+        self.assertEqual(groups.attributes["group_by"], {"bucket": "month"})
+        self.assertEqual(plan.transformations[-1].params, {"reducer": "max"})
 
 
 class TimeExpressionMisplacementIsRejectedTest(unittest.TestCase):

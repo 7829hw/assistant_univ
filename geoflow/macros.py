@@ -158,6 +158,12 @@ class MacroNodeSpec:
     #: 구분이 place → scope 변환을 건너뛰지 않게 한다.
     inherit_from: str | None = None
     inherit_attributes: tuple[str, ...] = ()
+    #: 내부 node가 다른 node(보통 output port)와 같은 (concept, subtype)임을
+    #: 뜻한다. "주별 매출 합계"는 매출과 같은 AMOUNT/revenue이고, 다른 점은
+    #: 구간별로 나뉘어 있다는 것뿐이다. 새 concept나 subtype을 만들지 않는다.
+    same_type_as: str | None = None
+    #: 구간별 값을 담는 node인가. 구간 키는 grounding의 집계 spec이 정한다.
+    grouped: bool = False
 
     def resolve_subtype(self, factors):
         if self.subtype_by_factor is not None:
@@ -198,6 +204,13 @@ class MacroTemplate:
     #: 먼저 시도한다. 합성 결과가 실행마다 달라지지 않게 하기 위한 것이다.
     priority: int = 100
     source_path: str = ""
+    #: 이 조각이 표현하는 집계 형태. ``scalar``는 원시 값을 한 번 집계하고,
+    #: ``grouped``는 구간별 값을 만든 뒤 다시 합치거나 고른다. 목표를 만드는
+    #: 조각을 고를 때 grounding의 집계 spec과 맞아야 한다.
+    aggregation: str = "scalar"
+
+    def accepts_aggregation(self, spec):
+        return (self.aggregation == "grouped") == bool(spec.grouped)
 
     @property
     def required_input_ports(self):
@@ -361,7 +374,29 @@ def load_macro(path):
         transformations=transformations,
         priority=int(document.get("priority", 100)),
         source_path=str(path),
+        aggregation=_load_aggregation_mode(path, document, concepts),
     )
+
+
+AGGREGATION_MODES = ("scalar", "grouped")
+
+
+def _load_aggregation_mode(path, document, concepts):
+    mode = str(document.get("aggregation", "scalar"))
+    if mode not in AGGREGATION_MODES:
+        raise MacroError(
+            f"{path.name}: aggregation은 {', '.join(AGGREGATION_MODES)} 중 "
+            f"하나여야 합니다. (받은 값: {mode!r})",
+            context={"path": str(path)},
+        )
+    has_grouped = any(spec.grouped for spec in concepts.values())
+    if has_grouped != (mode == "grouped"):
+        raise MacroError(
+            f"{path.name}: aggregation={mode}인데 구간별 node가 "
+            f"{'없습니다' if mode == 'grouped' else '있습니다'}.",
+            context={"path": str(path)},
+        )
+    return mode
 
 
 def _check_node_subtypes(path, concepts, output_ports, internal_keys):
@@ -372,6 +407,14 @@ def _check_node_subtypes(path, concepts, output_ports, internal_keys):
         if port is None:
             # output port로 노출되지 않는 내부 node는 subtype을 스스로 정해야
             # 한다. grounding이 이름 붙일 수 없는 node이기 때문이다.
+            if spec.same_type_as is not None:
+                if spec.same_type_as not in output_ports:
+                    raise MacroError(
+                        f"{path.name}.concepts[{key}]: same_type_as는 output "
+                        f"port여야 합니다: {spec.same_type_as}",
+                        context={"path": str(path)},
+                    )
+                continue
             if key in internal_keys and not candidates:
                 raise MacroError(
                     f"{path.name}.concepts[{key}]: 내부 node는 subtype 또는 "
@@ -504,6 +547,10 @@ def _load_node(where, raw, input_ports):
         subtype_by_factor=rule,
         inherit_from=inherit_from,
         inherit_attributes=tuple(inherit.get("names") or ()),
+        same_type_as=(
+            None if raw.get("same_type_as") is None else str(raw["same_type_as"])
+        ),
+        grouped=bool(raw.get("grouped", False)),
     )
 
 

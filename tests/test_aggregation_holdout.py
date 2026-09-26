@@ -17,9 +17,11 @@ os.environ.setdefault("ASSISTANT_TOOL_PROVIDER", "mock")
 
 import aggregation_plan as AP
 import evaluate_prompt_ab as A
+import evaluate_planner as E
 import paraphrase_corpus as P
 from geoflow import validator as geoflow_validator
 from geoflow.composer import MacroComposer
+from geoflow.errors import CompositionError
 from geoflow.grounding import parse_grounding
 from geoflow.macros import MacroLibrary
 from tests.test_geoflow_composition import new_tool_executor
@@ -203,10 +205,19 @@ class HoldoutCorpusTest(unittest.TestCase):
             h2["factors"][AP.PLAN_KEY] = AP.semantic_to_plan(intent["aggregation"])
             calls = []
             for payload in (h0, AP.lower_payload(h2)):
-                plan = self.composer.compose(parse_grounding(payload, parent["question"]))
+                grounding = parse_grounding(payload, parent["question"])
+                if P.golden_inner_unspecified(grounding):
+                    # golden과 제품 계약의 충돌. P.golden_inner_unspecified 참고.
+                    with self.assertRaises(CompositionError) as caught:
+                        self.composer.compose(grounding)
+                    self.assertEqual(caught.exception.code,
+                                     P.INNER_UNSPECIFIED_REFUSAL)
+                    calls.append(P.INNER_UNSPECIFIED_REFUSAL)
+                    continue
+                plan = self.composer.compose(grounding)
                 self.assertTrue(geoflow_validator.validate(
                     plan, available_tools=self.executor.tool_names).ok)
-                self.assertEqual(list(plan.applied_macros), parent["expected_macros"])
+                self.assertEqual(E.corpus_labels(plan)[0], parent["expected_macros"])
                 tool, args = P.final_tool_call(plan)
                 self.assertEqual(P.tool_arg_mismatches(
                     intent["expected_tool_args"], args, P.tool_defaults(tool)), [], intent["intent"])

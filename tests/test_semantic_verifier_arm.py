@@ -102,10 +102,15 @@ class ContractTest(unittest.TestCase):
 
 class SignatureTest(unittest.TestCase):
     def test_two_stage_aggregation_and_defaults(self):
-        text = V.render(V.signature_of(plan_of([OP, REVENUE], {"bucket": "month", "rollup": "sum"})))
+        # 구간 안 집계가 없는 두 단계 계획은 이제 합성되지 않는다(Tool 기본값을 구간
+        # 안 집계로 쓰지 않는다). 그래서 구간 안 집계를 명시한 계획으로 렌더링을 본다.
+        plan = plan_of([OP, REVENUE], {"bucket": "month", "aggregation": "avg",
+                                       "rollup": "sum"})
+        text = V.render(V.signature_of(plan))
         self.assertIn("[bucket] 기간을 월 단위 구간으로 나눈다", text)
-        self.assertIn("[aggregation] 각 구간 안의 원시 값을 모으는 방식: 평균 "
-                      "(질문이 정하지 않아 쓰는 기본값)", text)
+        self.assertIn("[aggregation] 각 구간 안의 원시 값을 모으는 방식: 평균", text)
+        self.assertNotIn("[aggregation] 각 구간 안의 원시 값을 모으는 방식: 평균 "
+                         "(질문이 정하지 않아 쓰는 기본값)", text)
         self.assertIn("[rollup] 구간별 결과들을 최종 값 하나로 합치는 방식: 합계", text)
         self.assertIn("[taxi_type] 택시 유형: 전체 택시 (질문이 정하지 않아 쓰는 기본값)", text)
         text = V.render(V.signature_of(plan_of([OP, REVENUE], {"bucket": "week",
@@ -166,6 +171,7 @@ class SignatureTest(unittest.TestCase):
         import re
 
         text = V.render(V.signature_of(plan_of([OP, REVENUE], {"bucket": "week",
+                                                               "aggregation": "sum",
                                                                "rollup": "max"})))
         for name in re.findall(r"^\[(\w+)\]", text, flags=re.M):
             self.assertIn(name, V.FIELDS)

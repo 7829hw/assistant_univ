@@ -17,6 +17,7 @@ os.environ.setdefault("ASSISTANT_TOOL_PROVIDER", "mock")
 import evaluate_planner as E
 import paraphrase_corpus as P
 from geoflow.composer import MacroComposer
+from geoflow.errors import CompositionError
 from geoflow.grounding import parse_grounding
 from geoflow.macros import MacroLibrary
 from geoflow.operator_registry import get_operator
@@ -214,10 +215,16 @@ class _ContractChecks:
                 continue
             with self.subTest(intent=intent["intent"]):
                 grounding = parse_grounding(intent["golden"], parent["question"])
+                if P.golden_inner_unspecified(grounding):
+                    with self.assertRaises(CompositionError) as caught:
+                        self.composer.compose(grounding)
+                    self.assertEqual(caught.exception.code,
+                                     P.INNER_UNSPECIFIED_REFUSAL)
+                    continue
                 plan = self.composer.compose(grounding)
-                self.assertEqual(list(plan.applied_macros), parent["expected_macros"])
-                self.assertEqual([t.operator for t in plan.transformations],
-                                 parent["expected_operators"])
+                macros, operators = E.corpus_labels(plan)
+                self.assertEqual(macros, parent["expected_macros"])
+                self.assertEqual(operators, parent["expected_operators"])
                 tool, args = P.final_tool_call(plan)
                 self.assertEqual(tool, self._final_tool(intent))
                 self.assertEqual(P.tool_arg_mismatches(intent["expected_tool_args"], args), [])
@@ -231,6 +238,12 @@ class _ContractChecks:
                                                                ensure_ascii=False)))
             with self.subTest(intent=item["intent_id"]):
                 record = E.evaluate_once(planner, self.composer, item)
+                golden = parse_grounding(intent["golden"], item["question"]) \
+                    if "concepts" in intent["golden"] else None
+                if golden is not None and P.golden_inner_unspecified(golden):
+                    self.assertEqual(record["status"], P.INNER_UNSPECIFIED_REFUSAL)
+                    self.assertFalse(record["correct"])
+                    continue
                 self.assertTrue(record["correct"], record["status"])
 
 

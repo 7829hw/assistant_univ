@@ -59,7 +59,7 @@ import aggregation_refinement
 import semantic_verifier
 import evaluate_planner as E
 import paraphrase_corpus
-from paraphrase_corpus import final_tool_call, tool_arg_mismatches, tool_defaults
+from paraphrase_corpus import EVALUATION_REFERENCE_DATE, final_tool_call, tool_arg_mismatches, tool_defaults
 from geoflow import factors as F
 from geoflow import planner as planner_module
 from geoflow.compiler import compile_plan
@@ -918,7 +918,9 @@ def observe(item, *, arm, variant, repetition, position, pair_index,
 
 
 def planned_tool_calls(plan):
-    return len(compile_plan(plan).steps) if plan is not None else 0
+    if plan is None:
+        return 0
+    return len(compile_plan(plan, reference_date=EVALUATION_REFERENCE_DATE).tool_steps)
 
 
 def verify_observation(record, plan, variant, client, item):

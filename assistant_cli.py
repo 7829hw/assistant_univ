@@ -465,11 +465,19 @@ def _make_graph_event_handler():
                     print(f"     {item['message']}")
         elif event == "geoflow_repair":
             failure = payload["failure"]
-            print(
-                f"\n[Repair {payload['attempt']}] "
-                f"concept={failure['concept']} name={failure['name']} "
-                f"조회 실패 → Planner에 값 수정 요청"
-            )
+            if "concept" in failure:
+                print(
+                    f"\n[Repair {payload['attempt']}] "
+                    f"concept={failure['concept']} name={failure['name']} "
+                    f"조회 실패 → Planner에 값 수정 요청"
+                )
+            else:
+                # 계획 단계 재질의(조건 보완 등). payload 모양이 장소 조회와 다르다.
+                print(
+                    f"\n[Repair {payload['attempt']}] "
+                    f"{failure.get('stage')}/{failure.get('code')} "
+                    f"({failure.get('kind')}) → Planner에 수정 요청"
+                )
         elif event == "geoflow_execution_plan":
             steps = payload["execution_plan"]["steps"]
             names = " → ".join(step["tool_name"] for step in steps)
@@ -691,8 +699,19 @@ def _geoflow_report_lines(geoflow):
     if execution_plan:
         lines.extend(["### Tool Steps", ""])
         for index, step in enumerate(execution_plan["steps"], start=1):
+            covers = ", ".join(step.get("covers") or [])
+            group = (step.get("group") or {}).get("label")
             lines.append(
                 f"{index}. `{step['operator']}` → `{step['tool_name']}`"
+                + (f" (의미 단계: {covers})" if covers else "")
+                + (f" [구간 {group}]" if group else "")
+            )
+        for node_id, reason in (execution_plan.get("unobserved") or {}).items():
+            lines.append(f"- `{node_id}`: {reason}")
+        for step_id, period in (execution_plan.get("periods") or {}).items():
+            lines.append(
+                f"- `{step_id}` 기간 {period['period']} → {period['resolved']} "
+                f"({period['bucket']} {len(period['groups'])}개, {period['boundary']})"
             )
         lines.append("")
 

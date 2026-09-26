@@ -1,0 +1,72 @@
+# geoflow_macros/event_to_grouped_measure.yaml
+# EVENT (+ 선택적 공간 조건) -> 구간별 값 -> AMOUNT | PROPORTION.
+#
+# 논문 부록 E의 FILTER-AGGREGATE-MEASURE에 해당한다. 사건을 기간·범위·택시 유형
+# 조건으로 한정하고(filter), 시간 구간마다 집계한 뒤(aggregate), 구간별 값들을
+# 다시 합치거나 그중 한 구간을 고른다(measure).
+#
+#   "지난달 주별 매출 합계의 평균"
+#       operation --measure_groups(구간 안 합계)--> groups(주별 합계)
+#                 --combine_groups(평균)--> measure
+#
+# EVENT_TO_MEASURE와의 차이는 중간 개념 groups 하나다. groups는 새 concept가
+# 아니라 measure와 같은 (concept, subtype)이며, 구간별로 나뉘어 있다는 점만
+# 다르다(grouped). 역할은 SUPPORT다. 논문 부록 B.2의 SUPPORT는 "파생 개념을
+# 계산하는 데 쓰이는 기반"이고, 구간별 값은 최종 측정값을 계산하는 기반이다.
+#
+# 어떤 Tool을 부를지, 두 변환을 호출 하나로 합칠 수 있는지는 이 조각이 정하지
+# 않는다. measure_groups는 operator mapping이 TIMS operator를 고르고,
+# combine_groups는 집계 spec이 REDUCE_GROUPS(값) 또는 SELECT_GROUP(구간)을
+# 정한다. 호출로 내리는 일은 compiler가 한다.
+
+name: EVENT_TO_GROUPED_MEASURE
+description: 사건을 조건으로 한정해 시간 구간별로 집계한 뒤, 구간별 값을 다시 합치거나 한 구간을 고른다.
+priority: 10
+aggregation: grouped
+
+inputs:
+  event:
+    concept: EVENT
+    subtypes: [passage, trip, drive, operation]
+    roles: [SUPPORT]
+  area:
+    concept: LOCATION
+    subtypes: [scope, vicinity_scope]
+    roles: [COND]
+    required: false
+    attributes:
+      od_role: null
+
+outputs:
+  measure:
+    types:
+      - concept: AMOUNT
+        subtypes:
+          - speed
+          - rpm
+          - passage_count
+          - trip_count
+          - fare
+          - revenue
+          - operating_count
+          - hours
+      - concept: PROPORTION
+        subtypes: [vacant_ratio, operating_ratio]
+
+concepts:
+  - key: groups
+    role: SUPPORT
+    source: tool
+    same_type_as: measure
+    grouped: true
+  - key: measure
+    role: MEASURE
+    source: derived
+
+transformations:
+  - id: measure_groups
+    inputs: [event, area]
+    output: groups
+  - id: combine_groups
+    inputs: [groups]
+    output: measure

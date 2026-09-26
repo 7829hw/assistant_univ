@@ -19,6 +19,7 @@
 
 import time
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any
 
 from agent_graph import extract_scopes
@@ -123,10 +124,13 @@ class GeoFlowRun:
 class GeoFlowPipeline:
     """planner/composer/validator/compiler/executor를 한 경로로 묶는다."""
 
-    def __init__(self, *, planner, composer, tool_executor):
+    def __init__(self, *, planner, composer, tool_executor, clock=None):
         self.planner = planner
         self.composer = composer
         self.tool_executor = tool_executor
+        #: 상대 기간을 날짜로 풀 기준일. 기간을 로컬에서 구간으로 나눌 때만 쓴다.
+        #: 테스트는 고정 날짜를 넣는다.
+        self.clock = clock or date.today
 
     @classmethod
     def create(cls, *, client, tool_executor, macro_directory=None,
@@ -260,6 +264,7 @@ class GeoFlowPipeline:
                 return self._finish(
                     run, plan, result, started_at,
                     event_handler=event_handler,
+                    execution_plan=execution_plan,
                 )
 
             if result.status == STATUS_CANCELLED:
@@ -340,13 +345,13 @@ class GeoFlowPipeline:
         report.raise_if_failed()
 
         run.stage = Stage.COMPILE
-        execution_plan = compile_plan(plan)
+        execution_plan = compile_plan(plan, reference_date=self.clock())
         run.execution_plan = execution_plan.to_dict()
         emit("geoflow_execution_plan", execution_plan=run.execution_plan)
         return plan, execution_plan
 
     def _finish(self, run, plan, result, started_at,
-                *, event_handler=None):
+                *, event_handler=None, execution_plan=None):
         # 결과 scope를 장소명으로 바꾼다. 실패해도 답변 생성은 계속한다.
         labels, label_trace = resolve_scope_labels(
             result.final_value,
@@ -361,7 +366,9 @@ class GeoFlowPipeline:
         try:
             run.stage = Stage.ANSWER
             # 답변 표현은 최종 concept에서 정해진다(geoflow/answer.py).
-            run.final_answer = format_answer(plan, result, labels=labels)
+            run.final_answer = format_answer(
+                plan, result, labels=labels, execution_plan=execution_plan,
+            )
         except GeoFlowError as error:
             return _fail(run, error, started_at)
         run.stage = Stage.DONE

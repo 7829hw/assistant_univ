@@ -102,6 +102,11 @@ class OperatorOutput:
         return (concept, subtype) in self.allowed
 
 
+#: aggregation을 생략했을 때 TIMS가 쓰는 집계(schemas/_common.yaml pt_aggregation
+#: default). 한 단계 집계에서 질문에 집계어가 없으면 이 값이 적용된다는 사실을
+#: 답변이 밝힌다. 구간 안 집계로는 쓰지 않는다(composer, G7).
+TOOL_DEFAULT_REDUCER = "avg"
+
 #: 값은 합법이지만 특정 input이 채워져야만 Tool이 받는 경우.
 PARAM_VALUE_REQUIRES_INPUT = "PARAM_VALUE_REQUIRES_INPUT"
 
@@ -164,6 +169,23 @@ class ParamValueRequiresInput:
 
 
 @dataclass(frozen=True)
+class BucketRollup:
+    """Tool이 "구간 안 집계 → 구간별 값의 집계"를 한 호출로 수행한다는 선언.
+
+    근거는 schema다. get_operation_metrics의 bucket은 "1차 집계 시간 구간(지정 시
+    rollup 필수)", rollup은 "bucket별 값들을 단일 값으로 합치는 2차 집계"이고,
+    구간 안 집계는 aggregation이 정한다. mock도 같은 순서로 계산한다.
+
+    rollup은 스칼라 하나만 돌려주므로 "어느 구간인가"(SELECT_GROUP)는 이 선언으로
+    수행할 수 없다. 구간 경계(주의 시작 요일, 부분 구간)는 schema에 없다.
+    """
+
+    bucket_param: str = "bucket"
+    rollup_param: str = "rollup"
+    inner_param: str = "aggregation"
+
+
+@dataclass(frozen=True)
 class OperatorSpec:
     """semantic operator 하나의 전체 계약.
 
@@ -185,6 +207,24 @@ class OperatorSpec:
     #: param 값과 input binding 사이의 계약. factor끼리의 공기 제약과 달리
     #: 특정 Tool의 성질이므로 factor 어휘가 아니라 operator가 갖는다.
     input_constraints: tuple[ParamValueRequiresInput, ...] = ()
+    #: 두 단계 집계를 한 호출로 받는다는 선언. 없으면 compiler가 기간을 나눠
+    #: 구간마다 호출한 뒤 로컬에서 합친다.
+    bucket_rollup: BucketRollup | None = None
+    #: aggregation을 받지 않지만 결과 자체가 정해진 집계인 Tool. 개수 Tool은 사건을
+    #: 센 값(=합)을 돌려준다. 질문의 집계가 이 값과 같으면 조건을 잃지 않은 것이다.
+    inherent_reducer: str | None = None
+
+    #: 원시 값의 집계 방식을 받는 parameter와 기간 parameter.
+    REDUCER_PARAM = "aggregation"
+    PERIOD_PARAM = "date"
+
+    @property
+    def accepts_reducer(self):
+        return self.REDUCER_PARAM in self.params
+
+    @property
+    def accepts_period(self):
+        return self.PERIOD_PARAM in self.params
 
     def allowed_values(self, param):
         return self.param_enums.get(param)
@@ -342,6 +382,7 @@ _SPECS: tuple[OperatorSpec, ...] = (
         output=OperatorOutput(
             allowed=frozenset({(CoreConcept.AMOUNT, Subtype.PASSAGE_COUNT)}),
         ),
+        inherent_reducer="sum",
         params=frozenset({
             "date", "time", "taxi_type", "taxi_status",
             "dimension", "order", "limit",
@@ -379,6 +420,7 @@ _SPECS: tuple[OperatorSpec, ...] = (
         output=OperatorOutput(
             allowed=frozenset({(CoreConcept.AMOUNT, Subtype.TRIP_COUNT)}),
         ),
+        inherent_reducer="sum",
         params=frozenset({"date", "time", "dimension", "order", "limit"}),
         # vendor schema get_trip_count.dimension. 공간 기준만 받고 dayofweek는 없다.
         # scope_pickup/scope_dropoff 유무에 따른 조건은 schema에 없다.
@@ -458,6 +500,7 @@ _SPECS: tuple[OperatorSpec, ...] = (
             "bucket": frozenset({"week", "month"}),
             "rollup": frozenset({"max", "min", "sum", "avg", "med"}),
         },
+        bucket_rollup=BucketRollup(),
         # vendor schema: "scope가 설정되지 않은 경우는 sido, dayofweek만 가능함".
         # mock도 같은 규칙으로 거절한다. 전에는 enum을 {dayofweek, sido}로
         # 좁혀 이 규칙을 대신했지만, 그러면 지역이 있는 합법한 계획도 막혔다.

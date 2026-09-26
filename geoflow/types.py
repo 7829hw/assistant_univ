@@ -259,18 +259,42 @@ class GeoFlowPlan:
         }
 
 
+#: ExecutionPlan step 종류. tool은 TIMS 호출, local은 로컬 계산이다.
+STEP_TOOL = "tool"
+STEP_LOCAL = "local"
+
+
 @dataclass
 class ToolStep:
-    """실제 Tool 호출 하나. ``arguments``는 literal 또는 ValueRef를 갖는다."""
+    """실행 단계 하나. ``arguments``는 literal 또는 ValueRef를 갖는다.
+
+    ``kind``가 ``local``이면 Tool을 부르지 않고 ``inputs``(state key)를 읽어
+    로컬 분석 연산을 수행한다. ``tool_name``은 ``local:<operator>``로 둔다.
+    기록과 CLI가 문자열을 기대하기 때문이다.
+
+    ``covers``는 이 단계가 수행하는 의미 graph(GeoFlowPlan)의 transformation
+    id다. 여러 의미 단계를 호출 하나로 합쳤다면 여럿이 된다.
+    ``argument_sources``는 인자마다 그 값을 정한 의미 단계와 속성을 적는다.
+    """
 
     id: str
     operator: str
     tool_name: str
     arguments: dict[str, Any] = field(default_factory=dict)
     output_bindings: dict[str, str] = field(default_factory=dict)
+    kind: str = STEP_TOOL
+    covers: list[str] = field(default_factory=list)
+    argument_sources: dict[str, str] = field(default_factory=dict)
+    inputs: list[str] = field(default_factory=list)
+    #: 기간을 구간으로 나눠 부른 호출이면 그 구간.
+    group: dict[str, Any] | None = None
+
+    @property
+    def is_local(self):
+        return self.kind == STEP_LOCAL
 
     def to_dict(self):
-        return {
+        data = {
             "id": self.id,
             "operator": self.operator,
             "tool_name": self.tool_name,
@@ -279,7 +303,15 @@ class ToolStep:
                 for name, value in self.arguments.items()
             },
             "output_bindings": dict(self.output_bindings),
+            "kind": self.kind,
+            "covers": list(self.covers),
+            "argument_sources": dict(self.argument_sources),
         }
+        if self.inputs:
+            data["inputs"] = list(self.inputs)
+        if self.group is not None:
+            data["group"] = dict(self.group)
+        return data
 
 
 @dataclass
@@ -290,12 +322,28 @@ class ExecutionPlan:
     steps: list[ToolStep] = field(default_factory=list)
     final_node: str = ""
     seed_state: dict[str, Any] = field(default_factory=dict)
+    #: 의미 graph transformation id → 그것을 수행하는 step id 목록 (G ↔ G′).
+    semantic_map: dict[str, list[str]] = field(default_factory=dict)
+    #: 호출 안에서만 계산되어 실행 state에 나타나지 않는 중간 node와 그 이유.
+    #: 예: TIMS bucket/rollup으로 합친 구간별 값.
+    unobserved: dict[str, str] = field(default_factory=dict)
+    #: 기간을 로컬에서 구간으로 나눴다면 그 해석. 답변이 적용 기간을 밝힌다.
+    periods: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def tool_steps(self):
+        return [step for step in self.steps if not step.is_local]
 
     def to_dict(self):
         return {
             "template": self.template,
             "final_node": self.final_node,
             "steps": [step.to_dict() for step in self.steps],
+            "semantic_map": {
+                key: list(value) for key, value in self.semantic_map.items()
+            },
+            "unobserved": dict(self.unobserved),
+            "periods": dict(self.periods),
         }
 
 

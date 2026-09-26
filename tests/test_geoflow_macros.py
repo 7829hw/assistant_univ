@@ -28,6 +28,7 @@ from geoflow.types import (  # noqa: E402
 )
 
 EXPECTED_MACROS = (
+    "EVENT_TO_GROUPED_MEASURE",
     "EVENT_TO_MEASURE",
     "OD_EVENT_TO_MEASURE",
     "PLACE_TO_SCOPE",
@@ -296,7 +297,8 @@ class PortCompatibilityTest(unittest.TestCase):
         )
         self.assertEqual(
             sorted(item.name for item in first),
-            ["EVENT_TO_MEASURE", "OD_EVENT_TO_MEASURE"],
+            ["EVENT_TO_GROUPED_MEASURE", "EVENT_TO_MEASURE",
+             "OD_EVENT_TO_MEASURE"],
         )
 
     def test_unrelated_type_has_no_producer(self):

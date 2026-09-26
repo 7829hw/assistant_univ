@@ -33,6 +33,7 @@ from typing import Any
 
 from agent_graph import extract_scopes
 
+from geoflow import aggregation as aggregation_semantics
 from geoflow.errors import PlannerError
 from geoflow.factors import FACTOR_SPECS, STRUCTURAL_FACTORS, FactorSpec
 from geoflow.operator_mapping import measure_types
@@ -107,6 +108,17 @@ class Grounding:
     question: str
     concepts: list[GroundedConcept] = field(default_factory=list)
     factors: dict[str, Any] = field(default_factory=dict)
+    #: 구조화 표기(``factors.aggregation_plan``)로 받은 집계. 없으면 flat factor가
+    #: 집계의 유일한 출처다. 재질의 patch가 flat factor를 바꿔도 spec이 어긋나지
+    #: 않도록 flat 쪽은 저장하지 않고 매번 유도한다.
+    aggregation_plan: aggregation_semantics.AggregationSpec | None = None
+
+    @property
+    def aggregation(self):
+        """질문이 요구하는 집계 단계(``AggregationSpec``)."""
+        if self.aggregation_plan is not None:
+            return self.aggregation_plan
+        return aggregation_semantics.from_flat(self.factors)
 
     @property
     def measure(self):
@@ -131,11 +143,19 @@ class Grounding:
         return {
             "concepts": [item.to_dict() for item in self.concepts],
             "factors": dict(self.factors),
+            "aggregation": self.aggregation.to_dict(),
         }
 
 
-def parse_grounding(payload, question, *, raw_text=""):
-    """Planner 출력 payload를 검증된 ``Grounding``으로 바꾼다."""
+def parse_grounding(payload, question, *, raw_text="",
+                    structured_aggregation=False):
+    """Planner 출력 payload를 검증된 ``Grounding``으로 바꾼다.
+
+    ``structured_aggregation``이 참이면 ``factors.aggregation_plan``(구조화 집계
+    표기)을 읽는다. production planner는 이 표기를 안내하지 않고 읽지도 않는다
+    (H0 계약. 모르는 factor로 거부된다). 정답 grounding을 직접 넣는 테스트와 이후
+    측정할 grounding arm의 입구다.
+    """
     if not isinstance(payload, dict):
         raise PlannerError(
             f"grounding 최상위는 object여야 합니다. "
@@ -165,11 +185,15 @@ def parse_grounding(payload, question, *, raw_text=""):
         seen_ids.add(concept.id)
         concepts.append(concept)
 
-    factors = _parse_factors(
-        {**hoisted, **(payload.get("factors") or {})}, raw_text,
-    )
+    raw_factors, plan = payload.get("factors") or {}, None
+    if structured_aggregation:
+        raw_factors, plan = aggregation_semantics.split_plan(
+            raw_factors, raw_text=raw_text,
+        )
+    factors = _parse_factors({**hoisted, **(raw_factors or {})}, raw_text)
     grounding = Grounding(
         question=question, concepts=concepts, factors=factors,
+        aggregation_plan=plan,
     )
     _check_measure(grounding, raw_text)
     return grounding

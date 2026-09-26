@@ -28,10 +28,13 @@ Grounding 결과(개념 + factor)를 입력으로 받아, macro 조각을 input/
 import json
 from dataclasses import dataclass, field
 
-from geoflow import operator_mapping
+from geoflow import analysis_ops, operator_mapping
+from geoflow.aggregation import FLAT_KEYS
 from geoflow.errors import CompositionError
 from geoflow.factors import STRUCTURAL_FACTORS, validate_factors
 from geoflow.macros import MacroLibrary
+from geoflow.operator_mapping import OperatorBinding
+from geoflow.operator_registry import get_operator
 from geoflow.types import (
     GEOFLOW_VERSION,
     ConceptNode,
@@ -74,10 +77,28 @@ DIAGNOSTIC_PRECEDENCE = (
     "PARAM_VALUE_REQUIRES_INPUT",
     "INVALID_PARAM_VALUE",
     "MISSING_COMPANION_PARAM",
+    "AMBIGUOUS_INNER_AGGREGATION",
+    "UNSUPPORTED_GROUPED_MEASURE",
     "NO_OPERATOR",
+    "UNCONSUMED_CONDITION",
     "UNUSED_CONCEPT",
 )
 _PRECEDENCE_RANK = {code: rank for rank, code in enumerate(DIAGNOSTIC_PRECEDENCE)}
+
+#: 값이 조건을 걸지 않는 factor. 받는 Tool이 없어도 계산이 달라지지 않는다.
+NON_RESTRICTIVE_FACTORS = {"taxi_type": "all", "taxi_status": "all"}
+
+#: 구간별 집계와 함께 쓸 수 없는 factor. 공간 그룹과 시간 구간을 함께 나누는
+#: 계산은 schema가 정하지 않았고 mock은 거절한다. 지원된다고 가정하지 않는다.
+_GROUPED_EXCLUSIVE = ("dimension", "order", "limit")
+
+#: 사용자에게 보일 조건 이름.
+_FACTOR_LABELS = {
+    "date": "기간", "time": "시간대", "taxi_type": "택시 유형",
+    "taxi_status": "운행 상태", "dimension": "그룹 기준", "order": "정렬",
+    "limit": "개수", "aggregation": "집계 방식", "bucket": "구간",
+    "rollup": "구간별 값의 집계", "select": "구간 선택",
+}
 
 
 @dataclass(frozen=True)
@@ -201,6 +222,8 @@ class MacroComposer:
         # 그 조건을 소비할지 몰라도 판정할 수 있고, 계획을 만들기 전이라
         # 빠진 조건을 다시 물어 채울 수 있다.
         validate_factors(grounding.factors)
+        aggregation = grounding.aggregation
+        _check_aggregation_combination(grounding, aggregation)
         goal = grounding.measure
         if goal is None:
             raise CompositionError(
@@ -236,7 +259,26 @@ class MacroComposer:
         # 반영하지 못하는 합성은 성공으로 보지 않고 다음 후보로 넘어간다.
         # "A에서 B로"가 붙은 질문이 출발/도착을 조용히 버린 계획으로 끝나지
         # 않게 하는 장치다.
-        for macro in self.library.producing(goal.concept, goal.subtype):
+        # 집계 형태(한 단계 / 구간별)가 맞는 조각만 목표 후보가 된다. 구간을 나눈
+        # 질문을 한 단계 조각으로 합성하면 두 단계가 Tool 인자로 압축된다.
+        producers = self.library.producing(goal.concept, goal.subtype)
+        candidates = [
+            macro for macro in producers
+            if macro.accepts_aggregation(aggregation)
+        ]
+        if producers and not candidates:
+            raise CompositionError(
+                "이 측정값은 요청한 집계 형태를 표현할 조각이 없습니다: "
+                f"{goal.concept.value}/{goal.subtype}, "
+                f"집계={aggregation.to_dict()}",
+                user_message="이 측정값은 주·월 구간별 계산을 지원하지 않습니다.",
+                code="UNSUPPORTED_AGGREGATION",
+                context={
+                    "goal": f"{goal.concept.value}/{goal.subtype}",
+                    "aggregation": aggregation.to_dict(),
+                },
+            )
+        for macro in candidates:
             state = build.snapshot()
             try:
                 applied = self._apply(
@@ -249,6 +291,13 @@ class MacroComposer:
                 continue
             if applied:
                 unused = self._unused_conditions(grounding, build, goal_node)
+                unconsumed = self._unconsumed_factors(grounding, build)
+                if unconsumed and not unused:
+                    build.note_failure(macro.name, _unconsumed_error(
+                        grounding, unconsumed,
+                    ))
+                    build.restore(state)
+                    continue
                 if not unused:
                     return self._build_plan(grounding, build, goal_node)
                 build.note_failure(macro.name, CompositionError(
@@ -310,27 +359,54 @@ class MacroComposer:
         port_name = macro.output_port_for(
             output_node.concept, output_node.subtype,
         )
+        if port_name is None:
+            return False
+        return self._apply_key(
+            macro, port_name, output_node, grounding, build,
+            depth=depth, stack=stack, demand=demand, root=output_node,
+        )
+
+    def _apply_key(self, macro, key, output_node, grounding, build, *, depth,
+                   stack, demand, root):
+        """macro 안에서 ``key``를 만드는 변환 하나를 적용한다.
+
+        변환의 입력이 같은 macro의 다른 변환이 만드는 내부 node라면 그 변환을
+        먼저 적용한다. FILTER-AGGREGATE-MEASURE처럼 조각 하나가 여러 변환의
+        사슬인 경우를 위한 경로다.
+        """
         spec = next(
-            (
-                item for item in macro.transformations
-                if item.output == port_name
-            ),
+            (item for item in macro.transformations if item.output == key),
             None,
         )
         if spec is None:
             return False
-        inherited = _inherited_demand(macro, port_name, demand)
+        node_spec = macro.concepts.get(key)
+        if node_spec is not None and output_node.source in PRODUCED_SOURCES:
+            # 생성 node의 출처는 macro 정의가 정한다(Tool 결과인지 로컬 계산인지).
+            output_node.source = node_spec.source
+        inherited = _inherited_demand(macro, key, demand)
 
         bound = []
-        for key in spec.inputs:
-            port = macro.input_ports.get(key)
+        for input_key in spec.inputs:
+            port = macro.input_ports.get(input_key)
             if port is None:
-                # macro 내부 node. 같은 방식으로 다시 만든다.
-                node_spec = macro.concepts.get(key)
+                node_spec = macro.concepts.get(input_key)
                 if node_spec is None:
                     return False
+                if _produced_within(macro, input_key):
+                    internal = build.add_node(_internal_node(
+                        node_spec, input_key, root, grounding, build,
+                    ))
+                    if not self._apply_key(
+                        macro, input_key, internal, grounding, build,
+                        depth=depth, stack=stack, demand={}, root=root,
+                    ):
+                        return False
+                    bound.append(internal)
+                    continue
+                # macro 내부 node. 같은 방식으로 다시 만든다.
                 internal = build.add_node(ConceptNode(
-                    id=build.unique_id(f"{output_node.id}_{key}"),
+                    id=build.unique_id(f"{output_node.id}_{input_key}"),
                     concept=output_node.concept,
                     subtype=node_spec.resolve_subtype(grounding.factors),
                     role=node_spec.role,
@@ -347,7 +423,7 @@ class MacroComposer:
             node = self._resolve_port(
                 macro, port, output_node, grounding, build,
                 depth=depth, stack=stack,
-                demand={**port.required_attributes, **inherited.get(key, {})},
+                demand={**port.required_attributes, **inherited.get(input_key, {})},
             )
             if node is None:
                 if port.required:
@@ -355,18 +431,7 @@ class MacroComposer:
                 continue
             bound.append(node)
 
-        binding = operator_mapping.resolve(
-            inputs=bound,
-            output=output_node,
-            factors=grounding.factors,
-            where=f"{macro.name}.{spec.id}",
-            # 선택에는 쓰지 않는다. 실패했을 때 필수 input이 graph에 정말
-            # 없는지 판정하는 데만 쓴다.
-            available_nodes=[
-                node for node in build.nodes.values()
-                if node.id != output_node.id and _bindable(node)
-            ],
-        )
+        binding = self._bind(macro, spec, bound, output_node, grounding, build)
         build.transformations.append(Transformation(
             id=build.unique_transformation_id(spec.id),
             operator=binding.operator,
@@ -375,8 +440,82 @@ class MacroComposer:
             params=dict(binding.params),
         ))
         build.used_factors.update(binding.used_factors)
-        build.applied.append(macro.name)
+        if key in macro.output_ports:
+            # 내부 변환은 같은 조각의 일부이므로 조각 적용은 한 번으로 센다.
+            build.applied.append(macro.name)
         return True
+
+    def _bind(self, macro, spec, bound, output_node, grounding, build):
+        """변환 하나의 operator와 parameter를 정한다.
+
+        구간별 값을 받아 구간이 없는 값을 만드는 변환은 로컬 분석 연산자다.
+        무엇을 할지는 집계 spec이 정한다. 나머지는 operator mapping이 TIMS
+        operator를 고른다.
+        """
+        where = f"{macro.name}.{spec.id}"
+        aggregation = grounding.aggregation
+        if (
+            len(bound) == 1 and analysis_ops.is_grouped(bound[0])
+            and not analysis_ops.is_grouped(output_node)
+        ):
+            return _bind_group_combination(where, bound[0], output_node,
+                                           aggregation)
+
+        binding = operator_mapping.resolve(
+            inputs=bound,
+            output=output_node,
+            factors=_tool_factors(grounding),
+            where=where,
+            # 선택에는 쓰지 않는다. 실패했을 때 필수 input이 graph에 정말
+            # 없는지 판정하는 데만 쓴다.
+            available_nodes=[
+                node for node in build.nodes.values()
+                if node.id != output_node.id and _bindable(node)
+            ],
+        )
+        operator = get_operator(binding.operator)
+        if not analysis_ops.is_grouped(output_node):
+            if (
+                aggregation.inner_specified
+                and operator.inherent_reducer == aggregation.inner
+            ):
+                # "차량 대수의 합" 같은 표현. 개수 Tool의 결과가 곧 그 집계다.
+                return OperatorBinding(
+                    operator=binding.operator,
+                    inputs=dict(binding.inputs),
+                    params=dict(binding.params),
+                    used_factors=binding.used_factors | {"aggregation"},
+                )
+            return binding
+        if not operator.accepts_reducer:
+            raise CompositionError(
+                f"{where}: {binding.operator}는 구간 안 집계 방식을 받지 않아 "
+                "구간별 값을 정할 수 없습니다.",
+                user_message="이 측정값은 주·월 구간별 계산을 지원하지 않습니다.",
+                code="UNSUPPORTED_GROUPED_MEASURE",
+                context={"operator": binding.operator,
+                         "aggregation": aggregation.to_dict()},
+            )
+        if not aggregation.inner_specified:
+            # Tool 기본값(avg)을 조용히 쓰지 않는다. "주별 매출"은 주별 합계일
+            # 수도, 일평균일 수도 있다. 다시 물어 채우는 것도 하지 않는다. 국소
+            # 재질의(L1)는 질문에 없는 구간 안 집계를 지어냈다.
+            raise CompositionError(
+                f"{where}: 구간 안 집계 방식이 질문에 없습니다.",
+                user_message=(
+                    "각 구간 안에서 값을 어떻게 모을지(합계, 평균 등)가 질문에 "
+                    "없습니다. 예: '주별 매출 합계의 평균'처럼 적어 주세요."
+                ),
+                code="AMBIGUOUS_INNER_AGGREGATION",
+                context={"aggregation": aggregation.to_dict(),
+                         "operator": binding.operator},
+            )
+        return OperatorBinding(
+            operator=binding.operator,
+            inputs=dict(binding.inputs),
+            params=dict(binding.params),
+            used_factors=binding.used_factors | {"bucket"},
+        )
 
     def _resolve_port(self, macro, port, output_node, grounding, build,
                       *, depth, stack, demand):
@@ -504,6 +643,25 @@ class MacroComposer:
             concept.id for concept in grounding.concepts
             if concept.id in build.nodes and concept.id not in connected
         ]
+
+    def _unconsumed_factors(self, grounding, build):
+        """조건을 거는 factor 중 어떤 변환도 받지 못한 것.
+
+        예전에는 plan.unused_factors에 적고 실행했다. "법인택시 평균 속도"가
+        택시 유형 없이 계산되는 식이다. 조건을 잃은 계획은 실행하지 않는다.
+        """
+        aggregation = grounding.aggregation
+        required = {
+            name for name, value in grounding.factors.items()
+            if name not in STRUCTURAL_FACTORS and name not in FLAT_KEYS
+            and NON_RESTRICTIVE_FACTORS.get(name, object()) != value
+        }
+        if aggregation.inner_specified:
+            required.add("aggregation")
+        if aggregation.grouped:
+            required.add("bucket")
+            required.add("select" if aggregation.select else "rollup")
+        return sorted(required - build.used_factors)
 
     def _build_plan(self, grounding, build, goal_node):
         connected = _reachable(build, goal_node.id)
@@ -645,6 +803,122 @@ def _check_location_relations(grounding, goal, goal_node):
             code="MISSING_RELATION_QUALIFIER",
             context=diagnostics,
         )
+
+
+# -- 집계 -----------------------------------------------------------------
+
+
+def _check_aggregation_combination(grounding, aggregation):
+    """구간별 집계와 함께 성립하지 않는 조건을 합성 전에 거부한다."""
+    if not aggregation.grouped:
+        return
+    present = [name for name in _GROUPED_EXCLUSIVE if name in grounding.factors]
+    if present:
+        raise CompositionError(
+            "주·월 구간별 집계와 그룹 기준·순위를 함께 계산할 수 없습니다: "
+            + ", ".join(present),
+            user_message=(
+                "구간별 집계와 지역·요일별 분포를 한 번에 계산하는 기능은 "
+                "지원하지 않습니다."
+            ),
+            code="UNSUPPORTED_AGGREGATION_COMBINATION",
+            context={"present": present, "aggregation": aggregation.to_dict()},
+        )
+
+
+def _tool_factors(grounding):
+    """TIMS operator에 넘길 조건. 집계는 flat factor가 아니라 spec에서 온다.
+
+    bucket·rollup은 의미 graph의 node와 변환으로 표현하므로 여기서 넘기지
+    않는다. Tool 인자로 되살리는 것은 compiler의 lowering이다.
+    """
+    factors = {
+        name: value for name, value in grounding.factors.items()
+        if name not in FLAT_KEYS
+    }
+    aggregation = grounding.aggregation
+    if aggregation.inner_specified:
+        factors["aggregation"] = aggregation.inner
+    return factors
+
+
+def _bind_group_combination(where, groups, output_node, aggregation):
+    """구간별 값 → 값/구간 변환에 로컬 분석 연산자를 붙인다."""
+    if (groups.concept, groups.subtype) != (output_node.concept,
+                                            output_node.subtype):
+        raise CompositionError(
+            f"{where}: 구간별 값과 결과의 개념이 다릅니다: "
+            f"{groups.concept.value}/{groups.subtype} → "
+            f"{output_node.concept.value}/{output_node.subtype}",
+            code="NO_OPERATOR",
+            context={"where": where},
+        )
+    ref = {"groups": ValueRef(groups.id)}
+    if aggregation.select:
+        output_node.attributes[analysis_ops.RETURNS] = analysis_ops.RETURNS_GROUP
+        return OperatorBinding(
+            operator=analysis_ops.SELECT_GROUP, inputs=ref,
+            params={"select": aggregation.select},
+            used_factors=frozenset({"select"}),
+        )
+    if aggregation.outer:
+        return OperatorBinding(
+            operator=analysis_ops.REDUCE_GROUPS, inputs=ref,
+            params={"reducer": aggregation.outer},
+            used_factors=frozenset({"rollup"}),
+        )
+    raise CompositionError(
+        f"{where}: 구간별 값을 합치거나 고르는 방법이 없습니다.",
+        user_message="구간별 값을 어떻게 합칠지 질문에서 찾지 못했습니다.",
+        code="MISSING_OUTER_AGGREGATION",
+        context={"aggregation": aggregation.to_dict()},
+    )
+
+
+def _unconsumed_error(grounding, names):
+    labels = ", ".join(_FACTOR_LABELS.get(name, name) for name in names)
+    return CompositionError(
+        "질문의 조건을 받는 변환이 없습니다: " + ", ".join(names),
+        user_message=(
+            f"질문의 조건 중 현재 분석이 반영할 수 없는 것이 있습니다: {labels}"
+        ),
+        code="UNCONSUMED_CONDITION",
+        context={
+            "unconsumed": list(names),
+            "values": {name: grounding.factors.get(name) for name in names},
+            "aggregation": grounding.aggregation.to_dict(),
+        },
+    )
+
+
+def _produced_within(macro, key):
+    return any(item.output == key for item in macro.transformations)
+
+
+def _internal_node(node_spec, key, root, grounding, build):
+    """macro 내부 변환이 만드는 중간 node.
+
+    ``same_type_as``이면 목표와 같은 (concept, subtype)이다. 구간별 node는 구간
+    키를 속성으로 갖는다. 구간 키는 grounding의 집계 spec에서만 온다.
+    """
+    if node_spec.same_type_as is not None:
+        concept, subtype = root.concept, root.subtype
+    else:
+        concept = root.concept
+        subtype = node_spec.resolve_subtype(grounding.factors)
+    attributes = {}
+    if node_spec.grouped:
+        attributes[analysis_ops.GROUP_BY] = {
+            "bucket": grounding.aggregation.bucket,
+        }
+    return ConceptNode(
+        id=build.unique_id(f"{root.id}_{key}"),
+        concept=concept,
+        subtype=subtype,
+        role=node_spec.role,
+        source=node_spec.source,
+        attributes=attributes,
+    )
 
 
 # -- helper -----------------------------------------------------------------
@@ -813,6 +1087,10 @@ def _surface_slots(grounding, goal_node):
         name: value for name, value in grounding.factors.items()
         if name not in STRUCTURAL_FACTORS
     }
+    aggregation = grounding.aggregation
+    if not aggregation.grouped and aggregation.inner_specified:
+        # 구조화 표기로 받은 집계도 답변이 읽을 수 있게 같은 자리에 둔다.
+        slots["aggregation"] = aggregation.inner
     for concept in grounding.concepts:
         if concept.concept != CoreConcept.LOCATION or concept.value is None:
             # 실행이 채울 장소(예: "이 범위가 어디인가")는 표층 조건이 아니다.
