@@ -1,0 +1,795 @@
+# 질문–의미 graph 예시 저장소(geoflow/examples.py). 논문 부록 E.1의 example store에 해당한다.
+#
+# - 모든 예시는 2026-09-26에 새로 쓴 학습용 문장이다. 평가 질문, 그 paraphrase, 지역명만 바꾼
+#   변형을 넣지 않는다. 기능 확인 6문항(evaluation/reference/reference_questions_v1.yaml)도
+#   넣지 않는다. 모델 출력을 예시로 옮기지 않았다.
+# - reference 예시(가람구·나래구, 합성 데이터)는 기대 결과를 손으로 센 값으로 적고, 등록 검증이
+#   reference provider에서 실제로 계산해 맞춘다. 나머지 지명은 조합·검증용이며 실행하지 않는다.
+# - graph·macros·aggregation은 grounding에서 composer가 만든 것과 같아야 한다(등록 검증).
+# - 내용을 바꾸면 해당 예시의 version을 올리고 index를 다시 만든다(python example_retrieval.py build).
+# - 질문 의미에 대한 정답 여부는 사람이 검토한다(reviewed_by). 등록 검증은 형식·실행 검증이다.
+version: 1
+examples:
+- id: ex01
+  version: 1
+  question: 지난달 중구 법인택시의 운행 시간 평균은?
+  grounding:
+    concepts:
+    - id: place
+      text: 중구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value:
+        name: 중구
+        region: ''
+    - id: operation
+      concept: EVENT
+      subtype: operation
+      role: SUPPORT
+      source: implicit
+    - id: hours
+      concept: AMOUNT
+      subtype: hours
+      role: MEASURE
+      source: implicit
+    factors:
+      date: last_month
+      aggregation_plan:
+        result:
+          reducer: avg
+      taxi_type: corporate
+  graph:
+  - place(LOCATION/place, SUBCOND) --RESOLVE_PLACE_SCOPE[include_vicinity=False]--> place_scope(LOCATION/scope, COND)
+  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=avg; metric=hours; 조건: date, taxi_type]--> hours(AMOUNT/hours, MEASURE)'
+  macros:
+  - PLACE_TO_SCOPE
+  - EVENT_TO_MEASURE
+  result_kind: scalar
+  aggregation:
+    bucket: null
+    inner: avg
+    outer: null
+    select: null
+  expected_outcome: answered
+  note: 구간 표현이 없다. 전체 레코드의 평균 한 단계 → result.reducer=avg. bucket을 넣지 않는다.
+  tags:
+  - overall_average
+  source: authored:2026-09-26
+  split: retrieval_store
+  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+- id: ex02
+  version: 1
+  question: 2026년 8월 나래구 법인택시 매출 합계는?
+  grounding:
+    concepts:
+    - id: place
+      text: 나래구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value:
+        name: 나래구
+        region: ''
+    - id: operation
+      concept: EVENT
+      subtype: operation
+      role: SUPPORT
+      source: implicit
+    - id: revenue
+      concept: AMOUNT
+      subtype: revenue
+      role: MEASURE
+      source: implicit
+    factors:
+      date: 20260801-20260831
+      aggregation_plan:
+        result:
+          reducer: sum
+      taxi_type: corporate
+  graph:
+  - place(LOCATION/place, SUBCOND) --RESOLVE_PLACE_SCOPE[include_vicinity=False]--> place_scope(LOCATION/scope, COND)
+  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=sum; metric=revenue; 조건: date, taxi_type]--> revenue(AMOUNT/revenue, MEASURE)'
+  macros:
+  - PLACE_TO_SCOPE
+  - EVENT_TO_MEASURE
+  result_kind: scalar
+  aggregation:
+    bucket: null
+    inner: sum
+    outer: null
+    select: null
+  expected_outcome: answered
+  note: 구간 표현이 없는 합계 → result.reducer=sum.
+  reference:
+    provider: reference
+    reference_date: '2026-09-25'
+    value: 500000
+    basis: reference_data/synthetic_operation_days.csv를 손으로 센 값(tests/test_example_store.py가 독립 SQL로 대조)
+  tags:
+  - overall_total
+  source: authored:2026-09-26
+  split: retrieval_store
+  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+- id: ex03
+  version: 1
+  question: 지난달 수성구 개인택시의 주별 운행 시간 합계를 평균 내면?
+  grounding:
+    concepts:
+    - id: place
+      text: 수성구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value:
+        name: 수성구
+        region: ''
+    - id: operation
+      concept: EVENT
+      subtype: operation
+      role: SUPPORT
+      source: implicit
+    - id: hours
+      concept: AMOUNT
+      subtype: hours
+      role: MEASURE
+      source: implicit
+    factors:
+      date: last_month
+      aggregation_plan:
+        bucket:
+          unit: week
+          reducer: sum
+        result:
+          reducer: avg
+      taxi_type: private
+  graph:
+  - place(LOCATION/place, SUBCOND) --RESOLVE_PLACE_SCOPE[include_vicinity=False]--> place_scope(LOCATION/scope, COND)
+  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=sum; metric=hours; 조건: date, taxi_type]--> hours_groups(AMOUNT/hours, SUPPORT, 구간=week)'
+  - hours_groups --REDUCE_GROUPS[reducer=avg]--> hours(AMOUNT/hours, MEASURE)
+  macros:
+  - PLACE_TO_SCOPE
+  - EVENT_TO_GROUPED_MEASURE
+  result_kind: scalar
+  aggregation:
+    bucket: week
+    inner: sum
+    outer: avg
+    select: null
+  expected_outcome: answered
+  note: '''주별 합계''가 구간 안 집계(bucket.reducer=sum), ''평균 내면''이 구간별 값의 집계(result.reducer=avg). 답은 값 하나다.'
+  tags:
+  - avg_of_bucket_sums
+  source: authored:2026-09-26
+  split: retrieval_store
+  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+- id: ex04
+  version: 1
+  question: 2026년 상반기 동구 법인택시 월별 영업 횟수 평균 중 가장 큰 값은?
+  grounding:
+    concepts:
+    - id: place
+      text: 동구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value:
+        name: 동구
+        region: ''
+    - id: operation
+      concept: EVENT
+      subtype: operation
+      role: SUPPORT
+      source: implicit
+    - id: operating_count
+      concept: AMOUNT
+      subtype: operating_count
+      role: MEASURE
+      source: implicit
+    factors:
+      date: 20260101-20260630
+      aggregation_plan:
+        bucket:
+          unit: month
+          reducer: avg
+        result:
+          reducer: max
+      taxi_type: corporate
+  graph:
+  - place(LOCATION/place, SUBCOND) --RESOLVE_PLACE_SCOPE[include_vicinity=False]--> place_scope(LOCATION/scope, COND)
+  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=avg; metric=operating_count; 조건: date, taxi_type]--> operating_count_groups(AMOUNT/operating_count, SUPPORT, 구간=month)'
+  - operating_count_groups --REDUCE_GROUPS[reducer=max]--> operating_count(AMOUNT/operating_count, MEASURE)
+  macros:
+  - PLACE_TO_SCOPE
+  - EVENT_TO_GROUPED_MEASURE
+  result_kind: scalar
+  aggregation:
+    bucket: month
+    inner: avg
+    outer: max
+    select: null
+  expected_outcome: answered
+  note: '''월별 평균 중 가장 큰 값'' → 답은 값이다(result.reducer=max). 그 값을 가진 달을 묻는 질문이 아니다.'
+  tags:
+  - max_of_bucket_avgs
+  - value_not_group
+  source: authored:2026-09-26
+  split: retrieval_store
+  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+- id: ex05
+  version: 1
+  question: 2026년 8월 나래구 개인택시 주별 매출 합계 중 가장 작은 값은?
+  grounding:
+    concepts:
+    - id: place
+      text: 나래구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value:
+        name: 나래구
+        region: ''
+    - id: operation
+      concept: EVENT
+      subtype: operation
+      role: SUPPORT
+      source: implicit
+    - id: revenue
+      concept: AMOUNT
+      subtype: revenue
+      role: MEASURE
+      source: implicit
+    factors:
+      date: 20260801-20260831
+      aggregation_plan:
+        bucket:
+          unit: week
+          reducer: sum
+        result:
+          reducer: min
+      taxi_type: private
+  graph:
+  - place(LOCATION/place, SUBCOND) --RESOLVE_PLACE_SCOPE[include_vicinity=False]--> place_scope(LOCATION/scope, COND)
+  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=sum; metric=revenue; 조건: date, taxi_type]--> revenue_groups(AMOUNT/revenue, SUPPORT, 구간=week)'
+  - revenue_groups --REDUCE_GROUPS[reducer=min]--> revenue(AMOUNT/revenue, MEASURE)
+  macros:
+  - PLACE_TO_SCOPE
+  - EVENT_TO_GROUPED_MEASURE
+  result_kind: scalar
+  aggregation:
+    bucket: week
+    inner: sum
+    outer: min
+    select: null
+  expected_outcome: answered
+  note: '''주별 합계 중 가장 작은 값'' → 답은 값(result.reducer=min). 구간을 고르는 select가 아니다.'
+  reference:
+    provider: reference
+    reference_date: '2026-09-25'
+    value: 30000
+    basis: reference_data/synthetic_operation_days.csv를 손으로 센 값(tests/test_example_store.py가 독립 SQL로 대조)
+  tags:
+  - min_of_bucket_sums
+  - value_not_group
+  source: authored:2026-09-26
+  split: retrieval_store
+  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+- id: ex06
+  version: 1
+  question: 지난달 달서구 개인택시의 운행 시간 합계가 가장 길었던 주는?
+  grounding:
+    concepts:
+    - id: place
+      text: 달서구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value:
+        name: 달서구
+        region: ''
+    - id: operation
+      concept: EVENT
+      subtype: operation
+      role: SUPPORT
+      source: implicit
+    - id: hours
+      concept: AMOUNT
+      subtype: hours
+      role: MEASURE
+      source: implicit
+    factors:
+      date: last_month
+      aggregation_plan:
+        bucket:
+          unit: week
+          reducer: sum
+        result:
+          select: max
+      taxi_type: private
+  graph:
+  - place(LOCATION/place, SUBCOND) --RESOLVE_PLACE_SCOPE[include_vicinity=False]--> place_scope(LOCATION/scope, COND)
+  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=sum; metric=hours; 조건: date, taxi_type]--> hours_groups(AMOUNT/hours, SUPPORT, 구간=week)'
+  - hours_groups --SELECT_GROUP[select=max]--> hours(AMOUNT/hours, MEASURE)
+  macros:
+  - PLACE_TO_SCOPE
+  - EVENT_TO_GROUPED_MEASURE
+  result_kind: selected_groups
+  aggregation:
+    bucket: week
+    inner: sum
+    outer: null
+    select: max
+  expected_outcome: answered
+  note: '''가장 길었던 주는?'' → 답이 주(구간)다 → result.select=max. order·limit·dimension을 쓰지 않는다.'
+  tags:
+  - bucket_select
+  source: authored:2026-09-26
+  split: retrieval_store
+  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+- id: ex07
+  version: 1
+  question: 2026년 8월 나래구 개인택시 매출 평균이 가장 낮았던 주는 언제야?
+  grounding:
+    concepts:
+    - id: place
+      text: 나래구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value:
+        name: 나래구
+        region: ''
+    - id: operation
+      concept: EVENT
+      subtype: operation
+      role: SUPPORT
+      source: implicit
+    - id: revenue
+      concept: AMOUNT
+      subtype: revenue
+      role: MEASURE
+      source: implicit
+    factors:
+      date: 20260801-20260831
+      aggregation_plan:
+        bucket:
+          unit: week
+          reducer: avg
+        result:
+          select: min
+      taxi_type: private
+  graph:
+  - place(LOCATION/place, SUBCOND) --RESOLVE_PLACE_SCOPE[include_vicinity=False]--> place_scope(LOCATION/scope, COND)
+  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=avg; metric=revenue; 조건: date, taxi_type]--> revenue_groups(AMOUNT/revenue, SUPPORT, 구간=week)'
+  - revenue_groups --SELECT_GROUP[select=min]--> revenue(AMOUNT/revenue, MEASURE)
+  macros:
+  - PLACE_TO_SCOPE
+  - EVENT_TO_GROUPED_MEASURE
+  result_kind: selected_groups
+  aggregation:
+    bucket: week
+    inner: avg
+    outer: null
+    select: min
+  expected_outcome: answered
+  note: '''가장 낮았던 주는 언제야?'' → 답이 주다 → result.select=min. 구간 안 집계는 ''평균'' → bucket.reducer=avg.'
+  reference:
+    provider: reference
+    reference_date: '2026-09-25'
+    value: 30000
+    groups:
+    - 20260831-20260831
+    basis: reference_data/synthetic_operation_days.csv를 손으로 센 값(tests/test_example_store.py가 독립 SQL로 대조)
+  tags:
+  - bucket_select
+  source: authored:2026-09-26
+  split: retrieval_store
+  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+- id: ex08
+  version: 1
+  question: 2026년 상반기 중구 개인택시 영업 횟수 합계가 가장 많았던 달은?
+  grounding:
+    concepts:
+    - id: place
+      text: 중구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value:
+        name: 중구
+        region: ''
+    - id: operation
+      concept: EVENT
+      subtype: operation
+      role: SUPPORT
+      source: implicit
+    - id: operating_count
+      concept: AMOUNT
+      subtype: operating_count
+      role: MEASURE
+      source: implicit
+    factors:
+      date: 20260101-20260630
+      aggregation_plan:
+        bucket:
+          unit: month
+          reducer: sum
+        result:
+          select: max
+      taxi_type: private
+  graph:
+  - place(LOCATION/place, SUBCOND) --RESOLVE_PLACE_SCOPE[include_vicinity=False]--> place_scope(LOCATION/scope, COND)
+  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=sum; metric=operating_count; 조건: date, taxi_type]--> operating_count_groups(AMOUNT/operating_count, SUPPORT, 구간=month)'
+  - operating_count_groups --SELECT_GROUP[select=max]--> operating_count(AMOUNT/operating_count, MEASURE)
+  macros:
+  - PLACE_TO_SCOPE
+  - EVENT_TO_GROUPED_MEASURE
+  result_kind: selected_groups
+  aggregation:
+    bucket: month
+    inner: sum
+    outer: null
+    select: max
+  expected_outcome: answered
+  note: '''가장 많았던 달은?'' → 답이 달 → result.select=max. 구간 안은 ''합계'' → bucket.reducer=sum.'
+  tags:
+  - bucket_select
+  source: authored:2026-09-26
+  split: retrieval_store
+  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+- id: ex09
+  version: 1
+  question: 지난달 동구 법인택시 주별 운행 시간 평균 중 가장 짧은 값은?
+  grounding:
+    concepts:
+    - id: place
+      text: 동구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value:
+        name: 동구
+        region: ''
+    - id: operation
+      concept: EVENT
+      subtype: operation
+      role: SUPPORT
+      source: implicit
+    - id: hours
+      concept: AMOUNT
+      subtype: hours
+      role: MEASURE
+      source: implicit
+    factors:
+      date: last_month
+      aggregation_plan:
+        bucket:
+          unit: week
+          reducer: avg
+        result:
+          reducer: min
+      taxi_type: corporate
+  graph:
+  - place(LOCATION/place, SUBCOND) --RESOLVE_PLACE_SCOPE[include_vicinity=False]--> place_scope(LOCATION/scope, COND)
+  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=avg; metric=hours; 조건: date, taxi_type]--> hours_groups(AMOUNT/hours, SUPPORT, 구간=week)'
+  - hours_groups --REDUCE_GROUPS[reducer=min]--> hours(AMOUNT/hours, MEASURE)
+  macros:
+  - PLACE_TO_SCOPE
+  - EVENT_TO_GROUPED_MEASURE
+  result_kind: scalar
+  aggregation:
+    bucket: week
+    inner: avg
+    outer: min
+    select: null
+  expected_outcome: answered
+  note: '''주별 평균 중 가장 짧은 값'' → 답은 값(result.reducer=min). ''평균이 가장 짧았던 주는?''(구간 선택)과 다르다.'
+  tags:
+  - min_of_bucket_avgs
+  - value_not_group
+  - contrast_pair:ex10
+  source: authored:2026-09-26
+  split: retrieval_store
+  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+- id: ex10
+  version: 1
+  question: 지난달 동구 법인택시의 운행 시간 평균이 가장 짧았던 주는?
+  grounding:
+    concepts:
+    - id: place
+      text: 동구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value:
+        name: 동구
+        region: ''
+    - id: operation
+      concept: EVENT
+      subtype: operation
+      role: SUPPORT
+      source: implicit
+    - id: hours
+      concept: AMOUNT
+      subtype: hours
+      role: MEASURE
+      source: implicit
+    factors:
+      date: last_month
+      aggregation_plan:
+        bucket:
+          unit: week
+          reducer: avg
+        result:
+          select: min
+      taxi_type: corporate
+  graph:
+  - place(LOCATION/place, SUBCOND) --RESOLVE_PLACE_SCOPE[include_vicinity=False]--> place_scope(LOCATION/scope, COND)
+  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=avg; metric=hours; 조건: date, taxi_type]--> hours_groups(AMOUNT/hours, SUPPORT, 구간=week)'
+  - hours_groups --SELECT_GROUP[select=min]--> hours(AMOUNT/hours, MEASURE)
+  macros:
+  - PLACE_TO_SCOPE
+  - EVENT_TO_GROUPED_MEASURE
+  result_kind: selected_groups
+  aggregation:
+    bucket: week
+    inner: avg
+    outer: null
+    select: min
+  expected_outcome: answered
+  note: '''평균이 가장 짧았던 주는?'' → 답은 주(result.select=min). ''주별 평균 중 가장 짧은 값''(값 반환)과 다르다.'
+  tags:
+  - bucket_select
+  - contrast_pair:ex09
+  source: authored:2026-09-26
+  split: retrieval_store
+  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+- id: ex11
+  version: 1
+  question: 지난달 중구 개인택시 주별 운행 시간의 최댓값은?
+  grounding:
+    concepts:
+    - id: place
+      text: 중구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value:
+        name: 중구
+        region: ''
+    - id: operation
+      concept: EVENT
+      subtype: operation
+      role: SUPPORT
+      source: implicit
+    - id: hours
+      concept: AMOUNT
+      subtype: hours
+      role: MEASURE
+      source: implicit
+    factors:
+      date: last_month
+      aggregation_plan:
+        bucket:
+          unit: week
+          reducer: unspecified
+        result:
+          reducer: max
+      taxi_type: private
+  result_kind: scalar
+  aggregation:
+    bucket: week
+    inner: unspecified
+    outer: max
+    select: null
+  expected_outcome: needs_clarification
+  expected_error: AMBIGUOUS_INNER_AGGREGATION
+  note: 구간 안 집계(합계인지 평균인지)가 질문에 없다 → bucket.reducer=unspecified. 짐작해서 채우지 않는다.
+  tags:
+  - ambiguous_inner
+  source: authored:2026-09-26
+  split: retrieval_store
+  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+- id: ex12
+  version: 1
+  question: 지난달 수성구 법인택시의 주별 매출 합계를 주마다 모두 보여줘
+  grounding: &id001
+    unsupported: true
+  result_kind: grouped_values
+  aggregation: {}
+  expected_outcome: unsupported
+  expected_error: UNSUPPORTED_QUESTION
+  note: '구간별 값 목록을 달라는 질문은 현재 grounding 계약으로 표현할 수 없다 → {"unsupported": true}. dimension에 week를 넣거나 result를 지어내지 않는다.'
+  tags:
+  - grouped_values_list
+  source: authored:2026-09-26
+  split: retrieval_store
+  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+- id: ex13
+  version: 1
+  question: 2026년 상반기 동구 개인택시 월별 운행 시간 평균을 달마다 알려줘
+  grounding: *id001
+  result_kind: grouped_values
+  aggregation: {}
+  expected_outcome: unsupported
+  expected_error: UNSUPPORTED_QUESTION
+  note: '달마다 값을 나열하는 목록 질문 → {"unsupported": true}. 최종 집계나 select를 지어내지 않는다.'
+  tags:
+  - grouped_values_list
+  source: authored:2026-09-26
+  split: retrieval_store
+  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+- id: ex14
+  version: 1
+  question: 2026년 7월부터 8월까지 가람구 개인택시의 월별 매출 합계 평균은?
+  grounding:
+    concepts:
+    - id: place
+      text: 가람구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value:
+        name: 가람구
+        region: ''
+    - id: operation
+      concept: EVENT
+      subtype: operation
+      role: SUPPORT
+      source: implicit
+    - id: revenue
+      concept: AMOUNT
+      subtype: revenue
+      role: MEASURE
+      source: implicit
+    factors:
+      date: 20260701-20260831
+      aggregation_plan:
+        bucket:
+          unit: month
+          reducer: sum
+        result:
+          reducer: avg
+      taxi_type: private
+  graph:
+  - place(LOCATION/place, SUBCOND) --RESOLVE_PLACE_SCOPE[include_vicinity=False]--> place_scope(LOCATION/scope, COND)
+  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=sum; metric=revenue; 조건: date, taxi_type]--> revenue_groups(AMOUNT/revenue, SUPPORT, 구간=month)'
+  - revenue_groups --REDUCE_GROUPS[reducer=avg]--> revenue(AMOUNT/revenue, MEASURE)
+  macros:
+  - PLACE_TO_SCOPE
+  - EVENT_TO_GROUPED_MEASURE
+  result_kind: scalar
+  aggregation:
+    bucket: month
+    inner: sum
+    outer: avg
+    select: null
+  expected_outcome: answered
+  note: '''월별 합계 평균'' → bucket.unit=month, 구간 안 sum, 구간별 값 avg. 구간 단위는 bucket에만 적는다.'
+  reference:
+    provider: reference
+    reference_date: '2026-09-25'
+    value: 1119500
+    basis: reference_data/synthetic_operation_days.csv를 손으로 센 값(tests/test_example_store.py가 독립 SQL로 대조)
+  tags:
+  - avg_of_bucket_sums
+  source: authored:2026-09-26
+  split: retrieval_store
+  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+- id: ex15
+  version: 1
+  question: 지난달 달서구 개인택시 주별 운행 시간 평균들의 평균은?
+  grounding:
+    concepts:
+    - id: place
+      text: 달서구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value:
+        name: 달서구
+        region: ''
+    - id: operation
+      concept: EVENT
+      subtype: operation
+      role: SUPPORT
+      source: implicit
+    - id: hours
+      concept: AMOUNT
+      subtype: hours
+      role: MEASURE
+      source: implicit
+    factors:
+      date: last_month
+      aggregation_plan:
+        bucket:
+          unit: week
+          reducer: avg
+        result:
+          reducer: avg
+      taxi_type: private
+  graph:
+  - place(LOCATION/place, SUBCOND) --RESOLVE_PLACE_SCOPE[include_vicinity=False]--> place_scope(LOCATION/scope, COND)
+  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=avg; metric=hours; 조건: date, taxi_type]--> hours_groups(AMOUNT/hours, SUPPORT, 구간=week)'
+  - hours_groups --REDUCE_GROUPS[reducer=avg]--> hours(AMOUNT/hours, MEASURE)
+  macros:
+  - PLACE_TO_SCOPE
+  - EVENT_TO_GROUPED_MEASURE
+  result_kind: scalar
+  aggregation:
+    bucket: week
+    inner: avg
+    outer: avg
+    select: null
+  expected_outcome: answered
+  note: '''주별 평균들의 평균'' → 구간 안 avg, 구간별 값 avg. 구간 없는 전체 평균(result.reducer=avg)과 다른 계산이다.'
+  tags:
+  - avg_of_bucket_avgs
+  source: authored:2026-09-26
+  split: retrieval_store
+  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+- id: ex16
+  version: 1
+  question: 2026년 9월 10일 대구 개인택시 매출 평균이 높은 구·군 3곳은?
+  grounding:
+    concepts:
+    - id: place
+      text: 대구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value:
+        name: 대구
+        region: ''
+    - id: operation
+      concept: EVENT
+      subtype: operation
+      role: SUPPORT
+      source: implicit
+    - id: revenue
+      concept: AMOUNT
+      subtype: revenue
+      role: MEASURE
+      source: implicit
+    factors:
+      date: '20260910'
+      dimension: sigungu
+      order: top
+      limit: 3
+      aggregation_plan:
+        result:
+          reducer: avg
+      taxi_type: private
+  graph:
+  - place(LOCATION/place, SUBCOND) --RESOLVE_PLACE_SCOPE[include_vicinity=False]--> place_scope(LOCATION/scope, COND)
+  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=avg; dimension=sigungu; limit=3; metric=revenue; order=top; 조건: date, taxi_type]--> revenue(AMOUNT/revenue, MEASURE)'
+  macros:
+  - PLACE_TO_SCOPE
+  - EVENT_TO_MEASURE
+  result_kind: dimension_groups
+  aggregation:
+    bucket: null
+    inner: avg
+    outer: null
+    select: null
+  expected_outcome: answered
+  note: 지역(구·군)으로 나눈 순위 → dimension=sigungu, order=top, limit=3. 주·월 같은 시간 구간은 dimension·order·limit이 아니라 aggregation_plan.bucket에 적는다.
+  tags:
+  - dimension_ranking
+  source: authored:2026-09-26
+  split: retrieval_store
+  reviewed_by: claude-2026-09-26 (사용자 검토 전)

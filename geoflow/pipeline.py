@@ -122,6 +122,8 @@ class GeoFlowRun:
     verification: dict[str, Any] | None = None
     #: 실행 계약을 정한 provider 프로필(provider, 계약, TIMS 가정 모드, 합성 데이터 여부).
     execution_profile: dict[str, Any] | None = None
+    #: 질문–graph 예시 검색 기록(예시 id·점수·순서·prompt 절 hash). 검색을 끄면 None.
+    retrieval: dict[str, Any] | None = None
     attempts: list[dict[str, Any]] = field(default_factory=list)
     repair_count: int = 0
     #: 재계획 종류별 시도/성공 횟수. 계획 단계와 실행 단계를 구분해 센다.
@@ -162,6 +164,7 @@ class GeoFlowRun:
             "condition_trace": self.condition_trace,
             "verification": self.verification,
             "execution_profile": self.execution_profile,
+            "retrieval": self.retrieval,
             "attempts": [dict(item) for item in self.attempts],
             "planner": self.planner,
             "template": self.template,
@@ -204,8 +207,12 @@ class GeoFlowPipeline:
     def create(cls, *, client, tool_executor, macro_directory=None,
                planner_prompt=None, model=None,
                aggregation_grounding=structured_grounding.FLAT, clock=None,
-               condition_check=False, execution_profile=None):
-        """CLI/Web이 동일하게 사용할 기본 구성으로 파이프라인을 만든다."""
+               condition_check=False, execution_profile=None, example_selector=None):
+        """CLI/Web이 동일하게 사용할 기본 구성으로 파이프라인을 만든다.
+
+        ``example_selector``(geoflow/retrieval.py)는 structured grounding에 검토된 예시를 문맥으로
+        붙인다. 예시는 prompt에만 들어가고 조합·검증·실행은 현재 질문의 grounding만 쓴다.
+        """
         library = (
             MacroLibrary.from_directory()
             if macro_directory is None
@@ -218,6 +225,7 @@ class GeoFlowPipeline:
             aggregation_grounding=aggregation_grounding,
             condition_check=condition_check,
             clock=clock,
+            example_selector=example_selector,
         )
         return cls(
             planner=planner,
@@ -251,7 +259,9 @@ class GeoFlowPipeline:
         try:
             planner_output = self.planner.plan(question)
         except GeoFlowError as error:
+            run.retrieval = _retrieval_record(self.planner, question)
             return _fail(run, error, started_at)
+        run.retrieval = _retrieval_record(self.planner, question)
 
         run.durations["planner_ms"] = planner_output.duration_ms
         run.durations["execution_ms"] = 0.0
@@ -502,6 +512,11 @@ def describe_environment(profile, execution_plan):
     lines.append("- 계산 의미: 레코드 = 택시 한 대의 영업일 하루 매출(원). 평균의 분모는 조건에 맞는 "
                  "레코드 수(결측 제외), 주는 월요일 시작이며 기간 경계에서 잘립니다.")
     return "\n".join(lines)
+
+
+def _retrieval_record(planner, question):
+    record = getattr(planner, "retrieval_record", None)
+    return record(question) if record is not None else None
 
 
 def _planning_attempt(index, error, decision, *, attempted, exhausted):

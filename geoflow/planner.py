@@ -21,7 +21,7 @@ import yaml
 from build import BuildError, build_prompt
 
 from geoflow import conditions, structured_grounding
-from geoflow.errors import PlannerError
+from geoflow.errors import GeoFlowError, PlannerError
 from geoflow.factors import (
     FACTOR_SPECS,
     FACTOR_STAGE_NOTE,
@@ -83,6 +83,8 @@ class PlannerOutput:
     duration_ms: float = 0.0
     model: str | None = None
     attempts: int = 1
+    #: 예시 검색을 켰다면 이 질문에 붙인 예시 기록(``RetrievalResult.to_dict``). 끄면 None.
+    retrieval: dict | None = None
 
     @property
     def concepts(self):
@@ -99,6 +101,7 @@ class PlannerOutput:
             "duration_ms": self.duration_ms,
             "model": self.model,
             "attempts": self.attempts,
+            "retrieval": self.retrieval,
         }
 
 
@@ -208,6 +211,7 @@ class GeoFlowPlanner:
         aggregation_grounding=structured_grounding.FLAT,
         condition_check=False,
         clock=None,
+        example_selector=None,
     ):
         if max_attempts < 1:
             raise ValueError(f"max_attempts는 1 이상이어야 합니다: {max_attempts}")
@@ -222,6 +226,12 @@ class GeoFlowPlanner:
         #: prompt는 바꾸지 않는다. 같은 LLM 응답에 켜고 끈 결과를 비교할 수 있다.
         self.condition_check = bool(condition_check)
         self.clock = clock
+        #: 질문–graph 예시 선택기(geoflow/retrieval.py). None이면 기존 prompt 그대로다.
+        #: 예시는 구조화 표기로 적혀 있으므로 structured 계약에서만 받는다.
+        if example_selector is not None and aggregation_grounding != structured_grounding.STRUCTURED:
+            raise ValueError("예시 검색은 structured aggregation grounding에서만 쓸 수 있습니다.")
+        self.example_selector = example_selector
+        self._retrievals = {}
         self.max_attempts = max_attempts
         self.client = client
         self.base_prompt = (
@@ -271,14 +281,43 @@ class GeoFlowPlanner:
         ])
 
     def messages(self, question):
+        system = self.system_prompt()
+        retrieval = self._retrieve(question)
+        if retrieval is not None and retrieval.section:
+            system = f"{system}\n\n{retrieval.section}"
         return [
-            {"role": "system", "content": self.system_prompt()},
+            {"role": "system", "content": system},
             {"role": "user", "content": question},
         ]
 
+    def _retrieve(self, question):
+        """이 질문에 붙일 예시. 질문마다 한 번만 고르고 재질의에도 같은 예시를 쓴다.
+
+        선택기 오류는 숨기지 않고 ``RETRIEVAL_FAILED``로 올린다. 예시 없이 계속하지 않는다.
+        """
+        if self.example_selector is None:
+            return None
+        if question not in self._retrievals:
+            try:
+                self._retrievals[question] = self.example_selector.select(question)
+            except GeoFlowError as error:
+                raise PlannerError(
+                    f"질문 해석 예시를 고르지 못했습니다: {error.detail}",
+                    code="RETRIEVAL_FAILED",
+                    context={"retrieval_error": error.to_dict()},
+                ) from error
+        return self._retrievals[question]
+
+    def retrieval_record(self, question):
+        """기록용 검색 결과. 검색을 끄거나 아직 고르지 않았으면 None."""
+        result = self._retrievals.get(question)
+        return None if result is None else result.to_dict()
+
     def plan(self, question):
         """Planner를 1회 호출하고 검증된 ``PlannerOutput``을 반환한다."""
-        return self._ask(self.messages(question), question)
+        output = self._ask(self.messages(question), question)
+        output.retrieval = self.retrieval_record(question)
+        return output
 
     @property
     def repair_instruction(self):
@@ -375,6 +414,7 @@ class GeoFlowPlanner:
             raw_text=text,
             model=self.model,
             duration_ms=_elapsed_ms(started_at),
+            retrieval=self.retrieval_record(question),
         )
 
     def _ask(self, messages, question):

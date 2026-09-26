@@ -94,6 +94,8 @@ STAGE_CODES = {
     ),
     "GRAPH_VALIDATION": ("VALIDATION_FAILED",),
     "REPAIR": ("REPAIR_UNSUPPORTED", "REPAIR_OUT_OF_SCOPE", "REPAIR_NO_CHANGE"),
+    # 질문–graph 예시 검색(선택 기능)이 질문마다 예시를 고르지 못함.
+    "RETRIEVAL": ("RETRIEVAL_FAILED",),
 }
 _STAGE_OF = {code: stage for stage, codes in STAGE_CODES.items() for code in codes}
 
