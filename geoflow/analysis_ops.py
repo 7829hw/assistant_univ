@@ -127,12 +127,7 @@ def run(step, state):
         if reducer not in ("sum", "max", "min"):
             raise ExecutionError(f"{step.id}: 하루 값으로 합칠 수 없는 집계입니다: {reducer!r}",
                                  code="UNKNOWN_REDUCER")
-        values = []
-        for key in step.inputs:
-            if key not in state:
-                raise ExecutionError(f"{step.id}: 하루 값이 아직 없습니다: {key}",
-                                     code="UNRESOLVED_REF", context={"node_id": key})
-            values.append(_number(state[key], where=f"{step.id}[{key}]"))
+        values = _day_values(step, step.inputs, state)
         return reduce_values(values, reducer)
     if step.operator == COLLECT_GROUPS:
         groups = step.arguments.get("groups") or []
@@ -147,15 +142,18 @@ def run(step, state):
             )
         rows = []
         for group, keys in zip(groups, members):
-            values = []
-            for key in keys:
-                if key not in state:
-                    raise ExecutionError(
-                        f"{step.id}: 구간 값이 아직 없습니다: {key}",
-                        code="UNRESOLVED_REF",
-                        context={"node_id": key},
-                    )
-                values.append(_number(state[key], where=f"{step.id}[{key}]"))
+            if reducer is None:
+                values = []
+                for key in keys:
+                    if key not in state:
+                        raise ExecutionError(
+                            f"{step.id}: 구간 값이 아직 없습니다: {key}",
+                            code="UNRESOLVED_REF",
+                            context={"node_id": key},
+                        )
+                    values.append(_number(state[key], where=f"{step.id}[{key}]"))
+            else:
+                values = _day_values(step, keys, state)
             row = {
                 "group": dict(group),
                 "value": values[0] if reducer is None else reduce_values(values, reducer),
@@ -181,6 +179,27 @@ def run(step, state):
         }
     raise ExecutionError(f"알 수 없는 로컬 연산자: {step.operator}",
                          code="UNKNOWN_OPERATOR")
+
+
+def _day_values(step, keys, state):
+    """하루 단위 값들. ``empty_parts=skip``이면(계약상 null = 기록 없음) 빈 날을 뺀다."""
+    skip = step.arguments.get("empty_parts") == "skip"
+    values = []
+    for key in keys:
+        if key not in state:
+            raise ExecutionError(f"{step.id}: 하루 값이 아직 없습니다: {key}",
+                                 code="UNRESOLVED_REF", context={"node_id": key})
+        if skip and state[key] is None:
+            continue
+        values.append(_number(state[key], where=f"{step.id}[{key}]"))
+    if not values:
+        raise ExecutionError(
+            f"{step.id}: 모든 날의 값이 비어 있습니다.",
+            code="EMPTY_GROUP_VALUE",
+            user_message="값이 없는 구간이 있어 구간별 계산을 할 수 없습니다.",
+            context={"where": step.id},
+        )
+    return values
 
 
 def _group_rows(step, state):

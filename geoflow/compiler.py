@@ -172,7 +172,7 @@ def compile_plan(plan: GeoFlowPlan, *, reference_date=None,
             continue
         execution.steps.extend(_partition_steps(
             transformation, output, spec, nodes, plan, execution,
-            reference_date=reference_date, strategy=strategy,
+            reference_date=reference_date, strategy=strategy, contract=contract,
         ))
 
     for step in execution.steps:
@@ -290,7 +290,8 @@ def _lower_period(transformation, step, output, plan, execution, *, reference_da
         id=f"{transformation.id}.combine_days", operator=analysis_ops.COMBINE_DAYS,
         tool_name=f"local:{analysis_ops.COMBINE_DAYS}",
         arguments={"reducer": tims_contract.COMPOSABLE_REDUCERS[reducer],
-                   "days": [item.arguments[spec.PERIOD_PARAM] for item in steps]},
+                   "days": [item.arguments[spec.PERIOD_PARAM] for item in steps],
+                   "empty_parts": empty_day_policy(contract)},
         output_bindings={WHOLE_RESULT: output.id}, kind=STEP_LOCAL,
         covers=[transformation.id], inputs=keys,
         argument_sources={"reducer": f"{transformation.id}.params.{spec.REDUCER_PARAM}"},
@@ -427,8 +428,20 @@ def _fused_step(transformation, combine, output, spec, nodes, plan):
     return step
 
 
+def empty_day_policy(contract):
+    """하루 단위 합성에서 값이 없는(null) 날을 어떻게 다룰지. 계약이 정한다.
+
+    provider가 "null = 조건에 맞는 기록 없음"을 계약으로 확인했다면 그날은 합(max·min 포함)에
+    아무것도 더하지 않으므로 빼도 같은 계산이다(skip). 확인되지 않았다면 null이 결측인지
+    0인지 오류인지 모르므로 멈춘다(fail). 모든 날이 비면 어느 쪽이든 멈춘다.
+    """
+    if contract.satisfied("null_result") and contract.items["null_result"].value == "null":
+        return "skip"
+    return "fail"
+
+
 def _partition_steps(transformation, output, spec, nodes, plan, execution, *,
-                     reference_date, strategy):
+                     reference_date, strategy, contract=tims_contract.DEFAULT_CONTRACT):
     """기간을 나눠 같은 조건으로 호출하고, 구간별 값을 모으는 로컬 단계를 붙인다.
 
     ``range_partition``은 구간마다 날짜 범위로 한 번, ``daily_partition``은 하루마다
@@ -494,6 +507,7 @@ def _partition_steps(transformation, output, spec, nodes, plan, execution, *,
             "groups": [dict(group) for group in groups],
             "members": members,
             "reducer": tims_contract.DECOMPOSABLE_INNER[inner] if daily else None,
+            **({"empty_parts": empty_day_policy(contract)} if daily else {}),
         },
         output_bindings={WHOLE_RESULT: output.id},
         kind=STEP_LOCAL,
@@ -725,7 +739,7 @@ def verify_lowering(plan, execution, *, reference_date=None,
             )
         if partitioned:
             _verify_partition(transformation, output, tools, covering, plan,
-                              reference_date, strategy)
+                              reference_date, strategy, contract)
         else:
             if strategy != tims_contract.FUSED_BUCKET_ROLLUP.name:
                 raise _mismatch(f"{transformation.id}의 호출이 전략과 다릅니다.", plan,
@@ -762,7 +776,8 @@ def _verify_relowered_period(transformation, record, tools, covering, plan,
     combine = [step for step in covering if step.operator == analysis_ops.COMBINE_DAYS]
     keys = [key for step in tools for key in step.output_bindings.values()]
     if not ok or len(combine) != 1 or combine[0].inputs != keys or combine[0].arguments.get(
-            "reducer") != tims_contract.COMPOSABLE_REDUCERS.get(reducer):
+            "reducer") != tims_contract.COMPOSABLE_REDUCERS.get(reducer) or combine[
+            0].arguments.get("empty_parts") != empty_day_policy(contract):
         raise _mismatch(f"{transformation.id}의 하루 값 합성이 계약·집계와 맞지 않습니다. "
                         f"{reason}", plan, transformation=transformation.id)
 
@@ -791,7 +806,7 @@ def _verify_fused(transformation, output, tools, plan):
 
 
 def _verify_partition(transformation, output, tools, covering, plan,
-                      reference_date, strategy):
+                      reference_date, strategy, contract=tims_contract.DEFAULT_CONTRACT):
     spec = get_operator(transformation.operator)
     period = transformation.params.get(spec.PERIOD_PARAM)
     start, end = periods.resolve_period(period, reference_date=reference_date)
@@ -839,6 +854,8 @@ def _verify_partition(transformation, output, tools, covering, plan,
     if collect[0].arguments.get("reducer") != expected_reducer:
         raise _mismatch(f"{output.id}를 모으는 집계가 구간 안 집계와 다릅니다.", plan,
                         node=output.id)
+    if daily and collect[0].arguments.get("empty_parts") != empty_day_policy(contract):
+        raise _mismatch(f"{output.id}의 빈 날 처리가 계약과 다릅니다.", plan, node=output.id)
 
 
 def _verify_combination(transformation, covering, plan):
