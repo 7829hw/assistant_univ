@@ -151,6 +151,12 @@ class CorpusRegistryTest(unittest.TestCase):
                     continue
                 plan = composer.compose(grounding)
                 self.assertEqual(E.corpus_labels(plan)[0], parent["expected_macros"])
+                semantic = P.plan_aggregation(plan)
+                if semantic and "bucket" in semantic:
+                    # 두 단계 집계는 의미 graph로 채점한다. 호출 모양은 TIMS 계약에 따라
+                    # 달라진다(geoflow/tims_contract.py, test_geoflow_aggregation_graph).
+                    self.assertEqual(semantic, P.golden_aggregation(intent))
+                    continue
                 tool, args = P.final_tool_call(plan)
                 self.assertEqual(P.tool_arg_mismatches(
                     intent["expected_tool_args"], args, P.tool_defaults(tool)), [])

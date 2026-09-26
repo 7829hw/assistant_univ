@@ -1,0 +1,115 @@
+# flat(H0) vs structured(S1) 집계 grounding 비교용 평가 셋 v1.
+#
+# 2026-09-26 이번 작업에서 새로 작성했다. 측정 전에 고정했고, 결과를 보고 고치지 않는다.
+# 한 번 측정하면 development로 바꾼다(evaluation/corpus_registry.yaml 관례).
+# 기존 corpus(paraphrases*.yaml, stub_query*.yaml)와 개발 질문(dev_questions.yaml)의
+# 문장을 쓰지 않았다. S1 prompt의 예시 문장도 쓰지 않았다.
+#
+# expected
+#   outcome     현재 제품 계약(geoflow/tims_contract.py DEFAULT_CONTRACT, 기준일 2026-09-25)에서
+#               기대하는 결과. answered | needs_clarification | unsupported
+#   plan        기대 집계 의미. null은 질문에 집계 표현이 없다는 뜻이다.
+#               inner: unspecified는 질문이 구간 안 집계를 정하지 않았다는 뜻이다.
+#   conditions  grounding이 적어야 하는 조건(date 값은 pt_date 형식 그대로, place는 장소명).
+#
+# 분류: A 명시된 두 단계(답 가능) / B 구간 선택(답 가능) / C 한 단계 대조군 /
+#       D avg 구간 안 집계(계약 미확인) / E 모호한 구간 안 집계 / F 명확하지만 미지원
+version: 1
+role: fresh_holdout
+questions:
+  # A
+  - {id: e01, class: A, question: "지난달 수성구 개인택시의 주별 수입 합계를 평균 내면 얼마야?",
+     expected: {outcome: answered, plan: {bucket: week, inner: sum, final: avg},
+                conditions: {date: last_month, taxi_type: private, place: 수성구}}}
+  - {id: e02, class: A, question: "2026년 7월부터 8월까지 부산 법인택시의 월별 영업 시간 합계 중 최솟값은?",
+     expected: {outcome: answered, plan: {bucket: month, inner: sum, final: min},
+                conditions: {date: 20260701-20260831, taxi_type: corporate, place: 부산}}}
+  - {id: e03, class: A, question: "지난달 달서구 택시의 주 단위 최고 수입을 평균하면?",
+     expected: {outcome: answered, plan: {bucket: week, inner: max, final: avg},
+                conditions: {date: last_month, place: 달서구}}}
+  - {id: e04, class: A, question: "지난달 인천 개인택시 영업 횟수를 주마다 합산했을 때 가장 작은 값은?",
+     expected: {outcome: answered, plan: {bucket: week, inner: sum, final: min},
+                conditions: {date: last_month, taxi_type: private, place: 인천}}}
+  - {id: e05, class: A, question: "2026년 8월 한 달간 서울 택시의 주별 최소 영업 시간 중 가장 큰 값은?",
+     expected: {outcome: answered, plan: {bucket: week, inner: min, final: max},
+                conditions: {date: 20260801-20260831, place: 서울}}}
+  - {id: e06, class: A, question: "지난달 동구 법인택시의 주별 수입 총합의 중간값은?",
+     expected: {outcome: answered, plan: {bucket: week, inner: sum, final: med},
+                conditions: {date: last_month, taxi_type: corporate, place: 동구}}}
+  - {id: e29, class: A, question: "지난달 두산동 법인택시의 주별 영업 횟수 합계 중 가장 큰 값은?",
+     expected: {outcome: answered, plan: {bucket: week, inner: sum, final: max},
+                conditions: {date: last_month, taxi_type: corporate, place: 두산동}}}
+  # B
+  - {id: e07, class: B, question: "지난달 부산진구 개인택시 수입 합계가 가장 적었던 주는?",
+     expected: {outcome: answered, plan: {bucket: week, inner: sum, select: min},
+                conditions: {date: last_month, taxi_type: private, place: 부산진구}}}
+  - {id: e08, class: B, question: "2026년 7월과 8월 중 대구 법인택시의 영업 시간 합계가 더 많은 달은?",
+     expected: {outcome: answered, plan: {bucket: month, inner: sum, select: max},
+                conditions: {date: 20260701-20260831, taxi_type: corporate, place: 대구}}}
+  - {id: e09, class: B, question: "지난달 서구 택시 영업 횟수 합계가 가장 많았던 주는 언제야?",
+     expected: {outcome: answered, plan: {bucket: week, inner: sum, select: max},
+                conditions: {date: last_month, place: 서구}}}
+  - {id: e10, class: B, question: "지난달 중구 개인택시의 최고 수입이 가장 높았던 주는?",
+     expected: {outcome: answered, plan: {bucket: week, inner: max, select: max},
+                conditions: {date: last_month, taxi_type: private, place: 중구}}}
+  - {id: e30, class: B, question: "2026년 8월 한 달 동안 수성구 개인택시 수입 합계가 가장 컸던 주는?",
+     expected: {outcome: answered, plan: {bucket: week, inner: sum, select: max},
+                conditions: {date: 20260801-20260831, taxi_type: private, place: 수성구}}}
+  # C
+  - {id: e11, class: C, question: "지난달 수영구 법인택시의 평균 수입은?",
+     expected: {outcome: answered, plan: {final: avg},
+                conditions: {date: last_month, taxi_type: corporate, place: 수영구}}}
+  - {id: e12, class: C, question: "지난주 광안동 택시 영업 시간의 합계는?",
+     expected: {outcome: answered, plan: {final: sum},
+                conditions: {date: last_week, place: 광안동}}}
+  - {id: e13, class: C, question: "지난달 개인택시 공차율은?",
+     expected: {outcome: answered, plan: null,
+                conditions: {date: last_month, taxi_type: private}}}
+  - {id: e14, class: C, question: "2026년 8월 동인동 택시 운행률의 최댓값은?",
+     expected: {outcome: answered, plan: {final: max},
+                conditions: {date: 20260801-20260831, place: 동인동}}}
+  - {id: e15, class: C, question: "지난달 두류동 개인택시 영업 횟수의 최솟값은?",
+     expected: {outcome: answered, plan: {final: min},
+                conditions: {date: last_month, taxi_type: private, place: 두류동}}}
+  - {id: e28, class: C, question: "지난달 동성로 주변 택시의 평균 속도는?",
+     expected: {outcome: answered, plan: {final: avg},
+                conditions: {date: last_month, place: 동성로}}}
+  # D
+  - {id: e16, class: D, question: "지난달 태평로동 택시의 주별 평균 수입 중 가장 높은 값은?",
+     expected: {outcome: unsupported, plan: {bucket: week, inner: avg, final: max},
+                conditions: {date: last_month, place: 태평로동}}}
+  - {id: e17, class: D, question: "지난달 법인택시 영업 시간의 주별 평균이 가장 낮았던 주는?",
+     expected: {outcome: unsupported, plan: {bucket: week, inner: avg, select: min},
+                conditions: {date: last_month, taxi_type: corporate}}}
+  # E
+  - {id: e18, class: E, question: "지난달 초량동 개인택시의 주별 수입 중 가장 큰 값은?",
+     expected: {outcome: needs_clarification, plan: {bucket: week, inner: unspecified, final: max},
+                conditions: {date: last_month, taxi_type: private, place: 초량동}}}
+  - {id: e19, class: E, question: "2026년 7월부터 8월까지 월별 영업 횟수의 평균은?",
+     expected: {outcome: needs_clarification, plan: {bucket: month, inner: unspecified, final: avg},
+                conditions: {date: 20260701-20260831}}}
+  - {id: e20, class: E, question: "지난달 부산 법인택시 수입이 가장 많았던 주는?",
+     expected: {outcome: needs_clarification, plan: {bucket: week, inner: unspecified, select: max},
+                conditions: {date: last_month, taxi_type: corporate, place: 부산}}}
+  - {id: e21, class: E, question: "지난달 중앙로동 택시의 주 단위 영업 시간 최솟값은?",
+     expected: {outcome: needs_clarification, plan: {bucket: week, inner: unspecified, final: min},
+                conditions: {date: last_month, place: 중앙로동}}}
+  - {id: e22, class: E, question: "지난달 신천동 개인택시 운행률을 주별로 봤을 때 평균은?",
+     expected: {outcome: needs_clarification, plan: {bucket: week, inner: unspecified, final: avg},
+                conditions: {date: last_month, taxi_type: private, place: 신천동}}}
+  # F
+  - {id: e23, class: F, question: "월 단위로 합산한 법인택시 영업 시간의 최댓값은?",
+     expected: {outcome: unsupported, plan: {bucket: month, inner: sum, final: max},
+                conditions: {taxi_type: corporate}}}
+  - {id: e24, class: F, question: "지난달 동대구역 근처 주별 통행량 합계의 평균은?",
+     expected: {outcome: unsupported, plan: {bucket: week, inner: sum, final: avg},
+                conditions: {date: last_month, place: 동대구역}}}
+  - {id: e25, class: F, question: "주말 동안 개인택시 수입을 주별로 합산했을 때 평균은?",
+     expected: {outcome: unsupported, plan: {bucket: week, inner: sum, final: avg},
+                conditions: {date: weekend, taxi_type: private}}}
+  - {id: e26, class: F, question: "지난달 개인택시 요금의 평균은?",
+     expected: {outcome: unsupported, plan: {final: avg},
+                conditions: {date: last_month, taxi_type: private}}}
+  - {id: e27, class: F, question: "2026년 상반기 대구 택시 주별 수입 합계의 평균은?",
+     expected: {outcome: unsupported, plan: {bucket: week, inner: sum, final: avg},
+                conditions: {date: 20260101-20260630, place: 대구}}}

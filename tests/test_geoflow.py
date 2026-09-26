@@ -1231,15 +1231,31 @@ class PipelineScenarioTest(unittest.TestCase):
         pipeline, _client = new_pipeline([grounding_payload([
             event_concept("operation", "operation"),
             measure_concept("revenue", "AMOUNT", "revenue"),
-        ], {"bucket": "week", "aggregation": "sum", "rollup": "avg"})])
-        run = pipeline.run("주 단위로 합산한 택시 수입의 평균은?")
+        ], {"bucket": "week", "aggregation": "sum", "rollup": "avg",
+            "date": "20260801-20260831"})])
+        run = pipeline.run("2026년 8월 주 단위로 합산한 택시 수입의 평균은?")
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
-        arguments = run.hop_log[0]["arguments"]
-        self.assertEqual(arguments["bucket"], "week")
-        self.assertEqual(arguments["aggregation"], "sum")
-        self.assertEqual(arguments["rollup"], "avg")
+        tools = [hop for hop in run.hop_log if hop["phase"] == "tool"]
+        # bucket 경계가 계약으로 확인되지 않아 호출 하나로 합치지 않는다.
+        self.assertEqual([hop["arguments"]["date"] for hop in tools][:2],
+                         ["20260801", "20260802"])
+        self.assertEqual(len(tools), 31)
+        for hop in tools:
+            self.assertNotIn("bucket", hop["arguments"])
+            self.assertEqual(hop["arguments"]["aggregation"], "sum")
         self.assertIn("주별 합계의 평균", run.final_answer)
         self.assertIn("영업 수익", run.final_answer)
+
+    def test_two_stage_without_period_is_refused(self):
+        """기간이 없으면 구간을 나눌 수 없다. TIMS에 기간을 맡기는 병합도 하지 않는다."""
+        pipeline, _client = new_pipeline([grounding_payload([
+            event_concept("operation", "operation"),
+            measure_concept("revenue", "AMOUNT", "revenue"),
+        ], {"bucket": "week", "aggregation": "sum", "rollup": "avg"})])
+        run = pipeline.run("주 단위로 합산한 택시 수입의 평균은?")
+        self.assertIsNone(run.final_answer)
+        self.assertEqual(run.error["code"], "UNRESOLVED_PERIOD")
+        self.assertEqual(run.hop_log, [])
 
     def test_bucket_without_inner_aggregation_is_refused(self):
         """구간 안 집계가 없으면 Tool 기본값(avg)으로 실행하지 않고 되묻는다."""

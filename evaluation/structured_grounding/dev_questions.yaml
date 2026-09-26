@@ -1,0 +1,37 @@
+# 구조화 집계 grounding(S1) prompt 정비용 development 질문. 평가 셋이 아니다.
+# 요청서의 예시 문장과 이미 결과를 본 development corpus 문장(a21_p0, f01_p0)으로 만들었다.
+version: 1
+role: development
+questions:
+  - id: d01
+    question: 지난달 대구 개인택시 주별 매출 합계의 평균은?
+    expected: {outcome: answered, plan: {bucket: week, inner: sum, final: avg},
+               conditions: {date: last_month, taxi_type: private, place: 대구}}
+  - id: d02
+    question: 지난달 대구 개인택시 주별 매출 평균의 최댓값은?
+    expected: {outcome: unsupported, plan: {bucket: week, inner: avg, final: max},
+               conditions: {date: last_month, taxi_type: private, place: 대구}}
+  - id: d03
+    question: 지난달 대구 개인택시 전체 매출의 평균은?
+    expected: {outcome: answered, plan: {final: avg},
+               conditions: {date: last_month, taxi_type: private, place: 대구}}
+  - id: d04
+    question: 지난달 대구 개인택시 매출 합계가 가장 큰 주는?
+    expected: {outcome: answered, plan: {bucket: week, inner: sum, select: max},
+               conditions: {date: last_month, taxi_type: private, place: 대구}}
+  - id: d05
+    question: 수입이 가장 많았던 주는 언제인가요?
+    expected: {outcome: needs_clarification, plan: {bucket: week, inner: unspecified, select: max},
+               conditions: {}}
+  - id: d06
+    question: 월 단위로 합산한 택시 수입의 평균은?
+    expected: {outcome: unsupported, plan: {bucket: month, inner: sum, final: avg},
+               conditions: {}}
+  - id: d07
+    question: 지난달 법인택시 주별 영업 횟수의 최솟값은?
+    expected: {outcome: needs_clarification, plan: {bucket: week, inner: unspecified, final: min},
+               conditions: {date: last_month, taxi_type: corporate}}
+  - id: d08
+    question: 지난달 대구 개인택시 주별 매출 합계의 최댓값은?
+    expected: {outcome: answered, plan: {bucket: week, inner: sum, final: max},
+               conditions: {date: last_month, taxi_type: private, place: 대구}}

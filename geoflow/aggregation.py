@@ -49,6 +49,7 @@ FLAT_KEYS = ("bucket", "aggregation", "rollup")
 
 SOURCE_FLAT = "flat"
 SOURCE_STRUCTURED = "structured"
+SOURCE_BOTH = "structured+flat"
 
 #: 사람이 읽는 이름. 답변이 쓴다.
 REDUCER_LABELS = {
@@ -186,18 +187,36 @@ def parse_plan(raw, *, raw_text=""):
 def split_plan(raw_factors, *, raw_text=""):
     """factor 원문에서 구조화 표기를 떼어 낸다. ``(나머지 factor, spec 또는 None)``.
 
-    두 표기를 섞으면 어느 쪽이 질문의 뜻인지 고르지 않고 거부한다.
+    flat 집계 factor가 함께 오면 두 표현의 뜻이 같은지 본다. 같으면 받아들이고
+    (source="structured+flat"), 다르면 어느 쪽이 질문의 뜻인지 고르지 않고 거부한다.
+    flat 쪽 값은 나머지 factor에 그대로 남겨 기록과 재질의가 읽을 수 있게 한다.
     """
     if not isinstance(raw_factors, dict) or PLAN_KEY not in raw_factors:
         return raw_factors, None
     rest = {key: value for key, value in raw_factors.items() if key != PLAN_KEY}
-    mixed = [key for key in FLAT_KEYS if rest.get(key) not in (None, "")]
-    if mixed:
+    structured = parse_plan(raw_factors[PLAN_KEY], raw_text=raw_text)
+    flat_keys = [key for key in FLAT_KEYS if rest.get(key) not in (None, "")]
+    if not flat_keys:
+        return rest, structured
+    flat = from_flat({key: rest[key] for key in flat_keys})
+    if not _same_meaning(structured, flat):
         raise PlannerError(
-            "aggregation_plan과 flat 집계 factor를 함께 적었습니다: "
-            + ", ".join(mixed),
+            "aggregation_plan과 flat 집계 factor의 뜻이 다릅니다: "
+            f"구조화={structured.to_dict()}, flat={flat.to_dict()}",
             user_message="질문의 집계 방식을 해석하지 못했습니다.",
-            code="DUPLICATE_AGGREGATION_SOURCE",
-            context={"raw_text": raw_text, "flat": mixed},
+            code="AGGREGATION_SOURCE_CONFLICT",
+            context={"raw_text": raw_text, "structured": structured.to_dict(),
+                     "flat": flat.to_dict(), "flat_keys": flat_keys},
         )
-    return rest, parse_plan(raw_factors[PLAN_KEY], raw_text=raw_text)
+    return rest, AggregationSpec(
+        bucket=structured.bucket, inner=structured.inner, outer=structured.outer,
+        select=structured.select, source=SOURCE_BOTH,
+    )
+
+
+def _same_meaning(structured, flat):
+    """두 표현이 같은 계산을 뜻하는가. flat은 구간 선택(select)을 표현할 수 없다."""
+    if structured.select is not None:
+        return False
+    return (structured.bucket, structured.inner, structured.outer) == (
+        flat.bucket, flat.inner, flat.outer)

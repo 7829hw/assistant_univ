@@ -17,6 +17,7 @@ from assistant_runtime import (
     AssistantRuntime,
 )
 from build import build
+from geoflow import structured_grounding
 from geoflow.errors import GeoFlowError
 from geoflow.pipeline import GeoFlowPipeline
 from query_loader import (
@@ -54,6 +55,10 @@ MODEL_NAME = os.environ.get("OLLAMA_MODEL", DEFAULT_MODEL_NAME)
 CHAT_TIMEOUT = DEFAULT_CHAT_TIMEOUT
 OLLAMA_CLIENT = None
 AGENT_MODE = DEFAULT_AGENT_MODE
+#: GeoFlow planner의 집계 grounding 계약. flat이 production 기본값이다.
+AGGREGATION_GROUNDING = structured_grounding.FLAT
+#: 질문 원문으로 날짜·택시 유형·장소 조건을 다시 정하는 선택 기능. 기본은 끔.
+CONDITION_CHECK = False
 
 ARRAY_PREVIEW_LIMIT = 3
 INLINE_RESULT_LIMIT = 8
@@ -394,11 +399,19 @@ def _format_hop(
     return "\n".join([heading, *argument_lines, *_format_result_lines(result)])
 
 
+#: pipeline이 확인 요청을 적을 때 쓰는 머리말(geoflow/pipeline.py _fail).
+CLARIFICATION_PREFIX = "확인 필요:"
+
+
 def _format_outcome(final_answer, runtime_error, *, markdown=False):
     answer_heading = "### Answer" if markdown else "[Answer]"
     runtime_heading = "### Runtime" if markdown else "[Runtime]"
     answer = final_answer if final_answer is not None else "(없음)"
-    runtime = f"ERROR\n{runtime_error}" if runtime_error else "OK"
+    if runtime_error and runtime_error.startswith(CLARIFICATION_PREFIX):
+        # 실행 오류가 아니라 사용자에게 되물어야 하는 상태다(needs_clarification).
+        runtime = f"NEEDS_CLARIFICATION\n{runtime_error}"
+    else:
+        runtime = f"ERROR\n{runtime_error}" if runtime_error else "OK"
     separator = "\n\n" if markdown else "\n"
     runtime_line = f"{runtime_heading}\n{runtime}" if markdown else f"{runtime_heading} {runtime}"
     return f"{answer_heading}\n{answer}{separator}{runtime_line}"
@@ -509,6 +522,8 @@ def _new_runtime(tools, system_prompt, *, tool_handlers=None, agent_mode=None):
                 client=client,
                 tool_executor=tool_executor,
                 model=MODEL_NAME,
+                aggregation_grounding=AGGREGATION_GROUNDING,
+                condition_check=CONDITION_CHECK,
             )
         except GeoFlowError as error:
             raise SystemExit(f"GeoFlow 구성 실패: {error.detail}") from error
@@ -957,6 +972,24 @@ def parse_args(argv=None):
             f"geoflow=GeoFlow planning 후 결정적 실행(기본: {DEFAULT_AGENT_MODE})"
         ),
     )
+    parser.add_argument(
+        "--aggregation-grounding",
+        choices=structured_grounding.MODES,
+        default=structured_grounding.FLAT,
+        help=(
+            "geoflow 모드의 집계 grounding 계약. flat=기존 aggregation/bucket/rollup "
+            "factor(기본), structured=aggregation_plan(구간 안/밖 집계와 구간 선택을 "
+            "구조로 적음). 평가 전에는 기본값을 바꾸지 않는다."
+        ),
+    )
+    parser.add_argument(
+        "--condition-check",
+        action="store_true",
+        help=(
+            "geoflow 모드에서 질문 원문으로 날짜·택시 유형을 다시 정하고 장소 근거를 확인한다. "
+            "상대 날짜는 Asia/Seoul 기준일로 해석을 기록한다. 기본은 끔."
+        ),
+    )
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--query", help="실행할 단일 자연어 Query")
     source.add_argument("--query-file", help="실행할 Query YAML 경로")
@@ -1037,6 +1070,9 @@ def main(argv=None):
         raise SystemExit(str(error)) from error
 
     configure_agent_mode(args.agent_mode)
+    global AGGREGATION_GROUNDING, CONDITION_CHECK
+    AGGREGATION_GROUNDING = args.aggregation_grounding
+    CONDITION_CHECK = args.condition_check
     configure_ollama_client(
         args.ollama_host,
         args.model,
@@ -1044,9 +1080,15 @@ def main(argv=None):
         think=resolve_think(args.model_think),
         num_predict=args.num_predict,
     )
+    grounding_note = (
+        f"/ aggregation grounding: {AGGREGATION_GROUNDING} "
+        f"/ condition check: {'on' if CONDITION_CHECK else 'off'} "
+        if AGENT_MODE == AGENT_MODE_GEOFLOW else ""
+    )
     print(
         f"설정 — 모델: {MODEL_NAME} / 주소: {OLLAMA_HOST} "
         f"/ chat timeout: {CHAT_TIMEOUT:g}초 / agent mode: {AGENT_MODE} "
+        f"{grounding_note}"
         f"/ think: {args.model_think} "
         f"/ num_predict: {args.num_predict or '모델 기본값'}"
     )

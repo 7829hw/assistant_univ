@@ -18,7 +18,7 @@ Planner도 template도 Tool argument 이름을 직접 지정하지 않는다.
 구간 안/밖 집계가 뒤바뀐 lowering은 실행하지 않는다.
 """
 
-from geoflow import analysis_ops, periods
+from geoflow import analysis_ops, periods, tims_contract
 from geoflow.errors import CompilerError
 from geoflow.operator_registry import get_operator
 from geoflow.types import (
@@ -76,11 +76,14 @@ def topological_order(plan: GeoFlowPlan):
     return order, []
 
 
-def compile_plan(plan: GeoFlowPlan, *, reference_date=None):
+def compile_plan(plan: GeoFlowPlan, *, reference_date=None,
+                 contract=tims_contract.DEFAULT_CONTRACT):
     """검증을 통과한 plan을 topological order의 실행 단계로 만든다.
 
     ``reference_date``는 상대 기간(last_month 등)을 날짜로 풀 기준일이다. 기간을
     로컬에서 나눠야 할 때만 쓰며, 없으면 그런 계획은 만들지 않는다.
+    ``contract``는 TIMS 계약의 확인 상태다. 구간별 집계를 어떤 호출로 내릴지는
+    이 계약이 허용하는 전략 중에서만 고른다(``geoflow/tims_contract.py``).
     """
     order, cycle = topological_order(plan)
     if cycle:
@@ -121,26 +124,106 @@ def compile_plan(plan: GeoFlowPlan, *, reference_date=None):
             continue
         combine = _single_combiner(transformation, output, consumers, plan)
         spec = get_operator(transformation.operator)
-        if _can_fuse(spec, output, combine):
+        strategy, rejected = choose_group_strategy(
+            transformation, output, combine, spec, contract,
+        )
+        execution.lowering[transformation.id] = {
+            "strategy": None if strategy is None else strategy.name,
+            "rejected": rejected,
+        }
+        if strategy is None:
+            raise CompilerError(
+                f"{transformation.id}: 구간별 집계를 정확히 계산할 수 있는 호출 방법이 "
+                "확인되지 않았습니다. "
+                + "; ".join(f"{item['strategy']}: {item['reason']}" for item in rejected),
+                code="UNVERIFIED_TIMS_CONTRACT",
+                user_message=(
+                    "이 구간별 계산은 TIMS의 동작이 문서로 확인되지 않아 정확한 값을 "
+                    "보장할 수 없으므로 수행하지 않았습니다."
+                ),
+                context={"template": plan.template, "rejected": rejected},
+            )
+        if strategy is tims_contract.FUSED_BUCKET_ROLLUP:
             execution.steps.append(_fused_step(
                 transformation, combine, output, spec, nodes, plan,
             ))
             fused.add(combine.id)
             execution.unobserved[output.id] = (
-                "TIMS bucket/rollup 호출 안에서 계산되어 구간별 값은 반환되지 "
-                "않습니다. 구간 경계는 TIMS의 정의를 따릅니다."
+                "TIMS bucket/rollup 호출 안에서 계산되어 구간별 값은 반환되지 않습니다."
             )
             continue
         execution.steps.extend(_partition_steps(
             transformation, output, spec, nodes, plan, execution,
-            reference_date=reference_date,
+            reference_date=reference_date, strategy=strategy,
         ))
 
     for step in execution.steps:
         for covered in step.covers:
             execution.semantic_map.setdefault(covered, []).append(step.id)
-    verify_lowering(plan, execution, reference_date=reference_date)
+    verify_lowering(plan, execution, reference_date=reference_date,
+                    contract=contract)
     return execution
+
+
+#: 의미 graph가 정한 구간의 정의. 호출 하나로 합치려면 TIMS의 확인된 값이 이것과
+#: 같아야 한다. 상대 기간은 compiler가 Asia/Seoul 기준일로 푼다(pipeline clock).
+SEMANTIC_GROUP_DEFINITION = {
+    "bucket_week_start": "monday",
+    "bucket_partial": "clip_to_period",
+    "bucket_empty": "undefined",
+    "relative_date_reference": "Asia/Seoul calendar",
+}
+
+
+def choose_group_strategy(transformation, output, combine, spec, contract):
+    """구간별 집계를 내릴 전략과, 쓰지 않은 전략의 이유를 돌려준다.
+
+    순서: 호출 하나로 합침 → 구간 범위 호출 → 일 단위 호출. 앞의 것일수록 호출
+    수가 적다. 전략마다 필요한 계약 항목이 확인되지 않으면 쓰지 않는다.
+    """
+    rejected = []
+
+    def reject(strategy, reason):
+        rejected.append({"strategy": strategy.name, "reason": reason})
+
+    fused = tims_contract.FUSED_BUCKET_ROLLUP
+    if not _fusable_shape(spec, output, combine):
+        reject(fused, "Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다")
+    else:
+        missing = contract.missing(fused)
+        differing = [
+            key for key, value in SEMANTIC_GROUP_DEFINITION.items()
+            if key in fused.requires and key not in missing
+            and contract.items[key].value != value
+        ]
+        if missing:
+            reject(fused, "확인되지 않은 계약: " + ", ".join(missing))
+        elif differing:
+            reject(fused, "의미 graph의 구간 정의와 다른 계약: " + ", ".join(differing))
+        else:
+            return fused, rejected
+
+    if spec is None or not spec.accepts_period:
+        reject(tims_contract.RANGE_PARTITION, "Tool이 기간을 받지 않습니다")
+        reject(tims_contract.DAILY_PARTITION, "Tool이 기간을 받지 않습니다")
+        return None, rejected
+
+    ranged = tims_contract.RANGE_PARTITION
+    missing = contract.missing(ranged)
+    if not missing:
+        return ranged, rejected
+    reject(ranged, "확인되지 않은 계약: " + ", ".join(missing))
+
+    daily = tims_contract.DAILY_PARTITION
+    inner = transformation.params.get(spec.REDUCER_PARAM)
+    missing = contract.missing(daily)
+    if missing:
+        reject(daily, "확인되지 않은 계약: " + ", ".join(missing))
+    elif inner not in tims_contract.DECOMPOSABLE_INNER:
+        reject(daily, f"구간 안 집계 {inner}는 하루 값들로 정확히 다시 만들 수 없습니다")
+    else:
+        return daily, rejected
+    return None, rejected
 
 
 def _sources_for(transformation):
@@ -167,8 +250,11 @@ def _single_combiner(transformation, output, consumers, plan):
     return users[0]
 
 
-def _can_fuse(spec, output, combine):
-    """구간 안 집계와 구간별 값의 집계를 TIMS 호출 하나로 합칠 수 있는가."""
+def _fusable_shape(spec, output, combine):
+    """Tool이 이 구간·집계 조합을 호출 하나의 인자로 받을 수 있는가.
+
+    인자 모양만 본다. 같은 계산인지는 ``choose_group_strategy``가 계약으로 본다.
+    """
     capability = getattr(spec, "bucket_rollup", None)
     if capability is None or combine.operator != analysis_ops.REDUCE_GROUPS:
         return False
@@ -191,24 +277,31 @@ def _fused_step(transformation, combine, output, spec, nodes, plan):
     step.argument_sources[capability.rollup_param] = f"{combine.id}.params.reducer"
     step.output_bindings = {spec.output.extraction: combine.outputs[0]}
     step.covers = [transformation.id, combine.id]
+    step.assumptions = list(tims_contract.FUSED_BUCKET_ROLLUP.requires)
     return step
 
 
 def _partition_steps(transformation, output, spec, nodes, plan, execution, *,
-                     reference_date):
-    """기간을 구간으로 나눠 구간마다 같은 조건으로 호출한다."""
-    if spec is None or not spec.accepts_period:
-        raise CompilerError(
-            f"{transformation.id}: {transformation.operator}는 기간을 받지 않아 "
-            "구간별로 나눠 호출할 수 없습니다.",
-            code="UNSUPPORTED_GROUPED_MEASURE",
-            user_message="이 측정값은 주·월 구간별 계산을 지원하지 않습니다.",
-            context={"template": plan.template},
-        )
+                     reference_date, strategy):
+    """기간을 나눠 같은 조건으로 호출하고, 구간별 값을 모으는 로컬 단계를 붙인다.
+
+    ``range_partition``은 구간마다 날짜 범위로 한 번, ``daily_partition``은 하루마다
+    한 번 부른다. 일 단위일 때는 COLLECT_GROUPS가 구간 안 집계를 하루 값들에 다시
+    적용해 구간 값을 만든다(sum, max, min만 허용).
+    """
     bucket = output.attributes[analysis_ops.GROUP_BY]["bucket"]
     period = transformation.params.get(spec.PERIOD_PARAM)
     start, end = periods.resolve_period(period, reference_date=reference_date)
     groups = periods.partition(start, end, bucket)
+    daily = strategy is tims_contract.DAILY_PARTITION
+    if daily and (end - start).days + 1 > tims_contract.MAX_DAILY_CALLS:
+        raise CompilerError(
+            f"{transformation.id}: 일 단위 호출이 {(end - start).days + 1}번 필요해 "
+            f"상한 {tims_contract.MAX_DAILY_CALLS}을 넘습니다.",
+            code="UNSUPPORTED_PARTITION_SIZE",
+            user_message="기간이 길어 구간별 계산에 필요한 조회 수가 너무 많습니다.",
+            context={"template": plan.template, "period": period},
+        )
     execution.periods[transformation.id] = {
         "period": period,
         "resolved": periods.describe_period(start, end),
@@ -220,32 +313,47 @@ def _partition_steps(transformation, output, spec, nodes, plan, execution, *,
         "bucket": bucket,
         "boundary": periods.BOUNDARY_RULES[bucket],
         "groups": [group["label"] for group in groups],
+        "strategy": strategy.name,
     }
     steps = []
-    keys = []
-    for index, group in enumerate(groups, start=1):
-        step = _compile_step(transformation, nodes, plan)
-        key = f"{output.id}#{index}"
-        step.id = f"{transformation.id}#{index}"
-        step.arguments[spec.PERIOD_PARAM] = periods.date_argument(group)
-        step.argument_sources[spec.PERIOD_PARAM] = (
-            f"{output.id}.group_by.bucket[{group['label']}] "
-            f"⊂ {transformation.id}.params.{spec.PERIOD_PARAM}"
-        )
-        step.output_bindings = {spec.output.extraction: key}
-        step.group = dict(group)
-        steps.append(step)
-        keys.append(key)
+    members = []
+    inner = transformation.params.get(spec.REDUCER_PARAM)
+    for group_index, group in enumerate(groups, start=1):
+        spans = periods.days_of(group) if daily else [group]
+        keys = []
+        for day_index, span in enumerate(spans, start=1):
+            step = _compile_step(transformation, nodes, plan)
+            suffix = f"{group_index}.{day_index}" if daily else f"{group_index}"
+            key = f"{output.id}#{suffix}"
+            step.id = f"{transformation.id}#{suffix}"
+            step.arguments[spec.PERIOD_PARAM] = (
+                span["start"] if daily else periods.date_argument(span)
+            )
+            step.argument_sources[spec.PERIOD_PARAM] = (
+                f"{output.id}.group_by.bucket[{group['label']}] "
+                f"⊂ {transformation.id}.params.{spec.PERIOD_PARAM}"
+            )
+            step.output_bindings = {spec.output.extraction: key}
+            step.group = dict(group)
+            step.assumptions = list(strategy.requires)
+            steps.append(step)
+            keys.append(key)
+        members.append(keys)
     steps.append(ToolStep(
         id=f"{transformation.id}.collect",
         operator=analysis_ops.COLLECT_GROUPS,
         tool_name=f"local:{analysis_ops.COLLECT_GROUPS}",
-        arguments={"groups": [dict(group) for group in groups]},
+        arguments={
+            "groups": [dict(group) for group in groups],
+            "members": members,
+            "reducer": tims_contract.DECOMPOSABLE_INNER[inner] if daily else None,
+        },
         output_bindings={WHOLE_RESULT: output.id},
         kind=STEP_LOCAL,
         covers=[transformation.id],
-        argument_sources={"groups": f"{output.id}.group_by.bucket"},
-        inputs=keys,
+        argument_sources={"groups": f"{output.id}.group_by.bucket",
+                          "reducer": f"{transformation.id}.params.{spec.REDUCER_PARAM}"},
+        inputs=[key for keys in members for key in keys],
     ))
     return steps
 
@@ -388,11 +496,22 @@ def _mismatch(message, plan, **context):
     )
 
 
-def verify_lowering(plan, execution, *, reference_date=None):
+def verify_lowering(plan, execution, *, reference_date=None,
+                    contract=tims_contract.DEFAULT_CONTRACT):
     """실행 단계가 의미 graph의 조건과 집계를 빠짐없이 옮겼는지 확인한다.
 
     compiler의 결과를 다시 읽는 방어선이다. 인자 형식은 Tool schema가, 계획의
     구조는 validator가 보지만, "이 호출이 질문의 그 계산인가"는 둘 다 보지 않는다.
+
+    검증하는 것(내부 일관성)
+    - 모든 의미 단계가 실행 단계로 수행된다.
+    - 각 호출이 그 의미 단계의 조건(기간·범위·택시 유형 등)을 그대로 갖는다.
+    - 구간별 집계에 쓴 전략이 ``contract``에서 허용된 것이다.
+    - 기간 분할이 기간을 빈틈과 겹침 없이 덮고, 구간 안/밖 집계가 뒤바뀌지 않았다.
+
+    검증할 수 없는 것(외부 계약): TIMS가 실제로 각 단계의 ``assumptions``에 적힌
+    항목대로 동작하는지. 예를 들어 단일 날짜가 정말 그 하루를 뜻하는지는 호출
+    결과만으로 알 수 없다.
     """
     nodes = {node.id: node for node in plan.concepts}
     steps = {step.id: step for step in execution.steps}
@@ -439,10 +558,26 @@ def verify_lowering(plan, execution, *, reference_date=None):
                 raise _mismatch(f"{transformation.id}가 여러 호출로 나뉘었습니다.",
                                 plan, transformation=transformation.id)
             continue
+        strategy = (execution.lowering.get(transformation.id) or {}).get("strategy")
+        allowed = {
+            item.name: contract.allows(item)
+            for item in (tims_contract.FUSED_BUCKET_ROLLUP,
+                         tims_contract.RANGE_PARTITION,
+                         tims_contract.DAILY_PARTITION)
+        }
+        if not allowed.get(strategy):
+            raise _mismatch(
+                f"{transformation.id}의 lowering 전략 {strategy!r}은 계약에서 허용되지 "
+                "않습니다.",
+                plan, transformation=transformation.id,
+            )
         if partitioned:
             _verify_partition(transformation, output, tools, covering, plan,
-                              reference_date)
+                              reference_date, strategy)
         else:
+            if strategy != tims_contract.FUSED_BUCKET_ROLLUP.name:
+                raise _mismatch(f"{transformation.id}의 호출이 전략과 다릅니다.", plan,
+                                transformation=transformation.id)
             _verify_fused(transformation, output, tools, plan)
 
 
@@ -470,13 +605,19 @@ def _verify_fused(transformation, output, tools, plan):
 
 
 def _verify_partition(transformation, output, tools, covering, plan,
-                      reference_date):
+                      reference_date, strategy):
     spec = get_operator(transformation.operator)
     period = transformation.params.get(spec.PERIOD_PARAM)
     start, end = periods.resolve_period(period, reference_date=reference_date)
     bucket = output.attributes[analysis_ops.GROUP_BY]["bucket"]
-    expected = [periods.date_argument(group)
-                for group in periods.partition(start, end, bucket)]
+    groups = periods.partition(start, end, bucket)
+    daily = strategy == tims_contract.DAILY_PARTITION.name
+    if daily:
+        expected_members = [[day["start"] for day in periods.days_of(group)]
+                            for group in groups]
+    else:
+        expected_members = [[periods.date_argument(group)] for group in groups]
+    expected = [item for members in expected_members for item in members]
     actual = [step.arguments.get(spec.PERIOD_PARAM) for step in tools]
     if actual != expected:
         raise _mismatch(
@@ -493,6 +634,24 @@ def _verify_partition(transformation, output, tools, covering, plan,
     collect = [step for step in covering if step.operator == analysis_ops.COLLECT_GROUPS]
     if len(collect) != 1 or collect[0].output_bindings.get(WHOLE_RESULT) != output.id:
         raise _mismatch(f"{output.id}를 모으는 단계가 없습니다.", plan,
+                        node=output.id)
+    by_key = {key: step for step in tools for key in step.output_bindings.values()}
+    members = collect[0].arguments.get("members") or []
+    member_dates = [
+        [by_key[key].arguments.get(spec.PERIOD_PARAM) if key in by_key else None
+         for key in keys]
+        for keys in members
+    ]
+    if member_dates != expected_members:
+        raise _mismatch(f"{output.id}의 구간 구성이 기간 분할과 다릅니다.", plan,
+                        node=output.id)
+    inner = transformation.params.get(spec.REDUCER_PARAM)
+    expected_reducer = tims_contract.DECOMPOSABLE_INNER.get(inner) if daily else None
+    if daily and expected_reducer is None:
+        raise _mismatch(f"{transformation.id}의 구간 안 집계 {inner}는 일 단위로 "
+                        "다시 만들 수 없습니다.", plan, transformation=transformation.id)
+    if collect[0].arguments.get("reducer") != expected_reducer:
+        raise _mismatch(f"{output.id}를 모으는 집계가 구간 안 집계와 다릅니다.", plan,
                         node=output.id)
 
 

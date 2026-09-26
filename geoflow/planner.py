@@ -20,6 +20,7 @@ import yaml
 
 from build import BuildError, build_prompt
 
+from geoflow import conditions, structured_grounding
 from geoflow.errors import PlannerError
 from geoflow.factors import (
     FACTOR_SPECS,
@@ -175,10 +176,12 @@ def describe_vocabulary():
     return "\n".join(sorted(set(lines)))
 
 
-def describe_factors():
+def describe_factors(exclude=()):
     """사용 가능한 factor 이름과 값 형식을 정의에서 만든다."""
     lines = []
     for name, spec in sorted(FACTOR_SPECS.items()):
+        if name in exclude:
+            continue
         if spec.values:
             shape = " | ".join(sorted(spec.values))
         elif spec.kind == "boolean":
@@ -202,9 +205,23 @@ class GeoFlowPlanner:
         model=None,
         repair_instruction=None,
         max_attempts=DEFAULT_MAX_ATTEMPTS,
+        aggregation_grounding=structured_grounding.FLAT,
+        condition_check=False,
+        clock=None,
     ):
         if max_attempts < 1:
             raise ValueError(f"max_attempts는 1 이상이어야 합니다: {max_attempts}")
+        if aggregation_grounding not in structured_grounding.MODES:
+            raise ValueError(
+                f"aggregation_grounding은 {', '.join(structured_grounding.MODES)} 중 "
+                f"하나여야 합니다: {aggregation_grounding}"
+            )
+        #: 집계를 적는 grounding 계약. flat(H0, production 기본값) 또는 structured(S1).
+        self.aggregation_grounding = aggregation_grounding
+        #: 질문 원문으로 날짜·택시 유형·장소 조건을 다시 정하는 선택 기능(geoflow/conditions.py).
+        #: prompt는 바꾸지 않는다. 같은 LLM 응답에 켜고 끈 결과를 비교할 수 있다.
+        self.condition_check = bool(condition_check)
+        self.clock = clock
         self.max_attempts = max_attempts
         self.client = client
         self.base_prompt = (
@@ -218,8 +235,14 @@ class GeoFlowPlanner:
         )
         self.model = model if model is not None else getattr(client, "model", None)
 
+    @property
+    def structured(self):
+        return self.aggregation_grounding == structured_grounding.STRUCTURED
+
     def system_prompt(self):
         """어휘를 정의에서 직접 만들어 prompt 표류를 막는다."""
+        if self.structured:
+            return self._structured_system_prompt()
         return "\n\n".join([
             self.base_prompt,
             f"{_VOCABULARY_HEADING}\n{describe_vocabulary()}",
@@ -227,6 +250,24 @@ class GeoFlowPlanner:
             f"{_SEMANTICS_HEADING}\n{describe_factor_semantics()}"
             f"\n\n{FACTOR_STAGE_NOTE}",
             f"{_CONSTRAINT_HEADING}\n{describe_constraints()}",
+        ])
+
+    def _structured_system_prompt(self):
+        """S1: flat 집계 factor를 빼고 [집계 계획]으로 집계를 적게 한다."""
+        excluded = structured_grounding.EXCLUDED_FACTORS
+        factors = describe_factors(exclude=excluded)
+        factors += "\n- aggregation_plan: 아래 [집계 계획]의 형식"
+        semantics = describe_factor_semantics(
+            sorted(set(FACTOR_SPECS) - excluded),
+        )
+        return "\n\n".join([
+            structured_grounding.structured_base_prompt(self.base_prompt),
+            f"{_VOCABULARY_HEADING}\n{describe_vocabulary()}",
+            f"{_FACTOR_HEADING}\n{factors}",
+            f"{_SEMANTICS_HEADING}\n"
+            f"{structured_grounding.structured_factor_semantics(semantics)}"
+            f"\n\n{structured_grounding.PLAN_SECTION}",
+            f"{_CONSTRAINT_HEADING}\n{describe_constraints(exclude=excluded)}",
         ])
 
     def messages(self, question):
@@ -409,7 +450,17 @@ class GeoFlowPlanner:
                 context={"raw_text": text},
             )
 
-        grounding = parse_grounding(payload, question, raw_text=text)
+        audit = None
+        if self.condition_check:
+            reference = (self.clock or conditions.reference_now)()
+            payload, audit = conditions.reconcile_payload(
+                payload, question, reference_date=reference, raw_text=text,
+            )
+        grounding = parse_grounding(
+            payload, question, raw_text=text,
+            structured_aggregation=self.structured,
+        )
+        grounding.condition_audit = audit
         # 발화에 없는 상위 지역은 조회를 어긋나게 만들 뿐이므로 덜어 낸다.
         # 거부가 아니라 제거로 처리하는 이유는 drop_invented_regions와 같다.
         drop_unsupported_regions(grounding)

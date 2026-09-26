@@ -418,7 +418,7 @@ def _group_text(group):
 
 
 def _route_text(stages, execution_plan, detail):
-    """실제로 어떻게 계산했는지. 같은 뜻이라도 경로에 따라 구간 경계가 다르다."""
+    """실제로 어떻게 계산했는지. 어느 경로든 의미 graph와 같은 계산일 때만 실행된다."""
     unit = BUCKET_LABELS.get(stages["bucket"], stages["bucket"])
     inner = REDUCER_LABELS.get(stages["inner"], stages["inner"])
     if detail:
@@ -428,16 +428,19 @@ def _route_text(stages, execution_plan, detail):
             else f"구간별 값의 "
                  f"{_josa(REDUCER_LABELS.get(stages['reducer']), '을', '를')} 계산했습니다"
         )
-        return (
-            f"기간 {detail['resolved']}을 {unit} 구간 {len(detail['groups'])}개"
-            f"({BOUNDARY_RULES[stages['bucket']]})로 나눠 구간마다 "
-            f"{_josa(inner, '을', '를')} 조회한 뒤 로컬에서 {last}."
-        )
+        split = (f"기간 {detail['resolved']}을 {unit} 구간 {len(detail['groups'])}개"
+                 f"({BOUNDARY_RULES[stages['bucket']]})로 나눠")
+        if detail.get("strategy") == "daily_partition":
+            fetch = (f" 하루마다 {_josa(inner, '을', '를')} 조회하고 구간마다 하루 값들의 "
+                     f"{_josa(inner, '을', '를')} 구한 뒤")
+        else:
+            fetch = f" 구간마다 {_josa(inner, '을', '를')} 조회한 뒤"
+        return f"{split}{fetch} 로컬에서 {last}."
     if execution_plan is not None and stages["groups_node"] in execution_plan.unobserved:
         return (
             f"TIMS가 {unit} 구간마다 {_josa(inner, '을', '를')} 구한 뒤 그 값들의 "
             f"{_josa(REDUCER_LABELS.get(stages['reducer']), '을', '를')} 한 번에 계산했습니다 "
             f"(bucket={stages['bucket']}, aggregation={stages['inner']}, "
-            f"rollup={stages['reducer']}). 구간 경계는 TIMS 정의를 따릅니다."
+            f"rollup={stages['reducer']})."
         )
     return describe_stages(stages)

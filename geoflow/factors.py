@@ -261,11 +261,11 @@ def describe_factor_semantics(names=None):
     return "\n".join(lines)
 
 
-def describe_constraints():
+def describe_constraints(exclude=()):
     """factor 공기 규칙을 Prompt에 넣을 문장으로 만든다.
 
     같은 규칙을 Prompt에 손으로 또 적어 두면 한쪽만 고쳐져 어긋난다.
-    설명 문구까지 이 표에서 만들어 붙인다.
+    설명 문구까지 이 표에서 만들어 붙인다. ``exclude``의 factor가 걸린 규칙은 뺀다.
     """
     return "\n".join(
         f"- {item.factor}를 넣으면 {', '.join(item.requires)}도 함께 "
@@ -273,6 +273,7 @@ def describe_constraints():
         for item in sorted(
             FACTOR_CONSTRAINTS.values(), key=lambda item: item.factor
         )
+        if item.factor not in exclude and not set(item.requires) & set(exclude)
     )
 
 

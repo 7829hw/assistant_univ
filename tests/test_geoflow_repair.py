@@ -562,9 +562,11 @@ class RepairPatchApplyTest(unittest.TestCase):
 class FactorCompletionReproducerTest(unittest.TestCase):
     """E. b24 형태를 LLM 없이 재현한다."""
 
-    QUESTION = "월 단위로 집계한 개인택시 수입의 최대값은?"
+    QUESTION = "2026년 7~8월, 월 단위로 집계한 개인택시 수입의 최대값은?"
     CONCEPTS = [event("e", "operation"), measure("m", "AMOUNT", "revenue")]
-    FACTORS = {"bucket": "month", "aggregation": "max", "taxi_type": "private"}
+    # 구간을 나누려면 기간이 필요하다. 기간이 없으면 계획 전에 거부된다.
+    FACTORS = {"bucket": "month", "aggregation": "max", "taxi_type": "private",
+               "date": "20260701-20260831"}
 
     def test_bucket_only_is_repaired_by_a_factor_patch(self):
         pipeline, client = new_pipeline([
@@ -578,11 +580,18 @@ class FactorCompletionReproducerTest(unittest.TestCase):
             run.repairs["factor_completion"],
             {"attempted": 1, "succeeded": 1},
         )
-        step = run.execution_plan["steps"][0]
-        self.assertEqual(step["arguments"]["bucket"], "month")
-        self.assertEqual(step["arguments"]["rollup"], "max")
-        # 기존 조건은 그대로 살아 있다.
-        self.assertEqual(step["arguments"]["taxi_type"], "private")
+        # 보완된 rollup은 구간별 값의 집계가 된다. TIMS bucket 경계가 확인되지 않아
+        # 호출 하나로 합치지 않고 하루마다 부른다.
+        steps = run.execution_plan["steps"]
+        tool_steps = [step for step in steps if step["kind"] == "tool"]
+        self.assertEqual(len(tool_steps), 62)
+        self.assertEqual(steps[-1]["operator"], "REDUCE_GROUPS")
+        self.assertEqual(steps[-1]["arguments"], {"reducer": "max"})
+        for step in tool_steps:
+            self.assertNotIn("bucket", step["arguments"])
+            # 기존 조건은 그대로 살아 있다.
+            self.assertEqual(step["arguments"]["taxi_type"], "private")
+            self.assertEqual(step["arguments"]["aggregation"], "max")
 
     def test_wrong_rollup_value_is_rejected(self):
         """bucket 단위를 rollup에 넣는 혼동은 값 검증이 막는다.
@@ -641,10 +650,11 @@ class PlanningRepairPipelineTest(unittest.TestCase):
         pipeline, client = new_pipeline([
             payload([event("e", "operation"),
                      measure("m", "AMOUNT", "revenue")],
-                    {"bucket": "week", "aggregation": "sum"}),
+                    {"bucket": "week", "aggregation": "sum",
+                     "date": "20260801-20260831"}),
             factor_patch(rollup="avg"),
         ])
-        run = pipeline.run("주 단위로 합산한 택시 수입의 평균은?")
+        run = pipeline.run("2026년 8월 주 단위로 합산한 택시 수입의 평균은?")
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
         self.assertEqual(
             run.repairs["factor_completion"],

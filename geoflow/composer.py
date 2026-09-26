@@ -29,7 +29,7 @@ import json
 from dataclasses import dataclass, field
 
 from geoflow import analysis_ops, operator_mapping
-from geoflow.aggregation import FLAT_KEYS
+from geoflow.aggregation import FLAT_KEYS, REDUCERS
 from geoflow.errors import CompositionError
 from geoflow.factors import STRUCTURAL_FACTORS, validate_factors
 from geoflow.macros import MacroLibrary
@@ -508,7 +508,12 @@ class MacroComposer:
                 ),
                 code="AMBIGUOUS_INNER_AGGREGATION",
                 context={"aggregation": aggregation.to_dict(),
-                         "operator": binding.operator},
+                         "operator": binding.operator,
+                         # 오류가 아니라 사용자 확인이 필요한 상태다. 무엇을 물어야
+                         # 하는지와 고를 수 있는 값을 함께 남긴다.
+                         "needs_clarification": True,
+                         "clarify": "inner_reducer",
+                         "choices": sorted(REDUCERS)},
             )
         return OperatorBinding(
             operator=binding.operator,

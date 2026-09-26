@@ -1,0 +1,144 @@
+# 두 단계 집계 의미 라벨 v2 (inner 미지정 감사 결과)
+#
+# v1은 corpus 파일의 expected_tool_args다(paraphrases*.yaml). 수정하지 않는다. corpus
+# sha256이 고정되어 있고 그 corpus로 잰 기존 run과 결과가 이 라벨을 전제로 한다.
+#
+# v2가 필요한 이유
+# - v1은 두 단계 집계를 TIMS 호출 하나(bucket·aggregation·rollup)의 인자로 적었다.
+#   구간 안 집계를 질문이 말하지 않으면 aggregation을 생략했고, 채점(tool_arg_mismatches)은
+#   생략을 schema 기본값 avg와 같게 본다. 그래서
+#   1) 질문이 여러 해석을 허용하는데 Tool 기본값을 정답으로 정했고(b21, b24, h12, f13),
+#   2) 질문의 뜻으로 sum이 정해지는데 기본값(avg)을 정답으로 정했으며(f03),
+#   3) 모델이 명시된 구간 안 집계(avg)를 빠뜨려도 기본값과 같아 정답으로 셌다(f02_p1).
+# - 구간별 집계는 이제 계약에 따라 다른 호출로 내려가므로(geoflow/tims_contract.py) Tool
+#   인자로는 두 단계 의미를 채점할 수 없다. v2는 의미 계획(plan)과 결과 종류(outcome)를
+#   따로 적는다.
+#
+# 필드
+#   plan     기대 의미 계획. inner: unspecified는 "질문이 정하지 않았다"는 뜻이며 채울 값이 아니다.
+#   outcome  현재 제품 계약에서 기대하는 결과 종류.
+#            answered | needs_clarification | unsupported
+#   class    감사 유형(주 유형 먼저).
+#            1 질문에 명시된 inner를 LLM이 누락  2 질문의 뜻으로 inner가 정해짐
+#            3 질문이 여러 해석을 허용            4 의도는 명확하지만 현재 도구·계약이 지원하지 않음
+#            5 기존 라벨이나 평가 변환이 잘못됨
+#   fix      고쳐야 할 대상: grounding | execution | evaluation_label | user_confirmation
+#
+# 이 corpus들은 모두 development다(결과를 이미 보았다).
+#
+# 공통 사항: 아래 질문에는 기간이 없다. 기간이 없으면 구간을 정확히 나눌 수 없고, TIMS가
+# date 생략을 어떤 기간으로 보는지도 계약에 없다. 그래서 의미가 확정되어도 현재 계약에서는
+# 실행할 수 없다(UNRESOLVED_PERIOD 또는 UNVERIFIED_TIMS_CONTRACT). 그 경우 outcome은
+# unsupported이고 class에 4가 붙는다.
+
+version: 2
+base: v1 (corpus expected_tool_args, 수정하지 않음)
+evaluation_reference_date: "20260925"
+
+intents:
+  b21_bucket_rollup:
+    question: 주 단위로 집계한 택시 수입의 평균은?
+    v1_expected_tool_args: {metric: revenue, bucket: week, rollup: avg}
+    plan: {bucket: week, inner: unspecified, final: avg}
+    outcome: needs_clarification
+    class: [3, 5, 4]
+    fix: [user_confirmation, evaluation_label]
+    rationale: >-
+      "집계한"은 구간 안 집계 방식을 정하지 않는다. 수입의 원시 단위는 택시·일
+      기록(schema: '개별 택시 1일 영업')이어서 "주별 총수입의 평균"과 "주별 일평균 수입의
+      평균"이 모두 성립한다. v1은 Tool 기본값 avg를 정답으로 적었다.
+    paraphrases:
+      b21_p3:
+        question: 수입의 평균을 주 단위로 집계하면?
+        plan: null
+        outcome: needs_clarification
+        class: [3]
+        rationale: >-
+          "평균을 주 단위로 집계"는 구간 안 집계가 avg이고 구간별 값을 합치는 방식이
+          없다(주별 목록으로도 읽힌다). 원문(p0)과 뜻이 다르다. 어느 쪽으로도 확정할 수 없다.
+
+  b24_bucket_rollup_month:
+    question: 월 단위로 집계한 개인택시 수입의 최대값은?
+    v1_expected_tool_args: {metric: revenue, taxi_type: private, bucket: month, rollup: max}
+    plan: {bucket: month, inner: unspecified, final: max}
+    outcome: needs_clarification
+    class: [3, 5, 4]
+    fix: [user_confirmation, evaluation_label]
+    rationale: >-
+      b21과 같다. "월별 총수입 중 최대"와 "월별 일평균 수입 중 최대"가 모두 성립한다.
+    paraphrases:
+      b24_p3:
+        question: 수입의 최대값을 월 단위로 개인택시 기준 집계하면?
+        plan: null
+        outcome: needs_clarification
+        class: [3]
+        rationale: >-
+          "최대값을 월 단위로 집계"는 구간 안 집계가 max이고 구간별 값의 집계가 없다.
+          원문과 뜻이 다르고 확정할 수 없다.
+
+  h12_private_revenue_week_min:
+    question: 주 단위로 집계한 개인택시 수입의 최소값은?
+    v1_expected_tool_args: {metric: revenue, taxi_type: private, bucket: week, rollup: min}
+    plan: {bucket: week, inner: unspecified, final: min}
+    outcome: needs_clarification
+    class: [3, 5, 4]
+    fix: [user_confirmation, evaluation_label]
+    rationale: b21과 같다.
+    paraphrases:
+      h12_p3:
+        question: 최소 수입은 주 단위로 개인택시 기준 집계하면 얼마인가요?
+        plan: null
+        outcome: needs_clarification
+        class: [3]
+        rationale: >-
+          "최소 수입"이 구간 안 집계(min)인지 구간별 값의 최소인지 정해지지 않는다.
+
+  f13_week_avg_corporate_operating_count:
+    question: 주 단위로 집계한 법인택시 영업 횟수의 평균은?
+    v1_expected_tool_args: {metric: operating_count, bucket: week, rollup: avg, taxi_type: corporate}
+    plan: {bucket: week, inner: unspecified, final: avg}
+    outcome: needs_clarification
+    class: [3, 5, 4]
+    fix: [user_confirmation, evaluation_label]
+    rationale: >-
+      영업 횟수의 원시 단위도 택시·일이다. "주별 총 영업 횟수의 평균"과 "주별 택시·일당
+      평균 영업 횟수의 평균"이 모두 성립한다.
+
+  f03_month_sum_operating_count:
+    question: 월 단위 영업 횟수의 합계는?
+    v1_expected_tool_args: {metric: operating_count, bucket: month, rollup: sum}
+    plan: {bucket: month, inner: sum, final: sum}
+    outcome: unsupported
+    class: [2, 5, 4]
+    fix: [grounding, evaluation_label, execution]
+    rationale: >-
+      구간별 값을 다시 "합계"하는 질문이다. 월별 평균을 더한 값은 의미 있는 양이 아니므로
+      월별 값은 월별 합계로 정해진다. v1은 aggregation을 생략해 Tool 기본값 avg를 구간 안
+      집계로 삼았다(라벨 오류). 모델이 inner를 적지 않은 것은 grounding 오류다. 이전
+      보고서가 이 intent를 "golden 충돌이므로 거부가 맞다"로 묶은 것은 틀렸다. 거부는
+      안전하지만 정답이 아니다. 의미가 확정되어도 기간이 없어 현재 계약으로는 실행할 수 없다.
+
+  f01_month_sum_then_avg_revenue:
+    question: 월 단위로 합산한 택시 수입의 평균은?
+    v1_expected_tool_args: {metric: revenue, bucket: month, aggregation: sum, rollup: avg}
+    plan: {bucket: month, inner: sum, final: avg}
+    outcome: unsupported
+    class: [1, 4]
+    fix: [grounding, execution]
+    rationale: >-
+      "합산한"이 구간 안 집계(sum)를 명시한다. 모델이 이를 빠뜨리면 grounding 오류이며
+      모호한 질문으로 재분류하지 않는다. v1 라벨은 의미가 맞다. 기간이 없어 현재 계약으로는
+      실행할 수 없다.
+
+  f02_week_avg_then_max_hours:
+    question: 주 단위로 평균 낸 영업 시간의 최대값은?
+    v1_expected_tool_args: {metric: hours, bucket: week, aggregation: avg, rollup: max}
+    plan: {bucket: week, inner: avg, final: max}
+    outcome: unsupported
+    class: [1, 4]
+    fix: [grounding, execution]
+    rationale: >-
+      "평균 낸"이 구간 안 집계(avg)를 명시한다. v1 라벨은 의미가 맞다. 그러나 v1 채점은
+      aggregation 생략을 기본값 avg와 같게 보므로, 모델이 inner를 빠뜨린 관측(M0 f02_p1)을
+      정답으로 셌다(평가 변환 오류, class 5는 그 관측에만 해당). avg 구간 안 집계는 날짜 범위
+      계약(range_inclusive)이 확인되지 않아 현재 계약으로는 계산할 수 없고, 기간도 없다.

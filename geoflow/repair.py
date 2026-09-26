@@ -20,6 +20,7 @@
 질문 문자열은 보지 않는다.
 """
 
+import copy
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -554,4 +555,32 @@ def apply_patch(grounding, patch):
     else:
         raise RepairViolation(f"알 수 없는 patch입니다: {type(patch).__name__}")
 
-    return parse_grounding(payload, grounding.question)
+    structured = grounding.aggregation_plan
+    if structured is not None and isinstance(patch, FactorCompletionPatch):
+        # 구조화 집계가 있는데 flat 집계 factor를 덧붙이면 두 표현이 섞인다.
+        raise RepairViolation("구조화 집계가 있는 grounding에 집계 factor를 덧붙일 수 없습니다.")
+    repaired = parse_grounding(payload, grounding.question)
+    # 직렬화 표현(factors)에는 구조화 집계가 없다. 수정 대상이 아니므로 그대로 옮긴다.
+    # 옮기지 않으면 장소 값 수정만으로 집계 의미가 조용히 사라진다.
+    repaired.aggregation_plan = structured
+    repaired.condition_audit = _carry_condition_audit(grounding, patch)
+    return repaired
+
+
+def _carry_condition_audit(grounding, patch):
+    """조건 기록을 옮기고, 장소 값이 바뀌면 원래 근거와 수정 이력을 남긴다."""
+    audit = grounding.condition_audit
+    if audit is None:
+        return None
+    audit = copy.deepcopy(audit)
+    if isinstance(patch, PlaceValuePatch):
+        for record in audit.get("places") or []:
+            if record.get("id") != patch.concept_id:
+                continue
+            record.setdefault("history", []).append({
+                "from": {"name": record.get("lookup_name"), "region": record.get("region")},
+                "to": {"name": patch.name, "region": patch.region},
+                "reason": "place_value_repair",
+            })
+            record["lookup_name"], record["region"] = patch.name, patch.region
+    return audit

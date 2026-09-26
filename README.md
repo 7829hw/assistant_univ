@@ -851,23 +851,66 @@ operation --measure_groups(OPERATION_METRIC, aggregation=sum, 기간·범위·�
           --combine_groups(REDUCE_GROUPS avg | SELECT_GROUP max)--> revenue
 ```
 
-compiler가 이것을 실행 단계로 내림.
+compiler가 이것을 실행 단계로 내림. 어떤 호출로 내릴지는 TIMS 계약의 확인 상태
+(`geoflow/tims_contract.py`)가 정함. schema와 vendor parameter 정의에 문장으로 있는 항목만
+확인된 것으로 보고, mock 동작은 근거로 쓰지 않음.
 
-* TIMS가 받으면 호출 하나로 합침. `get_operation_metrics(bucket=week, aggregation=sum, rollup=avg)`.
-  인자마다 어느 의미 단계에서 왔는지 `argument_sources`에 남음.
-* 받지 않으면 기간을 명시 날짜 구간으로 나눠 구간마다 같은 조건으로 호출한 뒤 로컬에서
-  합치거나 고름. "가장 큰 주"(rollup은 구간을 돌려주지 않음)와 bucket이 없는 Tool이 여기에
-  해당함. 상대 기간은 pipeline의 기준일(`clock`)로 풀고, 풀 수 없으면 거부함.
-* `verify_lowering`이 실행 단계를 의미 graph와 대조함. 조건 누락, 구간 누락, 구간 안/밖
-  뒤바뀜은 `LOWERING_MISMATCH`로 거부함.
+| 전략 | 필요한 계약 | 현재 |
+|---|---|---|
+| bucket/aggregation/rollup 호출 하나 | 주 시작일·부분 구간·빈 구간·상대 날짜 기준이 확인되고 의미 graph의 정의와 같을 것 | 쓰지 않음(미확인) |
+| 구간마다 날짜 범위 호출 | 범위 양 끝 포함 | 쓰지 않음(예시만 있음) |
+| 하루마다 호출 후 로컬에서 구간 값 계산 | 단일 날짜 = 그 하루(확인됨), 구간 안 집계가 sum·max·min | 사용(최대 62회) |
+
+* 명시 기간이 없거나, 연속 기간이 아니거나, 구간 안 집계가 avg·med이면 구조화된 지원 불가로
+  멈춤(`UNRESOLVED_PERIOD`, `UNSUPPORTED_PERIOD_FOR_GROUPING`, `UNVERIFIED_TIMS_CONTRACT`).
+* 상대 기간은 pipeline 기준일(Asia/Seoul)로 풂. 하루 값이 null이면 0으로 채우지 않고 멈춤.
+* `verify_lowering`은 실행 단계가 의미 graph의 조건·구간 분할·집계를 빠짐없이 옮겼는지 확인함.
+  TIMS가 계약대로 동작하는지는 확인할 수 없으며, step마다 `assumptions`로 남김.
 
 구간 안 집계가 질문에 없으면(`bucket=week, rollup=avg`) Tool 기본값(avg)으로 채우지 않고
-`AMBIGUOUS_INNER_AGGREGATION`으로 되물음. 재질의로 채우지도 않음. 구간이 없는 한 단계
-질문은 기존대로 기본값을 쓰고, 답변에 그 사실을 밝힘.
+`AMBIGUOUS_INNER_AGGREGATION`(`outcome=needs_clarification`)으로 되물음. 재질의로 채우지도 않음.
+구간이 없는 한 단계 질문은 기존대로 기본값을 쓰고, 답변에 그 사실을 밝힘.
 
-답변에는 기간(로컬에서 푼 날짜 포함), 범위, 택시 유형, 집계 뜻, 실제 계산 경로(호출 하나 /
-기간 분할과 구간 경계), 구간별 값이 나옴. trace의 모든 항목은 `covers`로 의미 단계와
-연결됨. 설계와 측정 기록: `evaluation/design/semantic_aggregation_graph.md`.
+답변에는 기간(로컬에서 푼 날짜 포함), 범위, 택시 유형, 집계 뜻, 계산 경로, 구간별 값이 나옴.
+trace의 모든 항목은 `covers`로 의미 단계와 연결됨.
+
+**구조화 집계 grounding(선택).** 기본값은 flat factor(aggregation·bucket·rollup)임.
+`--aggregation-grounding structured`를 주면 Planner가 `factors.aggregation_plan`에
+`bucket{unit, reducer|unspecified}`와 `result{reducer}|{select}`를 적음. "최댓값"과
+"최댓값을 가진 주"를 구분할 수 있음. flat factor와 함께 오면 뜻이 같을 때만 받음
+(`AGGREGATION_SOURCE_CONFLICT`). qwen3:8b 비교 평가에서 채택 근거가 없어(조용한 오답 증가)
+기본값은 바꾸지 않았음.
+
+```bash
+python assistant_cli.py --agent-mode geoflow --aggregation-grounding structured \
+  --model qwen3:8b --query "지난달 대구 개인택시 매출 합계가 가장 큰 주는?"
+```
+
+설계와 측정 기록: `evaluation/design/tims_lowering_contract.md`,
+`evaluation/design/semantic_aggregation_graph.md`.
+
+**조건 보존(선택).** `--condition-check`를 주면 LLM grounding을 검증하기 전에 질문 원문을
+닫힌 어휘·문법으로 읽어 날짜와 택시 유형을 다시 정하고, 장소명의 근거를 확인함
+(`geoflow/conditions.py`). prompt는 바꾸지 않음. 기본은 끔.
+
+* 날짜: "지난달"→`last_month`처럼 지원 표현을 찾으면 그 값이 date가 됨. LLM이 절대 날짜로
+  잘못 바꿨거나 형식을 틀렸으면 코드의 해석으로 바꾸고 원래 값을 기록함. 상대 날짜는
+  Asia/Seoul 기준일로 해석 범위를 기록하되, TIMS에는 기존대로 상대 토큰을 넘김(TIMS의
+  상대 날짜 해석은 계약에 없음). "최근 한 달", "최근 7일", "이번 달" 등은 지원하지 않음으로,
+  연도 없는 "8월"과 명시 날짜·상대 표현의 충돌은 확인 필요로 돌려줌. 질문에 날짜 단서가 전혀
+  없는데 LLM이 날짜를 붙였으면 적용하지 않음.
+* 택시 유형: "개인(용)택시", "법인(용)/회사택시", "전체/모든 택시". 부정("제외", "빼고")과
+  여러 유형은 지원하지 않음. 단서가 전혀 없을 때만 LLM이 붙인 개인/법인을 지움.
+* 장소: 장소명이 질문에 있는지(정규화 포함)만 확인함. **장소 누락은 탐지하지 않음.**
+* 답변에 "적용 조건" 줄을 붙이고, run 기록에 조건별 근거 → 해석 → 적용 변환 → 실행 인자를
+  남김(`condition_audit`, `condition_trace`).
+
+```bash
+python assistant_cli.py --agent-mode geoflow --condition-check \
+  --model qwen3:8b --query "지난달 대구 개인택시 평균 수입은?"
+```
+
+설계와 측정 기록: `evaluation/design/condition_preservation.md`.
 
 ### 질문에 없는 조건
 

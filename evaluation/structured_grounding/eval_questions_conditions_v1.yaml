@@ -1,0 +1,85 @@
+# 조건(날짜·장소·택시 유형) 보존 평가 셋 v1. 2026-09-26 작성, 측정 전 고정.
+#
+# 분리한 것
+# - 기존 평가 셋(eval_questions_v1.yaml), 개발 질문, census corpus의 문장을 쓰지 않았다(중복 검사).
+# - 조건 조합(택시 유형 × 기간 × 장소)은 새 intent다.
+# 분리하지 못한 것(독립 평가가 아닌 이유)
+# - 측정값 어휘(수입·영업 시간·영업 횟수·공차율·속도·요금·실차 건수), mock 지명, 문장 틀
+#   ("지난달 X 개인택시의 평균 수입은?")은 기존 셋과 같은 계열이다.
+# - 조건 규칙(geoflow/conditions.py)은 기존 30문항 관측을 보고 만들었다. 지원 표현
+#   ("지난달", "개인택시" 등)도 그 관측에서 나왔다.
+#
+# 집계 난이도는 통제했다. 모든 질문이 한 단계 집계이거나 집계가 없다.
+# 최소 대조쌍: 택시 유형(c01~c04), 기간(c08~c18), 출발/도착(c23·c24).
+# 표현 변형: c05(=c01), c19(=c08).
+#
+# expected는 질문과 제품 계약(DEFAULT_CONTRACT, 기준일 2026-09-25 Asia/Seoul)으로 정했다.
+# conditions.date는 pt_date 값. taxi_type "all"(전체 택시)은 조건이 없는 것과 같게 적는다.
+# od는 {pickup, dropoff} 장소명.
+version: 1
+role: fresh_holdout
+questions:
+  - {id: c01, family: taxi, question: "지난달 서구 개인택시의 평균 수입은?",
+     expected: {outcome: answered, plan: {final: avg}, conditions: {date: last_month, taxi_type: private, place: 서구}}}
+  - {id: c02, family: taxi, question: "지난달 서구 법인택시의 평균 수입은?",
+     expected: {outcome: answered, plan: {final: avg}, conditions: {date: last_month, taxi_type: corporate, place: 서구}}}
+  - {id: c03, family: taxi, question: "지난달 서구 택시의 평균 수입은?",
+     expected: {outcome: answered, plan: {final: avg}, conditions: {date: last_month, place: 서구}}}
+  - {id: c04, family: taxi, question: "지난달 서구 전체 택시의 평균 수입은?",
+     expected: {outcome: answered, plan: {final: avg}, conditions: {date: last_month, place: 서구}}}
+  - {id: c05, family: taxi, question: "서구 개인택시들이 지난달 벌어들인 수입의 평균은 얼마야?",
+     expected: {outcome: answered, plan: {final: avg}, conditions: {date: last_month, taxi_type: private, place: 서구}}}
+  - {id: c06, family: taxi, question: "지난달 서구에서 개인택시를 제외한 택시의 평균 수입은?",
+     expected: {outcome: unsupported, plan: {final: avg}, conditions: {date: last_month, place: 서구}}}
+  - {id: c07, family: taxi, question: "지난달 서구 개인택시와 법인택시의 평균 수입은?",
+     expected: {outcome: unsupported, plan: {final: avg}, conditions: {date: last_month, place: 서구}}}
+  - {id: c08, family: date, question: "지난달 광안동 법인택시의 영업 시간 합계는?",
+     expected: {outcome: answered, plan: {final: sum}, conditions: {date: last_month, taxi_type: corporate, place: 광안동}}}
+  - {id: c09, family: date, question: "지난주 광안동 법인택시의 영업 시간 합계는?",
+     expected: {outcome: answered, plan: {final: sum}, conditions: {date: last_week, taxi_type: corporate, place: 광안동}}}
+  - {id: c10, family: date, question: "최근 한 달 광안동 법인택시의 영업 시간 합계는?",
+     expected: {outcome: unsupported, plan: {final: sum}, conditions: {taxi_type: corporate, place: 광안동}}}
+  - {id: c11, family: date, question: "최근 7일 광안동 법인택시의 영업 시간 합계는?",
+     expected: {outcome: unsupported, plan: {final: sum}, conditions: {taxi_type: corporate, place: 광안동}}}
+  - {id: c12, family: date, question: "2026년 7월 광안동 법인택시의 영업 시간 합계는?",
+     expected: {outcome: answered, plan: {final: sum}, conditions: {date: 20260701-20260731, taxi_type: corporate, place: 광안동}}}
+  - {id: c13, family: date, question: "어제 광안동 법인택시의 영업 시간 합계는?",
+     expected: {outcome: answered, plan: {final: sum}, conditions: {date: "20260924", taxi_type: corporate, place: 광안동}}}
+  - {id: c14, family: date, question: "광안동 법인택시의 영업 시간 합계는?",
+     expected: {outcome: answered, plan: {final: sum}, conditions: {taxi_type: corporate, place: 광안동}}}
+  - {id: c15, family: date, question: "2026년 7월 15일부터 20일까지 광안동 법인택시의 영업 시간 합계는?",
+     expected: {outcome: answered, plan: {final: sum}, conditions: {date: 20260715-20260720, taxi_type: corporate, place: 광안동}}}
+  - {id: c16, family: date, question: "8월 광안동 법인택시의 영업 시간 합계는?",
+     expected: {outcome: needs_clarification, plan: {final: sum}, conditions: {taxi_type: corporate, place: 광안동}}}
+  - {id: c17, family: date, question: "지난달인 2026년 6월 광안동 법인택시의 영업 시간 합계는?",
+     expected: {outcome: needs_clarification, plan: {final: sum}, conditions: {taxi_type: corporate, place: 광안동}}}
+  - {id: c18, family: date, question: "작년 광안동 법인택시의 영업 시간 합계는?",
+     expected: {outcome: answered, plan: {final: sum}, conditions: {date: last_year, taxi_type: corporate, place: 광안동}}}
+  - {id: c19, family: date, question: "광안동 법인택시가 지난달 일한 영업 시간을 모두 합하면?",
+     expected: {outcome: answered, plan: {final: sum}, conditions: {date: last_month, taxi_type: corporate, place: 광안동}}}
+  - {id: c20, family: place, question: "지난달 중앙로동 개인택시 영업 횟수의 최솟값은?",
+     expected: {outcome: answered, plan: {final: min}, conditions: {date: last_month, taxi_type: private, place: 중앙로동}}}
+  - {id: c21, family: place, question: "지난달 개인택시 영업 횟수의 최솟값은?",
+     expected: {outcome: answered, plan: {final: min}, conditions: {date: last_month, taxi_type: private}}}
+  - {id: c22, family: place, question: "지난달 동성로 근처 택시의 평균 속도는?",
+     expected: {outcome: answered, plan: {final: avg}, conditions: {date: last_month, place: 동성로}}}
+  - {id: c23, family: place, question: "지난달 초읍동에서 출발해 초량동에 도착한 실차 구간 건수는?",
+     expected: {outcome: answered, plan: null, conditions: {date: last_month, place: [초읍동, 초량동], od: {pickup: 초읍동, dropoff: 초량동}}}}
+  - {id: c24, family: place, question: "지난달 초량동에서 출발해 초읍동에 도착한 실차 구간 건수는?",
+     expected: {outcome: answered, plan: null, conditions: {date: last_month, place: [초읍동, 초량동], od: {pickup: 초량동, dropoff: 초읍동}}}}
+  - {id: c25, family: mixed, question: "2026년 8월 한 달 동안 서울 개인택시 공차율은?",
+     expected: {outcome: answered, plan: null, conditions: {date: 20260801-20260831, taxi_type: private, place: 서울}}}
+  - {id: c26, family: mixed, question: "지난주 달서구 법인택시 수입의 최댓값은?",
+     expected: {outcome: answered, plan: {final: max}, conditions: {date: last_week, taxi_type: corporate, place: 달서구}}}
+  - {id: c27, family: mixed, question: "지난달 부산진구 택시의 영업 횟수 합계는?",
+     expected: {outcome: answered, plan: {final: sum}, conditions: {date: last_month, place: 부산진구}}}
+  - {id: c28, family: mixed, question: "수성구 법인택시의 평균 공차율은?",
+     expected: {outcome: answered, plan: {final: avg}, conditions: {taxi_type: corporate, place: 수성구}}}
+  - {id: c29, family: mixed, question: "지난달 개인택시의 평균 요금은?",
+     expected: {outcome: unsupported, plan: {final: avg}, conditions: {date: last_month, taxi_type: private}}}
+  - {id: c30, family: mixed, question: "지난주 동인동 개인택시 운행률의 평균은?",
+     expected: {outcome: answered, plan: {final: avg}, conditions: {date: last_week, taxi_type: private, place: 동인동}}}
+  - {id: c31, family: mixed, question: "2026년 상반기 인천 법인택시의 평균 수입은?",
+     expected: {outcome: answered, plan: {final: avg}, conditions: {date: 20260101-20260630, taxi_type: corporate, place: 인천}}}
+  - {id: c32, family: mixed, question: "어제 중구 택시의 영업 횟수 합계는?",
+     expected: {outcome: answered, plan: {final: sum}, conditions: {date: "20260924", place: 중구}}}

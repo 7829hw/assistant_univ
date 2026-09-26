@@ -312,15 +312,66 @@ def golden_inner_unspecified(grounding):
     return aggregation.grouped and not aggregation.inner_specified
 
 
+def plan_aggregation(plan):
+    """의미 graph(GeoFlowPlan)에서 집계 의미를 corpus golden과 같은 모양으로 읽는다.
+
+        {"final": "avg"}                                  구간 없음
+        {"bucket": "week", "inner": "sum", "final": "avg"} 구간별 값의 집계
+        {"bucket": "week", "inner": "sum", "select": "max"} 구간 선택(새 모양)
+
+    Tool 호출이 아니라 의미 graph를 읽는다. 구간별 집계를 어떤 호출로 내릴지는
+    TIMS 계약에 따라 달라지므로(geoflow/tims_contract.py) 최종 Tool 인자로는 두 단계
+    의미를 채점할 수 없다.
+    """
+    grouped = next((n for n in plan.concepts if n.attributes.get("group_by")), None)
+    if grouped is None:
+        producer = next(
+            (t for t in plan.transformations if plan.final_node in t.outputs), None,
+        )
+        reducer = None if producer is None else producer.params.get("aggregation")
+        return None if reducer is None else {"final": reducer}
+    produce = next(t for t in plan.transformations if grouped.id in t.outputs)
+    combine = next(t for t in plan.transformations
+                   if any(ref.node_id == grouped.id for ref in t.inputs.values()))
+    semantic = {"bucket": grouped.attributes["group_by"]["bucket"],
+                "inner": produce.params.get("aggregation") or aggregation_plan.UNSPECIFIED}
+    if combine.params.get("select"):
+        semantic["select"] = combine.params["select"]
+    else:
+        semantic["final"] = combine.params.get("reducer")
+    return semantic
+
+
+def golden_aggregation(intent):
+    """corpus intent의 집계 의미. aggregation이 없으면 golden flat factor에서 읽는다."""
+    if "aggregation" in intent:
+        return intent["aggregation"]
+    semantic = aggregation_plan.flat_to_semantic(
+        (intent.get("golden") or {}).get("factors") or {})
+    if semantic is not None:
+        semantic = {k: v for k, v in semantic.items() if v is not None}
+    return semantic
+
+
 def final_tool_call(plan):
     """측정 Tool 호출과 인자. scope 참조는 그것을 만든 장소 이름으로 푼다.
 
     기존 채점은 macro/operator/검증만 본다. 그래서 승하차가 뒤바뀌거나 factor
     값이 틀려도 정답으로 센다. 최종 Tool 인자를 보면 그것이 드러난다.
+
+    구간별 값을 REDUCE_GROUPS로 합치는 계획은 실행 호출이 TIMS 계약에 따라 달라진다
+    (일 단위 호출, 또는 계약 미확인으로 compile 거부). corpus의 expected_tool_args는
+    그 의미를 bucket·aggregation·rollup 호출 하나의 어휘로 적었으므로, 이 경우에는
+    의미 graph를 그 어휘로 옮긴 ``legacy_bucket_call``을 돌려준다. 실행한 호출이
+    아니며, 실행 가능 여부는 따로(실행 재생) 판정한다.
     """
-    execution = compile_plan(plan, reference_date=EVALUATION_REFERENCE_DATE)
-    # 로컬 계산 단계는 Tool 호출이 아니다. 마지막 TIMS 호출을 본다.
-    step = execution.tool_steps[-1]
+    legacy = legacy_bucket_call(plan)
+    if legacy is not None:
+        step = legacy
+    else:
+        execution = compile_plan(plan, reference_date=EVALUATION_REFERENCE_DATE)
+        # 로컬 계산 단계는 Tool 호출이 아니다. 마지막 TIMS 호출을 본다.
+        step = execution.tool_steps[-1]
     producers = {output: item for item in plan.transformations for output in item.outputs}
     concepts = {concept.id: concept for concept in plan.concepts}
 
@@ -338,6 +389,30 @@ def final_tool_call(plan):
         return f"@node:{value.node_id}"
 
     return step.tool_name, {key: resolve(value) for key, value in step.arguments.items()}
+
+
+def legacy_bucket_call(plan):
+    """REDUCE_GROUPS 계획을 예전 호출 하나의 어휘로 옮긴 ToolStep. 아니면 None.
+
+    구간 안 집계 변환의 인자(조건 전부와 aggregation)에 구간 단위(bucket)와 구간별
+    값의 집계(rollup)를 더한다. 의미 graph의 정보를 잃지 않는다. SELECT_GROUP은 이
+    어휘로 표현할 수 없으므로 옮기지 않는다.
+    """
+    from geoflow.compiler import _compile_step
+
+    grouped = next((n for n in plan.concepts if n.attributes.get("group_by")), None)
+    if grouped is None:
+        return None
+    produce = next(t for t in plan.transformations if grouped.id in t.outputs)
+    combine = next(t for t in plan.transformations
+                   if any(ref.node_id == grouped.id for ref in t.inputs.values()))
+    if combine.operator != "REDUCE_GROUPS":
+        return None
+    nodes = {node.id: node for node in plan.concepts}
+    step = _compile_step(produce, nodes, plan)
+    step.arguments["bucket"] = grouped.attributes["group_by"]["bucket"]
+    step.arguments["rollup"] = combine.params["reducer"]
+    return step
 
 
 #: Tool schema 위치. 기본값을 읽는다.

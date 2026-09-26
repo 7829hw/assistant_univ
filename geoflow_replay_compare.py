@@ -43,7 +43,28 @@ from geoflow.macros import MacroLibrary  # noqa: E402
 REFERENCE = getattr(P, "EVALUATION_REFERENCE_DATE", None)
 KEPT = ("id", "intent_id", "question", "status", "validated", "macros", "operators",
         "final_tool", "final_tool_args", "expected_tool_args", "arg_mismatches",
-        "final_category", "exec_status", "exec_code", "outcome", "correct")
+        "final_category", "exec_status", "exec_code", "outcome", "correct",
+        "factors", "factors_after_repair", "plan_aggregation", "run_outcome",
+        "tool_calls")
+
+#: 결과 종류(현재 코드의 pipeline.outcome과 같은 기준). 이전 코드에는 없으므로 여기서 정한다.
+CLARIFICATION_CODES = frozenset({"AMBIGUOUS_INNER_AGGREGATION"})
+
+
+def _run_outcome(record):
+    """answered / needs_clarification / unsupported / failed."""
+    if record["exec_status"] == STATUS_OK:
+        return "answered"
+    code = record["exec_code"] if record["validated"] else record["status"]
+    if code in CLARIFICATION_CODES:
+        return "needs_clarification"
+    try:
+        from geoflow.pipeline import UNSUPPORTED_CODES
+    except ImportError:
+        UNSUPPORTED_CODES = frozenset()
+    if code in UNSUPPORTED_CODES or code in E.REFUSAL_CODES:
+        return "unsupported"
+    return "failed"
 
 
 def _compile(plan):
@@ -52,9 +73,16 @@ def _compile(plan):
     return compile_plan(plan)
 
 
+#: 조건 보존 기능을 켜고 재생할지(현재 코드에만 있다). main에서 정한다.
+CONDITION_CHECK = False
+
+
 def rederive(row, item, composer, executor, variant):
     contents = [call.get("content") or "" for call in row.get("llm_calls") or []]
     planner = A.FixedPromptPlanner(client=C.ReplayClient(contents), variant=variant)
+    if CONDITION_CHECK:
+        planner.condition_check = True
+        planner.clock = lambda: REFERENCE
     plans = A.RecordingComposer(composer)
     record = E.evaluate_once(planner, plans, item)
     record.update(
@@ -63,8 +91,11 @@ def rederive(row, item, composer, executor, variant):
         expected_tool_args=dict(item.get("expected_tool_args") or {}),
         final_tool=None, final_tool_args=None, arg_mismatches=None,
         exec_status=None, exec_code=None, exec_retryable=None,
+        plan_aggregation=None, tool_calls=None,
     )
     plan = plans.last_plan
+    if plan is not None and hasattr(P, "plan_aggregation"):
+        record["plan_aggregation"] = P.plan_aggregation(plan)
     if plan is not None and record["validated"]:
         try:
             record["final_tool"], record["final_tool_args"] = P.final_tool_call(plan)
@@ -73,6 +104,8 @@ def rederive(row, item, composer, executor, variant):
         try:
             executed = execute_plan(_compile(plan), executor,
                                     known_scopes=set(extract_scopes(item["question"])))
+            record["tool_calls"] = sum(1 for entry in executed.trace
+                                       if entry.get("phase", "tool") == "tool")
             error = executed.error or {}
             record.update(exec_status=executed.status, exec_code=error.get("code"),
                           exec_retryable=bool((error.get("context") or {}).get("retryable")))
@@ -85,6 +118,7 @@ def rederive(row, item, composer, executor, variant):
             P.tool_defaults(record["final_tool"]))
     record["final_category"] = A.final_category(record)
     record["outcome"] = C.outcome_of(record)
+    record["run_outcome"] = _run_outcome(record)
     return {key: record.get(key) for key in KEPT}
 
 
@@ -137,7 +171,10 @@ def main(argv=None):
     parser.add_argument("run_dir", nargs="?")
     parser.add_argument("--out", help="결과 JSON 경로 (새 파일)")
     parser.add_argument("--diff", nargs=2, metavar=("BASE", "HEAD"))
+    parser.add_argument("--condition-check", action="store_true")
     args = parser.parse_args(argv)
+    global CONDITION_CHECK
+    CONDITION_CHECK = args.condition_check
     result = diff(*args.diff) if args.diff else run(args.run_dir)
     if args.out:
         with open(args.out, "x", encoding="utf-8") as handle:

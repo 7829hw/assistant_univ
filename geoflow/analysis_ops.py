@@ -121,23 +121,35 @@ def run(step, state):
     """로컬 step 하나를 실행하고 결과를 돌려준다."""
     if step.operator == COLLECT_GROUPS:
         groups = step.arguments.get("groups") or []
-        if len(groups) != len(step.inputs):
+        members = step.arguments.get("members") or [[key] for key in step.inputs]
+        reducer = step.arguments.get("reducer")
+        if len(groups) != len(members) or (reducer is None and any(
+            len(keys) != 1 for keys in members
+        )):
             raise ExecutionError(
-                f"{step.id}: 구간 수와 입력 수가 다릅니다.",
+                f"{step.id}: 구간 수와 입력 구성이 맞지 않습니다.",
                 code="GROUP_ARITY",
             )
         rows = []
-        for group, key in zip(groups, step.inputs):
-            if key not in state:
-                raise ExecutionError(
-                    f"{step.id}: 구간 값이 아직 없습니다: {key}",
-                    code="UNRESOLVED_REF",
-                    context={"node_id": key},
-                )
-            rows.append({
+        for group, keys in zip(groups, members):
+            values = []
+            for key in keys:
+                if key not in state:
+                    raise ExecutionError(
+                        f"{step.id}: 구간 값이 아직 없습니다: {key}",
+                        code="UNRESOLVED_REF",
+                        context={"node_id": key},
+                    )
+                values.append(_number(state[key], where=f"{step.id}[{key}]"))
+            row = {
                 "group": dict(group),
-                "value": _number(state[key], where=f"{step.id}[{group['label']}]"),
-            })
+                "value": values[0] if reducer is None else reduce_values(values, reducer),
+            }
+            if reducer is not None:
+                # 일 단위 값과 그것을 합친 방법을 남긴다(부록 F의 중간 상태).
+                row["parts"] = values
+                row["parts_reducer"] = reducer
+            rows.append(row)
         return rows
 
     rows = _group_rows(step, state)

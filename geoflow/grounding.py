@@ -112,6 +112,9 @@ class Grounding:
     #: 집계의 유일한 출처다. 재질의 patch가 flat factor를 바꿔도 spec이 어긋나지
     #: 않도록 flat 쪽은 저장하지 않고 매번 유도한다.
     aggregation_plan: aggregation_semantics.AggregationSpec | None = None
+    #: 조건 보존 기능(condition_check)이 남긴 기록. 질문의 근거 표현, LLM 값, 해석된 값,
+    #: 보정 내역, 장소 수정 이력. 기능을 끄면 None이다.
+    condition_audit: dict | None = None
 
     @property
     def aggregation(self):

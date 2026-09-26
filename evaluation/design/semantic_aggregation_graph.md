@@ -1,5 +1,12 @@
 # 두 단계 집계: 의미 graph와 TIMS 호출의 분리
 
+> **정정(2026-09-26)**: 이 문서의 lowering 부분은 `tims_lowering_contract.md`가 대체한다.
+> - 계약이 확인되지 않은 bucket/rollup 병합을 "경로·경계를 답변에 표시한다"로 정당화한 것(4·7절)은 틀렸다. 병합은 이제 기본 계약에서 쓰지 않는다.
+> - 로컬 경로는 날짜 범위 호출이 아니라 일 단위 호출이다.
+> - f03을 "golden 충돌"로 묶은 분류(6절)는 틀렸다(질문의 뜻으로 inner=sum이 정해진다).
+>
+> 아래 본문은 당시 기록으로 남긴다.
+
 상태: 구현됨. production grounding prompt는 바꾸지 않았다(H0, sha256 앞 8자리 `64bbceb4`).
 기준 commit: `c547e5c`. 재생 결과: `semantic_aggregation_graph_replay.json`.
 

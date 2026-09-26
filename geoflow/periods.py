@@ -135,6 +135,17 @@ def partition(start, end, unit):
     return groups
 
 
+def days_of(group):
+    """구간 하나를 하루 단위로 편다. 일 단위 호출에 쓴다."""
+    start, end = _parse_day(group["start"], group["label"]), _parse_day(
+        group["end"], group["label"])
+    days = []
+    while start <= end:
+        days.append({"start": _text(start), "end": _text(start)})
+        start += timedelta(days=1)
+    return days
+
+
 def date_argument(group):
     """구간 하나를 TIMS pt_date 인자로 쓴다."""
     return f"{group['start']}-{group['end']}"

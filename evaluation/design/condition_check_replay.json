@@ -1,0 +1,297 @@
+{
+  "purpose": "조건 보존 기능의 결정적 영향. 기록된 LLM 원문 재생(LLM 호출 없음). 모두 development 자료이며 규칙 설계에 쓴 관측을 포함한다.",
+  "eval_v1": {
+    "off": {
+      "flat": {
+        "observations": 30,
+        "not_replayable": 0,
+        "correct_answer": 6,
+        "plan_ok": 11,
+        "conditions_ok": 20,
+        "silent_wrong": 5,
+        "answerable_refused": 10,
+        "clarification_ok": 1,
+        "execution_failure": 10,
+        "outcomes": {
+          "unsupported": 4,
+          "answered": 11,
+          "needs_clarification": 5,
+          "failed": 10
+        }
+      },
+      "structured": {
+        "observations": 30,
+        "not_replayable": 0,
+        "correct_answer": 8,
+        "plan_ok": 16,
+        "conditions_ok": 20,
+        "silent_wrong": 10,
+        "answerable_refused": 2,
+        "clarification_ok": 0,
+        "execution_failure": 3,
+        "outcomes": {
+          "answered": 18,
+          "failed": 3,
+          "unsupported": 9
+        }
+      }
+    },
+    "on": {
+      "flat": {
+        "observations": 30,
+        "not_replayable": 0,
+        "correct_answer": 8,
+        "plan_ok": 14,
+        "conditions_ok": 27,
+        "silent_wrong": 5,
+        "answerable_refused": 8,
+        "clarification_ok": 2,
+        "execution_failure": 7,
+        "outcomes": {
+          "unsupported": 4,
+          "answered": 13,
+          "needs_clarification": 6,
+          "failed": 7
+        }
+      },
+      "structured": {
+        "observations": 30,
+        "not_replayable": 0,
+        "correct_answer": 11,
+        "plan_ok": 17,
+        "conditions_ok": 27,
+        "silent_wrong": 9,
+        "answerable_refused": 1,
+        "clarification_ok": 0,
+        "execution_failure": 2,
+        "outcomes": {
+          "answered": 20,
+          "failed": 2,
+          "unsupported": 8
+        }
+      }
+    }
+  },
+  "census": {
+    "20260925_171514_model_M0_census": {
+      "observations": 210,
+      "before": {
+        "SUPPORTED_REJECTION": 20,
+        "CORRECT": 138,
+        "EXECUTION_REJECTION": 15,
+        "WRONG_PLAN_STOPPED_AT_EXECUTION": 3,
+        "RECOVERABLE_REJECTION": 16,
+        "SAFE_REJECTION": 15,
+        "SILENT_WRONG_PLAN": 3
+      },
+      "after": {
+        "SUPPORTED_REJECTION": 20,
+        "CORRECT": 139,
+        "EXECUTION_REJECTION": 17,
+        "WRONG_PLAN_STOPPED_AT_EXECUTION": 1,
+        "RECOVERABLE_REJECTION": 16,
+        "SAFE_REJECTION": 16,
+        "SILENT_WRONG_PLAN": 1
+      },
+      "transitions": {
+        "WRONG_PLAN_STOPPED_AT_EXECUTION -> EXECUTION_REJECTION": 2,
+        "SILENT_WRONG_PLAN -> SAFE_REJECTION": 1,
+        "SILENT_WRONG_PLAN -> CORRECT": 1
+      },
+      "rows": [
+        {
+          "id": "f13_p0",
+          "intent_id": "f13_week_avg_corporate_operating_count",
+          "question": "주 단위로 집계한 법인택시 영업 횟수의 평균은?",
+          "before": {
+            "outcome": "WRONG_PLAN_STOPPED_AT_EXECUTION",
+            "status": "OK",
+            "final_tool_args": {
+              "aggregation": "avg",
+              "metric": "operating_count",
+              "bucket": "week",
+              "rollup": "avg"
+            }
+          },
+          "after": {
+            "outcome": "EXECUTION_REJECTION",
+            "status": "OK",
+            "final_tool_args": {
+              "aggregation": "avg",
+              "metric": "operating_count",
+              "taxi_type": "corporate",
+              "bucket": "week",
+              "rollup": "avg"
+            }
+          }
+        },
+        {
+          "id": "f14_p1",
+          "intent_id": "f14_period_comparison",
+          "question": "택시 수입은 지난주와 지난달 중 어느 쪽이 더 많은가요?",
+          "before": {
+            "outcome": "SILENT_WRONG_PLAN",
+            "status": "OK",
+            "final_tool_args": {
+              "date": "last_month",
+              "metric": "revenue"
+            }
+          },
+          "after": {
+            "outcome": "SAFE_REJECTION",
+            "status": "DATE_MULTIPLE_UNSUPPORTED",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "h04_p3",
+          "intent_id": "h04_private_vacant_ratio_busan",
+          "question": "부산에서 개인택시 공차율은 얼마인가요?",
+          "before": {
+            "outcome": "SILENT_WRONG_PLAN",
+            "status": "OK",
+            "final_tool_args": {
+              "scope": "@place:부산",
+              "metric": "vacant_ratio"
+            }
+          },
+          "after": {
+            "outcome": "CORRECT",
+            "status": "OK",
+            "final_tool_args": {
+              "scope": "@place:부산",
+              "metric": "vacant_ratio",
+              "taxi_type": "private"
+            }
+          }
+        },
+        {
+          "id": "h12_p1",
+          "intent_id": "h12_private_revenue_week_min",
+          "question": "개인택시 수입을 주 단위로 집계했을 때 최소값은?",
+          "before": {
+            "outcome": "WRONG_PLAN_STOPPED_AT_EXECUTION",
+            "status": "OK",
+            "final_tool_args": {
+              "aggregation": "min",
+              "metric": "revenue",
+              "bucket": "week",
+              "rollup": "min"
+            }
+          },
+          "after": {
+            "outcome": "EXECUTION_REJECTION",
+            "status": "OK",
+            "final_tool_args": {
+              "aggregation": "min",
+              "metric": "revenue",
+              "taxi_type": "private",
+              "bucket": "week",
+              "rollup": "min"
+            }
+          }
+        }
+      ]
+    },
+    "20260925_180607_model_M2_census": {
+      "observations": 211,
+      "before": {
+        "CORRECT": 149,
+        "SUPPORTED_REJECTION": 24,
+        "RECOVERABLE_REJECTION": 13,
+        "SAFE_REJECTION": 10,
+        "SILENT_WRONG_PLAN": 7,
+        "EXECUTION_REJECTION": 7,
+        "WRONG_PLAN_STOPPED_AT_EXECUTION": 1
+      },
+      "after": {
+        "CORRECT": 149,
+        "SUPPORTED_REJECTION": 24,
+        "RECOVERABLE_REJECTION": 13,
+        "SAFE_REJECTION": 14,
+        "EXECUTION_REJECTION": 7,
+        "WRONG_PLAN_STOPPED_AT_EXECUTION": 1,
+        "SILENT_WRONG_PLAN": 3
+      },
+      "transitions": {
+        "SILENT_WRONG_PLAN -> SAFE_REJECTION": 4
+      },
+      "rows": [
+        {
+          "id": "f14_p1",
+          "intent_id": "f14_period_comparison",
+          "question": "택시 수입은 지난주와 지난달 중 어느 쪽이 더 많은가요?",
+          "before": {
+            "outcome": "SILENT_WRONG_PLAN",
+            "status": "OK",
+            "final_tool_args": {
+              "date": "last_week",
+              "metric": "revenue"
+            }
+          },
+          "after": {
+            "outcome": "SAFE_REJECTION",
+            "status": "DATE_MULTIPLE_UNSUPPORTED",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "f14_p2",
+          "intent_id": "f14_period_comparison",
+          "question": "지난달과 지난주 중 택시 수입이 더 많은 쪽은?",
+          "before": {
+            "outcome": "SILENT_WRONG_PLAN",
+            "status": "OK",
+            "final_tool_args": {
+              "aggregation": "sum",
+              "date": "last_month",
+              "metric": "revenue"
+            }
+          },
+          "after": {
+            "outcome": "SAFE_REJECTION",
+            "status": "DATE_MULTIPLE_UNSUPPORTED",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "h15_p1",
+          "intent_id": "h15_taxi_type_comparison",
+          "question": "법인택시와 개인택시 중 수입이 더 많은 쪽은?",
+          "before": {
+            "outcome": "SILENT_WRONG_PLAN",
+            "status": "OK",
+            "final_tool_args": {
+              "aggregation": "max",
+              "metric": "revenue",
+              "taxi_type": "all"
+            }
+          },
+          "after": {
+            "outcome": "SAFE_REJECTION",
+            "status": "TAXI_TYPE_EXPRESSION_UNSUPPORTED",
+            "final_tool_args": null
+          }
+        },
+        {
+          "id": "h15_p3",
+          "intent_id": "h15_taxi_type_comparison",
+          "question": "개인택시와 법인택시의 수입을 비교하면 어느 쪽이 더 많은가요?",
+          "before": {
+            "outcome": "SILENT_WRONG_PLAN",
+            "status": "OK",
+            "final_tool_args": {
+              "metric": "revenue"
+            }
+          },
+          "after": {
+            "outcome": "SAFE_REJECTION",
+            "status": "TAXI_TYPE_EXPRESSION_UNSUPPORTED",
+            "final_tool_args": null
+          }
+        }
+      ]
+    }
+  },
+  "note": "census 재생 첫 판에서 \"개인용 택시\"(q18)의 맞는 taxi_type을 지우는 잘못된 보정이 있었고, 어휘와 삭제 조건을 고친 뒤 다시 잰 결과가 위 값이다."
+}

@@ -288,6 +288,9 @@ class ToolStep:
     inputs: list[str] = field(default_factory=list)
     #: 기간을 구간으로 나눠 부른 호출이면 그 구간.
     group: dict[str, Any] | None = None
+    #: 이 호출이 옳으려면 TIMS가 지켜야 하는 계약 항목(``geoflow/tims_contract.py``).
+    #: verify_lowering이 확인할 수 없는 외부 가정이다.
+    assumptions: list[str] = field(default_factory=list)
 
     @property
     def is_local(self):
@@ -311,6 +314,8 @@ class ToolStep:
             data["inputs"] = list(self.inputs)
         if self.group is not None:
             data["group"] = dict(self.group)
+        if self.assumptions:
+            data["assumptions"] = list(self.assumptions)
         return data
 
 
@@ -329,6 +334,8 @@ class ExecutionPlan:
     unobserved: dict[str, str] = field(default_factory=dict)
     #: 기간을 로컬에서 구간으로 나눴다면 그 해석. 답변이 적용 기간을 밝힌다.
     periods: dict[str, Any] = field(default_factory=dict)
+    #: 구간별 집계마다 고른 lowering 전략과, 쓰지 않은 전략의 이유.
+    lowering: dict[str, Any] = field(default_factory=dict)
 
     @property
     def tool_steps(self):
@@ -344,6 +351,7 @@ class ExecutionPlan:
             },
             "unobserved": dict(self.unobserved),
             "periods": dict(self.periods),
+            "lowering": dict(self.lowering),
         }
 
 

@@ -19,11 +19,13 @@
 
 import time
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Any
 
 from agent_graph import extract_scopes
 
+from geoflow import conditions, structured_grounding
 from geoflow import validator as geoflow_validator
 from geoflow.answer import format_answer
 from geoflow.compiler import compile_plan
@@ -53,6 +55,29 @@ STATUS_REPAIR_SKIPPED = "repair_skipped"
 
 #: 계획을 만들지 못해 끝난 attempt. 실행에 이르지 못했다는 뜻이다.
 STATUS_PLANNING_FAILED = "planning_failed"
+
+
+OUTCOME_ANSWERED = "answered"
+OUTCOME_NEEDS_CLARIFICATION = "needs_clarification"
+OUTCOME_UNSUPPORTED = "unsupported"
+OUTCOME_FAILED = "failed"
+OUTCOME_CANCELLED = "cancelled"
+
+#: 질문을 이해했지만 현재 도구·계약으로 정확히 계산할 수 없어 멈춘 경우.
+UNSUPPORTED_CODES = frozenset({
+    "UNSUPPORTED_QUESTION", "UNSUPPORTED_MEASURE", "NO_MACRO", "NO_OPERATOR",
+    "UNCONSUMED_CONDITION", "UNSUPPORTED_AGGREGATION", "UNSUPPORTED_GROUPED_MEASURE",
+    "UNSUPPORTED_AGGREGATION_COMBINATION", "UNVERIFIED_TIMS_CONTRACT",
+    "UNSUPPORTED_PARTITION_SIZE", "UNSUPPORTED_PERIOD_FOR_GROUPING", "UNRESOLVED_PERIOD",
+    "DATE_EXPRESSION_UNSUPPORTED", "DATE_MULTIPLE_UNSUPPORTED",
+    "TAXI_TYPE_EXPRESSION_UNSUPPORTED",
+})
+
+SERVICE_TIMEZONE = ZoneInfo("Asia/Seoul")
+
+
+def seoul_today():
+    return datetime.now(SERVICE_TIMEZONE).date()
 
 
 class Stage:
@@ -88,6 +113,9 @@ class GeoFlowRun:
     execution: dict[str, Any] | None = None
     hop_log: list[dict[str, Any]] = field(default_factory=list)
     scope_labels: dict[str, str] = field(default_factory=dict)
+    #: 조건 보존 기능의 기록(원문 근거 → 해석 → 보정)과 실행 인자까지의 추적.
+    condition_audit: dict[str, Any] | None = None
+    condition_trace: list[dict[str, Any]] | None = None
     attempts: list[dict[str, Any]] = field(default_factory=list)
     repair_count: int = 0
     #: 재계획 종류별 시도/성공 횟수. 계획 단계와 실행 단계를 구분해 센다.
@@ -98,13 +126,34 @@ class GeoFlowRun:
     cancelled: bool = False
     durations: dict[str, float] = field(default_factory=dict)
 
+    @property
+    def outcome(self):
+        """결과 종류. 답을 냈는지, 사용자 확인이 필요한지, 지원 범위 밖인지를 가른다.
+
+        확인 필요는 오류 context의 ``needs_clarification``에서만 온다. 질문이 여러
+        집계를 허용해 계획을 정할 수 없는 경우이며, 지원하지 않는 계산과 구분한다.
+        """
+        if self.cancelled:
+            return OUTCOME_CANCELLED
+        if self.final_answer is not None:
+            return OUTCOME_ANSWERED
+        error = self.error or {}
+        if (error.get("context") or {}).get("needs_clarification"):
+            return OUTCOME_NEEDS_CLARIFICATION
+        if error.get("code") in UNSUPPORTED_CODES:
+            return OUTCOME_UNSUPPORTED
+        return OUTCOME_FAILED
+
     def to_dict(self):
         return {
             "agent_mode": self.agent_mode,
+            "outcome": self.outcome,
             "stage": self.stage,
             "repair_count": self.repair_count,
             "repairs": dict(self.repairs),
             "scope_labels": dict(self.scope_labels),
+            "condition_audit": self.condition_audit,
+            "condition_trace": self.condition_trace,
             "attempts": [dict(item) for item in self.attempts],
             "planner": self.planner,
             "template": self.template,
@@ -129,12 +178,15 @@ class GeoFlowPipeline:
         self.composer = composer
         self.tool_executor = tool_executor
         #: 상대 기간을 날짜로 풀 기준일. 기간을 로컬에서 구간으로 나눌 때만 쓴다.
-        #: 테스트는 고정 날짜를 넣는다.
-        self.clock = clock or date.today
+        #: 서비스 사용자의 "지난달"은 한국 달력 기준으로 푼다(설계 선택이며 TIMS
+        #: 계약이 아니다). 테스트는 고정 날짜를 넣는다.
+        self.clock = clock or seoul_today
 
     @classmethod
     def create(cls, *, client, tool_executor, macro_directory=None,
-               planner_prompt=None, model=None):
+               planner_prompt=None, model=None,
+               aggregation_grounding=structured_grounding.FLAT, clock=None,
+               condition_check=False):
         """CLI/Web이 동일하게 사용할 기본 구성으로 파이프라인을 만든다."""
         library = (
             MacroLibrary.from_directory()
@@ -145,11 +197,15 @@ class GeoFlowPipeline:
             client=client,
             prompt=planner_prompt,
             model=model,
+            aggregation_grounding=aggregation_grounding,
+            condition_check=condition_check,
+            clock=clock,
         )
         return cls(
             planner=planner,
             composer=MacroComposer(library),
             tool_executor=tool_executor,
+            clock=clock,
         )
 
     def run(self, question, *, event_handler=None, cancel_checker=None):
@@ -319,6 +375,7 @@ class GeoFlowPipeline:
         """planner 출력을 검증된 실행 계획까지 끌고 간다."""
         run.planner = planner_output.to_dict()
         run.grounding = planner_output.grounding.to_dict()
+        run.condition_audit = planner_output.grounding.condition_audit
 
         run.stage = Stage.COMPOSITION
         plan = self.composer.compose(planner_output.grounding)
@@ -347,6 +404,9 @@ class GeoFlowPipeline:
         run.stage = Stage.COMPILE
         execution_plan = compile_plan(plan, reference_date=self.clock())
         run.execution_plan = execution_plan.to_dict()
+        run.condition_trace = conditions.trace(
+            plan, execution_plan, planner_output.grounding.condition_audit,
+        )
         emit("geoflow_execution_plan", execution_plan=run.execution_plan)
         return plan, execution_plan
 
@@ -369,6 +429,9 @@ class GeoFlowPipeline:
             run.final_answer = format_answer(
                 plan, result, labels=labels, execution_plan=execution_plan,
             )
+            note = conditions.describe_for_answer(run.condition_audit)
+            if note:
+                run.final_answer = f"{run.final_answer}\n{note}"
         except GeoFlowError as error:
             return _fail(run, error, started_at)
         run.stage = Stage.DONE
@@ -446,7 +509,11 @@ def _repairable_failure(plan, execution_plan, result):
 
 def _fail(run, error, started_at):
     run.error = error.to_dict()
-    run.runtime_error = f"{error.stage} 단계 실패: {error.detail}"
+    if (error.context or {}).get("needs_clarification"):
+        # 실패가 아니라 사용자에게 되물어야 하는 상태다.
+        run.runtime_error = f"확인 필요: {error.user_message}"
+    else:
+        run.runtime_error = f"{error.stage} 단계 실패: {error.detail}"
     run.final_answer = None
     run.durations["total_ms"] = _elapsed(started_at)
     return run
