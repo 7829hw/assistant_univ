@@ -568,5 +568,17 @@ class GroundingIntegrationTest(unittest.TestCase):
 
 
 
+class EvalArmTest(unittest.TestCase):
+    def test_arm_names(self):
+        from structured_grounding_eval import arm_examples, parse_arm
+        self.assertEqual(parse_arm("structured+cc+rx"), ("structured", True))
+        self.assertEqual(arm_examples("structured+cc+rx"), "rx")
+        self.assertEqual(arm_examples("structured+fx"), "fx")
+        self.assertIsNone(arm_examples("structured+cc"))
+        for bad in ("flat+rx", "structured+rx+fx", "structured+cc+cc", "structured+zz"):
+            with self.assertRaises(ValueError):
+                parse_arm(bad)
+
+
 if __name__ == "__main__":
     unittest.main()

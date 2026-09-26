@@ -1,0 +1,93 @@
+{
+  "name": "dev_retrieval_v1",
+  "created_at": "20260926_212959",
+  "model": "qwen3:8b",
+  "host": "http://localhost:11434",
+  "options": {
+    "temperature": 0
+  },
+  "chat_timeout": 300.0,
+  "reference_date": "2026-09-25",
+  "questions_file": "evaluation/reference/reference_questions_v1.yaml",
+  "questions_sha256": "967b0463c9e73bfedbe802c0c46d43582d7fd85e8f4e9bc65af5d8b5cded078d",
+  "questions_role": "functional_check",
+  "prompt_sha256": {
+    "structured+cc": "73979b6e190d3d9b4cacecbf3f90f15b08782742dc702118f0a0b1d45fb909eb",
+    "structured+cc+rx": "73979b6e190d3d9b4cacecbf3f90f15b08782742dc702118f0a0b1d45fb909eb",
+    "structured+cc+fx": "73979b6e190d3d9b4cacecbf3f90f15b08782742dc702118f0a0b1d45fb909eb"
+  },
+  "arms": [
+    "structured+cc",
+    "structured+cc+rx",
+    "structured+cc+fx"
+  ],
+  "order": "question i: arms를 i만큼 회전한 순서(2 arm이면 짝수 flat 먼저)",
+  "repeat": 1,
+  "reset_state": true,
+  "provider": "reference",
+  "execution_profile": {
+    "provider": "reference",
+    "contract": "reference",
+    "mode": null,
+    "date_policy": "guaranteed",
+    "synthetic": true,
+    "legacy_assumptions": [],
+    "description": "reference provider: 고정 합성 데이터를 계산(실제 교통·TIMS 데이터 아님)"
+  },
+  "examples": {
+    "structured+cc": null,
+    "structured+cc+rx": {
+      "mode": "retrieved",
+      "index": "index_lexical.json",
+      "index_sha256": "83a797091e0bce61dd3780271ed9dd2ade84ba6d302f591bd512b4610f3b710c",
+      "store_sha256": "75b83c3bd1161400abca74d4eb261975d266de7196f321754ef727cd5a04b707",
+      "embedder": {
+        "kind": "lexical",
+        "name": "char-ngram-tfidf",
+        "version": "1",
+        "params": {
+          "ngram": [
+            2,
+            3
+          ]
+        }
+      },
+      "normalization": "nfkc+casefold+strip-punct+collapse-ws/v1",
+      "settings": {
+        "top_k": 3,
+        "max_chars": 3000,
+        "min_score": null,
+        "order": "score desc, id asc",
+        "score_digits": 12
+      }
+    },
+    "structured+cc+fx": {
+      "mode": "fixed",
+      "store_sha256": "75b83c3bd1161400abca74d4eb261975d266de7196f321754ef727cd5a04b707",
+      "fixed_ids": [
+        "ex03",
+        "ex09",
+        "ex10"
+      ],
+      "settings": {
+        "top_k": 3,
+        "max_chars": 3000,
+        "min_score": null,
+        "order": "score desc, id asc",
+        "score_digits": 12
+      }
+    }
+  },
+  "code_sha256": {
+    "geoflow/conditions.py": "f7351e8b4a38ec350878b7b7eb8d458ed1c8a6c780035c2c15b079b11a7506ed",
+    "geoflow/compiler.py": "e386a73538c0dc9320d7526ef77c9f499a0be9245b411ad1efe908c8f7497d58",
+    "geoflow/tims_contract.py": "c23238543c0944f5bccea78a22143bcbe19f1ab137c46445ecd973a0ff98ca74",
+    "geoflow/pipeline.py": "49012ab24fbb6c56671b1995c31e8f40dee78563bb772c973e8971479372efd0",
+    "geoflow/planner.py": "a837dd4dae91869df2d4333a310dff3ff7024e63d46630af49eb87b97d8e13c6",
+    "geoflow/retrieval.py": "cff08a0f92542c51bee5470ccfaa916740bf5db491efcf9a930d58df75affaaa",
+    "geoflow/examples.py": "1802a26045fa8e5f7a6725b7194e8c740ccef997e46139dc17c89247ecb47542",
+    "condition_scoring.py": "f1b1977920b549e232b1a5d2e15a9154543ee9cea9f4f47e1c2bcce6a775c1d5",
+    "geoflow_examples/question_graph_examples.yaml": "75b83c3bd1161400abca74d4eb261975d266de7196f321754ef727cd5a04b707",
+    "geoflow_examples/index_lexical.json": "83a797091e0bce61dd3780271ed9dd2ade84ba6d302f591bd512b4610f3b710c"
+  }
+}

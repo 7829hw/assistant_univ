@@ -32,7 +32,11 @@ import yaml
 from evaluation_records import write_analysis
 
 SCORER_NAME = "condition_scoring"
-SCORER_VERSION = "v2.6"
+SCORER_VERSION = "v2.7"
+# v2.7: 집계 의미를 칸별로 따로 센다(bucket, inner, outer, 결과 종류 value/group). gold에
+#       retrieval_tags가 있으면 붙인 예시 중 그 의미 구분을 설명하는 예시가 있었는지(검색 포함률)를
+#       센다. system prompt 글자 수와 입력 token(prompt_eval_count), 지연을 요약에 더한다.
+#       이전 판의 판정(plan_ok, correct_answer 등)은 바꾸지 않는다.
 # v2.6: 구간마다 부른 범위 호출(range_partition)이 gold 기간을 빈틈과 겹침 없이 덮으면 요청
 #       인자 보존으로 인정한다. v2.5까지는 범위 호출이 여러 개면 보존 실패로 셌다.
 # v2.5: gold에 answer가 있으면 계산 값(와 선택 구간)을 비교한다(reference provider용).
@@ -115,6 +119,8 @@ def load_gold(questions_path, addendum_path=None):
             "structure": {key: (expected.get("structure") or {}).get(key)
                           for key in STRUCTURE_KEYS},
             "answer": expected.get("answer"),
+            "retrieval_tags": list(item.get("retrieval_tags") or []),
+            "ambiguity": item.get("ambiguity"),
         }
     return document, gold
 
@@ -391,6 +397,44 @@ def returns_kind(plan):
     return "value"
 
 
+def _spec(plan):
+    """plan(grounding_plan 모양)을 칸별 값으로. 집계가 없으면 모두 None."""
+    if not isinstance(plan, dict):
+        return {"bucket": None, "inner": None, "outer": None, "select": None}
+    if plan.get("bucket") is None:
+        return {"bucket": None, "inner": plan.get("final"), "outer": None, "select": None}
+    return {"bucket": plan["bucket"], "inner": plan.get("inner"),
+            "outer": plan.get("final"), "select": plan.get("select")}
+
+
+def slot_level(record, gold):
+    """집계 의미 칸별 판정. 답할 수 있거나 확인이 필요한 질문에서 grounding이 있을 때만."""
+    plan = grounding_plan(record.get("grounding"))
+    if gold["outcome"] not in ("answered", "needs_clarification") or plan == "NO_GROUNDING":
+        return None
+    got, want = _spec(plan), _spec(gold["plan"])
+    return {"bucket": got["bucket"] == want["bucket"], "inner": got["inner"] == want["inner"],
+            "outer": got["outer"] == want["outer"],
+            "result_kind": returns_kind(plan) == returns_kind(gold["plan"]),
+            "got": got}
+
+
+def retrieval_coverage(record, gold):
+    """붙인 예시 가운데 gold가 적은 의미 구분(retrieval_tags)을 설명하는 예시가 있었나."""
+    retrieval = record.get("retrieval")
+    if not retrieval or not gold.get("retrieval_tags"):
+        return None
+    from geoflow.examples import load_store
+    store = load_store()
+    tags = set()
+    for example_id in retrieval.get("included") or []:
+        try:
+            tags.update(store.get(example_id).tags)
+        except KeyError:
+            continue
+    return bool(tags & set(gold["retrieval_tags"]))
+
+
 def judge(record, gold):
     plan = grounding_plan(record.get("grounding"))
     structure = structure_level(record, gold)
@@ -434,6 +478,8 @@ def judge(record, gold):
         "corrections": corrections(record, gold),
         "verified_claims": verified_claims(record, interp),
         "taxi_stated": gold["taxi_stated"],
+        "slots": slot_level(record, gold),
+        "retrieval_covered": retrieval_coverage(record, gold),
     }
 
 
@@ -500,8 +546,25 @@ def summarize(judged, arms):
             "outcomes": dict(Counter(r["outcome"] for r in mine)),
             "tool_calls_total": sum(r.get("tool_calls") or 0 for r in mine),
             "llm_calls_total": sum(r.get("llm_calls") or 0 for r in mine),
+            # v2.7
+            "slots_judged": sum(r["slots"] is not None for r in mine),
+            "slot_ok": {key: sum(bool(r["slots"] and r["slots"][key]) for r in mine)
+                        for key in ("bucket", "inner", "outer", "result_kind")},
+            "plan_ok": sum(r["plan_ok"] for r in mine),
+            "retrieval_covered": sum(r["retrieval_covered"] is True for r in mine),
+            "retrieval_judged": sum(r["retrieval_covered"] is not None for r in mine),
+            "system_prompt_chars_median": _median([r.get("system_prompt_chars") for r in mine]),
+            "prompt_tokens_median": _median([r.get("prompt_tokens") for r in mine]),
+            "elapsed_ms_median": _median([r.get("elapsed_ms") for r in mine]),
+            "by_ambiguity": dict(Counter(f"{r.get('ambiguity') or 'clear'}:{category(r)}"
+                                         for r in mine)),
         }
     return summary
+
+
+def _median(values):
+    values = sorted(value for value in values if value is not None)
+    return values[len(values) // 2] if values else None
 
 
 def category(row):
@@ -532,6 +595,14 @@ def transitions(judged, before, after):
     return {"counts": dict(counts), "ids": examples}
 
 
+def _prompt_tokens(record):
+    calls = record.get("llm_calls")
+    if not isinstance(calls, list):
+        return None
+    counts = [call.get("prompt_eval_count") for call in calls if isinstance(call, dict)]
+    return sum(counts) if counts and None not in counts else None
+
+
 def score_records(records, gold, arms):
     judged = []
     for record in records:
@@ -543,7 +614,10 @@ def score_records(records, gold, arms):
                "contract_executable": expected["contract_executable"],
                "tool_calls": record.get("tool_calls"),
                "llm_calls": len(record.get("llm_calls") or []) if isinstance(
-                   record.get("llm_calls"), list) else record.get("llm_calls")}
+                   record.get("llm_calls"), list) else record.get("llm_calls"),
+               "system_prompt_chars": record.get("system_prompt_chars"),
+               "prompt_tokens": _prompt_tokens(record), "elapsed_ms": record.get("elapsed_ms"),
+               "ambiguity": expected.get("ambiguity")}
         if valid:
             row.update(judge(record, expected))
         judged.append(row)
@@ -557,7 +631,7 @@ def score_records(records, gold, arms):
         summary["transitions"] = {
             f"{arms[i]}->{arms[j]}": transitions(usable, arms[i], arms[j])
             for i in range(len(arms)) for j in range(len(arms))
-            if i < j and arms[j] == arms[i] + "+cc"}
+            if i < j and arms[j] in (arms[i] + "+cc", arms[i] + "+rx", arms[i] + "+fx")}
     return summary, judged
 
 

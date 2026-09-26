@@ -209,6 +209,44 @@ class StructureTest(unittest.TestCase):
                          ("value", False, False))
 
 
+class SlotTest(unittest.TestCase):
+    """v2.7: 집계 의미를 칸별로 센다. 이전 판정(plan_ok)은 그대로다."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.gold = gold(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_value_versus_group_differs_only_in_outer_and_result_kind(self):
+        want = dict(self.gold["q3"], plan={"bucket": "week", "inner": "avg", "final": "max"})
+        chose_group = dict(grounding("20260924"), aggregation={
+            "bucket": "week", "inner": "avg", "select": "max"})
+        row = cs.judge(record("q3", chose_group, dates=["20260924"]), want)
+        slots = row["slots"]
+        self.assertEqual({key: slots[key] for key in ("bucket", "inner", "outer", "result_kind")},
+                         {"bucket": True, "inner": True, "outer": False, "result_kind": False})
+        self.assertFalse(row["plan_ok"])
+
+    def test_rejected_grounding_and_unsupported_gold_are_not_slot_judged(self):
+        row = cs.judge(record("q3", None, outcome="failed"), self.gold["q3"])
+        self.assertIsNone(row["slots"])
+        unsupported = dict(self.gold["q3"], outcome="unsupported", plan=None)
+        row = cs.judge(record("q3", grounding("20260924", final="sum")), unsupported)
+        self.assertIsNone(row["slots"])
+        self.assertTrue(row["silent_semantic_error"])
+
+    def test_retrieval_coverage_uses_store_tags(self):
+        want = dict(self.gold["q3"], retrieval_tags=["value_not_group"])
+        rec = record("q3", grounding("20260924", final="sum"), dates=["20260924"])
+        self.assertIsNone(cs.judge(rec, want)["retrieval_covered"])
+        rec["retrieval"] = {"included": ["ex06", "ex07"]}
+        self.assertFalse(cs.judge(rec, want)["retrieval_covered"])
+        rec["retrieval"] = {"included": ["ex06", "ex09"]}
+        self.assertTrue(cs.judge(rec, want)["retrieval_covered"])
+
+
 class ReferenceAnswerTest(unittest.TestCase):
     """v2.5: reference 관측은 계산 값과 reference 계약으로 판정한다."""
 

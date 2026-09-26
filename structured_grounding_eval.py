@@ -49,18 +49,41 @@ RESULT_DIR = BASE_DIR / "evaluation" / "structured_grounding"
 REFERENCE_DATE = date(2026, 9, 25)
 OPTIONS = {"temperature": 0}
 ARMS = (structured_grounding.FLAT, structured_grounding.STRUCTURED)
-#: arm 이름 = 집계 grounding 계약[+cc]. +cc는 조건 보존 기능(condition_check)을 켠다.
+#: arm 이름 = 집계 grounding 계약[+cc][+rx|+fx]. +cc는 조건 보존 기능(condition_check)을 켠다.
+#: +rx는 질문–graph 예시 검색(lexical index, geoflow/retrieval.py), +fx는 질문과 무관한 고정 예시.
 CONDITION_SUFFIX = "+cc"
+#: +fx arm이 붙이는 예시(측정 전 고정). 두 단계 값 집계 하나와 값/구간 최소 대조쌍.
+FIXED_EXAMPLE_IDS = ("ex03", "ex09", "ex10")
 #: 이 파일의 score()(v1 채점). taxi_type all 정규화를 correction_quality에 넣은 판이다.
 #: 새 채점 의미(해석·요청·provider 분리)는 condition_scoring.py(v2)가 맡는다.
 LEGACY_SCORER_VERSION = "v1.1"
 
 
 def parse_arm(arm):
-    mode, _, flag = arm.partition("+")
-    if mode not in ARMS or flag not in ("", "cc"):
+    """(grounding 계약, condition_check). 예시 옵션은 ``arm_examples``가 읽는다."""
+    mode, *flags = arm.split("+")
+    if (mode not in ARMS or len(set(flags)) != len(flags)
+            or not set(flags) <= {"cc", "rx", "fx"} or {"rx", "fx"} <= set(flags)
+            or ({"rx", "fx"} & set(flags) and mode != structured_grounding.STRUCTURED)):
         raise ValueError(f"알 수 없는 arm: {arm}")
-    return mode, flag == "cc"
+    return mode, "cc" in flags
+
+
+def arm_examples(arm):
+    """None | "rx"(검색 예시) | "fx"(고정 예시)."""
+    parse_arm(arm)
+    flags = set(arm.split("+")[1:])
+    return "rx" if "rx" in flags else "fx" if "fx" in flags else None
+
+
+def example_selector(kind):
+    from geoflow.examples import load_store
+    from geoflow.retrieval import ExampleRetriever, FixedExamples
+    if kind == "rx":
+        return ExampleRetriever.load()
+    if kind == "fx":
+        return FixedExamples(load_store(), list(FIXED_EXAMPLE_IDS))
+    return None
 
 
 def executed_conditions(run):
@@ -95,7 +118,7 @@ def _tool_executor(provider="mock"):
 
 
 def observe(item, arm, *, host, model, timeout, reset, provider="mock",
-            tims_execution="legacy"):
+            tims_execution="legacy", selector=None):
     outcome = reset.reset() if reset is not None else None
     record = {"id": item["id"], "arm": arm, "question": item["question"],
               "reset": None if outcome is None else {
@@ -110,8 +133,19 @@ def observe(item, arm, *, host, model, timeout, reset, provider="mock",
                                       model=model, aggregation_grounding=mode,
                                       clock=lambda: REFERENCE_DATE,
                                       condition_check=condition_check,
-                                      execution_profile=profile_for(provider, tims_execution))
+                                      execution_profile=profile_for(provider, tims_execution),
+                                      example_selector=selector)
     record["prompt_sha256"] = _sha(pipeline.planner.system_prompt())
+    if selector is not None:
+        # 예시 절을 붙인 실제 system prompt. 검색이 실패하면 run이 RETRIEVAL_FAILED로 기록한다.
+        try:
+            system = pipeline.planner.messages(item["question"])[0]["content"]
+            record["system_prompt_sha256"] = _sha(system)
+            record["system_prompt_chars"] = len(system)
+        except Exception as error:  # noqa: BLE001 - run이 같은 오류를 다시 낸다
+            record["system_prompt_error"] = f"{type(error).__name__}: {error}"
+    else:
+        record["system_prompt_chars"] = len(pipeline.planner.system_prompt())
     started = time.perf_counter()
     try:
         run = pipeline.run(item["question"])
@@ -129,6 +163,8 @@ def observe(item, arm, *, host, model, timeout, reset, provider="mock",
             final_value=run.execution["final_value"] if isinstance(run.execution, dict)
             and "final_value" in run.execution else None,
             hop_log=run.hop_log,
+            retrieval=run.retrieval,
+            execution_plan=run.execution_plan,
         )
     except Exception as error:  # noqa: BLE001 - 관측 결과로 남긴다
         record.update(outcome="crash", error={"code": "CRASH",
@@ -153,6 +189,7 @@ def run(questions_path, *, name, host, model, timeout, reset_state=True, repeat=
     out_dir = RESULT_DIR / f"{stamp}_{name}"
     out_dir.mkdir(parents=True, exist_ok=False)
     reset = OllamaStateReset(host, model) if reset_state else None
+    selectors = {arm: example_selector(arm_examples(arm)) for arm in arms}
     prompts = {arm: _sha(GeoFlowPipeline.create(
         client=type("C", (), {"model": model})(), tool_executor=_tool_executor(),
         aggregation_grounding=parse_arm(arm)[0]).planner.system_prompt()) for arm in arms}
@@ -167,10 +204,15 @@ def run(questions_path, *, name, host, model, timeout, reset_state=True, repeat=
         "repeat": repeat, "reset_state": reset_state,
         "provider": provider,
         "execution_profile": profile_for(provider, tims_execution).to_dict(),
+        "examples": {arm: None if selector is None else selector.describe()
+                     for arm, selector in selectors.items()},
         "code_sha256": {path: _sha(Path(BASE_DIR / path).read_text(encoding="utf-8"))
                         for path in ("geoflow/conditions.py", "geoflow/compiler.py",
                                      "geoflow/tims_contract.py", "geoflow/pipeline.py",
-                                     "condition_scoring.py")},
+                                     "geoflow/planner.py", "geoflow/retrieval.py",
+                                     "geoflow/examples.py", "condition_scoring.py",
+                                     "geoflow_examples/question_graph_examples.yaml",
+                                     "geoflow_examples/index_lexical.json")},
     }
     (out_dir / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2),
                                        encoding="utf-8")
@@ -182,7 +224,8 @@ def run(questions_path, *, name, host, model, timeout, reset_state=True, repeat=
                 for position, arm in enumerate(order):
                     record = observe(item, arm, host=host, model=model, timeout=timeout,
                                      reset=reset, provider=provider,
-                                     tims_execution=tims_execution)
+                                     tims_execution=tims_execution,
+                                     selector=selectors[arm])
                     record.update(repetition=repetition, question_index=index,
                                   position=position)
                     handle.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
@@ -457,7 +500,8 @@ def main(argv=None):
     run_parser.add_argument("--provider", choices=("mock", "reference"), default="mock")
     run_parser.add_argument("--tims-execution", choices=("legacy", "strict"), default="legacy")
     run_parser.add_argument("--arms", default=",".join(ARMS),
-                            help="쉼표로 구분. 예: flat,flat+cc,structured,structured+cc")
+                            help="쉼표로 구분. 예: flat,flat+cc,structured,structured+cc,"
+                                 "structured+cc+rx,structured+cc+fx")
     score_parser = sub.add_parser("score")
     score_parser.add_argument("run_dir")
     replay_parser = sub.add_parser("replay")
