@@ -37,6 +37,7 @@ from evaluate_prompt_ab import (  # noqa: E402
     OllamaStateReset,
     RecordingClient,
 )
+from evaluation_records import write_analysis, write_new  # noqa: E402
 from geoflow import structured_grounding  # noqa: E402
 from geoflow.aggregation import UNSPECIFIED  # noqa: E402
 from geoflow.pipeline import GeoFlowPipeline  # noqa: E402
@@ -49,6 +50,9 @@ OPTIONS = {"temperature": 0}
 ARMS = (structured_grounding.FLAT, structured_grounding.STRUCTURED)
 #: arm 이름 = 집계 grounding 계약[+cc]. +cc는 조건 보존 기능(condition_check)을 켠다.
 CONDITION_SUFFIX = "+cc"
+#: 이 파일의 score()(v1 채점). taxi_type all 정규화를 correction_quality에 넣은 판이다.
+#: 새 채점 의미(해석·요청·provider 분리)는 condition_scoring.py(v2)가 맡는다.
+LEGACY_SCORER_VERSION = "v1.1"
 
 
 def parse_arm(arm):
@@ -113,6 +117,8 @@ def observe(item, arm, *, host, model, timeout, reset):
             tool_calls=sum(1 for hop in run.hop_log if hop.get("phase", "tool") == "tool"),
             repair_count=run.repair_count, durations=run.durations,
             condition_audit=run.condition_audit, condition_trace=run.condition_trace,
+            verification=run.verification,
+            date_semantics=(run.execution_plan or {}).get("date_semantics"),
             executed=executed_conditions(run),
         )
     except Exception as error:  # noqa: BLE001 - 관측 결과로 남긴다
@@ -150,6 +156,12 @@ def run(questions_path, *, name, host, model, timeout, reset_state=True, repeat=
         "arms": list(arms),
         "order": "question i: arms를 i만큼 회전한 순서(2 arm이면 짝수 flat 먼저)",
         "repeat": repeat, "reset_state": reset_state,
+        "provider": os.environ.get("ASSISTANT_TOOL_PROVIDER"),
+        "tims_contract": "DEFAULT_CONTRACT(geoflow/tims_contract.py)",
+        "code_sha256": {path: _sha(Path(BASE_DIR / path).read_text(encoding="utf-8"))
+                        for path in ("geoflow/conditions.py", "geoflow/compiler.py",
+                                     "geoflow/tims_contract.py", "geoflow/pipeline.py",
+                                     "condition_scoring.py")},
     }
     (out_dir / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2),
                                        encoding="utf-8")
@@ -347,12 +359,19 @@ def score(run_dir):
             "llm_calls_total": sum(r["llm_calls"] for r in mine),
             "elapsed_ms_median": sorted(r["elapsed_ms"] for r in mine)[n // 2] if n else None,
         }
-    # 처음 채점한 파일은 측정 기록이다. 채점기를 고친 뒤 다시 채점하면 따로 적는다.
-    suffix = "" if not (run_dir / "summary.json").exists() else "_rescored"
-    (run_dir / f"judged{suffix}.json").write_text(
-        json.dumps(judged, ensure_ascii=False, indent=2), encoding="utf-8")
-    (run_dir / f"summary{suffix}.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    # 처음 채점한 파일은 측정 기록이다. 이미 있으면 덮어쓰지 않고 analyses/ 아래 새 id로
+    # 쓴다(evaluation_records). 예전의 *_rescored 접미사는 두 번째 재채점에서 덮어썼다.
+    if not (run_dir / "summary.json").exists():
+        write_new(run_dir / "judged.json", judged)
+        write_new(run_dir / "summary.json", summary)
+    else:
+        write_analysis(
+            run_dir, analysis_id=f"legacy-{LEGACY_SCORER_VERSION}",
+            outputs={"judged.json": judged, "summary.json": summary},
+            scorer={"name": "structured_grounding_eval.score",
+                    "version": LEGACY_SCORER_VERSION, "source": __file__},
+            config={}, inputs=[run_dir / "observations.jsonl", meta["questions_file"]],
+        )
     return summary, judged
 
 

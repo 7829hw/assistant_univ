@@ -45,7 +45,7 @@ KEPT = ("id", "intent_id", "question", "status", "validated", "macros", "operato
         "final_tool", "final_tool_args", "expected_tool_args", "arg_mismatches",
         "final_category", "exec_status", "exec_code", "outcome", "correct",
         "factors", "factors_after_repair", "plan_aggregation", "run_outcome",
-        "tool_calls")
+        "tool_calls", "measure_dates")
 
 #: 결과 종류(현재 코드의 pipeline.outcome과 같은 기준). 이전 코드에는 없으므로 여기서 정한다.
 CLARIFICATION_CODES = frozenset({"AMBIGUOUS_INNER_AGGREGATION"})
@@ -68,7 +68,11 @@ def _run_outcome(record):
 
 
 def _compile(plan):
-    if "reference_date" in inspect.signature(compile_plan).parameters:
+    parameters = inspect.signature(compile_plan).parameters
+    if "date_policy" in parameters and CONDITION_CHECK:
+        # production pipeline과 같다: condition_check 경로는 기간의 실행 의미를 보장한다.
+        return compile_plan(plan, reference_date=REFERENCE, date_policy="guaranteed")
+    if "reference_date" in parameters:
         return compile_plan(plan, reference_date=REFERENCE)
     return compile_plan(plan)
 
@@ -106,6 +110,11 @@ def rederive(row, item, composer, executor, variant):
                                     known_scopes=set(extract_scopes(item["question"])))
             record["tool_calls"] = sum(1 for entry in executed.trace
                                        if entry.get("phase", "tool") == "tool")
+            record["measure_dates"] = sorted({
+                str((entry.get("arguments") or {}).get("date"))
+                for entry in executed.trace
+                if entry.get("phase", "tool") == "tool"
+                and entry.get("tool") not in ("get_place_scope", "get_scope_name")})
             error = executed.error or {}
             record.update(exec_status=executed.status, exec_code=error.get("code"),
                           exec_retryable=bool((error.get("context") or {}).get("retryable")))
