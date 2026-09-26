@@ -201,6 +201,9 @@ class TimsContract:
 
     items: dict = field(default_factory=lambda: dict(ITEMS))
     allow_assumptions: bool = False
+    #: 이 계약을 가진 provider. TIMS가 아닌 provider(reference)의 계약은 따로 만든다
+    #: (``geoflow/providers.py``). 한 provider의 확인 항목을 다른 provider로 옮기지 않는다.
+    provider: str = "tims"
 
     def status(self, key):
         return self.items[key].status
@@ -222,7 +225,7 @@ class TimsContract:
         for key, value in values.items():
             items[key] = replace(items[key], status=ASSUMED, value=value,
                                  evidence="테스트 가정(계약 근거 아님)")
-        return TimsContract(items, allow_assumptions=True)
+        return TimsContract(items, allow_assumptions=True, provider=self.provider)
 
     def table(self):
         return [

@@ -17,7 +17,7 @@ from assistant_runtime import (
     AssistantRuntime,
 )
 from build import build
-from geoflow import structured_grounding
+from geoflow import providers, structured_grounding
 from geoflow.errors import GeoFlowError
 from geoflow.pipeline import GeoFlowPipeline
 from query_loader import (
@@ -39,6 +39,7 @@ from tool_handlers import (
     DEFAULT_TOOL_PROVIDER,
     TOOL_PROVIDER_ENV,
     get_tool_handlers,
+    selected_provider,
 )
 
 
@@ -59,6 +60,9 @@ AGENT_MODE = DEFAULT_AGENT_MODE
 AGGREGATION_GROUNDING = structured_grounding.FLAT
 #: 질문 원문으로 날짜·택시 유형·장소 조건을 다시 정하는 선택 기능. 기본은 끔.
 CONDITION_CHECK = False
+#: mock(TIMS schema) 경로의 실행 모드. legacy=미확인 TIMS 항목을 가정하는 기존 동작(기본),
+#: strict=확인된 TIMS 계약만 실행. reference provider에는 적용되지 않는다.
+TIMS_EXECUTION = "legacy"
 
 ARRAY_PREVIEW_LIMIT = 3
 INLINE_RESULT_LIMIT = 8
@@ -514,7 +518,11 @@ def _new_runtime(tools, system_prompt, *, tool_handlers=None, agent_mode=None):
     )
     selected_mode = AGENT_MODE if agent_mode is None else agent_mode
     client = get_ollama_client()
-    tool_executor = ToolExecutor(tools=tools, handlers=selected_handlers)
+    provider_name = selected_provider()
+    tool_executor = ToolExecutor(
+        tools=tools, handlers=selected_handlers,
+        provider=provider_name if tool_handlers is None else None,
+    )
     geoflow = None
     if selected_mode == AGENT_MODE_GEOFLOW:
         try:
@@ -524,6 +532,7 @@ def _new_runtime(tools, system_prompt, *, tool_handlers=None, agent_mode=None):
                 model=MODEL_NAME,
                 aggregation_grounding=AGGREGATION_GROUNDING,
                 condition_check=CONDITION_CHECK,
+                execution_profile=providers.profile_for(provider_name, TIMS_EXECUTION),
             )
         except GeoFlowError as error:
             raise SystemExit(f"GeoFlow 구성 실패: {error.detail}") from error
@@ -990,6 +999,16 @@ def parse_args(argv=None):
             "상대 날짜는 Asia/Seoul 기준일로 해석을 기록한다. 기본은 끔."
         ),
     )
+    parser.add_argument(
+        "--tims-execution",
+        choices=providers.TIMS_EXECUTION_MODES,
+        default=providers.LEGACY,
+        help=(
+            "mock(TIMS schema) 경로의 실행 계약. legacy=미확인 TIMS 항목(상대 토큰·범위·하루 "
+            "분할)을 가정하는 기존 동작(기본, 가정은 실행 기록에 남음), strict=확인된 TIMS "
+            "계약만 실행. condition_check와 무관하다. reference provider에는 적용되지 않는다."
+        ),
+    )
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--query", help="실행할 단일 자연어 Query")
     source.add_argument("--query-file", help="실행할 Query YAML 경로")
@@ -1070,9 +1089,10 @@ def main(argv=None):
         raise SystemExit(str(error)) from error
 
     configure_agent_mode(args.agent_mode)
-    global AGGREGATION_GROUNDING, CONDITION_CHECK
+    global AGGREGATION_GROUNDING, CONDITION_CHECK, TIMS_EXECUTION
     AGGREGATION_GROUNDING = args.aggregation_grounding
     CONDITION_CHECK = args.condition_check
+    TIMS_EXECUTION = args.tims_execution
     configure_ollama_client(
         args.ollama_host,
         args.model,
@@ -1083,6 +1103,9 @@ def main(argv=None):
     grounding_note = (
         f"/ aggregation grounding: {AGGREGATION_GROUNDING} "
         f"/ condition check: {'on' if CONDITION_CHECK else 'off'} "
+        f"/ provider: {selected_provider()} "
+        f"/ tims execution: "
+        f"{TIMS_EXECUTION if selected_provider() == providers.MOCK else '해당 없음'} "
         if AGENT_MODE == AGENT_MODE_GEOFLOW else ""
     )
     print(

@@ -39,7 +39,7 @@ def executed_conditions(run):
     }
 
 
-def replay(run_dir, *, arm, condition_check, label):
+def replay(run_dir, *, arm, condition_check, label, tims_execution="legacy"):
     from tests.test_geoflow_composition import new_tool_executor
 
     records = []
@@ -53,6 +53,12 @@ def replay(run_dir, *, arm, condition_check, label):
                   "clock": lambda: REFERENCE_DATE}
         if condition_check:
             kwargs["condition_check"] = True
+        try:
+            from geoflow.providers import profile_for
+        except ImportError:  # 0f2daaa 이전 코드: condition_check가 실행 계약을 정했다
+            profile_for = None
+        if profile_for is not None:
+            kwargs["execution_profile"] = profile_for("mock", tims_execution)
         run = GeoFlowPipeline.create(**kwargs).run(source["question"])
         detail = str((run.error or {}).get("detail", ""))
         records.append({
@@ -75,10 +81,12 @@ def main(argv=None):
     parser.add_argument("--arm", required=True, help="녹화된 arm 이름")
     parser.add_argument("--condition-check", choices=("off", "on"), default="off")
     parser.add_argument("--label", help="출력 기록의 arm 이름(기본: 녹화 arm)")
+    parser.add_argument("--tims-execution", choices=("legacy", "strict"), default="legacy",
+                        help="실행 계약(현재 코드). 0f2daaa의 condition_check 결과 재현은 strict")
     parser.add_argument("--out", required=True, help="새 JSONL 경로")
     args = parser.parse_args(argv)
     records = replay(args.run_dir, arm=args.arm, condition_check=args.condition_check == "on",
-                     label=args.label or args.arm)
+                     label=args.label or args.arm, tims_execution=args.tims_execution)
     with open(args.out, "x", encoding="utf-8") as handle:
         for record in records:
             handle.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")

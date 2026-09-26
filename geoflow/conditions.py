@@ -601,20 +601,21 @@ def trace(plan, execution_plan, audit):
     return rows
 
 
-def verification(audit, execution_plan):
+def verification(audit, execution_plan, contract=None):
     """조건별로 무엇을 확인했고 무엇을 확인하지 못했는지. 전체 완료로 적지 않는다.
 
     세 층을 나눈다: 질문 해석(interpretation), 요청 인자(request), provider가 그 인자를
-    같은 뜻으로 읽는다는 계약(provider). 장소 누락은 탐지하지 않으므로 ``complete``는
-    언제나 거짓이다.
+    같은 뜻으로 읽는다는 계약(provider). provider 층은 실행 프로필의 계약(``contract``,
+    기본 TIMS)으로 판정한다. 장소 누락은 탐지하지 않으므로 ``complete``는 언제나 거짓이다.
     """
     if audit is None:
         return None
     from geoflow import tims_contract
 
+    contract = contract or tims_contract.DEFAULT_CONTRACT
     date_records = list((getattr(execution_plan, "date_semantics", {}) or {}).values())
-    grouped_dates = [step.arguments.get("date") for step in execution_plan.tool_steps
-                     if step.group is not None]
+    grouped_steps = [step for step in execution_plan.tool_steps if step.group is not None]
+    grouped_dates = [step.arguments.get("date") for step in grouped_steps]
     date_audit = audit.get("date") or {}
     if date_records:
         providers = sorted({item["provider"] for item in date_records})
@@ -622,8 +623,16 @@ def verification(audit, execution_plan):
     else:
         providers, requests = [], []
     if grouped_dates:
+        # 구간별 호출은 인자 하나하나의 의미와, 그 전략의 가정(범위 계약, 하루 합성의
+        # 기록 계약)이 모두 계약으로 확인되어야 확인이다.
         providers = sorted(set(providers) | {
-            tims_contract.date_argument_semantics(arg)["status"] for arg in grouped_dates})
+            tims_contract.SEMANTICS_CONFIRMED
+            if tims_contract.date_argument_semantics(step.arguments.get("date"), contract)[
+                "status"] == tims_contract.SEMANTICS_CONFIRMED
+            and all(key in contract.items and contract.satisfied(key)
+                    for key in step.assumptions)
+            else tims_contract.SEMANTICS_UNVERIFIED
+            for step in grouped_steps})
         requests = sorted(set(requests) | set(grouped_dates))
     if date_audit.get("value") is None and not requests:
         providers = [tims_contract.SEMANTICS_NOT_REQUESTED]
@@ -638,8 +647,10 @@ def verification(audit, execution_plan):
                       "request": sorted({step.arguments.get("taxi_type")
                                          for step in execution_plan.tool_steps
                                          if step.arguments.get("taxi_type")}),
-                      # enum 값과 all≡생략은 schema에 적혀 있다(taxi_type_all_unrestricted).
-                      "provider": [tims_contract.SEMANTICS_CONFIRMED]},
+                      # enum 값과 all≡생략(taxi_type_all_unrestricted)을 계약으로 본다.
+                      "provider": [tims_contract.SEMANTICS_CONFIRMED
+                                   if contract.satisfied("taxi_type_all_unrestricted")
+                                   else tims_contract.SEMANTICS_UNVERIFIED]},
         "place": {"interpretation": "name_evidence_only",
                   "names": [p.get("lookup_name") for p in audit.get("places") or []],
                   "completeness": audit.get("place_completeness", "unchecked"),
@@ -651,7 +662,7 @@ def verification(audit, execution_plan):
                               tims_contract.SEMANTICS_NOT_REQUESTED)
                         for p in rows[key]["provider"])]
     unverified = [key for key in ("date", "taxi_type") if key not in verified]
-    return {"conditions": rows, "verified": verified,
+    return {"conditions": rows, "verified": verified, "contract": contract.provider,
             "unverified": unverified + ["place"],
             "not_checked": list(audit.get("not_checked") or NOT_CHECKED),
             "complete": False}
@@ -706,7 +717,9 @@ def describe_for_answer(audit, verification_summary=None, execution_plan=None):
         names = {"date": "기간", "taxi_type": "택시 유형"}
         verified = [names[key] for key in verification_summary["verified"]]
         pending = [names[key] for key in verification_summary["unverified"] if key in names]
-        scope = ("질문 표현과 TIMS 문서 계약으로 확인: " + ", ".join(verified)) if verified else ""
+        owner = verification_summary.get("contract", "tims")
+        source = "TIMS 문서 계약" if owner == "tims" else f"{owner} provider 계약"
+        scope = (f"질문 표현과 {source}으로 확인: " + ", ".join(verified)) if verified else ""
         rest = "장소는 이름 근거만 확인(지역 의미·누락은 미검증)"
         if pending:
             rest = "미검증: " + ", ".join(pending) + " · " + rest

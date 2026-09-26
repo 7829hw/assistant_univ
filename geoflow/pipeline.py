@@ -28,7 +28,8 @@ from agent_graph import extract_scopes
 from geoflow import conditions, structured_grounding
 from geoflow import validator as geoflow_validator
 from geoflow.answer import format_answer
-from geoflow.compiler import DATE_POLICY_GUARANTEED, DATE_POLICY_LEGACY, compile_plan
+from geoflow import providers
+from geoflow.compiler import compile_plan
 from geoflow.composer import MacroComposer
 from geoflow.errors import GeoFlowError
 from geoflow.executor import STATUS_CANCELLED, STATUS_OK, execute_plan
@@ -71,6 +72,7 @@ UNSUPPORTED_CODES = frozenset({
     "UNSUPPORTED_PARTITION_SIZE", "UNSUPPORTED_PERIOD_FOR_GROUPING", "UNRESOLVED_PERIOD",
     "DATE_EXPRESSION_UNSUPPORTED", "DATE_MULTIPLE_UNSUPPORTED",
     "TAXI_TYPE_EXPRESSION_UNSUPPORTED", "DATE_EXECUTION_UNVERIFIED",
+    "UNSUPPORTED_BY_PROVIDER",
 })
 
 SERVICE_TIMEZONE = ZoneInfo("Asia/Seoul")
@@ -118,6 +120,8 @@ class GeoFlowRun:
     condition_trace: list[dict[str, Any]] | None = None
     #: 조건별 검증 범위(질문 해석 / 요청 인자 / provider 계약). 전체 완료로 적지 않는다.
     verification: dict[str, Any] | None = None
+    #: 실행 계약을 정한 provider 프로필(provider, 계약, TIMS 가정 모드, 합성 데이터 여부).
+    execution_profile: dict[str, Any] | None = None
     attempts: list[dict[str, Any]] = field(default_factory=list)
     repair_count: int = 0
     #: 재계획 종류별 시도/성공 횟수. 계획 단계와 실행 단계를 구분해 센다.
@@ -157,6 +161,7 @@ class GeoFlowRun:
             "condition_audit": self.condition_audit,
             "condition_trace": self.condition_trace,
             "verification": self.verification,
+            "execution_profile": self.execution_profile,
             "attempts": [dict(item) for item in self.attempts],
             "planner": self.planner,
             "template": self.template,
@@ -176,10 +181,20 @@ class GeoFlowRun:
 class GeoFlowPipeline:
     """planner/composer/validator/compiler/executor를 한 경로로 묶는다."""
 
-    def __init__(self, *, planner, composer, tool_executor, clock=None):
+    def __init__(self, *, planner, composer, tool_executor, clock=None,
+                 execution_profile=None):
         self.planner = planner
         self.composer = composer
         self.tool_executor = tool_executor
+        #: 실행 계약. 기본은 mock + legacy(기존 동작). condition_check와 무관하다.
+        self.execution_profile = execution_profile or providers.profile_for()
+        declared = getattr(tool_executor, "provider", None)
+        if declared is not None and declared != self.execution_profile.provider:
+            raise GeoFlowError(
+                f"Tool provider({declared})와 실행 프로필({self.execution_profile.provider})이 "
+                "다릅니다.",
+                code="PROVIDER_PROFILE_MISMATCH",
+            )
         #: 상대 기간을 날짜로 풀 기준일. 기간을 로컬에서 구간으로 나눌 때만 쓴다.
         #: 서비스 사용자의 "지난달"은 한국 달력 기준으로 푼다(설계 선택이며 TIMS
         #: 계약이 아니다). 테스트는 고정 날짜를 넣는다.
@@ -189,7 +204,7 @@ class GeoFlowPipeline:
     def create(cls, *, client, tool_executor, macro_directory=None,
                planner_prompt=None, model=None,
                aggregation_grounding=structured_grounding.FLAT, clock=None,
-               condition_check=False):
+               condition_check=False, execution_profile=None):
         """CLI/Web이 동일하게 사용할 기본 구성으로 파이프라인을 만든다."""
         library = (
             MacroLibrary.from_directory()
@@ -209,6 +224,7 @@ class GeoFlowPipeline:
             composer=MacroComposer(library),
             tool_executor=tool_executor,
             clock=clock,
+            execution_profile=execution_profile,
         )
 
     def run(self, question, *, event_handler=None, cancel_checker=None):
@@ -405,18 +421,19 @@ class GeoFlowPipeline:
         report.raise_if_failed()
 
         run.stage = Stage.COMPILE
-        # condition_check 경로는 기간 인자의 실행 의미가 계약으로 확인될 때만 실행한다.
-        checked = bool(getattr(self.planner, "condition_check", False))
+        # 실행 계약과 기간 정책은 provider 프로필이 정한다. condition_check는 해석 옵션이다.
+        profile = self.execution_profile
+        run.execution_profile = profile.to_dict()
         execution_plan = compile_plan(
-            plan, reference_date=self.clock(),
-            date_policy=DATE_POLICY_GUARANTEED if checked else DATE_POLICY_LEGACY,
+            plan, reference_date=self.clock(), contract=profile.contract,
+            date_policy=profile.date_policy,
         )
         run.execution_plan = execution_plan.to_dict()
         run.condition_trace = conditions.trace(
             plan, execution_plan, planner_output.grounding.condition_audit,
         )
         run.verification = conditions.verification(
-            planner_output.grounding.condition_audit, execution_plan,
+            planner_output.grounding.condition_audit, execution_plan, profile.contract,
         )
         emit("geoflow_execution_plan", execution_plan=run.execution_plan)
         return plan, execution_plan
@@ -445,11 +462,46 @@ class GeoFlowPipeline:
             )
             if note:
                 run.final_answer = f"{run.final_answer}\n{note}"
+            environment = describe_environment(self.execution_profile, execution_plan)
+            if environment:
+                run.final_answer = f"{run.final_answer}\n{environment}"
         except GeoFlowError as error:
             return _fail(run, error, started_at)
         run.stage = Stage.DONE
         run.durations["total_ms"] = _elapsed(started_at)
         return run
+
+
+def describe_environment(profile, execution_plan):
+    """합성 데이터 provider의 답에 계산 환경과 요청 기간을 밝힌다. 기본 mock 답은 그대로다."""
+    if profile is None or not profile.synthetic:
+        return ""
+    lines = [f"- 계산 환경: {profile.provider} provider — 고정 합성 데이터로 계산한 값이며 "
+             "실제 교통 데이터나 TIMS 결과가 아닙니다."]
+    requested = []
+    for record in (getattr(execution_plan, "date_semantics", {}) or {}).values():
+        if record.get("request"):
+            text = ", ".join(record["request"])
+            if record.get("value") != text:
+                text += f"(질문 기간 {record['value']}"
+                if record.get("reference_date"):
+                    text += f", 기준일 {record['reference_date']} Asia/Seoul"
+                text += ")"
+            requested.append(text)
+    for detail in (getattr(execution_plan, "periods", {}) or {}).values():
+        text = detail["resolved"]
+        if detail.get("period") != text:
+            text += f"(질문 기간 {detail['period']}"
+            if detail.get("reference_date"):
+                text += f", 기준일 {detail['reference_date']} Asia/Seoul"
+            text += ")"
+        requested.append(text)
+    if requested:
+        lines.append("- 적용 기간: " + "; ".join(requested)
+                     + " — 양 끝 포함, 영업일(service_date) 기준")
+    lines.append("- 계산 의미: 레코드 = 택시 한 대의 영업일 하루 매출(원). 평균의 분모는 조건에 맞는 "
+                 "레코드 수(결측 제외), 주는 월요일 시작이며 기간 경계에서 잘립니다.")
+    return "\n".join(lines)
 
 
 def _planning_attempt(index, error, decision, *, attempted, exhausted):

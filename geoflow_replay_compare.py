@@ -69,8 +69,8 @@ def _run_outcome(record):
 
 def _compile(plan):
     parameters = inspect.signature(compile_plan).parameters
-    if "date_policy" in parameters and CONDITION_CHECK:
-        # production pipeline과 같다: condition_check 경로는 기간의 실행 의미를 보장한다.
+    if "date_policy" in parameters and TIMS_EXECUTION == "strict":
+        # 실행 계약은 TIMS 실행 모드가 정한다(condition_check와 무관, geoflow/providers.py).
         return compile_plan(plan, reference_date=REFERENCE, date_policy="guaranteed")
     if "reference_date" in parameters:
         return compile_plan(plan, reference_date=REFERENCE)
@@ -79,6 +79,9 @@ def _compile(plan):
 
 #: 조건 보존 기능을 켜고 재생할지(현재 코드에만 있다). main에서 정한다.
 CONDITION_CHECK = False
+#: TIMS 실행 모드(legacy | strict). 0f2daaa까지는 condition_check가 strict를 뜻했다.
+#: 그 결과를 재현하려면 --condition-check --tims-execution strict로 돌린다.
+TIMS_EXECUTION = "legacy"
 
 
 def rederive(row, item, composer, executor, variant):
@@ -181,9 +184,11 @@ def main(argv=None):
     parser.add_argument("--out", help="결과 JSON 경로 (새 파일)")
     parser.add_argument("--diff", nargs=2, metavar=("BASE", "HEAD"))
     parser.add_argument("--condition-check", action="store_true")
+    parser.add_argument("--tims-execution", choices=("legacy", "strict"), default="legacy")
     args = parser.parse_args(argv)
-    global CONDITION_CHECK
+    global CONDITION_CHECK, TIMS_EXECUTION
     CONDITION_CHECK = args.condition_check
+    TIMS_EXECUTION = args.tims_execution
     result = diff(*args.diff) if args.diff else run(args.run_dir)
     if args.out:
         with open(args.out, "x", encoding="utf-8") as handle:

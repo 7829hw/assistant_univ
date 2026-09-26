@@ -17,6 +17,7 @@ from geoflow.composer import MacroComposer  # noqa: E402
 from geoflow.errors import CompilerError, PlannerError  # noqa: E402
 from geoflow.grounding import parse_grounding  # noqa: E402
 from geoflow.pipeline import GeoFlowPipeline  # noqa: E402
+from geoflow.providers import MOCK, STRICT, profile_for  # noqa: E402
 from geoflow.planner import GeoFlowPlanner  # noqa: E402
 from tests.test_geoflow_aggregation_graph import (  # noqa: E402
     DAEGU,
@@ -269,10 +270,14 @@ class _Client:
         return {"message": {"content": json.dumps(self.responses.pop(0), ensure_ascii=False)}}
 
 
-def pipeline(responses, *, check, mode="structured"):
+STRICT_TIMS = profile_for(MOCK, STRICT)
+
+
+def pipeline(responses, *, check, mode="structured", profile=None):
+    """실행 계약은 profile이 정한다(기본 mock + legacy). condition_check는 해석 옵션이다."""
     return GeoFlowPipeline.create(client=_Client(responses), tool_executor=FakeTims(),
                                   aggregation_grounding=mode, clock=lambda: REF,
-                                  condition_check=check)
+                                  condition_check=check, execution_profile=profile)
 
 
 WRONG_DATE_NO_TAXI = {"concepts": [place("place", "대구"), event("operation"),
@@ -283,6 +288,27 @@ QUESTION = "지난달 대구 개인택시 평균 매출은?"
 
 
 class PipelineTest(unittest.TestCase):
+    def test_condition_check_does_not_change_the_execution_contract(self):
+        """condition_check는 해석 옵션이다. 같은 프로필이면 켜든 끄든 기간 정책이 같다."""
+        payload = {"concepts": [place("place", "대구"), event("operation"), measure("revenue")],
+                   "factors": {"date": "last_month", "taxi_type": "private",
+                               "aggregation_plan": {"result": {"reducer": "avg"}}}}
+        for profile in (None, STRICT_TIMS):
+            runs = [pipeline([payload], check=check, profile=profile).run(QUESTION)
+                    for check in (False, True)]
+            policies = {run.execution_profile["date_policy"] for run in runs}
+            outcomes = {run.outcome for run in runs}
+            with self.subTest(profile=None if profile is None else profile.mode):
+                self.assertEqual(len(policies), 1)
+                self.assertEqual(len(outcomes), 1)
+        legacy = pipeline([payload], check=True).run(QUESTION)
+        self.assertEqual(legacy.outcome, "answered", legacy.runtime_error)
+        self.assertEqual(legacy.execution_profile["mode"], "legacy")
+        # legacy는 토큰을 가정으로 넘긴다. 검증 요약은 기간을 검증으로 적지 않는다.
+        self.assertNotIn("date", legacy.verification["verified"])
+        self.assertIn("relative_date_reference", legacy.execution_profile["legacy_assumptions"])
+
+
     def test_default_path_is_unchanged(self):
         run = pipeline([WRONG_DATE_NO_TAXI], check=False).run(QUESTION)
         self.assertIsNone(run.condition_audit)
@@ -291,9 +317,9 @@ class PipelineTest(unittest.TestCase):
         self.assertNotIn("taxi_type", args[0])
 
     def test_condition_check_stops_when_relative_date_semantics_are_unverified(self):
-        """이전 구현은 '지난달'을 KST 범위로 풀어 기록하면서 TIMS에는 last_month를 넘기고,
+        """strict TIMS 프로필에서. 이전 구현은 '지난달'을 KST 범위로 풀어 기록하면서 TIMS에는 last_month를 넘기고,
         답변 문구("보장 없음")만 붙여 정상 실행했다. 계약이 없으면 실행하지 않는다."""
-        run = pipeline([WRONG_DATE_NO_TAXI], check=True).run(QUESTION)
+        run = pipeline([WRONG_DATE_NO_TAXI], check=True, profile=STRICT_TIMS).run(QUESTION)
         self.assertEqual(run.outcome, "unsupported")
         self.assertEqual(run.error["code"], "DATE_EXECUTION_UNVERIFIED")
         record = run.error["context"]["date_semantics"]
@@ -330,13 +356,13 @@ class PipelineTest(unittest.TestCase):
 
     def test_partitioned_calls_need_the_day_record_contract(self):
         """구간별 집계의 하루 단위 합성은 기록이 하루에만 속한다는 계약이 필요하다.
-        기본 경로는 이를 가정으로 적고 실행하지만, condition_check 경로는 멈춘다."""
+        legacy 프로필은 이를 가정으로 적고 실행하지만, strict 프로필은 멈춘다."""
         payload = {"concepts": [place("place", "대구"), event("operation"), measure("revenue")],
                    "factors": {"date": "20260401-20260430", "taxi_type": "private",
                                "aggregation_plan": {"bucket": {"unit": "week", "reducer": "sum"},
                                                     "result": {"select": "max"}}}}
         question = "지난달 대구 개인택시 매출 합계가 가장 큰 주는?"
-        run = pipeline([payload], check=True).run(question)
+        run = pipeline([payload], check=True, profile=STRICT_TIMS).run(question)
         self.assertEqual(run.outcome, "unsupported")
         self.assertEqual(run.error["code"], "UNVERIFIED_TIMS_CONTRACT")
         self.assertIn("day_records:get_operation_metrics", run.error["detail"])
@@ -358,7 +384,7 @@ class PipelineTest(unittest.TestCase):
                    "factors": {"date": "202608", "aggregation": "avg"}}
         question = "2026년 8월 한 달간 대구 평균 수입은?"
         off = pipeline([payload], check=False, mode="flat").run(question)
-        on = pipeline([payload], check=True, mode="flat").run(question)
+        on = pipeline([payload], check=True, mode="flat", profile=STRICT_TIMS).run(question)
         self.assertEqual(off.error["code"], "INVALID_FACTOR")
         # 형식 오류는 질문 표현으로 바로잡지만, 범위 양 끝 포함이 계약에 없고 avg는
         # 하루 값으로 합칠 수 없으므로 실행하지 않는다.

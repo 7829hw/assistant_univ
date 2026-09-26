@@ -9,6 +9,8 @@ RETRYABLE_BY_ERROR_CODE = {
     "NOT_FOUND": True,
     "UNSUPPORTED_COMBINATION": True,
     "TOOL_ERROR": False,
+    # provider가 이 인자·도구를 계약상 지원하지 않는다(reference provider). 다시 물어도 같다.
+    "UNSUPPORTED_BY_PROVIDER": False,
 }
 SUPPORTED_ERROR_CODES = frozenset(RETRYABLE_BY_ERROR_CODE)
 
@@ -55,8 +57,10 @@ def _validation_message(error):
 class ToolExecutor:
     """YAML Tool 목록으로 허용 범위를 제한하고 Handler를 실행한다."""
 
-    def __init__(self, *, tools, handlers):
+    def __init__(self, *, tools, handlers, provider=None):
         self._handlers = dict(handlers)
+        #: handler를 고른 provider 이름. 실행 프로필과 어긋나는지 pipeline이 확인한다.
+        self.provider = provider
         self._validators = {}
 
         for tool in tools:
