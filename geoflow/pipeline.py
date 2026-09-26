@@ -28,7 +28,7 @@ from agent_graph import extract_scopes
 from geoflow import conditions, structured_grounding
 from geoflow import validator as geoflow_validator
 from geoflow.answer import format_answer
-from geoflow.compiler import compile_plan
+from geoflow.compiler import DATE_POLICY_GUARANTEED, DATE_POLICY_LEGACY, compile_plan
 from geoflow.composer import MacroComposer
 from geoflow.errors import GeoFlowError
 from geoflow.executor import STATUS_CANCELLED, STATUS_OK, execute_plan
@@ -70,7 +70,7 @@ UNSUPPORTED_CODES = frozenset({
     "UNSUPPORTED_AGGREGATION_COMBINATION", "UNVERIFIED_TIMS_CONTRACT",
     "UNSUPPORTED_PARTITION_SIZE", "UNSUPPORTED_PERIOD_FOR_GROUPING", "UNRESOLVED_PERIOD",
     "DATE_EXPRESSION_UNSUPPORTED", "DATE_MULTIPLE_UNSUPPORTED",
-    "TAXI_TYPE_EXPRESSION_UNSUPPORTED",
+    "TAXI_TYPE_EXPRESSION_UNSUPPORTED", "DATE_EXECUTION_UNVERIFIED",
 })
 
 SERVICE_TIMEZONE = ZoneInfo("Asia/Seoul")
@@ -116,6 +116,8 @@ class GeoFlowRun:
     #: 조건 보존 기능의 기록(원문 근거 → 해석 → 보정)과 실행 인자까지의 추적.
     condition_audit: dict[str, Any] | None = None
     condition_trace: list[dict[str, Any]] | None = None
+    #: 조건별 검증 범위(질문 해석 / 요청 인자 / provider 계약). 전체 완료로 적지 않는다.
+    verification: dict[str, Any] | None = None
     attempts: list[dict[str, Any]] = field(default_factory=list)
     repair_count: int = 0
     #: 재계획 종류별 시도/성공 횟수. 계획 단계와 실행 단계를 구분해 센다.
@@ -154,6 +156,7 @@ class GeoFlowRun:
             "scope_labels": dict(self.scope_labels),
             "condition_audit": self.condition_audit,
             "condition_trace": self.condition_trace,
+            "verification": self.verification,
             "attempts": [dict(item) for item in self.attempts],
             "planner": self.planner,
             "template": self.template,
@@ -402,10 +405,18 @@ class GeoFlowPipeline:
         report.raise_if_failed()
 
         run.stage = Stage.COMPILE
-        execution_plan = compile_plan(plan, reference_date=self.clock())
+        # condition_check 경로는 기간 인자의 실행 의미가 계약으로 확인될 때만 실행한다.
+        checked = bool(getattr(self.planner, "condition_check", False))
+        execution_plan = compile_plan(
+            plan, reference_date=self.clock(),
+            date_policy=DATE_POLICY_GUARANTEED if checked else DATE_POLICY_LEGACY,
+        )
         run.execution_plan = execution_plan.to_dict()
         run.condition_trace = conditions.trace(
             plan, execution_plan, planner_output.grounding.condition_audit,
+        )
+        run.verification = conditions.verification(
+            planner_output.grounding.condition_audit, execution_plan,
         )
         emit("geoflow_execution_plan", execution_plan=run.execution_plan)
         return plan, execution_plan
@@ -429,7 +440,9 @@ class GeoFlowPipeline:
             run.final_answer = format_answer(
                 plan, result, labels=labels, execution_plan=execution_plan,
             )
-            note = conditions.describe_for_answer(run.condition_audit)
+            note = conditions.describe_for_answer(
+                run.condition_audit, run.verification, execution_plan,
+            )
             if note:
                 run.final_answer = f"{run.final_answer}\n{note}"
         except GeoFlowError as error:

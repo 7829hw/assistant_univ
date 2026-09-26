@@ -143,8 +143,12 @@ _YEARLESS = r"(?<![\d년])\s?(\d{1,2})\s*월(?:\s*(\d{1,2})\s*일)?(?!\s*(별|�
 
 #: 지원 문법으로 읽지 못해도 날짜를 말하고 있을 수 있는 단서. 단서가 남아 있으면 LLM
 #: 값을 지우지 않는다. "월별", "주 단위"는 구간 표현이지 기간이 아니므로 넣지 않는다.
-_DATE_CUES = (r"\d+\s*(년|월|일)|지난|저번|작년|올해|금년|이번|최근|어제|오늘|그제|주말|평일|주중"
-              r"|휴일|연휴|분기|반기|추석|설날|명절|\d{8}")
+_DATE_CUES = (r"\d+\s*(년|월|일)|(?<!\d)\d{1,2}\s*[/.]\s*\d{1,2}(?!\d)|지난|저번|작년|올해|금년|이번|최근|어제|오늘|그제|주말|평일|주중"
+              r"|휴일|연휴|분기|반기|추석|설날|명절|\d{8}"
+              # 달력 안의 위치를 말하는 말. 읽은 표현 옆에 남으면("지난주 금요일", "지난달 말")
+              # 읽은 부분만으로 기간을 정하면 뜻이 바뀐다.
+              r"|[월화수목금토일]요일|초순|중순|하순|월초|월말|연초|연말|말일|첫\s*주|마지막\s*주"
+              r"|(?:^|\s)(?:초|말)(?=\s|$|에|부터|까지|의)")
 
 
 def scan_dates(question, *, reference_date):
@@ -255,6 +259,51 @@ def _interpreted_range(value, reference_date):
     return value
 
 
+# -- 조건 상태 -------------------------------------------------------------------
+#
+# 규칙이 질문에서 표현을 찾지 못했다는 것은 조건이 없다는 증거가 아니다. 그래서 상태를
+# 나눈다. 지우는 것은 "LLM 값의 근거 표현이 질문에 없고, 그 조건을 말하는 단서도 없을
+# 때"뿐이다. 단서는 있는데 읽지 못하면 LLM 값을 그대로 두되(보류) 검증된 값으로 적지 않는다.
+
+#: 질문 표현을 지원 문법으로 읽고 값이 정해졌다(LLM 값과 같거나 LLM 값이 없었다).
+STATUS_INTERPRETED = "interpreted"
+#: 질문 표현으로 정한 값과 LLM 값이 다르다. 질문 표현을 따른다(보정).
+STATUS_CONFLICT = "conflict"
+#: 표현은 찾았지만 뜻이 하나로 정해지지 않는다(연도 없음, 명시·상대 충돌). 확인 요청.
+STATUS_AMBIGUOUS = "ambiguous"
+#: 조건을 말하는 단서가 있지만 지원 문법으로 읽지 못했다. 판정하지 않는다(보류).
+STATUS_UNVERIFIABLE = "unverifiable"
+#: 조건 표현도 단서도 없다. LLM 값이 있었다면 근거가 없어 지운다.
+STATUS_ABSENT = "absent"
+#: 표현을 찾았지만 지원하지 않는 계산이다(최근 N일, 여러 기간, 유형 제외).
+STATUS_UNSUPPORTED = "unsupported"
+
+VERIFIED_STATUSES = frozenset({STATUS_INTERPRETED, STATUS_CONFLICT, STATUS_ABSENT})
+
+_RELATIVE_ANCHORS = {
+    "last_week": r"지난|저번|전주|주", "last_month": r"지난|저번|전월|달|월",
+    "last_year": r"작년|지난|전년|해|년",
+    "weekday": r"평일|주중", "weekend": r"주말", "holiday": r"휴일",
+}
+
+
+def _date_value_anchors(value):
+    """LLM이 적은 기간 값의 근거가 될 수 있는 질문 표현(연도·월 숫자, 상대어)."""
+    if value in _RELATIVE_ANCHORS:
+        return [_RELATIVE_ANCHORS[value]]
+    anchors = []
+    for part in re.findall(r"\d{8}", str(value)):
+        month, day = int(part[4:6]), int(part[6:])
+        anchors += [part, part[:4], rf"(?<!\d){month}\s*월",
+                    # 숫자 표기("9/24", "9.24")처럼 월과 일이 숫자로 나란히 있는 경우
+                    rf"(?<!\d)0?{month}\s*[/.\-]\s*0?{day}(?!\d)"]
+    return anchors or [re.escape(str(value))]
+
+
+def _has_anchor(question, anchors):
+    return any(re.search(anchor, question) for anchor in anchors)
+
+
 def reconcile_date(factors, question, reference_date, raw_text=""):
     llm_value = factors.get("date")
     mentions, cues_left = scan_dates(question, reference_date=reference_date)
@@ -264,10 +313,13 @@ def reconcile_date(factors, question, reference_date, raw_text=""):
     ambiguous = [m for m in mentions if m.status == AMBIGUOUS]
     supported = [m for m in mentions if m.status == SUPPORTED]
     if unsupported:
+        record.update(status=STATUS_UNSUPPORTED, action="unsupported",
+                      basis="unsupported_expression")
         raise _error("DATE_EXPRESSION_UNSUPPORTED",
                      f"지원하지 않는 기간 표현입니다: {', '.join(m.text for m in unsupported)}",
                      context={"date": record}, raw_text=raw_text)
     if ambiguous:
+        record.update(status=STATUS_AMBIGUOUS, action="clarify", basis="yearless_date")
         raise _error("DATE_AMBIGUOUS",
                      f"기간을 확정할 수 없습니다(연도 없음): {', '.join(m.text for m in ambiguous)}",
                      clarify="date", context={"date": record}, raw_text=raw_text)
@@ -277,29 +329,54 @@ def reconcile_date(factors, question, reference_date, raw_text=""):
                                 or "yesterday" in m.meaning or "today" in m.meaning)
                  else "explicit" for m in supported}
         if kinds == {"relative", "explicit"}:
+            record.update(status=STATUS_AMBIGUOUS, action="clarify",
+                          basis="relative_and_explicit")
             raise _error("DATE_CONFLICT",
                          "질문의 명시 날짜와 상대 기간 표현이 함께 있어 기간을 정할 수 없습니다: "
                          + ", ".join(m.text for m in supported),
                          clarify="date", context={"date": record}, raw_text=raw_text)
+        record.update(status=STATUS_UNSUPPORTED, action="unsupported",
+                      basis="multiple_periods")
         raise _error("DATE_MULTIPLE_UNSUPPORTED",
                      "여러 기간을 비교하는 질문은 지원하지 않습니다: "
                      + ", ".join(m.text for m in supported),
                      context={"date": record}, raw_text=raw_text)
-    if values:
+    if values and cues_left:
+        # 읽은 표현 밖에도 날짜 단서가 남았다("지난달 15일"). 읽은 부분만으로 기간을 정하면
+        # 뜻을 바꿀 수 있으므로 판정하지 않는다.
+        (partial,) = values
+        record.update(status=STATUS_UNVERIFIABLE, value=llm_value, action="held",
+                      basis="unparsed_date_cue_beside_expression",
+                      partial_interpretation=partial, interpreted_range=None)
+    elif values:
         (value,) = values
-        record.update(value=value, action="confirmed" if llm_value == value else (
-            "corrected" if llm_value else "filled"),
+        record.update(
+            value=value,
+            status=STATUS_INTERPRETED if llm_value in (None, value) else STATUS_CONFLICT,
+            action="confirmed" if llm_value == value else ("corrected" if llm_value else "filled"),
+            basis="question_expression" if llm_value in (None, value)
+            else "question_expression_over_llm_value",
             interpreted_range=_interpreted_range(value, reference_date))
         factors["date"] = value
-    elif llm_value and not cues_left:
-        record.update(value=None, action="removed_no_evidence")
+    elif llm_value and not cues_left and not _has_anchor(question, _date_value_anchors(llm_value)):
+        record.update(value=None, status=STATUS_ABSENT, action="removed_no_evidence",
+                      basis="llm_value_has_no_anchor_and_no_date_cue")
         factors.pop("date", None)
     elif llm_value:
-        record.update(value=llm_value, action="unverified",
+        record.update(value=llm_value, status=STATUS_UNVERIFIABLE, action="held",
+                      basis="unparsed_date_cue" if cues_left else "llm_value_anchor_unparsed",
                       interpreted_range=None)
+    elif cues_left:
+        # LLM도 값을 내지 않았고 규칙도 읽지 못했다. 기간이 빠졌을 수 있다.
+        record.update(value=None, status=STATUS_UNVERIFIABLE, action="flagged",
+                      basis="unparsed_date_cue_without_value")
     else:
-        record.update(value=None, action="none")
+        record.update(value=None, status=STATUS_ABSENT, action="none",
+                      basis="no_value_no_cue")
     return record
+
+
+_TAXI_ANCHORS = {"private": r"개인", "corporate": r"법인|회사"}
 
 
 def reconcile_taxi_type(factors, question, raw_text=""):
@@ -307,29 +384,49 @@ def reconcile_taxi_type(factors, question, raw_text=""):
     mentions = scan_taxi_types(question)
     record = {"mentions": [m.to_dict() for m in mentions], "llm_value": llm_value}
     if mentions and re.search(_NEGATION, question):
+        record.update(status=STATUS_UNSUPPORTED, action="unsupported", basis="negation")
         raise _error("TAXI_TYPE_EXPRESSION_UNSUPPORTED",
                      "택시 유형을 제외하는 표현은 지원하지 않습니다.",
                      context={"taxi_type": record}, raw_text=raw_text)
     values = {m.value for m in mentions}
     if len(values) > 1:
+        record.update(status=STATUS_UNSUPPORTED, action="unsupported", basis="multiple_types")
         raise _error("TAXI_TYPE_EXPRESSION_UNSUPPORTED",
                      "여러 택시 유형을 함께 묻는 질문은 지원하지 않습니다: "
                      + ", ".join(m.text for m in mentions),
                      context={"taxi_type": record}, raw_text=raw_text)
+    cue = bool(re.search(_TAXI_CUES, question))
     if values:
         (value,) = values
-        record.update(value=value, action="confirmed" if llm_value == value else (
-            "corrected" if llm_value else "filled"))
+        # "전체 택시"(all)와 LLM의 생략은 실행 의미가 같다(계약 taxi_type_all_unrestricted).
+        # 값은 질문 표현대로 all로 두고, 사용자가 명시했다는 사실을 stated에 남긴다.
+        same = llm_value == value or (value == "all" and llm_value is None)
+        record.update(value=value, stated=f"explicit_{value}",
+                      status=STATUS_INTERPRETED if same or llm_value is None else STATUS_CONFLICT,
+                      action="confirmed" if llm_value == value else (
+                          "confirmed_equivalent" if same else
+                          "corrected" if llm_value else "filled"),
+                      basis="question_expression" if same or llm_value is None
+                      else "question_expression_over_llm_value")
         factors["taxi_type"] = value
-    elif llm_value in ("private", "corporate") and not re.search(_TAXI_CUES, question):
-        # 질문에 택시 유형을 말하는 단서가 전혀 없는데 개인/법인이 붙었다.
-        record.update(value=None, action="removed_no_evidence")
+    elif llm_value in _TAXI_ANCHORS and not cue and not re.search(
+            _TAXI_ANCHORS[llm_value], question):
+        record.update(value=None, stated="not_stated", status=STATUS_ABSENT,
+                      action="removed_no_evidence",
+                      basis="llm_value_has_no_anchor_and_no_type_cue")
         factors.pop("taxi_type", None)
-    elif llm_value in ("private", "corporate"):
-        # 단서는 있지만 지원 어휘로 읽지 못했다. 판정하지 않고 LLM 값을 둔다.
-        record.update(value=llm_value, action="unverified")
+    elif llm_value in _TAXI_ANCHORS:
+        # 단서는 있지만 지원 어휘로 읽지 못했다. 판정하지 않고 LLM 값을 둔다(검증 안 됨).
+        record.update(value=llm_value, stated="unverifiable", status=STATUS_UNVERIFIABLE,
+                      action="held", basis="unparsed_type_cue")
+    elif cue:
+        # 유형을 말하는 듯한 단서가 있는데 값이 없다. 빠졌을 수 있으므로 없음으로 확정하지 않는다.
+        record.update(value=llm_value, stated="unverifiable", status=STATUS_UNVERIFIABLE,
+                      action="flagged", basis="unparsed_type_cue_without_value")
     else:
-        record.update(value=llm_value, action="none")
+        record.update(value=llm_value, stated="not_stated", status=STATUS_ABSENT, action="none",
+                      basis="no_value_no_cue" if llm_value is None
+                      else "llm_all_equivalent_to_unstated")
     return record
 
 
@@ -338,7 +435,12 @@ def _compact(text):
 
 
 def check_places(concepts, question, raw_text=""):
-    """장소명이 질문에 근거가 있는지 본다. 이름 정규화(대구시→대구)는 허용한다."""
+    """장소명이 질문에 근거가 있는지 본다. 이름 정규화(대구시→대구)는 허용한다.
+
+    이름이 질문에 있다는 것은 문자열 근거일 뿐이다. 어느 지역을 뜻하는지(서구가 어느
+    도시의 서구인지), 질문의 다른 장소가 빠지지 않았는지, 출발/도착 관계가 맞는지는 보지
+    않는다(``semantics``·``completeness`` 참고).
+    """
     compact = _compact(question)
     records = []
     for item in concepts or []:
@@ -353,7 +455,8 @@ def check_places(concepts, question, raw_text=""):
             continue
         record = {"id": item.get("id"), "text": text, "lookup_name": name,
                   "region": (value or {}).get("region", "") if isinstance(value, dict) else "",
-                  "od_role": (item.get("attributes") or {}).get("od_role") or item.get("od_role")}
+                  "od_role": (item.get("attributes") or {}).get("od_role") or item.get("od_role"),
+                  "semantics": "name_evidence_only"}
         if _compact(name) in compact:
             record["evidence"] = "exact"
         elif text and _compact(text) in compact and (
@@ -365,6 +468,15 @@ def check_places(concepts, question, raw_text=""):
                          clarify="place", context={"place": record}, raw_text=raw_text)
         records.append(record)
     return records
+
+
+#: 조건 계층이 확인하지 않는 것. 검증 요약(``verification``)이 그대로 옮긴다.
+NOT_CHECKED = (
+    "place_completeness: 질문의 장소가 모두 출력되었는지(누락 탐지 없음)",
+    "place_semantics: 장소명이 뜻하는 지역(동명 지역 구분)",
+    "od_semantics: 출발/도착 관계의 의미(보존만 함)",
+    "unsupported_grammar: 지원 문법 밖의 날짜·유형 표현(보류로 둠)",
+)
 
 
 def reconcile_payload(payload, question, *, reference_date, raw_text=""):
@@ -386,11 +498,8 @@ def reconcile_payload(payload, question, *, reference_date, raw_text=""):
         "date": reconcile_date(factors, question, reference_date, raw_text),
         "taxi_type": reconcile_taxi_type(factors, question, raw_text),
         "places": check_places(fixed.get("concepts"), question, raw_text),
-        "not_checked": [
-            "장소 누락(질문의 어느 말이 장소인지 판정하지 않음)",
-            "출발/도착 관계의 의미",
-            "지원 문법 밖의 날짜 표현",
-        ],
+        "place_completeness": "unchecked",
+        "not_checked": list(NOT_CHECKED),
     }
     before = {key: value for key, value in (payload.get("factors") or {}).items()
               if key not in ("date", "taxi_type")}
@@ -399,9 +508,14 @@ def reconcile_payload(payload, question, *, reference_date, raw_text=""):
         raise AssertionError("조건 보정이 date·taxi_type 밖을 바꿨습니다.")
     audit["corrections"] = [
         {"condition": key, "from": audit[key]["llm_value"], "to": audit[key].get("value"),
-         "action": audit[key]["action"]}
+         "action": audit[key]["action"], "basis": audit[key]["basis"]}
         for key in ("date", "taxi_type")
         if audit[key]["action"] in ("corrected", "filled", "removed_no_evidence")
+    ]
+    audit["held"] = [
+        {"condition": key, "value": audit[key].get("value"), "action": audit[key]["action"],
+         "basis": audit[key]["basis"]}
+        for key in ("date", "taxi_type") if audit[key]["status"] == STATUS_UNVERIFIABLE
     ]
     return fixed, audit
 
@@ -418,7 +532,9 @@ def trace(plan, execution_plan, audit):
     """조건마다 적용된 의미 단계와 실행 인자를 잇는다. 사라진 조건이 있으면 멈춘다.
 
     compiler의 verify_lowering이 인자 보존을 이미 보지만, 이 추적은 "질문의 근거 표현"
-    에서 출발해 실제 호출까지 이어지는지를 본다(부록 F의 trace와 같은 목적).
+    에서 출발해 실제 호출까지 이어지는지를 본다(부록 F의 trace와 같은 목적). 기간은
+    요청 인자가 해석과 같다는 것(보존)과, provider가 그 인자를 그 기간으로 읽는다는 것
+    (``date_semantics``의 provider 상태)을 따로 적는다.
     """
     from geoflow.errors import CompilerError
 
@@ -428,6 +544,7 @@ def trace(plan, execution_plan, audit):
     for step in execution_plan.steps:
         for covered in step.covers:
             steps_by_transformation.setdefault(covered, []).append(step)
+    date_semantics = getattr(execution_plan, "date_semantics", {}) or {}
     rows = []
     for key in ("date", "taxi_type"):
         record = audit.get(key) or {}
@@ -437,14 +554,19 @@ def trace(plan, execution_plan, audit):
         applied = [t.id for t in plan.transformations if t.params.get(key) == value]
         calls = []
         for transformation_id in applied:
+            lowered = date_semantics.get(transformation_id) or {}
             for step in steps_by_transformation.get(transformation_id, []):
                 if step.is_local:
                     continue
                 calls.append({"step": step.id, "argument": step.arguments.get(key),
-                              "partition": step.group is not None})
+                              "partition": step.group is not None,
+                              "lowering": lowered.get("lowering") if key == "date" else None,
+                              "allowed": (lowered.get("request") if key == "date" and lowered
+                                          else [value])})
         lost = not applied or any(
             call["argument"] is None
-            or (not call["partition"] and call["argument"] != value) for call in calls)
+            or (not call["partition"] and call["argument"] not in call["allowed"])
+            for call in calls)
         if lost:
             raise CompilerError(
                 f"질문의 {key} 조건({value})이 실행 인자까지 전달되지 않았습니다.",
@@ -452,11 +574,15 @@ def trace(plan, execution_plan, audit):
                 context={"condition": key, "value": value, "applied_to": applied,
                          "calls": calls},
             )
-        rows.append({"condition": key,
-                     "text": [m["text"] for m in record.get("mentions") or []],
-                     "value": value, "action": record.get("action"),
-                     "interpreted_range": record.get("interpreted_range"),
-                     "applied_to": applied, "calls": calls})
+        row = {"condition": key,
+               "text": [m["text"] for m in record.get("mentions") or []],
+               "value": value, "status": record.get("status"), "action": record.get("action"),
+               "interpreted_range": record.get("interpreted_range"),
+               "applied_to": applied, "calls": calls}
+        if key == "date":
+            row["provider"] = sorted({
+                (date_semantics.get(t) or {}).get("provider", "partition") for t in applied})
+        rows.append(row)
     for place in audit.get("places") or []:
         applied = [t.id for t in plan.transformations
                    if any(ref.node_id == place["id"] for ref in t.inputs.values())]
@@ -466,34 +592,100 @@ def trace(plan, execution_plan, audit):
                  if not step.is_local]
         rows.append({"condition": "place", "text": place.get("text"),
                      "value": place.get("lookup_name"), "od_role": place.get("od_role"),
-                     "evidence": place.get("evidence"), "history": place.get("history", []),
+                     "evidence": place.get("evidence"), "semantics": place.get("semantics"),
+                     "history": place.get("history", []),
                      "applied_to": applied, "calls": calls})
     return rows
 
 
-def describe_for_answer(audit):
-    """답변에 붙일 적용 조건 한 줄. 해석의 근거와 전달 방식을 함께 적는다."""
+def verification(audit, execution_plan):
+    """조건별로 무엇을 확인했고 무엇을 확인하지 못했는지. 전체 완료로 적지 않는다.
+
+    세 층을 나눈다: 질문 해석(interpretation), 요청 인자(request), provider가 그 인자를
+    같은 뜻으로 읽는다는 계약(provider). 장소 누락은 탐지하지 않으므로 ``complete``는
+    언제나 거짓이다.
+    """
+    if audit is None:
+        return None
+    from geoflow import tims_contract
+
+    date_records = list((getattr(execution_plan, "date_semantics", {}) or {}).values())
+    grouped_dates = [step.arguments.get("date") for step in execution_plan.tool_steps
+                     if step.group is not None]
+    date_audit = audit.get("date") or {}
+    if date_records:
+        providers = sorted({item["provider"] for item in date_records})
+        requests = sorted({arg for item in date_records for arg in item["request"]})
+    else:
+        providers, requests = [], []
+    if grouped_dates:
+        providers = sorted(set(providers) | {
+            tims_contract.date_argument_semantics(arg)["status"] for arg in grouped_dates})
+        requests = sorted(set(requests) | set(grouped_dates))
+    if date_audit.get("value") is None and not requests:
+        providers = [tims_contract.SEMANTICS_NOT_REQUESTED]
+    taxi = audit.get("taxi_type") or {}
+    rows = {
+        "date": {"interpretation": date_audit.get("status"), "action": date_audit.get("action"),
+                 "basis": date_audit.get("basis"),
+                 "interpreted_range": date_audit.get("interpreted_range"),
+                 "request": requests, "provider": providers},
+        "taxi_type": {"interpretation": taxi.get("status"), "action": taxi.get("action"),
+                      "basis": taxi.get("basis"), "stated": taxi.get("stated"),
+                      "request": sorted({step.arguments.get("taxi_type")
+                                         for step in execution_plan.tool_steps
+                                         if step.arguments.get("taxi_type")}),
+                      # enum 값과 all≡생략은 schema에 적혀 있다(taxi_type_all_unrestricted).
+                      "provider": [tims_contract.SEMANTICS_CONFIRMED]},
+        "place": {"interpretation": "name_evidence_only",
+                  "names": [p.get("lookup_name") for p in audit.get("places") or []],
+                  "completeness": audit.get("place_completeness", "unchecked"),
+                  "provider": ["unverified"]},
+    }
+    verified = [key for key in ("date", "taxi_type")
+                if rows[key]["interpretation"] in VERIFIED_STATUSES
+                and all(p in (tims_contract.SEMANTICS_CONFIRMED,
+                              tims_contract.SEMANTICS_NOT_REQUESTED)
+                        for p in rows[key]["provider"])]
+    unverified = [key for key in ("date", "taxi_type") if key not in verified]
+    return {"conditions": rows, "verified": verified,
+            "unverified": unverified + ["place"],
+            "not_checked": list(audit.get("not_checked") or NOT_CHECKED),
+            "complete": False}
+
+
+def describe_for_answer(audit, verification_summary=None, execution_plan=None):
+    """답변에 붙일 적용 조건과 검증 범위. 확인한 것과 확인하지 못한 것을 함께 적는다."""
     if audit is None:
         return ""
     parts = []
     date_record = audit.get("date") or {}
     value = date_record.get("value")
+    lowered = list((getattr(execution_plan, "date_semantics", {}) or {}).values())
     if value:
         texts = ", ".join(m["text"] for m in date_record.get("mentions") or [])
-        text = f"기간 '{texts}' → {value}" if texts else f"기간 {value}(질문 근거 미확인)"
-        if value in RELATIVE_TOKENS:
-            text += (f" (TIMS에 상대 날짜로 전달. 기준일 {audit['reference_date']} "
-                     f"{audit['timezone']}로 푼 해석은 {date_record.get('interpreted_range')}이며 "
-                     "TIMS의 해석과 같다는 보장은 없음)")
+        text = f"기간 '{texts}' → {value}" if texts else f"기간 {value}"
+        if date_record.get("interpreted_range") and date_record["interpreted_range"] != value:
+            text += (f" = {date_record['interpreted_range']}(기준일 {audit['reference_date']}, "
+                     f"{audit['timezone']})")
+        for item in lowered:
+            if item.get("lowering") == "daily_composition":
+                text += f", 하루 단위 조회 {len(item['request'])}회를 합성"
+            elif item.get("lowering") == "explicit_range":
+                text += f", 명시 범위 {item['request'][0]}로 조회"
+        if date_record.get("status") == STATUS_UNVERIFIABLE:
+            text += " [질문 표현을 현재 문법으로 검증하지 못한 LLM 값]"
         if date_record.get("action") == "corrected":
             text += f" [LLM 값 {date_record.get('llm_value')}을 질문 표현으로 바로잡음]"
         parts.append(text)
     taxi = audit.get("taxi_type") or {}
     if taxi.get("value") in ("private", "corporate", "all"):
         texts = ", ".join(m["text"] for m in taxi.get("mentions") or [])
-        text = f"택시 유형 '{texts}' → {taxi['value']}"
+        text = f"택시 유형 '{texts}' → {taxi['value']}" if texts else f"택시 유형 {taxi['value']}"
         if taxi.get("action") in ("corrected", "filled"):
             text += " [질문 표현으로 보완]"
+        if taxi.get("status") == STATUS_UNVERIFIABLE:
+            text += " [질문 표현을 현재 문법으로 검증하지 못한 LLM 값]"
         parts.append(text)
     for place in audit.get("places") or []:
         text = f"장소 '{place.get('text') or place['lookup_name']}'(조회명 {place['lookup_name']}"
@@ -506,4 +698,14 @@ def describe_for_answer(audit):
     removed = [c for c in audit.get("corrections") or [] if c["action"] == "removed_no_evidence"]
     for item in removed:
         parts.append(f"{item['condition']} {item['from']}은 질문에 근거가 없어 적용하지 않음")
-    return "- 적용 조건: " + " · ".join(parts) if parts else ""
+    lines = ["- 적용 조건: " + " · ".join(parts)] if parts else []
+    if verification_summary is not None:
+        names = {"date": "기간", "taxi_type": "택시 유형"}
+        verified = [names[key] for key in verification_summary["verified"]]
+        pending = [names[key] for key in verification_summary["unverified"] if key in names]
+        scope = ("질문 표현과 TIMS 문서 계약으로 확인: " + ", ".join(verified)) if verified else ""
+        rest = "장소는 이름 근거만 확인(지역 의미·누락은 미검증)"
+        if pending:
+            rest = "미검증: " + ", ".join(pending) + " · " + rest
+        lines.append("- 검증 범위: " + " · ".join(item for item in (scope, rest) if item))
+    return "\n".join(lines)
