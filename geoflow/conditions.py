@@ -9,21 +9,24 @@ LLM이 적은 grounding(payload)을 검증하기 전에, 질문 원문을 **닫�
 
 역할 분담
 
-- 날짜: 해석을 코드로 옮긴다. 아래 지원 표현을 질문에서 찾으면 그 값이 date가 된다.
-  LLM이 적은 값과 다르면 코드의 해석으로 바꾸고 LLM 값과 이유를 기록한다. 상대 날짜의
-  절대 날짜 계산은 주입된 기준일(Asia/Seoul 날짜)로만 한다.
+- 날짜: 해석을 코드로 옮긴다. 지원 표현을 찾으면 그 값이 date가 된다. LLM이 적은 값과
+  다르면 질문 표현을 따르고(conflict → corrected) LLM 값과 근거를 기록한다. 상대 날짜의
+  절대 범위는 주입된 기준일(Asia/Seoul 날짜)로만 계산한다. 이 해석은 **기록**이다. 실제
+  요청 인자와 그 provider 의미는 compiler의 date 정책이 정한다(condition_check 경로는
+  계약으로 확인된 기간만 실행, ``geoflow/compiler.py`` DATE_POLICY_GUARANTEED).
 - 택시 유형: "개인(용)택시", "법인(용)택시", "회사택시", "전체/모든 택시"를 찾는다.
-  하나만 있으면 그 값이 taxi_type이 된다. 부정·여러 유형이 섞이면 지원하지 않는다.
-  질문에 유형 단서가 전혀 없을 때만 LLM이 붙인 개인/법인을 지운다. 단서가 있지만
-  읽지 못하면 LLM 값을 두고 unverified로 기록한다.
-- 장소: LLM이 적은 장소명이 질문에 근거가 있는지만 본다. 누락은 탐지하지 않는다.
+  부정·여러 유형은 지원하지 않는다. all은 생략과 실행 의미가 같고, 명시 여부는 stated에 남긴다.
+- 장소: LLM이 적은 장소명이 질문에 문자열 근거가 있는지만 본다.
+
+조건 상태(``STATUS_*``): interpreted / conflict / ambiguous / unverifiable / absent /
+unsupported. 규칙이 읽지 못했다는 것만으로 부재를 확정하지 않는다. LLM 값은 그 근거 표현이
+질문에 없고 조건 단서도 없을 때만 지운다. 단서가 남으면 보류(held)하고 검증된 값으로 적지 않는다.
 
 한계(검증하지 않는 것)
 
-- 문자열이 질문에 있다는 것은 해석이 맞다는 보장이 아니다. 지원 문법 밖의 날짜 표현,
-  "개인택시 기사가 태운 법인 고객"처럼 문장 구조가 필요한 표현은 판정하지 못한다.
-- 장소 누락은 찾지 못한다. 질문의 어느 말이 장소인지 알려면 Gazetteer 전체나 개체명
-  인식이 필요하다. 출발/도착 관계의 의미도 검증하지 않는다(보존만 한다).
+- 문자열이 질문에 있다는 것은 해석이 맞다는 보장이 아니다. 단서 어휘는 닫혀 있어, 목록 밖
+  표현이 단서도 남기지 않으면 부재로 판정된다.
+- 장소 누락, 장소의 지역 의미, 출발/도착 관계의 의미는 검증하지 않는다(``NOT_CHECKED``).
 - 평가 라벨을 쓰지 않는다. 이 모듈은 질문 원문과 기준일만 본다.
 
 지원 날짜 표현(이 밖은 "해석 불가"로 두고 LLM 값을 바꾸지 않는다)
@@ -54,7 +57,7 @@ SUPPORTED = "supported"
 AMBIGUOUS = "ambiguous"
 UNSUPPORTED = "unsupported"
 
-#: pt_date 상대 토큰. TIMS에 그대로 넘긴다(TIMS의 해석은 계약에 없다. tims_contract 참고).
+#: pt_date 상대 토큰. TIMS의 해석은 계약에 없다(tims_contract relative_date_reference).
 RELATIVE_TOKENS = {"last_week", "last_month", "last_year"}
 CALENDAR_TOKENS = {"weekday", "weekend", "holiday"}
 
