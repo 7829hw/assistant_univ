@@ -959,6 +959,7 @@ ASSISTANT_TOOL_PROVIDER=reference python assistant_cli.py --agent-mode geoflow \
 ```
 
 설계·검증·비교 결과: `evaluation/design/question_graph_retrieval.md`.
+모델별 점수(같은 셋, development): `evaluation/retrieval/model_scores_v1.md`.
 
 ### 질문에 없는 조건
 
