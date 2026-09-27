@@ -42,7 +42,7 @@ from geoflow import structured_grounding  # noqa: E402
 from geoflow.aggregation import UNSPECIFIED  # noqa: E402
 from geoflow.pipeline import GeoFlowPipeline  # noqa: E402
 from geoflow.providers import profile_for  # noqa: E402
-from ollama_client import OllamaClient, chat_options  # noqa: E402
+from ollama_client import OllamaClient, chat_options, resolve_think  # noqa: E402
 
 BASE_DIR = Path(__file__).resolve().parent
 RESULT_DIR = BASE_DIR / "evaluation" / "structured_grounding"
@@ -118,7 +118,7 @@ def _tool_executor(provider="mock"):
 
 
 def observe(item, arm, *, host, model, timeout, reset, provider="mock",
-            tims_execution="legacy", selector=None):
+            tims_execution="legacy", selector=None, think=None):
     outcome = reset.reset() if reset is not None else None
     record = {"id": item["id"], "arm": arm, "question": item["question"],
               "reset": None if outcome is None else {
@@ -127,7 +127,7 @@ def observe(item, arm, *, host, model, timeout, reset, provider="mock",
     if outcome is not None and not outcome.succeeded:
         return {**record, "measurement": "invalid", "invalid_reason": "reset_failed"}
     client = RecordingClient(OllamaClient(host, model, chat_options(OPTIONS, None),
-                                          chat_timeout=timeout))
+                                          chat_timeout=timeout, think=think))
     mode, condition_check = parse_arm(arm)
     pipeline = GeoFlowPipeline.create(client=client, tool_executor=_tool_executor(provider),
                                       model=model, aggregation_grounding=mode,
@@ -182,7 +182,7 @@ def observe(item, arm, *, host, model, timeout, reset, provider="mock",
 
 
 def run(questions_path, *, name, host, model, timeout, reset_state=True, repeat=1,
-        arms=ARMS, provider="mock", tims_execution="legacy"):
+        arms=ARMS, provider="mock", tims_execution="legacy", think=None):
     document, questions = load_questions(questions_path)
     arms = tuple(arms)
     stamp = datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y%m%d_%H%M%S")
@@ -202,6 +202,8 @@ def run(questions_path, *, name, host, model, timeout, reset_state=True, repeat=
         "arms": list(arms),
         "order": "question i: arms를 i만큼 회전한 순서(2 arm이면 짝수 flat 먼저)",
         "repeat": repeat, "reset_state": reset_state,
+        #: None은 payload에 think를 넣지 않는다(모델 기본값). 모델마다 기본 동작이 다르다.
+        "think": think,
         "provider": provider,
         "execution_profile": profile_for(provider, tims_execution).to_dict(),
         "examples": {arm: None if selector is None else selector.describe()
@@ -225,7 +227,7 @@ def run(questions_path, *, name, host, model, timeout, reset_state=True, repeat=
                     record = observe(item, arm, host=host, model=model, timeout=timeout,
                                      reset=reset, provider=provider,
                                      tims_execution=tims_execution,
-                                     selector=selectors[arm])
+                                     selector=selectors[arm], think=think)
                     record.update(repetition=repetition, question_index=index,
                                   position=position)
                     handle.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
@@ -499,6 +501,8 @@ def main(argv=None):
     run_parser.add_argument("--no-reset", action="store_true")
     run_parser.add_argument("--provider", choices=("mock", "reference"), default="mock")
     run_parser.add_argument("--tims-execution", choices=("legacy", "strict"), default="legacy")
+    run_parser.add_argument("--think", choices=("auto", "on", "off"), default="auto",
+                            help="auto=think를 보내지 않음(모델 기본값, 기존 측정과 같음)")
     run_parser.add_argument("--arms", default=",".join(ARMS),
                             help="쉼표로 구분. 예: flat,flat+cc,structured,structured+cc,"
                                  "structured+cc+rx,structured+cc+fx")
@@ -523,7 +527,7 @@ def main(argv=None):
         out = run(args.questions, name=args.name, host=args.host, model=args.model,
                   timeout=args.timeout, reset_state=not args.no_reset, repeat=args.repeat,
                   arms=args.arms.split(","), provider=args.provider,
-                  tims_execution=args.tims_execution)
+                  tims_execution=args.tims_execution, think=resolve_think(args.think))
         print(out)
         summary, _ = score(out)
     else:
