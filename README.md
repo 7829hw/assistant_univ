@@ -400,7 +400,34 @@ v2 계약의 다른 변경도 반영했음.
 * `get_trip_count.dimension_target`(pickup | dropoff | both, 기본 both)은 factor
   `dimension_target`으로 받음. 승차·하차 한쪽 기준이 드러날 때만 넣음.
 * pt_date의 `this_week`, `this_month`, `this_year`를 받음. condition_check는 "이번 주/달",
-  "올해"를 이 토큰으로 읽고, 로컬 분할은 기간 시작일부터 기준일까지로 풂.
+  "올해"를 이 토큰으로 읽고, 로컬 분할은 기간 시작일부터 기준일까지로 풂. 이 풀이(월요일 시작,
+  기준일 포함, Asia/Seoul 달력)는 **애플리케이션 정책**이며 TIMS 계약이 아님. 토큰을 그대로
+  보내는 호출(legacy)에서는 TIMS가 정한 기간이 쓰이고, 실행 기록의 `interpretation.source`가
+  `application_policy`로 남음(`geoflow/periods.py`).
+* `PARAM_VALUE_REQUIRES_INPUT`·`PARAM_VALUE_FORBIDS_INPUT`(schema가 받지 않는 scope·dimension
+  조합)은 결과 종류 `unsupported`로 분류함.
+
+#### 측정값별 집계 의미 (`geoflow/measures.py`)
+
+TIMS Tool은 `aggregation`을 받지만 모든 측정값에 같은 뜻으로 성립하지 않음. 측정값마다 뜻이
+없는 집계와, 하루 단위 호출 값으로 기간 값을 다시 만들 수 있는 집계를 근거 문장과 함께 적음.
+
+| 측정값 | 종류 | 뜻이 없는 집계 | 하루 값으로 합성 |
+| --- | --- | --- | --- |
+| fare, revenue | 기록마다 값(합계 의미 있음) | - | sum, max, min |
+| speed, rpm | 기록마다 값(합계 의미 없음) | sum | max, min |
+| passage_count, trip_count | 사건 수 | - | sum |
+| vacant_ratio | drive마다 비율 | sum | max, min |
+| active_taxi_count | 고유 대수 | sum | 없음 |
+| active_taxi_ratio | 집단 비율(활성/등록) | sum | 없음 |
+| operating_days | 택시별 기간 집계(업체 v2 README) | - | sum |
+
+* 뜻이 없는 집계(한 단계 aggregation, 구간 안 집계, 구간별 값의 집계)는 합성 전에
+  `UNDEFINED_MEASURE_AGGREGATION`(unsupported)으로 거부함.
+* 구간별 집계의 일 단위 분해와 한 단계 기간의 일 단위 합성은 이 표를 따름. legacy도 이 수학
+  조건은 가정하지 않음. 그래서 활성택시 대수·가동률의 두 단계 집계는 계산하지 않음.
+* 로컬 계산은 v2 결과 형식(`{"count": N}`, "30km/h"·"35%" 같은 단위 문자열)을 숫자로 읽고
+  단위를 보존함. 단위가 섞이면 `MIXED_UNITS`로 거부함.
 
 `EVENT/passage`와 `AMOUNT/fare`를 붙인 계획은 후보 operator가 없어 합성 단계에서
 거부되고, 그래도 빠져나간 경우 G3가 다시 거부함.
@@ -846,6 +873,40 @@ python evaluate_planner.py --aggregate
 
 `temperature=0`으로 고정하므로 같은 입력에는 같은 출력이 반복됨. `--repeat`은
 변동성 측정이 필요한 경우에만 사용함.
+
+### v2 평가셋과 실행기
+
+업체 v2 전환으로 v1 고정 corpus의 intent 36개가 지원 범위 밖이 되었음(registry
+`v2_contract.retired`). 그중 aggregation holdout 10개, local aggregation holdout 10개, verifier
+holdout 7개의 검사 능력(두 단계 집계, stage-swap, 구간 안 집계 미지정, 대조군, verifier 오류
+유형)을 v2에서 뜻이 정해진 측정값(요금·운행일수·공차율·속도)으로 새로 쓴 평가셋을 따로 둠.
+기존 corpus와 이력은 그대로임.
+
+| 파일 | 내용 |
+| --- | --- |
+| `evaluation/v2/paraphrases_holdout_v2.yaml`, `holdout_v2_parents.yaml` | holdout_v2: 42 intent × 3문장. 복원 27, v2 거부 7, v2 경계 8. 기대 결과 answered 26 · needs_clarification 5 · unsupported 11 |
+| `evaluation/v2/stub_v2_gold.yaml` | 업체 v2 stub 5문항의 기대 결과·인자 |
+| `evaluation/v2/preregistration_v2.md` | 설계 기준, 구성, 중복 점검, 실행 절차, 채점 규칙, 사용 규칙(모델 실행 전 고정) |
+| `evaluate_v2.py` | production 기본 설정으로 전체 파이프라인을 격리 실행하고 채점 |
+
+문항·라벨은 Claude가 작성했고 **사람이 검토하지 않았음**(registry `review.status: unreviewed`).
+이 평가셋의 결과는 잠정치로 봐야 함.
+
+채점은 실행 완료(답을 내야 할 문항에서 답을 냄), 의미 정답(결과 종류·측정값·라벨·집계 의미·
+최종 Tool 인자·조건·답변 형식이 모두 맞음), 거부 정확도(strict: 기대한 종류로 멈춤, lenient: 답하지
+않음)를 분모와 함께 나눠 보고함. 장소 인자는 mock gazetteer scope로 비교해 별칭(대구 = 대구시)은
+같고, 재계획으로 장소가 바뀐 경우(대구 동성로동 → 동성로 도로)는 실행에 성공해도 오답임.
+
+```bash
+python evaluate_v2.py run --model qwen3:8b --sets stub --label v2_stub_qwen3_8b
+python evaluate_v2.py run --model qwen3:8b --sets holdout_v2 --label v2_holdout_qwen3_8b
+python evaluate_v2.py analyze evaluation/v2/runs/<run_id>
+```
+
+v2 기준 모델 측정 결과는 아직 없음. 2026-09-29 작업 시점에 로컬 Ollama 컨테이너가 중지되어 있어
+실행하지 못했음(위 명령으로 재실행). 아래 v1 결과와는 계약(측정값 어휘, Tool 이름, scope·dimension
+규칙), 질의 목록(v1 stub 14건 vs v2 stub 5건 + holdout_v2), 채점(v1은 planner·합성 단계, v2는 실행과
+답변까지)이 다름.
 
 ### 모델별 정확도
 

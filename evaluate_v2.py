@@ -323,6 +323,22 @@ def observe(item, *, client, reset, tools, model, restarts=A.MAX_FRESH_RESTARTS)
     }
 
 
+#: 결과에 영향을 주는 경로. run meta에 커밋과 함께 이 경로의 미커밋 변경을 남긴다.
+TRACKED_PATHS = ("geoflow", "prompts", "schemas", "geoflow_macros", "geoflow_examples",
+                 "evaluate_v2.py", "evaluate_planner.py", "paraphrase_corpus.py",
+                 "aggregation_plan.py", "mock_responses.py", "mock_stub.yaml", "tool_executor.py",
+                 "tool_handlers.py", "build.py", "stub_query.yaml", "evaluation/v2")
+
+
+def git_state():
+    def git(*args):
+        import subprocess
+        return subprocess.run(["git", *args], cwd=BASE_DIR, capture_output=True,
+                              text=True).stdout.strip()
+    return {"commit": git("rev-parse", "HEAD"), "branch": git("branch", "--show-current"),
+            "dirty_paths": git("status", "--porcelain", "--", *TRACKED_PATHS).splitlines()}
+
+
 def _sha(path):
     return hashlib.sha256((BASE_DIR / path).read_bytes()).hexdigest()
 
@@ -337,7 +353,7 @@ def run_meta(args, names, client, tools, system_prompt):
         "protocol": PROTOCOL,
         "started_at": datetime.now(ZoneInfo("Asia/Seoul")).isoformat(),
         "command": " ".join(sys.argv),
-        "git": A._git_state(),
+        "git": git_state(),
         "model": args.model, "ollama_host": args.host, "ollama_version": version,
         "model_digest": digest, "model_details": details,
         "pipeline": PIPELINE_CONFIG, "chat_timeout": args.chat_timeout,
@@ -363,10 +379,11 @@ def cmd_run(args):
     client = OllamaClient(args.host, args.model, dict(PIPELINE_CONFIG["ollama_options"]),
                           chat_timeout=args.chat_timeout,
                           think=resolve_think(PIPELINE_CONFIG["think"]))
+    # 서버 정보를 먼저 읽는다. 서버에 닿지 않으면 빈 run 디렉터리를 남기지 않는다.
+    meta = run_meta(args, names, client, tools, system_prompt)
     run_id = f"{datetime.now(ZoneInfo('Asia/Seoul')).strftime('%Y%m%d_%H%M%S')}_{args.label}"
     run_dir = Path(args.out_root) / run_id
     run_dir.mkdir(parents=True, exist_ok=False)
-    meta = run_meta(args, names, client, tools, system_prompt)
     meta.update(run_id=run_id, item_count=len(items))
     (run_dir / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1),
                                        encoding="utf-8")

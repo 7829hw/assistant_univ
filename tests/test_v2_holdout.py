@@ -6,8 +6,10 @@
 새 문항이 기존 corpus·예시의 단순 paraphrase가 아닌지를 모델 실행 전에 고정한다.
 """
 
+import contextlib
 import copy
 import hashlib
+import io
 import json
 import os
 import unittest
@@ -351,6 +353,71 @@ class StubGoldTest(unittest.TestCase):
         self.assertIn("scope_exposed", V.answer_problems("scope:district:1: 3건", "q"))
         self.assertEqual(V.answer_problems("scope:edge:1742 속도: 30km/h", "scope:edge:1742"), [])
         self.assertIn("double_unit", V.answer_problems("공차율: 35%%", "q"))
+
+
+class CommandLineTest(unittest.TestCase):
+    """run 명령의 배선: 서버 정보·격리 절차·기록·요약. 가짜 Ollama 서버를 쓴다."""
+
+    def test_run_writes_meta_observations_and_summary(self):
+        import tempfile
+        import threading
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+
+        loaded = set()
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def reply(self, body):
+                data = json.dumps(body).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+            def do_GET(self):
+                self.reply({"/api/version": {"version": "fake"},
+                            "/api/tags": {"models": [{"name": "m", "digest": "d",
+                                                      "details": {}}]},
+                            "/api/ps": {"models": [{"name": n} for n in loaded]}
+                            }.get(self.path, {}))
+
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                if self.path == "/api/generate":
+                    loaded.discard(body["model"])
+                    return self.reply({"done_reason": "unload"})
+                loaded.add(body["model"])
+                return self.reply({"message": {"content": json.dumps({"unsupported": True})},
+                                   "done_reason": "stop", "load_duration": 900_000_000})
+
+        server = HTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            with tempfile.TemporaryDirectory() as tmp, \
+                    contextlib.redirect_stdout(io.StringIO()):
+                code = V.main(["run", "--model", "m", "--host",
+                               f"http://127.0.0.1:{server.server_port}", "--sets", "holdout_v2",
+                               "--only", "w28_last_month_corporate_avg_hours,w01_p0",
+                               "--label", "t", "--out-root", tmp])
+                self.assertEqual(code, 0)
+                (run_dir,) = Path(tmp).iterdir()
+                meta = json.loads((run_dir / "meta.json").read_text(encoding="utf-8"))
+                self.assertEqual(meta["reference_date"], "2026-09-25")
+                self.assertEqual(meta["pipeline"]["tims_execution"], "legacy")
+                self.assertIn("evaluation/v2/paraphrases_holdout_v2.yaml", meta["inputs"])
+                rows = [json.loads(line) for line in
+                        (run_dir / "observations.jsonl").read_text(encoding="utf-8").splitlines()]
+                self.assertEqual(len(rows), 4)
+                self.assertTrue(all(row["measurement"] == A.VALID for row in rows))
+                summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+                self.assertEqual(summary["all"]["refusal_strict"], {"count": 3, "of": 3, "rate": 1.0})
+                self.assertEqual(summary["all"]["categories"],
+                                 {"correct": 3, "refused_supported": 1})
+        finally:
+            server.shutdown()
 
 
 class AnalysisTest(unittest.TestCase):
