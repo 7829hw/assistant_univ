@@ -121,4 +121,10 @@ stub v2(5문항)는 `evaluation/v2/stub_v2_gold.yaml`에 기대 결과·인자·
 - 2026-09-29 작업 시점에는 로컬 Ollama 컨테이너가 중지되어 있어 모델을 실행하지 못했다. 공용
   서버라 컨테이너를 임의로 다시 켜지 않았다. 이 holdout은 아직 어떤 모델 결과도 보지 않은
   fresh_holdout이다.
+- 2026-09-29 01:40 KST: 개발용 stub 실행(`20260929_014032_v2_stub_qwen3_8b`, commit 14cb4b9). 실패 2건은
+  모델 오답이었고 실행기를 바꾸지 않았다.
+- 2026-09-29 01:43–02:11 KST: holdout 최초 실행 한 번(`20260929_014313_v2_holdout_qwen3_8b`, commit
+  5c2991e, 126관측 모두 유효). 결과를 열람했으므로 registry role을 development로 바꿨다. 라벨·기준·
+  채점 규칙은 바꾸지 않았다. 보고서 집계기 `evaluation/v2/report_v2.py`는 실행 뒤에 추가했으며
+  채점하지 않고 기록된 범주를 다시 셀 뿐이다.
 

@@ -903,10 +903,37 @@ python evaluate_v2.py run --model qwen3:8b --sets holdout_v2 --label v2_holdout_
 python evaluate_v2.py analyze evaluation/v2/runs/<run_id>
 ```
 
-v2 기준 모델 측정 결과는 아직 없음. 2026-09-29 작업 시점에 로컬 Ollama 컨테이너가 중지되어 있어
-실행하지 못했음(위 명령으로 재실행). 아래 v1 결과와는 계약(측정값 어휘, Tool 이름, scope·dimension
-규칙), 질의 목록(v1 stub 14건 vs v2 stub 5건 + holdout_v2), 채점(v1은 planner·합성 단계, v2는 실행과
-답변까지)이 다름.
+### v2 실측 결과 (잠정치)
+
+2026-09-29, `qwen3:8b`(digest `500a1f067a9f`, 8.2B Q4_K_M), Ollama 0.34.4, production 기본 설정(flat,
+condition_check 끔, mock + legacy, 예시 검색 끔), temperature 0, think=auto, 기준일 2026-09-25(Asia/Seoul).
+평가셋은 사람이 검토하지 않았으므로 **잠정치**임. mock 고정값으로 실행했으므로 실제 데이터의 수치
+정확도가 아니라 결과 종류·측정값·집계 의미·Tool 인자·답변 형식을 채점함. 모든 수치는 문장(관측) 단위.
+
+| 평가셋 | 의미 정답 | 실행 완료(answered 기대) | answered 기대 의미 정답 | 거부 strict | 보조: 답하지 않음 |
+| --- | --- | --- | --- | --- | --- |
+| stub v2 (개발용, 5) | 3/5 | 4/5 | 3/5 | - | - |
+| holdout_v2 (126) | 52/126 (41.3%) | 46/78 (59.0%) | 42/78 (53.8%) | 10/48 (20.8%) | 42/48 (87.5%) |
+
+holdout_v2 기대 결과별 문장 정답: answered 42/78, needs_clarification 0/15, unsupported 10/33.
+intent 단위(세 문장 모두 정답)는 10/42. 절별 문장 정답은 A(aggregation 복원) 7/30, B(local aggregation
+복원) 8/30, C(verifier 복원) 16/21, D(v2 거부) 9/21, E(v2 경계) 12/24이고, stage-swap 대상 두 단계
+answered 문항은 9/33, 구간 없는 대조군은 21/21임.
+
+주요 실패: 월 단위 기간을 `"202607-202608"`처럼 YYYYMM으로 적어 grounding 검증에서 거부(28문장), 명시된
+구간 안 집계 누락(15), 구간 안 집계가 없는 질문에 집계를 지어냄(needs_clarification 0/15), 모델이
+`{"unsupported": true}`를 한 번도 내지 않음(0/126, 올바른 거부 10건은 모두 제품 검사), 그룹 단어를
+장소로 만듦(4). 답변 형식 오류는 0건. 거부 기대 문장에서 "답하지 않음"은 보조 지표이며 올바른
+unsupported 판정이 아님(그중 23건은 planner 단계 실패).
+
+기록: `evaluation/v2/runs/20260929_014313_v2_holdout_qwen3_8b/`(meta, observations, summary,
+report, analysis), `evaluation/v2/runs/20260929_014032_v2_stub_qwen3_8b/`. holdout_v2는 이 결과를 열람했으므로
+development로 바뀌었음. 이 결과로 prompt·검색·조건 보정을 바꾸면 그 개선의 최종 평가에는 새 holdout이
+필요함.
+
+아래 v1 결과와 직접 비교할 수 없음: 계약(측정값 어휘, Tool 이름, scope·dimension 규칙), 질의 목록(v1 stub
+14건 + boundary 24건 vs v2 stub 5건 + holdout_v2 126문장), 채점 범위(v1은 planner·합성 단계, v2는 실행과
+답변까지), 격리 절차가 다름.
 
 ### 모델별 정확도
 
