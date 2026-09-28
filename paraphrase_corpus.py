@@ -41,7 +41,12 @@ _INTENT_KEYS = frozenset({
     "trigger_expected",
     # 의미 검증기 holdout. 분석에서만 쓰고 검증기에는 보여 주지 않는다.
     "family", "control",
+    # v2 holdout(evaluation/v2). 현재 제품 계약에서 기대하는 결과, 검증하려는 능력, 정답 근거,
+    # 되살린 v1 intent.
+    "expected_outcome", "capability", "rationale", "restores",
 })
+#: expected_outcome 값. geoflow.pipeline의 OUTCOME_*와 같은 이름이다.
+EXPECTED_OUTCOMES = frozenset({"answered", "needs_clarification", "unsupported"})
 #: label 관련 key가 없다. paraphrase마다 정답을 바꿀 수 없게 한다.
 _PARAPHRASE_KEYS = frozenset({"id", "question", "note"})
 
@@ -200,8 +205,33 @@ def corpus_items(intents, parents=None, cohorts=None):
                 "paraphrase_note": paraphrase.get("note"),
                 **({"semantic_aggregation": intent["aggregation"]}
                    if "aggregation" in intent else {}),
+                **{key: intent[key] for key in ("expected_outcome", "capability", "restores",
+                                                "family", "control")
+                   if key in intent},
             })
     return items
+
+
+def structure_signature(golden, semantic):
+    """질문 구조의 서명. 두 intent의 서명이 같으면 한쪽은 다른 쪽의 단순 paraphrase다.
+
+    측정값, 장소(이름·승하차 역할), 사용자 scope, 집계가 아닌 조건(factor) 값, 집계 의미를 본다.
+    지원하지 않는 질의(golden unsupported)는 구조가 없으므로 None이다.
+    """
+    if not isinstance(golden, dict) or "concepts" not in golden:
+        return None
+    concepts = golden["concepts"]
+    measure = next((c["subtype"] for c in concepts if c.get("role") == "MEASURE"), None)
+    places = sorted(((c.get("value") or {}).get("name", ""),
+                     (c.get("attributes") or {}).get("od_role", ""))
+                    for c in concepts if c.get("subtype") == "place")
+    scopes = sorted(str(c.get("value")) for c in concepts
+                    if c.get("subtype") in ("scope", "vicinity_scope"))
+    factors = sorted((key, str(value)) for key, value in (golden.get("factors") or {}).items()
+                     if key not in aggregation_plan.FLAT_KEYS
+                     and key != aggregation_plan.PLAN_KEY)
+    aggregation = tuple(sorted((semantic or {}).items())) or None
+    return (measure, tuple(places), tuple(scopes), tuple(factors), aggregation)
 
 
 def normalize_question(text):
@@ -256,6 +286,16 @@ def validate(document, parents):
 
         unsupported = NONE_LABEL in (parent.get("expected_macros") or [])
         golden = intent.get("golden")
+        outcome = intent.get("expected_outcome")
+        if outcome is not None:
+            if outcome not in EXPECTED_OUTCOMES:
+                problems.append(f"{where}: expected_outcome은 {sorted(EXPECTED_OUTCOMES)} 중 하나")
+            elif unsupported and outcome != "unsupported":
+                problems.append(f"{where}: NONE 부모의 expected_outcome은 unsupported다")
+            semantic = intent.get("aggregation")
+            if (isinstance(semantic, dict) and semantic.get("inner") == "unspecified"
+                    and outcome != "needs_clarification"):
+                problems.append(f"{where}: 구간 안 집계가 없는 질의는 needs_clarification이다")
         if unsupported:
             if golden != {"unsupported": True}:
                 problems.append(f"{where}: 지원하지 않는 부모의 golden은 unsupported여야 한다")

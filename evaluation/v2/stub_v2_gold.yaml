@@ -1,0 +1,42 @@
+# 업체 v2 stub_query.yaml 다섯 질의의 기대 결과와 Tool 인자(v2 평가 실행기 evaluate_v2.py가 읽는다).
+#
+# 2026-09-29 작성. Claude가 썼고 사용자 검토 전이다. 모델 실행 전에 고정했다.
+# stub_query.yaml의 라벨(expected_concepts/macros/operators)은 그 파일에 있고, 여기에는
+# 의미 채점에 필요한 기대 결과·인자·근거만 적는다.
+#
+# expected_tool_args: 최종 Tool 호출 인자 중 반드시 맞아야 하는 것. null은 "없어야 한다(또는
+# schema 기본값)". "@place:이름"은 그 이름을 mock gazetteer에서 지역 없이 조회한 scope와 같아야
+# 한다는 뜻이다(별칭은 같은 scope: 대구 = 대구시). 실행 성공만으로 정답으로 보지 않는다.
+version: 1
+queries:
+  q01_edge_average_speed:
+    expected_outcome: answered
+    expected_tool_args: {scope: "scope:edge:1742", date: "20260530", time: "120000-130000",
+                         metric: speed, aggregation: avg}
+    capability: 사용자가 적은 scope·날짜·시간대·평균을 그대로 옮기는지
+    rationale: "질문의 scope:edge:1742를 그대로 쓰고, 2026년 5월 30일 오후 12시~1시는 20260530, 120000-130000이다."
+  q12_vacant_drive_ratio:
+    expected_outcome: answered
+    expected_tool_args: {metric: vacant_ratio, date: null, taxi_type: null, aggregation: null}
+    capability: 조건이 없는 질문에 기간·유형·집계를 지어내지 않는지
+    rationale: 기간·택시 유형·집계어가 없다. aggregation은 생략(또는 schema 기본값 avg)과 같다.
+  q16_1_private_revenue_by_day:
+    expected_outcome: answered
+    expected_tool_args: {metric: revenue, dimension: dayofweek, taxi_type: private, scope: null,
+                         bucket: null}
+    capability: 요일별 분포와 택시 유형, get_billing_metrics 호출
+    rationale: "'요일별'은 dimension=dayofweek, '개인용 택시'는 taxi_type=private. scope가 없으면 dayofweek를 받는다."
+  q18_daegu_origin_destination_count:
+    expected_outcome: answered
+    expected_tool_args: {scope_pickup: "@place:동성로동", scope_dropoff: "@place:신천동", date: null}
+    capability: 출발·도착 역할 보존과 재계획 뒤 원래 장소 의미 보존
+    rationale: >-
+      출발지는 동성로동(행정동, v2 mock scope:district:2711012300), 도착지는 신천동이다. v2 mock은
+      동성로동의 부모 scope(2711000000)를 등록하지 않아 region=대구와 함께 조회하면 NOT_FOUND다
+      (mock 계층 데이터 결함, tests/test_v2_contract.py). 이름을 동성로(도로 edge)로 바꿔 실행에
+      성공하면 출발지가 바뀐 것이므로 정답이 아니다.
+  q20_daegu_average_fare:
+    expected_outcome: answered
+    expected_tool_args: {metric: fare, scope: "@place:대구시", aggregation: avg}
+    capability: 장소 별칭(대구시)과 평균
+    rationale: v2 mock에서 대구시는 대구의 별칭으로 같은 scope다. get_trip_metrics의 scope는 택시 소속 지역이다.

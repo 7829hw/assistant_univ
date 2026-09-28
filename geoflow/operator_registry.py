@@ -553,8 +553,10 @@ _SPECS: tuple[OperatorSpec, ...] = (
                 param="dimension",
                 values=frozenset({"h3", "sigungu", "emd"}),
                 input_name="area",
-                reason="시군구·읍면동·H3 단위로 나눠 보려면 분석할 지역을 함께 "
-                       "지정해야 합니다.",
+                # v2에서는 지역을 지정해도 dimension을 쓸 수 없으므로(아래 제약) 지역을
+                # 더하라고 안내하지 않는다.
+                reason="영업 통계는 시군구·읍면동·H3 단위로 나눠 제공하지 않습니다. "
+                       "지역을 정하지 않으면 시도별·요일별만 볼 수 있습니다.",
             ),
             ParamValueForbidsInput(
                 param="dimension",

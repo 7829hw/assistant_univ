@@ -1,0 +1,276 @@
+# 업체 v2 계약 기준 holdout 부모 질의 (holdout_v2).
+#
+# 2026-09-29 작성. 사람이 아니라 Claude가 썼고 사용자 검토 전이다(corpus_registry review 참고).
+# 설계 기준·채점 규칙은 evaluation/v2/preregistration_v2.md에 모델 실행 전에 고정했다.
+# 결과를 보고 문구·라벨을 고치지 않는다.
+#
+# v1 corpus에서 v2에 없는 측정값(영업 시간·영업 횟수) 때문에 지원 범위 밖이 된 intent의 검사
+# 능력(두 단계 집계, stage-swap, 대조군, verifier 오류 유형)을 v2에서 뜻이 정해진 측정값(요금,
+# 운행일수, 공차율, 속도)으로 되살렸다(A·B·C). metric 이름만 바꾸지 않고 질문을 새로 썼다.
+# D는 거부 동작, E는 v2 경계 동작이다.
+#
+# expected_macros: [NONE] 은 "실행 가능한 계획이 만들어지면 안 됨"을 뜻한다. 계획은 만들어지지만
+# 계약상 실행하지 않는 질의(구간 안 avg 등)는 라벨이 계획을 가리키고, 기대 결과는 corpus의
+# expected_outcome에 적는다. 라벨은 golden grounding을 실제 composer로 조합해 얻었다.
+
+# --- A. aggregation holdout 복원 (v1 a01·a04·a05·a06·a11·a12·a13·a15·a17·a18) ---
+
+- id: w01_last_month_week_sum_then_avg_fare
+  question: "지난달 주마다 합한 택시 요금의 평균은?"
+  expected_concepts: ["EVENT/trip:SUPPORT", "AMOUNT/fare:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [TRIP_METRIC]
+
+- id: w02_last_month_week_min_then_avg_fare
+  question: "지난달 매주 가장 낮았던 택시 요금의 평균은?"
+  expected_concepts: ["EVENT/trip:SUPPORT", "AMOUNT/fare:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [TRIP_METRIC]
+
+- id: w03_jul_aug_month_sum_then_min_days
+  question: "2026년 7월부터 8월까지 달마다 합한 운행일수 가운데 가장 작은 값은?"
+  expected_concepts: ["EVENT/operation:SUPPORT", "AMOUNT/operating_days:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: w04_last_month_week_unspecified_max_fare
+  question: "지난달 주별 택시 요금의 최댓값은?"
+  expected_concepts: ["EVENT/trip:SUPPORT", "AMOUNT/fare:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [TRIP_METRIC]
+
+- id: w05_jul_aug_month_avg_then_sum_fare
+  question: "2026년 7월부터 8월까지 달마다 평균 낸 택시 요금을 모두 합하면?"
+  expected_concepts: ["EVENT/trip:SUPPORT", "AMOUNT/fare:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [TRIP_METRIC]
+
+- id: w06_jul_aug_month_avg_then_min_days
+  question: "2026년 7월부터 8월까지 각 달의 평균 운행일수 중 가장 작은 값은?"
+  expected_concepts: ["EVENT/operation:SUPPORT", "AMOUNT/operating_days:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: w07_last_week_avg_fare
+  question: "지난주 택시 요금의 평균값은?"
+  expected_concepts: ["EVENT/trip:SUPPORT", "AMOUNT/fare:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [TRIP_METRIC]
+
+- id: w08_aug_sum_days
+  question: "2026년 8월 택시 운행일수의 합계는?"
+  expected_concepts: ["EVENT/operation:SUPPORT", "AMOUNT/operating_days:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: w09_jul_aug_private_month_sum_then_avg_days
+  question: "2026년 7월부터 8월까지 개인택시 운행일수를 달마다 합한 값의 평균은?"
+  expected_concepts: ["EVENT/operation:SUPPORT", "AMOUNT/operating_days:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: w10_last_month_corporate_week_unspecified_max_vacant
+  question: "지난달 법인택시의 주별 공차율 최댓값은?"
+  expected_concepts: ["EVENT/drive:SUPPORT", "PROPORTION/vacant_ratio:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [DRIVE_METRIC]
+
+# --- B. local aggregation holdout 복원 (v1 l02·l03·l04·l07·l08·l10·l12·l13·l15·l20) ---
+
+- id: w11_jul_aug_month_sum_then_max_fare
+  question: "2026년 7월부터 8월까지 월마다 택시 요금을 합산하면 그중 최댓값은?"
+  expected_concepts: ["EVENT/trip:SUPPORT", "AMOUNT/fare:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [TRIP_METRIC]
+
+- id: w12_jul_aug_month_avg_then_min_vacant
+  question: "2026년 7월부터 8월까지 달마다 평균 낸 공차율 중 가장 낮은 값은?"
+  expected_concepts: ["EVENT/drive:SUPPORT", "PROPORTION/vacant_ratio:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [DRIVE_METRIC]
+
+- id: w13_last_month_week_min_then_avg_vacant
+  question: "지난달 주마다 가장 낮았던 공차율을 평균하면?"
+  expected_concepts: ["EVENT/drive:SUPPORT", "PROPORTION/vacant_ratio:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [DRIVE_METRIC]
+
+- id: w14_jul_aug_month_unspecified_avg_days
+  question: "2026년 7월부터 8월까지 월 단위 운행일수의 평균은?"
+  expected_concepts: ["EVENT/operation:SUPPORT", "AMOUNT/operating_days:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: w15_jul_aug_month_sum_then_avg_fare_final_first
+  question: "2026년 7월부터 8월까지 평균적으로 한 달 택시 요금 합계는 얼마인가요?"
+  expected_concepts: ["EVENT/trip:SUPPORT", "AMOUNT/fare:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [TRIP_METRIC]
+
+- id: w16_jul_aug_corporate_month_sum_then_min_days
+  question: "2026년 7월부터 8월까지 법인택시의 달별 운행일수 합계 중 최솟값은?"
+  expected_concepts: ["EVENT/operation:SUPPORT", "AMOUNT/operating_days:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: w17_last_month_daegu_week_unspecified_avg_vacant
+  question: "지난달 대구의 주별 공차율 평균은?"
+  expected_concepts: ["LOCATION/place:SUBCOND", "EVENT/drive:SUPPORT", "PROPORTION/vacant_ratio:MEASURE"]
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, DRIVE_METRIC]
+
+- id: w18_jul_aug_busan_month_avg_then_max_fare
+  question: "2026년 7월부터 8월까지 부산에서 달마다 평균 낸 택시 요금의 최댓값은?"
+  expected_concepts: ["LOCATION/place:SUBCOND", "EVENT/trip:SUPPORT", "AMOUNT/fare:MEASURE"]
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, TRIP_METRIC]
+
+- id: w19_last_week_min_fare
+  question: "지난주 택시 요금의 최솟값은?"
+  expected_concepts: ["EVENT/trip:SUPPORT", "AMOUNT/fare:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [TRIP_METRIC]
+
+- id: w20_private_avg_days
+  question: "개인택시의 평균 운행일수는?"
+  expected_concepts: ["EVENT/operation:SUPPORT", "AMOUNT/operating_days:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+# --- C. verifier holdout 복원 (v1 v01·v03·v04·v07·v08·v10·v20) ---
+
+- id: w21_last_month_week_sum_then_max_days
+  question: "지난달 주마다 더한 운행일수 가운데 가장 큰 값은?"
+  expected_concepts: ["EVENT/operation:SUPPORT", "AMOUNT/operating_days:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: w22_jul_aug_month_unspecified_med_fare
+  question: "2026년 7월부터 8월까지 월별 택시 요금의 중간값은?"
+  expected_concepts: ["EVENT/trip:SUPPORT", "AMOUNT/fare:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [TRIP_METRIC]
+
+- id: w23_control_min_fare
+  question: "택시 요금의 최솟값은?"
+  expected_concepts: ["EVENT/trip:SUPPORT", "AMOUNT/fare:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [TRIP_METRIC]
+
+- id: w24_last_month_private_sum_days
+  question: "지난달 개인택시 운행일수 합계는?"
+  expected_concepts: ["EVENT/operation:SUPPORT", "AMOUNT/operating_days:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: w25_control_max_days
+  question: "택시 운행일수의 최댓값은?"
+  expected_concepts: ["EVENT/operation:SUPPORT", "AMOUNT/operating_days:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: w26_weekend_sum_fare
+  question: "주말 택시 요금 합계는?"
+  expected_concepts: ["EVENT/trip:SUPPORT", "AMOUNT/fare:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [TRIP_METRIC]
+
+- id: w27_control_days_by_day
+  question: "요일별 택시 운행일수 평균은?"
+  expected_concepts: ["EVENT/operation:SUPPORT", "AMOUNT/operating_days:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+# --- D. v2 거부: 없어진 측정값, 뜻이 없는 집계, schema가 금지한 조합 ---
+
+- id: w28_last_month_corporate_avg_hours
+  question: "지난달 법인택시의 평균 영업 시간은?"
+  expected_concepts: []
+  expected_macros: [NONE]
+  expected_operators: []
+
+- id: w29_private_operating_count_top_sido
+  question: "개인택시 영업 횟수가 가장 많은 시도 2곳은?"
+  expected_concepts: []
+  expected_macros: [NONE]
+  expected_operators: []
+
+- id: w30_last_month_ratio_sum
+  question: "지난달 택시 가동률의 합계는?"
+  expected_concepts: []
+  expected_macros: [NONE]
+  expected_operators: []
+
+- id: w31_jul_aug_week_sum_active_count_avg
+  question: "2026년 7월부터 8월까지 주별 활성택시 대수 합계의 평균은?"
+  expected_concepts: []
+  expected_macros: [NONE]
+  expected_operators: []
+
+- id: w32_last_month_week_max_then_avg_ratio
+  question: "지난달 주별 최고 가동률의 평균은?"
+  expected_concepts: ["EVENT/operation:SUPPORT", "PROPORTION/active_taxi_ratio:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [OPERATION_METRIC]
+
+- id: w33_daegu_revenue_by_day
+  question: "대구 택시의 요일별 수입은?"
+  expected_concepts: []
+  expected_macros: [NONE]
+  expected_operators: []
+
+- id: w34_revenue_top_sigungu
+  question: "시군구별 택시 수입 상위 3곳은?"
+  expected_concepts: []
+  expected_macros: [NONE]
+  expected_operators: []
+
+# --- E. v2 경계: dimension_target, this_*, {count}·지역명·단위 문자열 결과 ---
+
+- id: w35_last_month_top_pickup_emd
+  question: "지난달 승차가 가장 많은 읍면동 3곳은?"
+  expected_concepts: ["EVENT/trip:SUPPORT", "AMOUNT/trip_count:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [TRIP_COUNT]
+
+- id: w36_last_month_bottom_dropoff_sigungu
+  question: "지난달 하차가 가장 적은 시군구 2곳은?"
+  expected_concepts: ["EVENT/trip:SUPPORT", "AMOUNT/trip_count:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [TRIP_COUNT]
+
+- id: w37_last_month_top_od_routes_emd
+  question: "지난달 승하차 건수가 가장 많은 읍면동 간 노선 상위 3개는?"
+  expected_concepts: ["EVENT/trip:SUPPORT", "AMOUNT/trip_count:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [TRIP_COUNT]
+
+- id: w38_this_week_dongdaegu_vicinity_passage_count
+  question: "이번 주 동대구역 주변 택시 통행량은?"
+  expected_concepts: ["LOCATION/place:SUBCOND", "EVENT/passage:SUPPORT", "AMOUNT/passage_count:MEASURE"]
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, PASSAGE_COUNT]
+
+- id: w39_this_month_busan_avg_fare
+  question: "이번 달 부산 택시의 평균 요금은?"
+  expected_concepts: ["LOCATION/place:SUBCOND", "EVENT/trip:SUPPORT", "AMOUNT/fare:MEASURE"]
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, TRIP_METRIC]
+
+- id: w40_this_year_corporate_vacant
+  question: "올해 법인택시의 공차율은?"
+  expected_concepts: ["EVENT/drive:SUPPORT", "PROPORTION/vacant_ratio:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [DRIVE_METRIC]
+
+- id: w41_this_month_week_sum_then_max_fare
+  question: "이번 달 주별 택시 요금 합계의 최댓값은?"
+  expected_concepts: ["EVENT/trip:SUPPORT", "AMOUNT/fare:MEASURE"]
+  expected_macros: [EVENT_TO_MEASURE]
+  expected_operators: [TRIP_METRIC]
+
+- id: w42_last_month_dongdaegu_week_max_then_avg_speed
+  question: "지난달 동대구역 택시의 주별 최고 속도를 평균하면?"
+  expected_concepts: ["LOCATION/place:SUBCOND", "EVENT/passage:SUPPORT", "AMOUNT/speed:MEASURE"]
+  expected_macros: [PLACE_TO_SCOPE, EVENT_TO_MEASURE]
+  expected_operators: [RESOLVE_PLACE_SCOPE, PASSAGE_METRIC]

@@ -104,6 +104,19 @@ corpora:
       retired: [v01_week_sum_then_max_hours, v03_month_unspecified_med_hours, v04_control_min_count, v07_private_last_month_sum_hours, v08_control_max_hours, v10_weekend_sum_count, v20_control_hours_by_day]
       renamed: [v05_private_avg_operating_ratio]
 
+  - path: evaluation/v2/paraphrases_holdout_v2.yaml
+    parents: [evaluation/v2/holdout_v2_parents.yaml]
+    role: fresh_holdout
+    version: v2.0
+    purpose: "업체 v2 계약 기준 성능. v1에서 지원 범위 밖이 된 aggregation·local aggregation·verifier intent 27개의 검사 능력 복원 + v2 거부·경계"
+    source: "2026-09-29 Claude 작성(질문·golden·라벨·근거). 설계·채점: evaluation/v2/preregistration_v2.md"
+    review: {status: unreviewed, reviewer: null, note: "사람이 검토하지 않았다. 결과는 잠정치다"}
+    sha256: d1884be436d8f61e1ac20370e3654ccc39a3480602cde95e4c181cb6bc0f614e
+    parents_sha256:
+      evaluation/v2/holdout_v2_parents.yaml: 25d2d350bb750d073172292d1ce611f125ca69937ea4e564e5047cd5328dc24c
+    history:
+      - "2026-09-29 작성, 모델 실행 전 고정 (42 intent, 126 paraphrase)"
+
 # paraphrase corpus가 아닌 단일 문장 질문 셋. 형식이 달라 corpora와 따로 적는다.
 question_sets:
   - path: evaluation/structured_grounding/dev_questions.yaml
@@ -167,3 +180,14 @@ question_sets:
       - "2026-09-26 예시 저장소 v1·검색 후보 고정 뒤, 모델 실행 전에 작성(17문항). evaluation/retrieval/preregistration_v1.md"
       - "20260926_214029_retrieval_eval_v1 에서 A/B/C 비교에 사용(판정: 검색 개선 조건 불충족, 기본값 유지). 이후 development"
       - "2026-09-27 모델별 점수(qwen3.8:27b, qwen3:8b, gemma4:e4b, gemma4:12b·qwen3.5:9b는 think off). development 점수. evaluation/retrieval/model_scores_v1.md"
+
+  - path: evaluation/v2/stub_v2_gold.yaml
+    # stub 다섯 질의는 2026-09-28 geoflow·react 실행(qwen3:8b)에서 이미 결과를 본 업체 질의다.
+    role: development
+    version: v2.0
+    purpose: "업체 v2 stub_query.yaml 다섯 질의의 기대 결과·Tool 인자(의미 채점)"
+    source: "2026-09-29 Claude 작성. evaluation/v2/preregistration_v2.md"
+    review: {status: unreviewed, reviewer: null, note: "사람이 검토하지 않았다"}
+    sha256: 1cde411c0a52ea78dccf4faa6558ee4e68ed52469f7b805164102aff91ab46d0
+    history:
+      - "2026-09-29 작성, 모델 실행 전 고정 (5문항)"
