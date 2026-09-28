@@ -28,7 +28,7 @@ Grounding 결과(개념 + factor)를 입력으로 받아, macro 조각을 input/
 import json
 from dataclasses import dataclass, field
 
-from geoflow import analysis_ops, operator_mapping
+from geoflow import analysis_ops, measures, operator_mapping
 from geoflow.aggregation import FLAT_KEYS, REDUCERS
 from geoflow.errors import CompositionError
 from geoflow.factors import STRUCTURAL_FACTORS, validate_factors
@@ -231,6 +231,7 @@ class MacroComposer:
                 "측정 대상(MEASURE) 개념이 없어 합성할 수 없습니다.",
                 code="NO_MEASURE",
             )
+        _check_measure_aggregation(goal, aggregation)
 
         build = _Build()
         # grounding이 준 개념을 pool에 올린다. 목표는 macro가 만들 값이므로
@@ -830,6 +831,41 @@ def _check_aggregation_combination(grounding, aggregation):
             code="UNSUPPORTED_AGGREGATION_COMBINATION",
             context={"present": present, "aggregation": aggregation.to_dict()},
         )
+
+
+#: 사용자에게 보일 측정값 이름. 내부 subtype 이름을 쓰지 않는다.
+_MEASURE_LABELS = {
+    "speed": "속도", "rpm": "RPM", "vacant_ratio": "공차율",
+    "active_taxi_count": "활성택시 대수", "active_taxi_ratio": "가동률",
+}
+_REDUCER_WORDS = {"sum": "합계", "avg": "평균", "max": "최댓값", "min": "최솟값",
+                  "med": "중간값"}
+
+
+def _check_measure_aggregation(goal, aggregation):
+    """측정값에 뜻이 정해지지 않는 집계를 합성 전에 거부한다(``geoflow/measures.py``).
+
+    Tool의 aggregation(한 단계 집계, 구간 안 집계)과 구간별 값의 집계(rollup) 모두 본다.
+    비율·속도의 합계, 고유 대수의 합계가 여기에 걸린다. 선택(가장 큰 구간)은 값을 새로
+    만들지 않으므로 보지 않는다.
+    """
+    undefined = measures.undefined_reducers(goal.subtype)
+    stages = [("aggregation", aggregation.inner), ("rollup", aggregation.outer)]
+    for stage, reducer in stages:
+        if reducer in undefined:
+            label = _MEASURE_LABELS.get(goal.subtype, goal.subtype)
+            item = measures.semantics_for(goal.subtype)
+            raise CompositionError(
+                f"측정값 {goal.concept.value}/{goal.subtype}({item.kind})에는 {reducer} "
+                f"집계의 뜻이 정해져 있지 않습니다({stage}). 근거: {item.evidence}",
+                user_message=(
+                    f"{label}은(는) {_REDUCER_WORDS.get(reducer, reducer)}로 모을 수 있는 "
+                    "값이 아니어서 계산하지 않았습니다."
+                ),
+                code="UNDEFINED_MEASURE_AGGREGATION",
+                context={"measure": goal.subtype, "kind": item.kind, "stage": stage,
+                         "reducer": reducer, "aggregation": aggregation.to_dict()},
+            )
 
 
 def _tool_factors(grounding):

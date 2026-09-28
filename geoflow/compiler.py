@@ -18,12 +18,13 @@ Planner도 template도 Tool argument 이름을 직접 지정하지 않는다.
 구간 안/밖 집계가 뒤바뀐 lowering은 실행하지 않는다.
 """
 
-from geoflow import analysis_ops, periods, tims_contract
+from geoflow import analysis_ops, measures, periods, tims_contract
 from geoflow.errors import CompilerError
 from geoflow.operator_registry import TOOL_DEFAULT_REDUCER, get_operator
 from geoflow.types import (
     STEP_LOCAL,
     WHOLE_RESULT,
+    CoreConcept,
     ExecutionPlan,
     GeoFlowPlan,
     NodeSource,
@@ -224,6 +225,10 @@ def _lower_period(transformation, step, output, plan, execution, *, reference_da
         "requires": semantics["requires"],
         "missing": semantics["missing"],
     }
+    if value in periods.RELATIVE_PERIOD_POLICY:
+        # interpreted_range를 만든 규칙. TIMS가 토큰을 같은 기간으로 읽는다는 계약은 없다.
+        record["interpretation"] = {"source": periods.RELATIVE_PERIOD_POLICY_SOURCE,
+                                    "rule": periods.RELATIVE_PERIOD_POLICY[value]}
     execution.date_semantics[transformation.id] = record
     if (date_policy == DATE_POLICY_LEGACY
             or semantics["status"] != tims_contract.SEMANTICS_UNVERIFIED):
@@ -263,6 +268,7 @@ def _lower_period(transformation, step, output, plan, execution, *, reference_da
               if step.arguments.get(name) is not None]
     ok, reason, requires = tims_contract.daily_composition(
         spec.tool_name, reducer, grouped_arguments=listed, days=days, contract=contract,
+        measure=_measure_of(output),
     )
     record["composition"] = {"reducer": reducer, "days": days, "ok": ok,
                              "reason": reason, "requires": requires}
@@ -364,13 +370,24 @@ def choose_group_strategy(transformation, output, combine, spec, contract, *,
         reject(daily, "확인되지 않은 계약: " + ", ".join(missing))
     elif inner not in tims_contract.DECOMPOSABLE_INNER:
         reject(daily, f"구간 안 집계 {inner}는 하루 값들로 정확히 다시 만들 수 없습니다")
-    elif require_day_records and not tims_contract.daily_composition(
-            spec.tool_name, inner, contract=contract)[0]:
+    elif not measures.day_composable(_measure_of(output), inner):
+        # 계약 확인 여부와 무관한 수학 조건이다. legacy 경로도 가정하지 않는다.
         reject(daily, tims_contract.daily_composition(
-            spec.tool_name, inner, contract=contract)[1])
+            spec.tool_name, inner, contract=contract, measure=_measure_of(output))[1])
+    elif require_day_records and not tims_contract.daily_composition(
+            spec.tool_name, inner, contract=contract, measure=_measure_of(output))[0]:
+        reject(daily, tims_contract.daily_composition(
+            spec.tool_name, inner, contract=contract, measure=_measure_of(output))[1])
     else:
         return daily, rejected
     return None, rejected
+
+
+def _measure_of(node):
+    """측정값 subtype. 측정 node가 아니면 None(측정값 조건을 보지 않는다)."""
+    if node is None or node.concept not in (CoreConcept.AMOUNT, CoreConcept.PROPORTION):
+        return None
+    return node.subtype
 
 
 def _sources_for(transformation):
@@ -474,6 +491,10 @@ def _partition_steps(transformation, output, spec, nodes, plan, execution, *,
         "groups": [group["label"] for group in groups],
         "strategy": strategy.name,
     }
+    if period in periods.RELATIVE_PERIOD_POLICY:
+        execution.periods[transformation.id]["interpretation"] = {
+            "source": periods.RELATIVE_PERIOD_POLICY_SOURCE,
+            "rule": periods.RELATIVE_PERIOD_POLICY[period]}
     steps = []
     members = []
     inner = transformation.params.get(spec.REDUCER_PARAM)
@@ -771,8 +792,11 @@ def _verify_relowered_period(transformation, record, tools, covering, plan,
     spec = get_operator(transformation.operator)
     reducer = (transformation.params.get(spec.REDUCER_PARAM) if spec.accepts_reducer
                else spec.inherent_reducer) or TOOL_DEFAULT_REDUCER
+    output = next((node for node in plan.concepts
+                   if node.id in transformation.outputs), None)
     ok, reason, _ = tims_contract.daily_composition(
-        spec.tool_name, reducer, days=len(expected), contract=contract)
+        spec.tool_name, reducer, days=len(expected), contract=contract,
+        measure=_measure_of(output))
     combine = [step for step in covering if step.operator == analysis_ops.COMBINE_DAYS]
     keys = [key for step in tools for key in step.output_bindings.values()]
     if not ok or len(combine) != 1 or combine[0].inputs != keys or combine[0].arguments.get(

@@ -23,6 +23,8 @@ provider가 없고(``tool_handlers``는 mock만 허용), mock 동작은 계약�
 import re
 from dataclasses import dataclass, field, replace
 
+from geoflow import measures
+
 CONFIRMED = "confirmed"
 OBSERVED = "observed"
 UNKNOWN = "unknown"
@@ -303,8 +305,9 @@ def date_argument_semantics(value, contract=DEFAULT_CONTRACT):
 # -- 하루 단위 호출의 합성 -----------------------------------------------------
 
 #: 하루 값들로 기간 값을 다시 만들 수 있는 집계. avg·med는 표본 수나 원시 값이 없어서
-#: 안 된다. 고유 개수(distinct)나 비율의 비율도 하루 값으로 합칠 수 없지만, 지금 Tool 중
-#: 결과가 고유 개수인 것은 없다(개수 Tool은 사건 수, inherent_reducer=sum).
+#: 안 된다. 측정값마다 더 좁아진다: 고유 대수(active_taxi_count)와 집단 비율
+#: (active_taxi_ratio)은 어떤 집계로도 하루 값에서 기간 값을 만들 수 없고, 속도·공차율의
+#: 합이나 운행일수의 최대·최소도 그렇다(``geoflow/measures.py``).
 COMPOSABLE_REDUCERS = {"sum": "sum", "max": "max", "min": "min"}
 
 
@@ -313,16 +316,23 @@ def day_records_key(tool_name):
 
 
 def daily_composition(tool_name, reducer, *, grouped_arguments=(), days=None,
-                      contract=DEFAULT_CONTRACT):
+                      contract=DEFAULT_CONTRACT, measure=None):
     """기간 값을 하루 단위 호출의 합성으로 정확히 만들 수 있는가. (가능 여부, 이유, 필요 항목).
 
-    수학 조건: 집계가 sum·max·min이다. 데이터 조건: 그 Tool의 기록이 하루 하나에만 속하고
+    수학 조건: 집계가 sum·max·min이고, 측정값 ``measure``가 그 집계로 하루 값에서 기간 값을
+    만들 수 있다(``geoflow/measures.py``). 데이터 조건: 그 Tool의 기록이 하루 하나에만 속하고
     aggregation이 그 기록에 바로 적용된다(``day_records:<tool>``). 목록을 돌려주는 호출
     (dimension·order·limit)은 항목별로 합친 뒤 다시 정렬·절단해야 하므로 다루지 않는다.
+    ``measure``를 주지 않으면 측정값 조건을 보지 않는다(측정값을 모르는 호출자용).
     """
     requires = ["single_date", day_records_key(tool_name)]
     if reducer not in COMPOSABLE_REDUCERS:
         return False, f"집계 {reducer}는 하루 값들로 다시 만들 수 없습니다", requires
+    if measure is not None and not measures.day_composable(measure, reducer):
+        kind = measures.semantics_for(measure)
+        label = measures.KIND_LABELS.get(kind.kind, kind.kind) if kind else "알 수 없는 측정값"
+        return False, (f"측정값 {measure}({label})는 하루 값들을 {reducer}로 합쳐 기간 값을 "
+                       "만들 수 없습니다"), requires
     if grouped_arguments:
         return False, ("목록 결과(" + ", ".join(grouped_arguments)
                        + ")는 하루 단위로 합치지 않습니다"), requires

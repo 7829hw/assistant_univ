@@ -8,6 +8,7 @@ count, 또는 분포 목록이라 LLM 없이 정확하게 표현할 수 있고, 
 
 from geoflow import analysis_ops
 from geoflow.aggregation import BUCKET_LABELS, REDUCER_LABELS, SELECT_LABELS
+from geoflow.errors import GeoFlowError
 from geoflow.operator_registry import TOOL_DEFAULT_REDUCER, get_operator
 from geoflow.periods import BOUNDARY_RULES
 from geoflow.types import CoreConcept, GeoFlowPlan, Subtype
@@ -290,19 +291,32 @@ def _row_value(row):
             return row[key]
     numeric = [
         item for key, item in row.items()
-        if isinstance(item, (int, float)) and not isinstance(item, bool)
+        if key not in _ROW_LABEL_KEYS and _is_scalar_value(item)
     ]
     if len(numeric) == 1:
         return numeric[0]
     return row
 
 
+def _is_scalar_value(value):
+    """숫자, 또는 Tool이 단위를 붙인 숫자 문자열("59.2%", "30km/h")."""
+    try:
+        analysis_ops.scalar_parts(value, where="answer")
+    except GeoFlowError:
+        return False
+    return not isinstance(value, dict)
+
+
+#: 목록 결과에서 항목 이름을 담는 key. 값이 아니다.
+_ROW_LABEL_KEYS = (
+    "dayofweek", "day_of_week", "place_name", "district_name",
+    "sido", "sigungu", "emd", "h3", "scope", "date", "month",
+    "pickup", "dropoff", "scope_pickup", "scope_dropoff",
+)
+
+
 def _row_text(row, unit, labels=None):
-    label_keys = (
-        "dayofweek", "day_of_week", "place_name", "district_name",
-        "sido", "sigungu", "emd", "h3", "scope", "date", "month",
-        "pickup", "dropoff",
-    )
+    label_keys = _ROW_LABEL_KEYS
     labels = labels or {}
 
     def shown(value):

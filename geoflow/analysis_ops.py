@@ -15,6 +15,7 @@ registry는 prompt에 영향을 주지 않는다.
 graph도 그런 변환을 표현하지 않는다(validator G7).
 """
 
+import re
 from dataclasses import dataclass
 
 from geoflow.aggregation import REDUCERS, SELECTIONS
@@ -75,6 +76,48 @@ def param_problems(operator, params):
 
 # -- 실행 -------------------------------------------------------------------
 
+#: Tool이 단위를 붙여 돌려준 스칼라("30km/h", "35%"). 숫자와 단위만 인정한다.
+_UNIT_VALUE = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*([^\d\s.,+-][^\d]*?)?\s*$")
+
+
+def scalar_parts(value, *, where):
+    """구간 값 하나를 (숫자, 단위)로 읽는다. 단위가 없으면 ""다.
+
+    v2 schema의 반환 형식을 받는다: 스칼라 숫자, dimension 없는 개수 object
+    ``{"count": N}``, 단위를 붙인 문자열(mock: "30km/h", "35%"). 단위 문자열의 숫자는
+    그대로 읽고 환산하지 않는다("35%"는 35와 단위 %).
+    """
+    if isinstance(value, dict) and set(value) == {"count"}:
+        value = value["count"]
+    if isinstance(value, str):
+        match = _UNIT_VALUE.fullmatch(value)
+        if match:
+            text, unit = match.group(1), (match.group(2) or "").strip()
+            number = float(text) if "." in text else int(text)
+            return number, unit
+    return _number(value, where=where), ""
+
+
+def with_unit(number, unit):
+    """숫자에 단위를 다시 붙인다. 단위가 없으면 숫자 그대로다. 반올림하지 않는다."""
+    if not unit:
+        return number
+    if isinstance(number, float) and number.is_integer():
+        number = int(number)
+    return f"{number}{unit}"
+
+
+def _common_unit(units, *, where):
+    distinct = sorted(set(units))
+    if len(distinct) > 1:
+        raise ExecutionError(
+            f"{where}: 단위가 다른 값을 함께 계산할 수 없습니다: {distinct}",
+            code="MIXED_UNITS",
+            user_message="단위가 서로 다른 값이 섞여 있어 계산하지 않았습니다.",
+            context={"where": where, "units": distinct},
+        )
+    return distinct[0] if distinct else ""
+
 
 def _number(value, *, where):
     if value is None:
@@ -127,8 +170,8 @@ def run(step, state):
         if reducer not in ("sum", "max", "min"):
             raise ExecutionError(f"{step.id}: 하루 값으로 합칠 수 없는 집계입니다: {reducer!r}",
                                  code="UNKNOWN_REDUCER")
-        values = _day_values(step, step.inputs, state)
-        return reduce_values(values, reducer)
+        values, unit = _day_values(step, step.inputs, state)
+        return with_unit(reduce_values(values, reducer), unit)
     if step.operator == COLLECT_GROUPS:
         groups = step.arguments.get("groups") or []
         members = step.arguments.get("members") or [[key] for key in step.inputs]
@@ -143,7 +186,7 @@ def run(step, state):
         rows = []
         for group, keys in zip(groups, members):
             if reducer is None:
-                values = []
+                values, units = [], []
                 for key in keys:
                     if key not in state:
                         raise ExecutionError(
@@ -151,12 +194,16 @@ def run(step, state):
                             code="UNRESOLVED_REF",
                             context={"node_id": key},
                         )
-                    values.append(_number(state[key], where=f"{step.id}[{key}]"))
+                    number, unit = scalar_parts(state[key], where=f"{step.id}[{key}]")
+                    values.append(number)
+                    units.append(unit)
+                unit = _common_unit(units, where=step.id)
             else:
-                values = _day_values(step, keys, state)
+                values, unit = _day_values(step, keys, state)
             row = {
                 "group": dict(group),
-                "value": values[0] if reducer is None else reduce_values(values, reducer),
+                "value": with_unit(values[0] if reducer is None
+                                   else reduce_values(values, reducer), unit),
             }
             if reducer is not None:
                 # 일 단위 값과 그것을 합친 방법을 남긴다(부록 F의 중간 상태).
@@ -166,16 +213,20 @@ def run(step, state):
         return rows
 
     rows = _group_rows(step, state)
-    values = [row["value"] for row in rows]
+    parts = [scalar_parts(row["value"], where=f"{step.id}[{row['group'].get('label')}]")
+             for row in rows]
+    values = [number for number, _unit in parts]
+    unit = _common_unit([unit for _number, unit in parts], where=step.id)
     if step.operator == REDUCE_GROUPS:
-        return reduce_values(values, step.arguments["reducer"])
+        return with_unit(reduce_values(values, step.arguments["reducer"]), unit)
     if step.operator == SELECT_GROUP:
         chosen = max(values) if step.arguments["select"] == "max" else min(values)
         # 동률이면 하나를 임의로 고르지 않고 모두 돌려준다.
         return {
             "select": step.arguments["select"],
-            "value": chosen,
-            "groups": [dict(row["group"]) for row in rows if row["value"] == chosen],
+            "value": with_unit(chosen, unit),
+            "groups": [dict(row["group"]) for row, value in zip(rows, values)
+                       if value == chosen],
         }
     raise ExecutionError(f"알 수 없는 로컬 연산자: {step.operator}",
                          code="UNKNOWN_OPERATOR")
@@ -184,14 +235,16 @@ def run(step, state):
 def _day_values(step, keys, state):
     """하루 단위 값들. ``empty_parts=skip``이면(계약상 null = 기록 없음) 빈 날을 뺀다."""
     skip = step.arguments.get("empty_parts") == "skip"
-    values = []
+    values, units = [], []
     for key in keys:
         if key not in state:
             raise ExecutionError(f"{step.id}: 하루 값이 아직 없습니다: {key}",
                                  code="UNRESOLVED_REF", context={"node_id": key})
         if skip and state[key] is None:
             continue
-        values.append(_number(state[key], where=f"{step.id}[{key}]"))
+        number, unit = scalar_parts(state[key], where=f"{step.id}[{key}]")
+        values.append(number)
+        units.append(unit)
     if not values:
         raise ExecutionError(
             f"{step.id}: 모든 날의 값이 비어 있습니다.",
@@ -199,7 +252,7 @@ def _day_values(step, keys, state):
             user_message="값이 없는 구간이 있어 구간별 계산을 할 수 없습니다.",
             context={"where": step.id},
         )
-    return values
+    return values, _common_unit(units, where=step.id)
 
 
 def _group_rows(step, state):
@@ -214,5 +267,5 @@ def _group_rows(step, state):
             context={"node_id": key},
         )
     for row in rows:
-        _number(row["value"], where=f"{step.id}[{row['group'].get('label')}]")
+        scalar_parts(row["value"], where=f"{step.id}[{row['group'].get('label')}]")
     return rows

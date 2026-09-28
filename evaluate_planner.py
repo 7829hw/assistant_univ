@@ -86,6 +86,8 @@ REFUSAL_CODES = frozenset({
     "UNSUPPORTED_GROUPED_MEASURE",
     "UNSUPPORTED_AGGREGATION_COMBINATION",
     "MISSING_OUTER_AGGREGATION",
+    # 측정값에 뜻이 없는 집계(비율의 합계 등). geoflow/measures.py.
+    "UNDEFINED_MEASURE_AGGREGATION",
 })
 
 

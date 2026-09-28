@@ -15,6 +15,13 @@ TIMS가 구간별 집계를 한 호출로 처리하지 못할 때, compiler는 �
   - this_week: 기준일이 속한 주의 월요일부터 기준일까지
   - this_month: 기준일이 속한 달의 1일부터 기준일까지
   - this_year: 기준일이 속한 해의 1월 1일부터 기준일까지
+
+상대 기간을 날짜로 푸는 위 규칙(월요일 시작, 기준일까지 포함, 기준일은 Asia/Seoul
+달력 날짜)은 **이 애플리케이션의 정책**이다. vendor schema·system prompt는 토큰 이름과
+"현재 시점을 기준으로 하는 상대 날짜"라는 설명만 적고, 주 시작 요일·기준일 포함 여부·
+시간대를 정하지 않는다(``tims_contract`` ``relative_date_reference``: UNKNOWN). 그래서
+토큰을 그대로 TIMS에 넘기는 호출(legacy)에서는 TIMS가 정한 기간이 쓰이고, 이 규칙은
+기간을 로컬에서 나눌 때와 조건 기록(interpreted_range)에만 쓰인다.
 - ``weekday``, ``weekend``, ``holiday``는 연속 기간이 아니므로 나누지 않는다.
 - 기간이 없으면 나눌 범위를 알 수 없으므로 거부한다.
 
@@ -34,6 +41,18 @@ RELATIVE_PERIODS = frozenset({
     "last_week", "last_month", "last_year", "this_week", "this_month", "this_year",
 })
 NON_CONTIGUOUS_PERIODS = frozenset({"weekday", "weekend", "holiday"})
+
+#: 상대 기간 토큰의 로컬 해석 규칙(애플리케이션 정책, TIMS 계약 아님). 기록에 남는다.
+RELATIVE_PERIOD_POLICY = {
+    "last_week": "기준일이 속한 주(월요일 시작) 바로 앞 주의 월요일부터 일요일까지",
+    "last_month": "기준일이 속한 달 바로 앞 달의 1일부터 말일까지",
+    "last_year": "기준일이 속한 해 바로 앞 해의 1월 1일부터 12월 31일까지",
+    "this_week": "기준일이 속한 주(월요일 시작)의 월요일부터 기준일까지",
+    "this_month": "기준일이 속한 달의 1일부터 기준일까지",
+    "this_year": "기준일이 속한 해의 1월 1일부터 기준일까지",
+}
+#: 위 규칙의 출처. TIMS 계약이 아니라는 표시다.
+RELATIVE_PERIOD_POLICY_SOURCE = "application_policy"
 
 #: 구간 경계 정의. 답변과 기록에 남는다.
 BOUNDARY_RULES = {
