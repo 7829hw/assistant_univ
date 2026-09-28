@@ -109,6 +109,8 @@ TOOL_DEFAULT_REDUCER = "avg"
 
 #: 값은 합법이지만 특정 input이 채워져야만 Tool이 받는 경우.
 PARAM_VALUE_REQUIRES_INPUT = "PARAM_VALUE_REQUIRES_INPUT"
+#: 값은 합법이지만 특정 input이 채워져 있으면 Tool이 받지 않는 경우.
+PARAM_VALUE_FORBIDS_INPUT = "PARAM_VALUE_FORBIDS_INPUT"
 
 
 @dataclass(frozen=True)
@@ -125,8 +127,10 @@ class OperatorContractViolation:
     reason: str
 
     def detail(self):
+        condition = ("채워져 있으면 쓸 수 없습니다"
+                     if self.kind == PARAM_VALUE_FORBIDS_INPUT else "채워져야 쓸 수 있습니다")
         return (f"{self.operator}의 {self.param}={self.value!r}는 "
-                f"{self.required_input} input이 채워져야 쓸 수 있습니다. "
+                f"{self.required_input} input이 {condition}. "
                 f"(채워진 input: {', '.join(self.bound_inputs) or '없음'})")
 
     def context(self):
@@ -169,10 +173,38 @@ class ParamValueRequiresInput:
 
 
 @dataclass(frozen=True)
+class ParamValueForbidsInput:
+    """``param``이 ``values`` 중 하나이면 ``input_name`` port가 비어 있어야 한다.
+
+    ``ParamValueRequiresInput``의 반대다. 두 제약을 함께 쓰면 "input이 없을 때만
+    쓸 수 있는 값"과 "input이 있으면 쓸 수 없는 값"을 각각 적을 수 있다.
+    """
+
+    param: str
+    values: frozenset[str]
+    input_name: str
+    reason: str
+
+    def violation(self, operator, params, bound_inputs):
+        value = params.get(self.param)
+        if value not in self.values or self.input_name not in bound_inputs:
+            return None
+        return OperatorContractViolation(
+            kind=PARAM_VALUE_FORBIDS_INPUT,
+            operator=operator,
+            param=self.param,
+            value=value,
+            required_input=self.input_name,
+            bound_inputs=tuple(sorted(bound_inputs)),
+            reason=self.reason,
+        )
+
+
+@dataclass(frozen=True)
 class BucketRollup:
     """Tool이 "구간 안 집계 → 구간별 값의 집계"를 한 호출로 수행한다는 선언.
 
-    근거는 schema다. get_operation_metrics의 bucket은 "1차 집계 시간 구간(지정 시
+    근거는 schema다. get_billing_metrics의 bucket은 "1차 집계 시간 구간(지정 시
     rollup 필수)", rollup은 "bucket별 값들을 단일 값으로 합치는 2차 집계"이고,
     구간 안 집계는 aggregation이 정한다. mock도 같은 순서로 계산한다.
 
@@ -206,7 +238,7 @@ class OperatorSpec:
     param_enums: dict[str, frozenset[str]] = field(default_factory=dict)
     #: param 값과 input binding 사이의 계약. factor끼리의 공기 제약과 달리
     #: 특정 Tool의 성질이므로 factor 어휘가 아니라 operator가 갖는다.
-    input_constraints: tuple[ParamValueRequiresInput, ...] = ()
+    input_constraints: tuple[ParamValueRequiresInput | ParamValueForbidsInput, ...] = ()
     #: 두 단계 집계를 한 호출로 받는다는 선언. 없으면 compiler가 기간을 나눠
     #: 구간마다 호출한 뒤 로컬에서 합친다.
     bucket_rollup: BucketRollup | None = None
@@ -421,11 +453,16 @@ _SPECS: tuple[OperatorSpec, ...] = (
             allowed=frozenset({(CoreConcept.AMOUNT, Subtype.TRIP_COUNT)}),
         ),
         inherent_reducer="sum",
-        params=frozenset({"date", "time", "dimension", "order", "limit"}),
+        params=frozenset({
+            "date", "time", "dimension", "dimension_target", "order", "limit",
+        }),
         # vendor schema get_trip_count.dimension. 공간 기준만 받고 dayofweek는 없다.
         # scope_pickup/scope_dropoff 유무에 따른 조건은 schema에 없다.
+        # dimension_target은 dimension을 승차지·하차지·승하차 조합 중 어디에 적용할지
+        # 정한다. 생략하면 schema default인 both(OD pair)다.
         param_enums={
             "dimension": frozenset({"h3", "sido", "sigungu", "emd"}),
+            "dimension_target": frozenset({"pickup", "dropoff", "both"}),
             "order": frozenset({"top", "bottom"}),
         },
     ),
@@ -469,7 +506,9 @@ _SPECS: tuple[OperatorSpec, ...] = (
     ),
     OperatorSpec(
         name=Operator.OPERATION_METRIC,
-        tool_name="get_operation_metrics",
+        # vendor schema의 설명은 "일 단위 택시 영업(operation) 관련 통계값"이다. 의미
+        # operator 이름은 그대로 두고 Tool 이름만 v2(get_billing_metrics)를 따른다.
+        tool_name="get_billing_metrics",
         inputs=_inputs(
             ("event", _event(Subtype.OPERATION)),
             ("area", OperatorInput(
@@ -482,9 +521,9 @@ _SPECS: tuple[OperatorSpec, ...] = (
         output=OperatorOutput(
             allowed=frozenset({
                 (CoreConcept.AMOUNT, Subtype.REVENUE),
-                (CoreConcept.AMOUNT, Subtype.OPERATING_COUNT),
-                (CoreConcept.AMOUNT, Subtype.HOURS),
-                (CoreConcept.PROPORTION, Subtype.OPERATING_RATIO),
+                (CoreConcept.AMOUNT, Subtype.ACTIVE_TAXI_COUNT),
+                (CoreConcept.AMOUNT, Subtype.OPERATING_DAYS),
+                (CoreConcept.PROPORTION, Subtype.ACTIVE_TAXI_RATIO),
             }),
         ),
         params=frozenset({
@@ -492,7 +531,7 @@ _SPECS: tuple[OperatorSpec, ...] = (
             "aggregation", "bucket", "rollup",
         }),
         param_enums={
-            # vendor schema(get_operation_metrics.dimension)의 enum 전체.
+            # vendor schema(get_billing_metrics.dimension)의 enum 전체.
             "dimension": frozenset({"h3", "sido", "sigungu", "emd", "dayofweek"}),
             "taxi_type": frozenset({"private", "corporate", "all"}),
             "order": frozenset({"top", "bottom"}),
@@ -501,9 +540,11 @@ _SPECS: tuple[OperatorSpec, ...] = (
             "rollup": frozenset({"max", "min", "sum", "avg", "med"}),
         },
         bucket_rollup=BucketRollup(),
-        # vendor schema: "scope가 설정되지 않은 경우는 sido, dayofweek만 가능함".
-        # mock도 같은 규칙으로 거절한다. 전에는 enum을 {dayofweek, sido}로
-        # 좁혀 이 규칙을 대신했지만, 그러면 지역이 있는 합법한 계획도 막혔다.
+        # vendor schema의 두 문장을 각각 제약으로 적는다.
+        #   "scope가 설정되지 않은 경우는 sido, dayofweek만 가능함"
+        #   "scope에 대한 통계를 추출하는 경우는 dimension 설정 금지"
+        # 둘을 합치면 h3·sigungu·emd는 어느 경우에도 쓸 수 없다. enum에는 schema
+        # 그대로 남긴다. mock도 같은 규칙으로 거절한다.
         #
         # "dimension과 bucket은 함께 쓸 수 없다"는 mock에만 있고 vendor schema에는
         # 없다. 근거가 생기기 전에는 계약으로 올리지 않는다.
@@ -514,6 +555,13 @@ _SPECS: tuple[OperatorSpec, ...] = (
                 input_name="area",
                 reason="시군구·읍면동·H3 단위로 나눠 보려면 분석할 지역을 함께 "
                        "지정해야 합니다.",
+            ),
+            ParamValueForbidsInput(
+                param="dimension",
+                values=frozenset({"h3", "sido", "sigungu", "emd", "dayofweek"}),
+                input_name="area",
+                reason="택시 소속 지역을 지정한 영업 통계는 지역·요일별로 나눠 "
+                       "볼 수 없습니다.",
             ),
         ),
     ),

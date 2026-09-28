@@ -26,13 +26,13 @@ from geoflow.operator_registry import OPERATORS, get_operator
 from geoflow.repair import decide
 from geoflow.types import CONCEPT_SUBTYPES, CoreConcept
 
-QUESTION = "법인택시의 평균 운행시간은?"
+QUESTION = "법인택시의 평균 수입은?"
 
 #: 측정값까지 갖춘 최소 grounding. 여기에 잘못된 개념 하나만 얹어 본다.
 BASE_CONCEPTS = [
     {"id": "op", "concept": "EVENT", "subtype": "operation",
      "role": "SUPPORT", "source": "implicit"},
-    {"id": "h", "concept": "AMOUNT", "subtype": "hours",
+    {"id": "h", "concept": "AMOUNT", "subtype": "revenue",
      "role": "MEASURE", "source": "implicit"},
 ]
 
@@ -82,7 +82,7 @@ class TaxiTypeAsFactorTest(unittest.TestCase):
         """조건으로 적으면 그대로 Tool 인자가 된다."""
         grounding = parse_grounding(
             payload(factors={"taxi_type": "private", "aggregation": "avg"}),
-            "개인택시의 평균 운행시간은?",
+            "개인택시의 평균 수입은?",
         )
         plan = MacroComposer(MacroLibrary.from_directory()).compose(grounding)
         params = plan.transformations[-1].params

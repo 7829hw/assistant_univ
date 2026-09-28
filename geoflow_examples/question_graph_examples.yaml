@@ -11,8 +11,8 @@
 version: 1
 examples:
 - id: ex01
-  version: 1
-  question: 지난달 중구 법인택시의 운행 시간 평균은?
+  version: 2
+  question: 지난달 중구 법인택시의 운행일수 평균은?
   grounding:
     concepts:
     - id: place
@@ -29,9 +29,9 @@ examples:
       subtype: operation
       role: SUPPORT
       source: implicit
-    - id: hours
+    - id: operating_days
       concept: AMOUNT
-      subtype: hours
+      subtype: operating_days
       role: MEASURE
       source: implicit
     factors:
@@ -42,7 +42,7 @@ examples:
       taxi_type: corporate
   graph:
   - place(LOCATION/place, SUBCOND) --RESOLVE_PLACE_SCOPE[include_vicinity=False]--> place_scope(LOCATION/scope, COND)
-  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=avg; metric=hours; 조건: date, taxi_type]--> hours(AMOUNT/hours, MEASURE)'
+  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=avg; metric=operating_days; 조건: date, taxi_type]--> operating_days(AMOUNT/operating_days, MEASURE)'
   macros:
   - PLACE_TO_SCOPE
   - EVENT_TO_MEASURE
@@ -58,7 +58,7 @@ examples:
   - overall_average
   source: authored:2026-09-26
   split: retrieval_store
-  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+  reviewed_by: claude-2026-09-28 (업체 v2 측정값으로 바꿈, 사용자 검토 전)
 - id: ex02
   version: 1
   question: 2026년 8월 나래구 법인택시 매출 합계는?
@@ -114,8 +114,8 @@ examples:
   split: retrieval_store
   reviewed_by: claude-2026-09-26 (사용자 검토 전)
 - id: ex03
-  version: 1
-  question: 지난달 수성구 개인택시의 주별 운행 시간 합계를 평균 내면?
+  version: 2
+  question: 지난달 수성구 개인택시의 주별 운행일수 합계를 평균 내면?
   grounding:
     concepts:
     - id: place
@@ -132,9 +132,9 @@ examples:
       subtype: operation
       role: SUPPORT
       source: implicit
-    - id: hours
+    - id: operating_days
       concept: AMOUNT
-      subtype: hours
+      subtype: operating_days
       role: MEASURE
       source: implicit
     factors:
@@ -148,8 +148,8 @@ examples:
       taxi_type: private
   graph:
   - place(LOCATION/place, SUBCOND) --RESOLVE_PLACE_SCOPE[include_vicinity=False]--> place_scope(LOCATION/scope, COND)
-  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=sum; metric=hours; 조건: date, taxi_type]--> hours_groups(AMOUNT/hours, SUPPORT, 구간=week)'
-  - hours_groups --REDUCE_GROUPS[reducer=avg]--> hours(AMOUNT/hours, MEASURE)
+  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=sum; metric=operating_days; 조건: date, taxi_type]--> operating_days_groups(AMOUNT/operating_days, SUPPORT, 구간=week)'
+  - operating_days_groups --REDUCE_GROUPS[reducer=avg]--> operating_days(AMOUNT/operating_days, MEASURE)
   macros:
   - PLACE_TO_SCOPE
   - EVENT_TO_GROUPED_MEASURE
@@ -165,10 +165,10 @@ examples:
   - avg_of_bucket_sums
   source: authored:2026-09-26
   split: retrieval_store
-  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+  reviewed_by: claude-2026-09-28 (업체 v2 측정값으로 바꿈, 사용자 검토 전)
 - id: ex04
-  version: 1
-  question: 2026년 상반기 동구 법인택시 월별 영업 횟수 평균 중 가장 큰 값은?
+  version: 2
+  question: 2026년 상반기 동구 법인택시 월별 활성택시 대수 평균 중 가장 큰 값은?
   grounding:
     concepts:
     - id: place
@@ -185,9 +185,9 @@ examples:
       subtype: operation
       role: SUPPORT
       source: implicit
-    - id: operating_count
+    - id: active_taxi_count
       concept: AMOUNT
-      subtype: operating_count
+      subtype: active_taxi_count
       role: MEASURE
       source: implicit
     factors:
@@ -201,8 +201,8 @@ examples:
       taxi_type: corporate
   graph:
   - place(LOCATION/place, SUBCOND) --RESOLVE_PLACE_SCOPE[include_vicinity=False]--> place_scope(LOCATION/scope, COND)
-  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=avg; metric=operating_count; 조건: date, taxi_type]--> operating_count_groups(AMOUNT/operating_count, SUPPORT, 구간=month)'
-  - operating_count_groups --REDUCE_GROUPS[reducer=max]--> operating_count(AMOUNT/operating_count, MEASURE)
+  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=avg; metric=active_taxi_count; 조건: date, taxi_type]--> active_taxi_count_groups(AMOUNT/active_taxi_count, SUPPORT, 구간=month)'
+  - active_taxi_count_groups --REDUCE_GROUPS[reducer=max]--> active_taxi_count(AMOUNT/active_taxi_count, MEASURE)
   macros:
   - PLACE_TO_SCOPE
   - EVENT_TO_GROUPED_MEASURE
@@ -219,7 +219,7 @@ examples:
   - value_not_group
   source: authored:2026-09-26
   split: retrieval_store
-  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+  reviewed_by: claude-2026-09-28 (업체 v2 측정값으로 바꿈, 사용자 검토 전)
 - id: ex05
   version: 1
   question: 2026년 8월 나래구 개인택시 주별 매출 합계 중 가장 작은 값은?
@@ -280,8 +280,8 @@ examples:
   split: retrieval_store
   reviewed_by: claude-2026-09-26 (사용자 검토 전)
 - id: ex06
-  version: 1
-  question: 지난달 달서구 개인택시의 운행 시간 합계가 가장 길었던 주는?
+  version: 2
+  question: 지난달 달서구 개인택시의 운행일수 합계가 가장 많았던 주는?
   grounding:
     concepts:
     - id: place
@@ -298,9 +298,9 @@ examples:
       subtype: operation
       role: SUPPORT
       source: implicit
-    - id: hours
+    - id: operating_days
       concept: AMOUNT
-      subtype: hours
+      subtype: operating_days
       role: MEASURE
       source: implicit
     factors:
@@ -314,8 +314,8 @@ examples:
       taxi_type: private
   graph:
   - place(LOCATION/place, SUBCOND) --RESOLVE_PLACE_SCOPE[include_vicinity=False]--> place_scope(LOCATION/scope, COND)
-  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=sum; metric=hours; 조건: date, taxi_type]--> hours_groups(AMOUNT/hours, SUPPORT, 구간=week)'
-  - hours_groups --SELECT_GROUP[select=max]--> hours(AMOUNT/hours, MEASURE)
+  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=sum; metric=operating_days; 조건: date, taxi_type]--> operating_days_groups(AMOUNT/operating_days, SUPPORT, 구간=week)'
+  - operating_days_groups --SELECT_GROUP[select=max]--> operating_days(AMOUNT/operating_days, MEASURE)
   macros:
   - PLACE_TO_SCOPE
   - EVENT_TO_GROUPED_MEASURE
@@ -326,12 +326,12 @@ examples:
     outer: null
     select: max
   expected_outcome: answered
-  note: '''가장 길었던 주는?'' → 답이 주(구간)다 → result.select=max. order·limit·dimension을 쓰지 않는다.'
+  note: '''가장 많았던 주는?'' → 답이 주(구간)다 → result.select=max. order·limit·dimension을 쓰지 않는다.'
   tags:
   - bucket_select
   source: authored:2026-09-26
   split: retrieval_store
-  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+  reviewed_by: claude-2026-09-28 (업체 v2 측정값으로 바꿈, 사용자 검토 전)
 - id: ex07
   version: 1
   question: 2026년 8월 나래구 개인택시 매출 평균이 가장 낮았던 주는 언제야?
@@ -393,8 +393,8 @@ examples:
   split: retrieval_store
   reviewed_by: claude-2026-09-26 (사용자 검토 전)
 - id: ex08
-  version: 1
-  question: 2026년 상반기 중구 개인택시 영업 횟수 합계가 가장 많았던 달은?
+  version: 2
+  question: 2026년 상반기 중구 개인택시 활성택시 대수 합계가 가장 많았던 달은?
   grounding:
     concepts:
     - id: place
@@ -411,9 +411,9 @@ examples:
       subtype: operation
       role: SUPPORT
       source: implicit
-    - id: operating_count
+    - id: active_taxi_count
       concept: AMOUNT
-      subtype: operating_count
+      subtype: active_taxi_count
       role: MEASURE
       source: implicit
     factors:
@@ -427,8 +427,8 @@ examples:
       taxi_type: private
   graph:
   - place(LOCATION/place, SUBCOND) --RESOLVE_PLACE_SCOPE[include_vicinity=False]--> place_scope(LOCATION/scope, COND)
-  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=sum; metric=operating_count; 조건: date, taxi_type]--> operating_count_groups(AMOUNT/operating_count, SUPPORT, 구간=month)'
-  - operating_count_groups --SELECT_GROUP[select=max]--> operating_count(AMOUNT/operating_count, MEASURE)
+  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=sum; metric=active_taxi_count; 조건: date, taxi_type]--> active_taxi_count_groups(AMOUNT/active_taxi_count, SUPPORT, 구간=month)'
+  - active_taxi_count_groups --SELECT_GROUP[select=max]--> active_taxi_count(AMOUNT/active_taxi_count, MEASURE)
   macros:
   - PLACE_TO_SCOPE
   - EVENT_TO_GROUPED_MEASURE
@@ -444,10 +444,10 @@ examples:
   - bucket_select
   source: authored:2026-09-26
   split: retrieval_store
-  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+  reviewed_by: claude-2026-09-28 (업체 v2 측정값으로 바꿈, 사용자 검토 전)
 - id: ex09
-  version: 1
-  question: 지난달 동구 법인택시 주별 운행 시간 평균 중 가장 짧은 값은?
+  version: 2
+  question: 지난달 동구 법인택시 주별 운행일수 평균 중 가장 작은 값은?
   grounding:
     concepts:
     - id: place
@@ -464,9 +464,9 @@ examples:
       subtype: operation
       role: SUPPORT
       source: implicit
-    - id: hours
+    - id: operating_days
       concept: AMOUNT
-      subtype: hours
+      subtype: operating_days
       role: MEASURE
       source: implicit
     factors:
@@ -480,8 +480,8 @@ examples:
       taxi_type: corporate
   graph:
   - place(LOCATION/place, SUBCOND) --RESOLVE_PLACE_SCOPE[include_vicinity=False]--> place_scope(LOCATION/scope, COND)
-  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=avg; metric=hours; 조건: date, taxi_type]--> hours_groups(AMOUNT/hours, SUPPORT, 구간=week)'
-  - hours_groups --REDUCE_GROUPS[reducer=min]--> hours(AMOUNT/hours, MEASURE)
+  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=avg; metric=operating_days; 조건: date, taxi_type]--> operating_days_groups(AMOUNT/operating_days, SUPPORT, 구간=week)'
+  - operating_days_groups --REDUCE_GROUPS[reducer=min]--> operating_days(AMOUNT/operating_days, MEASURE)
   macros:
   - PLACE_TO_SCOPE
   - EVENT_TO_GROUPED_MEASURE
@@ -492,17 +492,17 @@ examples:
     outer: min
     select: null
   expected_outcome: answered
-  note: '''주별 평균 중 가장 짧은 값'' → 답은 값(result.reducer=min). ''평균이 가장 짧았던 주는?''(구간 선택)과 다르다.'
+  note: '''주별 평균 중 가장 작은 값'' → 답은 값(result.reducer=min). ''평균이 가장 적었던 주는?''(구간 선택)과 다르다.'
   tags:
   - min_of_bucket_avgs
   - value_not_group
   - contrast_pair:ex10
   source: authored:2026-09-26
   split: retrieval_store
-  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+  reviewed_by: claude-2026-09-28 (업체 v2 측정값으로 바꿈, 사용자 검토 전)
 - id: ex10
-  version: 1
-  question: 지난달 동구 법인택시의 운행 시간 평균이 가장 짧았던 주는?
+  version: 2
+  question: 지난달 동구 법인택시의 운행일수 평균이 가장 적었던 주는?
   grounding:
     concepts:
     - id: place
@@ -519,9 +519,9 @@ examples:
       subtype: operation
       role: SUPPORT
       source: implicit
-    - id: hours
+    - id: operating_days
       concept: AMOUNT
-      subtype: hours
+      subtype: operating_days
       role: MEASURE
       source: implicit
     factors:
@@ -535,8 +535,8 @@ examples:
       taxi_type: corporate
   graph:
   - place(LOCATION/place, SUBCOND) --RESOLVE_PLACE_SCOPE[include_vicinity=False]--> place_scope(LOCATION/scope, COND)
-  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=avg; metric=hours; 조건: date, taxi_type]--> hours_groups(AMOUNT/hours, SUPPORT, 구간=week)'
-  - hours_groups --SELECT_GROUP[select=min]--> hours(AMOUNT/hours, MEASURE)
+  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=avg; metric=operating_days; 조건: date, taxi_type]--> operating_days_groups(AMOUNT/operating_days, SUPPORT, 구간=week)'
+  - operating_days_groups --SELECT_GROUP[select=min]--> operating_days(AMOUNT/operating_days, MEASURE)
   macros:
   - PLACE_TO_SCOPE
   - EVENT_TO_GROUPED_MEASURE
@@ -547,16 +547,16 @@ examples:
     outer: null
     select: min
   expected_outcome: answered
-  note: '''평균이 가장 짧았던 주는?'' → 답은 주(result.select=min). ''주별 평균 중 가장 짧은 값''(값 반환)과 다르다.'
+  note: '''평균이 가장 적었던 주는?'' → 답은 주(result.select=min). ''주별 평균 중 가장 작은 값''(값 반환)과 다르다.'
   tags:
   - bucket_select
   - contrast_pair:ex09
   source: authored:2026-09-26
   split: retrieval_store
-  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+  reviewed_by: claude-2026-09-28 (업체 v2 측정값으로 바꿈, 사용자 검토 전)
 - id: ex11
-  version: 1
-  question: 지난달 중구 개인택시 주별 운행 시간의 최댓값은?
+  version: 2
+  question: 지난달 중구 개인택시 주별 운행일수의 최댓값은?
   grounding:
     concepts:
     - id: place
@@ -573,9 +573,9 @@ examples:
       subtype: operation
       role: SUPPORT
       source: implicit
-    - id: hours
+    - id: operating_days
       concept: AMOUNT
-      subtype: hours
+      subtype: operating_days
       role: MEASURE
       source: implicit
     factors:
@@ -600,7 +600,7 @@ examples:
   - ambiguous_inner
   source: authored:2026-09-26
   split: retrieval_store
-  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+  reviewed_by: claude-2026-09-28 (업체 v2 측정값으로 바꿈, 사용자 검토 전)
 - id: ex12
   version: 1
   question: 지난달 수성구 법인택시의 주별 매출 합계를 주마다 모두 보여줘
@@ -617,8 +617,8 @@ examples:
   split: retrieval_store
   reviewed_by: claude-2026-09-26 (사용자 검토 전)
 - id: ex13
-  version: 1
-  question: 2026년 상반기 동구 개인택시 월별 운행 시간 평균을 달마다 알려줘
+  version: 2
+  question: 2026년 상반기 동구 개인택시 월별 운행일수 평균을 달마다 알려줘
   grounding: *id001
   result_kind: grouped_values
   aggregation: {}
@@ -629,7 +629,7 @@ examples:
   - grouped_values_list
   source: authored:2026-09-26
   split: retrieval_store
-  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+  reviewed_by: claude-2026-09-28 (업체 v2 측정값으로 바꿈, 사용자 검토 전)
 - id: ex14
   version: 1
   question: 2026년 7월부터 8월까지 가람구 개인택시의 월별 매출 합계 평균은?
@@ -689,8 +689,8 @@ examples:
   split: retrieval_store
   reviewed_by: claude-2026-09-26 (사용자 검토 전)
 - id: ex15
-  version: 1
-  question: 지난달 달서구 개인택시 주별 운행 시간 평균들의 평균은?
+  version: 2
+  question: 지난달 달서구 개인택시 주별 운행일수 평균들의 평균은?
   grounding:
     concepts:
     - id: place
@@ -707,9 +707,9 @@ examples:
       subtype: operation
       role: SUPPORT
       source: implicit
-    - id: hours
+    - id: operating_days
       concept: AMOUNT
-      subtype: hours
+      subtype: operating_days
       role: MEASURE
       source: implicit
     factors:
@@ -723,8 +723,8 @@ examples:
       taxi_type: private
   graph:
   - place(LOCATION/place, SUBCOND) --RESOLVE_PLACE_SCOPE[include_vicinity=False]--> place_scope(LOCATION/scope, COND)
-  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=avg; metric=hours; 조건: date, taxi_type]--> hours_groups(AMOUNT/hours, SUPPORT, 구간=week)'
-  - hours_groups --REDUCE_GROUPS[reducer=avg]--> hours(AMOUNT/hours, MEASURE)
+  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=avg; metric=operating_days; 조건: date, taxi_type]--> operating_days_groups(AMOUNT/operating_days, SUPPORT, 구간=week)'
+  - operating_days_groups --REDUCE_GROUPS[reducer=avg]--> operating_days(AMOUNT/operating_days, MEASURE)
   macros:
   - PLACE_TO_SCOPE
   - EVENT_TO_GROUPED_MEASURE
@@ -740,21 +740,12 @@ examples:
   - avg_of_bucket_avgs
   source: authored:2026-09-26
   split: retrieval_store
-  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+  reviewed_by: claude-2026-09-28 (업체 v2 측정값으로 바꿈, 사용자 검토 전)
 - id: ex16
-  version: 1
-  question: 2026년 9월 10일 대구 개인택시 매출 평균이 높은 구·군 3곳은?
+  version: 2
+  question: 2026년 9월 10일 개인택시 매출 평균이 높은 시도 3곳은?
   grounding:
     concepts:
-    - id: place
-      text: 대구
-      concept: LOCATION
-      subtype: place
-      role: SUBCOND
-      source: user
-      value:
-        name: 대구
-        region: ''
     - id: operation
       concept: EVENT
       subtype: operation
@@ -767,7 +758,7 @@ examples:
       source: implicit
     factors:
       date: '20260910'
-      dimension: sigungu
+      dimension: sido
       order: top
       limit: 3
       aggregation_plan:
@@ -775,10 +766,8 @@ examples:
           reducer: avg
       taxi_type: private
   graph:
-  - place(LOCATION/place, SUBCOND) --RESOLVE_PLACE_SCOPE[include_vicinity=False]--> place_scope(LOCATION/scope, COND)
-  - 'operation(EVENT/operation, SUPPORT) + place_scope --OPERATION_METRIC[aggregation=avg; dimension=sigungu; limit=3; metric=revenue; order=top; 조건: date, taxi_type]--> revenue(AMOUNT/revenue, MEASURE)'
+  - 'operation(EVENT/operation, SUPPORT) --OPERATION_METRIC[aggregation=avg; dimension=sido; limit=3; metric=revenue; order=top; 조건: date, taxi_type]--> revenue(AMOUNT/revenue, MEASURE)'
   macros:
-  - PLACE_TO_SCOPE
   - EVENT_TO_MEASURE
   result_kind: dimension_groups
   aggregation:
@@ -787,9 +776,9 @@ examples:
     outer: null
     select: null
   expected_outcome: answered
-  note: 지역(구·군)으로 나눈 순위 → dimension=sigungu, order=top, limit=3. 주·월 같은 시간 구간은 dimension·order·limit이 아니라 aggregation_plan.bucket에 적는다.
+  note: 지역(시도)으로 나눈 순위 → dimension=sido, order=top, limit=3. 주·월 같은 시간 구간은 dimension·order·limit이 아니라 aggregation_plan.bucket에 적는다. v2 schema는 소속 지역(scope)과 dimension을 함께 받지 않으므로 지역을 정하지 않은 전국 시도 순위로 쓴다.
   tags:
   - dimension_ranking
   source: authored:2026-09-26
   split: retrieval_store
-  reviewed_by: claude-2026-09-26 (사용자 검토 전)
+  reviewed_by: claude-2026-09-28 (업체 v2 계약으로 바꿈, 사용자 검토 전)

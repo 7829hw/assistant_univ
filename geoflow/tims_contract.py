@@ -44,7 +44,7 @@ class ContractItem:
     quote: str | None = None
 
 
-_SCHEMA = "schemas/tims.yaml get_operation_metrics"
+_SCHEMA = "schemas/tims.yaml get_billing_metrics"
 _COMMON = "schemas/_common.yaml"
 _PROMPT = "prompts/system.yaml param_types"
 
@@ -102,12 +102,13 @@ ITEMS = {
         ),
         ContractItem(
             "inner_avg_unit", "aggregation=avg의 분모가 되는 원시 단위", OBSERVED,
-            f"{_SCHEMA} metric 설명의 '개별 택시 1일 영업간 집계'에서 택시·일 단위 기록으로 "
-            "읽을 수 있으나 분모를 문장으로 정하지 않는다",
+            f"{_SCHEMA} 설명의 '일 단위 택시 영업'과 metric 설명의 'revenue=1일 수익금'에서 "
+            "택시·일 단위 기록으로 읽을 수 있으나 분모를 문장으로 정하지 않는다",
         ),
         ContractItem(
             "relative_date_reference", "last_week/last_month의 기준 시각과 시간대",
-            UNKNOWN, f"{_PROMPT} '현재 시점을 기준으로 하는 상대 날짜'. 시간대와 경계는 없다",
+            UNKNOWN, f"{_PROMPT} '현재 시점을 기준으로 하는 상대 날짜'. 시간대와 경계는 없다. "
+                     "this_week/this_month/this_year가 기준일까지인지 기간 끝까지인지도 없다",
         ),
         ContractItem(
             "calendar_token_period", "weekday/weekend/holiday 토큰이 어느 기간의 요일을 뜻하는가",
@@ -122,12 +123,12 @@ ITEMS = {
         # 속하는 기록에 바로 적용되어야 한다. 기록이 여러 날에 걸치거나(자정을 넘는 trip),
         # 기간 전체에서 택시별 값을 먼저 만든 뒤 집계하면 하루 값들로 다시 만들 수 없다.
         ContractItem(
-            "day_records:get_operation_metrics",
+            "day_records:get_billing_metrics",
             "aggregation이 하루 안에 속하는 기록(택시·일)에 바로 적용되는가", OBSERVED,
             f"{_SCHEMA}: '일 단위 택시 영업(operation) 관련 통계값'으로 기록이 하루 단위임은 "
-            "적혀 있다. 그러나 기간 집계가 그 기록에 바로 적용되는지는 없고, metric 설명의 "
-            "'운행률은 기간으로 합산하면 평균 운행일이 산출됨'은 택시별 중간 집계가 있을 "
-            "여지를 남긴다",
+            "적혀 있다. 그러나 기간 집계가 그 기록에 바로 적용되는지는 없다. v2 README의 "
+            "'operating_days는 분석기간 동안 택시별 운행일수를 구한 뒤 대상 택시 전체에 "
+            "집계하는 metric'처럼 택시별 중간 집계가 있는 metric도 있다",
         ),
         ContractItem(
             "day_records:get_trip_metrics", "trip 기록이 하루 하나에만 속하는가", UNKNOWN,
@@ -269,7 +270,8 @@ def date_argument_kind(value):
         return DATE_SINGLE
     if re.fullmatch(r"\d{8}-\d{8}", text):
         return DATE_RANGE
-    if text in ("last_week", "last_month", "last_year"):
+    if text in ("last_week", "last_month", "last_year",
+                "this_week", "this_month", "this_year"):
         return DATE_RELATIVE
     if text in ("weekday", "weekend", "holiday"):
         return DATE_CALENDAR
@@ -336,12 +338,13 @@ def daily_composition(tool_name, reducer, *, grouped_arguments=(), days=None,
 # -- mock provider의 명시적 계약 ------------------------------------------------
 
 #: 평가에 쓰는 mock의 동작. TIMS 계약이 아니며 compiler는 이것을 쓰지 않는다.
-#: mock은 인자를 해석하지 않고 인자 전체의 hash로 값을 만든다. 따라서 mock 기준 정답은
-#: "기대한 요청 인자와 같은 요청을 보냈다"는 뜻일 뿐 날짜 의미의 보장이 아니며, 하루
-#: 단위로 나눈 호출의 합은 기간 호출의 mock 값과 비교할 수 없다.
+#: mock은 날짜를 해석하지 않고 ``mock_stub.yaml``에 적은 고정값(또는 인자가 일치하는
+#: case의 결과)을 돌려준다. 따라서 mock 기준 정답은 "기대한 요청 인자와 같은 요청을
+#: 보냈다"는 뜻일 뿐 날짜 의미의 보장이 아니며, 하루 단위로 나눈 호출의 합은 기간 호출의
+#: mock 값과 비교할 수 없다.
 MOCK_PROVIDER_CONTRACT = {
-    "source": "mock_responses.py _rng",
-    "quote": "재현 가능한 난수기를 만든다",
+    "source": "mock_responses.py _fixed_metric",
+    "quote": "YAML에 선언된 Tool metric 고정값을 반환한다.",
     "date_semantics": "opaque: 날짜 문자열을 해석하지 않음",
     "compositional": False,
 }

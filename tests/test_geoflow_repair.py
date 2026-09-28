@@ -342,7 +342,7 @@ class RepairMutationGuardTest(unittest.TestCase):
     def test_changing_a_concept_during_factor_repair_is_rejected(self):
         before, decision = self._factor_case()
         after = ground(
-            [event("e", "operation"), measure("m", "AMOUNT", "hours")],
+            [event("e", "operation"), measure("m", "AMOUNT", "operating_days")],
             {"bucket": "week", "rollup": "avg"},
         )
         with self.assertRaises(RepairViolation):
@@ -714,11 +714,11 @@ class PlanningRepairPipelineTest(unittest.TestCase):
         """
         pipeline, client = new_pipeline([
             # 1) od_role 누락 → 계획 재질의
-            payload([place("a", "대구시"), *TRIP_CONCEPTS]),
+            payload([place("a", "부산시"), *TRIP_CONCEPTS]),
             # 2) 속성은 채웠지만 장소가 조회되지 않는다 → 실행 실패
             relation_patch(("a", "pickup")),
         ])
-        run = pipeline.run("대구시에서 출발한 실차 구간 건수는?")
+        run = pipeline.run("부산시에서 출발한 실차 구간 건수는?")
         self.assertEqual(len(client.calls), 2)
         self.assertEqual(run.repair_count, 1)
         self.assertIsNotNone(run.runtime_error)
@@ -728,10 +728,10 @@ class PlanningRepairPipelineTest(unittest.TestCase):
     def test_tool_repair_still_works_when_planning_succeeds(self):
         """계획이 한 번에 만들어지면 실행 실패에 재질의를 쓸 수 있다."""
         pipeline, client = new_pipeline([
-            payload([place("a", "대구시", od_role="pickup"), *TRIP_CONCEPTS]),
-            {"concept_id": "a", "name": "대구", "region": ""},
+            payload([place("a", "부산시", od_role="pickup"), *TRIP_CONCEPTS]),
+            {"concept_id": "a", "name": "부산", "region": ""},
         ])
-        run = pipeline.run("대구시에서 출발한 실차 구간 건수는?")
+        run = pipeline.run("부산시에서 출발한 실차 구간 건수는?")
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
         self.assertEqual(len(client.calls), 2)
         self.assertEqual(

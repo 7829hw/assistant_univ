@@ -139,7 +139,7 @@ class FakeTims:
 
     TOOLS = {
         "get_place_scope": {"name", "region", "include_vicinity"},
-        "get_operation_metrics": {"metric", "scope", "date", "taxi_type", "aggregation",
+        "get_billing_metrics": {"metric", "scope", "date", "taxi_type", "aggregation",
                                   "bucket", "rollup", "dimension", "order", "limit"},
         "get_passage_metrics": {"metric", "scope", "date", "time", "aggregation"},
         "get_passage_count": {"scope", "date", "time", "taxi_type", "taxi_status",
@@ -166,7 +166,7 @@ class FakeTims:
                     "message": "TIMS 응답 지연", "retryable": False}
         if name == "get_place_scope":
             return {"scope": {"대구": DAEGU, "부산": BUSAN}[arguments["name"]]}
-        if name == "get_operation_metrics":
+        if name == "get_billing_metrics":
             return self._operation(arguments)
         if name == "get_passage_metrics":
             return self._speed(arguments)
@@ -302,7 +302,7 @@ class Case(unittest.TestCase):
         return plan, execution, result, answer
 
     def metric_calls(self):
-        return [args for name, args in self.tims.calls if name == "get_operation_metrics"]
+        return [args for name, args in self.tims.calls if name == "get_billing_metrics"]
 
 
 # -- 계약 표 ---------------------------------------------------------------------
@@ -439,7 +439,7 @@ class LoweringStrategyTest(Case):
         self.assertEqual([step.arguments["date"] for step in calls], AUGUST_DAYS)
         # 기본 경로는 하루 합성의 데이터 조건(기록이 하루에만 속함)을 가정으로 적는다.
         self.assertTrue(all(step.assumptions == [
-            "single_date", "day_records:get_operation_metrics"] for step in calls))
+            "single_date", "day_records:get_billing_metrics"] for step in calls))
         collect = next(s for s in execution.steps if s.operator == "COLLECT_GROUPS")
         self.assertEqual([len(keys) for keys in collect.arguments["members"]],
                          [2, 7, 7, 7, 7, 1])
@@ -577,7 +577,7 @@ class ExecutionTest(Case):
     def test_a_bucket_that_drops_partial_weeks_would_answer_differently(self):
         """병합을 막는 이유. TIMS가 부분 주를 버린다면 같은 인자로 다른 값이 나온다."""
         tims = FakeTims(drop_partial_buckets=True)
-        fused = tims.execute("get_operation_metrics", {
+        fused = tims.execute("get_billing_metrics", {
             "metric": "revenue", "scope": DAEGU, "date": "last_month", "taxi_type": "private",
             "aggregation": "sum", "bucket": "week", "rollup": "avg"})
         self.assertEqual(fused, 272.5)
@@ -998,7 +998,8 @@ class StructuredGroundingPathTest(unittest.TestCase):
         import hashlib
         flat = self.planner("flat").system_prompt()
         structured = self.planner("structured").system_prompt()
-        self.assertEqual(hashlib.sha256(flat.encode()).hexdigest()[:8], "64bbceb4")
+        # 업체 v2 측정값 어휘를 반영한 production prompt(v2 이전: 64bbceb4).
+        self.assertEqual(hashlib.sha256(flat.encode()).hexdigest()[:8], "db113124")
         self.assertIn("[집계 계획]", structured)
         self.assertIn('"select"', structured)
         self.assertNotIn("- bucket: month | week", structured)

@@ -15,17 +15,14 @@ intents:
   # --- A. 집계 단계 ---
 
   - intent: v01_week_sum_then_max_hours
+    # v2 계약: get_billing_metrics가 영업 시간(hours)을 제공하지 않아 지원 범위 밖이다.
     cohorts: [factor_stage]
     family: A_aggregation
     control: false
-    aggregation: {bucket: week, inner: sum, final: max}
-    expected_tool_args: {metric: hours}
+    aggregation: null
+    expected_tool_args: {}
     must_include: [["주마다", "주별"], ["더한", "더했을", "합계"], ["가장 큰", "최댓값"], ["영업 시간"]]
-    golden:
-      concepts:
-        - {id: operation, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
-        - {id: hours, concept: AMOUNT, subtype: hours, role: MEASURE, source: implicit}
-      factors: {}
+    golden: {unsupported: true}
     paraphrases:
       - {id: v01_p0, question: "주마다 더한 영업 시간 가운데 가장 큰 값은?", note: "원문"}
       - {id: v01_p1, question: "영업 시간을 주마다 더했을 때 가장 큰 값은?", note: "어순"}
@@ -49,35 +46,29 @@ intents:
       - {id: v02_p2, question: "매달 최저 하루 수입을 평균 내면?", note: "절"}
 
   - intent: v03_month_unspecified_med_hours
+    # v2 계약: get_billing_metrics가 영업 시간(hours)을 제공하지 않아 지원 범위 밖이다.
     cohorts: [factor_stage]
     family: A_aggregation
     control: false
-    aggregation: {bucket: month, inner: unspecified, final: med}
-    expected_tool_args: {metric: hours}
+    aggregation: null
+    expected_tool_args: {}
     must_include: [["월별", "월 단위"], ["중간값"], ["영업 시간"]]
-    golden:
-      concepts:
-        - {id: operation, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
-        - {id: hours, concept: AMOUNT, subtype: hours, role: MEASURE, source: implicit}
-      factors: {}
+    golden: {unsupported: true}
     paraphrases:
       - {id: v03_p0, question: "월별 영업 시간의 중간값은?", note: "원문"}
       - {id: v03_p1, question: "영업 시간을 월별로 보면 중간값은?", note: "어순"}
       - {id: v03_p2, question: "월 단위 택시 영업 시간 중간값은 얼마인가요?", note: "절"}
 
   - intent: v04_control_min_count
+    # v2 계약: get_billing_metrics가 영업 횟수(operating_count)를 제공하지 않아 지원 범위 밖이다.
     cohorts: [factor_stage]
     family: A_aggregation
     control: true
-    aggregation: {final: min}
-    expected_tool_args: {metric: operating_count}
+    aggregation: null
+    expected_tool_args: {}
     must_include: [["최솟값", "가장 적은"], ["영업 횟수"]]
     must_exclude: ["주", "월", "달"]
-    golden:
-      concepts:
-        - {id: operation, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
-        - {id: count, concept: AMOUNT, subtype: operating_count, role: MEASURE, source: implicit}
-      factors: {}
+    golden: {unsupported: true}
     paraphrases:
       - {id: v04_p0, question: "택시 영업 횟수의 최솟값은?", note: "원문"}
       - {id: v04_p1, question: "영업 횟수 최솟값은 얼마인가요?", note: "어순"}
@@ -90,13 +81,13 @@ intents:
     family: B_taxi_type
     control: false
     aggregation: {final: avg}
-    expected_tool_args: {metric: operating_ratio, taxi_type: private}
+    expected_tool_args: {metric: active_taxi_ratio, taxi_type: private}
     must_include: [["개인"], ["평균"], ["운행률"]]
     must_exclude: ["법인"]
     golden:
       concepts:
         - {id: operation, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
-        - {id: ratio, concept: PROPORTION, subtype: operating_ratio, role: MEASURE, source: implicit}
+        - {id: ratio, concept: PROPORTION, subtype: active_taxi_ratio, role: MEASURE, source: implicit}
       factors: {taxi_type: private}
     paraphrases:
       - {id: v05_p0, question: "개인택시 운행률의 평균은?", note: "원문"}
@@ -122,36 +113,30 @@ intents:
       - {id: v06_p2, question: "법인택시의 가장 낮은 공차율은?", note: "절"}
 
   - intent: v07_private_last_month_sum_hours
+    # v2 계약: get_billing_metrics가 영업 시간(hours)을 제공하지 않아 지원 범위 밖이다.
     cohorts: [factor_stage]
     family: B_taxi_type
     control: false
-    aggregation: {final: sum}
-    expected_tool_args: {metric: hours, taxi_type: private, date: last_month}
+    aggregation: null
+    expected_tool_args: {}
     must_include: [["개인"], ["지난달"], ["합계", "합하면"], ["영업"]]
     must_exclude: ["법인", "달마다", "월별"]
-    golden:
-      concepts:
-        - {id: operation, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
-        - {id: hours, concept: AMOUNT, subtype: hours, role: MEASURE, source: implicit}
-      factors: {taxi_type: private, date: last_month}
+    golden: {unsupported: true}
     paraphrases:
       - {id: v07_p0, question: "지난달 개인택시 영업 시간 합계는?", note: "원문"}
       - {id: v07_p1, question: "개인택시 영업 시간 합계를 지난달만 보면?", note: "어순"}
       - {id: v07_p2, question: "지난달에 개인택시가 영업한 시간을 모두 합하면?", note: "절"}
 
   - intent: v08_control_max_hours
+    # v2 계약: get_billing_metrics가 영업 시간(hours)을 제공하지 않아 지원 범위 밖이다.
     cohorts: [factor_stage]
     family: B_taxi_type
     control: true
-    aggregation: {final: max}
-    expected_tool_args: {metric: hours}
+    aggregation: null
+    expected_tool_args: {}
     must_include: [["최댓값", "가장 긴"], ["영업"]]
     must_exclude: ["개인", "법인"]
-    golden:
-      concepts:
-        - {id: operation, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
-        - {id: hours, concept: AMOUNT, subtype: hours, role: MEASURE, source: implicit}
-      factors: {}
+    golden: {unsupported: true}
     paraphrases:
       - {id: v08_p0, question: "택시 영업 시간의 최댓값은?", note: "원문"}
       - {id: v08_p1, question: "영업 시간 최댓값은 얼마인가요?", note: "어순"}
@@ -179,18 +164,15 @@ intents:
       - {id: v09_p2, question: "지난주에 수성구 택시 평균 속도는 얼마였나요?", note: "절"}
 
   - intent: v10_weekend_sum_count
+    # v2 계약: get_billing_metrics가 영업 횟수(operating_count)를 제공하지 않아 지원 범위 밖이다.
     cohorts: [factor_stage]
     family: C_date_time
     control: false
-    aggregation: {final: sum}
-    expected_tool_args: {metric: operating_count, date: weekend}
+    aggregation: null
+    expected_tool_args: {}
     must_include: [["주말"], ["합계", "합하면"], ["영업 횟수"]]
     must_exclude: ["평일", "요일"]
-    golden:
-      concepts:
-        - {id: operation, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
-        - {id: count, concept: AMOUNT, subtype: operating_count, role: MEASURE, source: implicit}
-      factors: {date: weekend}
+    golden: {unsupported: true}
     paraphrases:
       - {id: v10_p0, question: "주말 영업 횟수의 합계는?", note: "원문"}
       - {id: v10_p1, question: "영업 횟수 합계를 주말만 놓고 보면?", note: "어순"}
@@ -354,17 +336,14 @@ intents:
       - {id: v19_p2, question: "달서구와 수성구의 영업 횟수를 비교해서 많은 쪽을 알려줘", note: "절"}
 
   - intent: v20_control_hours_by_day
+    # v2 계약: get_billing_metrics가 영업 시간(hours)을 제공하지 않아 지원 범위 밖이다.
     cohorts: [factor_stage]
     family: E_unsupported_collapse
     control: true
-    aggregation: {final: avg}
-    expected_tool_args: {metric: hours, dimension: dayofweek}
+    aggregation: null
+    expected_tool_args: {}
     must_include: [["요일"], ["평균"], ["영업 시간"]]
-    golden:
-      concepts:
-        - {id: operation, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
-        - {id: hours, concept: AMOUNT, subtype: hours, role: MEASURE, source: implicit}
-      factors: {dimension: dayofweek}
+    golden: {unsupported: true}
     paraphrases:
       - {id: v20_p0, question: "요일별 택시 영업 시간 평균은?", note: "원문"}
       - {id: v20_p1, question: "택시 영업 시간 평균을 요일별로 보여줘", note: "어순"}

@@ -42,6 +42,7 @@ reference_data/     reference provider용 합성 데이터
 tests/              GeoFlow 및 react mode 회귀 테스트
 evaluate_planner.py 모델별 concept grounding·합성 정확도 측정
 stub_query_boundary.yaml  합성 경계 평가 셋
+evaluation/stub_query_v1.yaml  v1 stub 질의(평가 corpus의 부모, v2에서 빠진 질의 보존)
 ```
 
 실제 ClickHouse 연결, 외부 Gazetteer HTTP Client, Web UI, 평가 Runner/Gold, 사용자별 Config, 과거 실행결과, Python 대체 Mock 등은 포함하지 않습니다.
@@ -368,8 +369,10 @@ AMOUNT/passage_count  → PASSAGE_COUNT
 AMOUNT/fare           → TRIP_METRIC        (metric=fare)
 AMOUNT/trip_count     → TRIP_COUNT
 AMOUNT/revenue        → OPERATION_METRIC   (metric=revenue)
-PROPORTION/vacant_ratio    → DRIVE_METRIC      (metric=vacant_ratio)
-PROPORTION/operating_ratio → OPERATION_METRIC  (metric=operating_ratio)
+AMOUNT/active_taxi_count → OPERATION_METRIC (metric=active_taxi_count)
+AMOUNT/operating_days    → OPERATION_METRIC (metric=operating_days)
+PROPORTION/vacant_ratio      → DRIVE_METRIC      (metric=vacant_ratio)
+PROPORTION/active_taxi_ratio → OPERATION_METRIC  (metric=active_taxi_ratio)
 LOCATION/place        → SCOPE_NAME
 ```
 
@@ -378,8 +381,26 @@ metric은 소속 개체가 다르면 다른 개념임. 이 구분은 이제 Prom
 
 ```text
 요금   = AMOUNT/fare(trip)              ≠ 수입   = AMOUNT/revenue(operation)
-공차율 = PROPORTION/vacant_ratio(drive) ≠ 운행률 = PROPORTION/operating_ratio(operation)
+공차율 = PROPORTION/vacant_ratio(drive) ≠ 가동률·운행률 = PROPORTION/active_taxi_ratio(operation)
 ```
+
+업체 v2 계약은 영업 통계 Tool을 `get_billing_metrics`로 바꾸고 측정값을 `revenue`,
+`active_taxi_count`, `active_taxi_ratio`, `operating_days`로 정했음. v1의 영업 시간
+(`hours`)·영업 횟수(`operating_count`)는 제공하지 않으므로 IR 어휘에서 뺐고, 그런 질문은
+지원 범위 밖(`{"unsupported": true}`)임. v1의 운행률(`operating_ratio`)은 v2 system
+prompt의 "가동률(운행률)" 정의에 따라 `active_taxi_ratio`로 옮겼음. 의미 operator 이름
+`OPERATION_METRIC`과 EVENT subtype `operation`은 그대로 둠(v2 schema 설명도 "일 단위 택시
+영업(operation)"이며, Tool 이름은 registry만 바꾸면 됨).
+
+v2 계약의 다른 변경도 반영했음.
+
+* `get_billing_metrics`는 소속 지역(scope)이 있으면 dimension을 받지 않음. scope가 없으면
+  sido·dayofweek만 받음. 두 규칙을 area input 제약으로 적었고(`PARAM_VALUE_FORBIDS_INPUT`,
+  `PARAM_VALUE_REQUIRES_INPUT`), 합성과 G4가 같은 규칙을 씀.
+* `get_trip_count.dimension_target`(pickup | dropoff | both, 기본 both)은 factor
+  `dimension_target`으로 받음. 승차·하차 한쪽 기준이 드러날 때만 넣음.
+* pt_date의 `this_week`, `this_month`, `this_year`를 받음. condition_check는 "이번 주/달",
+  "올해"를 이 토큰으로 읽고, 로컬 분할은 기간 시작일부터 기준일까지로 풂.
 
 `EVENT/passage`와 `AMOUNT/fare`를 붙인 계획은 후보 operator가 없어 합성 단계에서
 거부되고, 그래도 빠져나간 경우 G3가 다시 거부함.
@@ -552,7 +573,7 @@ PASSAGE_COUNT       → get_passage_count
 TRIP_COUNT          → get_trip_count
 TRIP_METRIC         → get_trip_metrics
 DRIVE_METRIC        → get_drive_metrics
-OPERATION_METRIC    → get_operation_metrics
+OPERATION_METRIC    → get_billing_metrics
 SCOPE_NAME          → get_scope_name
 ```
 
@@ -601,9 +622,9 @@ parameter 값·조합 제약까지 확인함.
 장소 개념의 값 수정을 1회 요청함. 그 밖의 오류는 구조화된 실행 실패로 그대로 반환함.
 
 ```text
-get_place_scope(name="대구시") → NOT_FOUND
+get_place_scope(name="부산시") → NOT_FOUND   (v2 mock_stub.yaml 기준)
     ↓ Planner에 값 수정 요청 (개념 구조는 그대로)
-get_place_scope(name="대구")   → scope:district:2700000000
+get_place_scope(name="부산")   → scope:district:2600000000
     ↓
 get_trip_metrics(metric=fare, scope=...)
 ```
@@ -685,11 +706,14 @@ OPERATION_METRIC의 dimension은 dayofweek, sido 중 하나여야 하지만 'h3'
 
 집계 결과에 포함된 scope는 `get_scope_name`으로 장소명을 조회해 보여줌.
 
+업체 v2 schema에서는 dimension 결과가 scope 대신 지역명(`{"sigungu": "달서구", "count": ...}`,
+`{"pickup": ..., "dropoff": ..., "count": ...}`)을 돌려주고, dimension 없는 개수는
+`{"count": N}`임. 이런 결과에는 scope가 없으므로 장소명 조회를 부르지 않음.
+
 ```text
 대구 시군구별 상위 3개 통행량
-- 수성구: 3,794건
-- 중구: 3,590건
-- 서구: 3,503건
+- 달서구: 320,822건
+- 수성구: 231,200건
 ```
 
 호출 횟수가 실행 결과의 행 수에 의존하므로 정적 `ExecutionPlan`으로는 표현할 수
@@ -706,8 +730,8 @@ OPERATION_METRIC의 dimension은 dayofweek, sido 중 하나여야 하지만 'h3'
 상대 날짜와 metric도 원시값 대신 이름으로 표시함.
 
 ```text
-last_month → 지난달       weekend → 주말
-operating_count → 영업 횟수   operating_ratio → 영업 운행률
+last_month → 지난달       this_month → 이번 달       weekend → 주말
+active_taxi_count → 활성택시 대수   active_taxi_ratio → 가동률   operating_days → 운행일수
 ```
 
 ### 실행 결과 저장
@@ -773,7 +797,7 @@ python evaluate_planner.py --all-models --repeat 3 --execute
 수 없으므로 의미만 적음.
 
 ```yaml
-- id: q22_daegu_origin_destination_count
+- id: q18_daegu_origin_destination_count
   question: "대구 동성로동에서 출발하여 신천동에 도착한 실차 구간 건수는?"
   expected_concepts:
     - LOCATION/place:SUBCOND
@@ -824,6 +848,9 @@ python evaluate_planner.py --aggregate
 변동성 측정이 필요한 경우에만 사용함.
 
 ### 모델별 정확도
+
+아래부터 이 절 끝까지의 측정 결과는 업체 v2 반영 전(v1 계약, v1 stub 14건,
+현재 `evaluation/stub_query_v1.yaml`)의 기록임. v2 계약에서 다시 재지 않았음.
 
 `qwen3.8:27b` 기준 `stub_query.yaml` 14건 + `stub_query_boundary.yaml` 24건.
 Ollama(Docker), `temperature=0`, chat timeout 300초. `--execute`로 Mock Provider

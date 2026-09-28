@@ -82,10 +82,10 @@ class FamilyTest(unittest.TestCase):
                          ["collapsed_two_stage_aggregation"])
 
     def test_group_word_read_as_place_is_flagged_for_review(self):
-        golden = {"concepts": [OPERATION, _item("AMOUNT", "operating_count", "MEASURE")],
+        golden = {"concepts": [OPERATION, _item("AMOUNT", "active_taxi_count", "MEASURE")],
                   "factors": {"dimension": "sido"}}
         payload = {"concepts": [_item("LOCATION", "place", "SUBCOND", value={"name": "시도"}),
-                                OPERATION, _item("AMOUNT", "operating_count", "MEASURE")],
+                                OPERATION, _item("AMOUNT", "active_taxi_count", "MEASURE")],
                    "factors": {"dimension": "sigungu"}}
         self.assertEqual(C.structural_families(payload, golden, []),
                          ["group_word_as_place?", "wrong_dimension"])

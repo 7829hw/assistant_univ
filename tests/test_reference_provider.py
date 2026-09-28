@@ -119,7 +119,7 @@ def compiled(aggregation, *, contract=REFERENCE_CONTRACT, **where):
 
 
 def measure_calls(result_run):
-    return [hop for hop in result_run.hop_log if hop.get("tool") == "get_operation_metrics"]
+    return [hop for hop in result_run.hop_log if hop.get("tool") == "get_billing_metrics"]
 
 
 def local_rows(result_run, operator):
@@ -460,7 +460,7 @@ class ContractIsolationTest(unittest.TestCase):
     def test_tims_items_stay_unconfirmed(self):
         expected = {"range_inclusive": "observed", "relative_date_reference": "unknown",
                     "bucket_week_start": "unknown", "bucket_empty": "unknown",
-                    "null_result": "unknown", "day_records:get_operation_metrics": "observed"}
+                    "null_result": "unknown", "day_records:get_billing_metrics": "observed"}
         for key, status in expected.items():
             with self.subTest(key=key):
                 self.assertEqual(tims_contract.DEFAULT_CONTRACT.status(key), status)
@@ -493,9 +493,9 @@ class ProviderSwitchTest(unittest.TestCase):
 
     def test_handlers_are_fresh_and_results_do_not_leak(self):
         first = get_tool_handlers(MOCK)
-        first["get_operation_metrics"] = lambda arguments: 0
-        self.assertIsNot(get_tool_handlers(MOCK)["get_operation_metrics"],
-                         first["get_operation_metrics"])
+        first["get_billing_metrics"] = lambda arguments: 0
+        self.assertIsNot(get_tool_handlers(MOCK)["get_billing_metrics"],
+                         first["get_billing_metrics"])
         before = run(SUM_THEN_AVG).hop_log[-1]["result"]
         from tests.test_geoflow_composition import new_tool_executor
         mock_run = GeoFlowPipeline.create(
@@ -511,14 +511,14 @@ class ProviderSwitchTest(unittest.TestCase):
         executor = reference_executor()
         speed = executor.execute("get_passage_metrics", {"metric": "speed", "scope": GARAM})
         self.assertEqual(speed["error_code"], "UNSUPPORTED_BY_PROVIDER")
-        listed = executor.execute("get_operation_metrics", {
+        listed = executor.execute("get_billing_metrics", {
             "metric": "revenue", "scope": GARAM, "dimension": "dayofweek"})
         self.assertEqual(listed["error_code"], "UNSUPPORTED_BY_PROVIDER")
-        relative = executor.execute("get_operation_metrics", {
+        relative = executor.execute("get_billing_metrics", {
             "metric": "revenue", "scope": GARAM, "date": "last_month"})
         self.assertEqual(relative["error_code"], "UNSUPPORTED_BY_PROVIDER")
-        hours = executor.execute("get_operation_metrics", {"metric": "hours", "scope": GARAM})
-        self.assertEqual(hours["error_code"], "UNSUPPORTED_BY_PROVIDER")
+        days = executor.execute("get_billing_metrics", {"metric": "operating_days", "scope": GARAM})
+        self.assertEqual(days["error_code"], "UNSUPPORTED_BY_PROVIDER")
         unknown = executor.execute("get_place_scope", {"name": "수성구"})
         self.assertEqual(unknown["error_code"], "NOT_FOUND")
 
@@ -528,7 +528,7 @@ class ProviderSwitchTest(unittest.TestCase):
              "source": "user", "value": {"name": "가람구"}},
             {"id": "operation", "concept": "EVENT", "subtype": "operation", "role": "SUPPORT",
              "source": "implicit"},
-            {"id": "hours", "concept": "AMOUNT", "subtype": "hours", "role": "MEASURE",
+            {"id": "days", "concept": "AMOUNT", "subtype": "operating_days", "role": "MEASURE",
              "source": "implicit"},
         ]
         payload = {"concepts": concepts, "factors": {

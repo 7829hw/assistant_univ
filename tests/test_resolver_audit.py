@@ -158,7 +158,7 @@ class KnownLimitationTest(unittest.TestCase):
         narrow = dataclasses.replace(
             spec, name="OPERATION_METRIC_NARROW", input_constraints=(),
             param_enums={**spec.param_enums, "dimension": frozenset({"sido", "dayofweek"})})
-        output = ConceptNode(id="out", concept=CoreConcept.AMOUNT, subtype="hours",
+        output = ConceptNode(id="out", concept=CoreConcept.AMOUNT, subtype="operating_days",
                              role=FunctionalRole.MEASURE, source=NodeSource.TOOL)
         area = ConceptNode(id="s", concept=CoreConcept.LOCATION, subtype="scope",
                            role=FunctionalRole.COND, source=NodeSource.TOOL)
@@ -211,7 +211,9 @@ class MacroOrderTest(unittest.TestCase):
                 self.assertEqual(reversed_order[key], calls)
         # dimension을 받지 않는 Tool에 dimension을 준 조합은 예전에는 조건을 버린
         # 채 성공했고(80개 초과), 지금은 UNCONSUMED_CONDITION으로 거부된다(74개).
-        self.assertGreater(sum(calls is not None for calls in baseline.values()), 70)
+        # 업체 v2 schema는 소속 지역(scope)을 정한 영업 통계에 dimension을 받지 않으므로
+        # 그 조합도 PARAM_VALUE_FORBIDS_INPUT으로 거부된다(58개).
+        self.assertGreater(sum(calls is not None for calls in baseline.values()), 55)
         # 두 macro가 모두 관여하는 trip_count 계획이 비교 대상에 들어 있다.
         self.assertGreater(sum(calls is not None for key, calls in baseline.items()
                                if key[0] == "trip_count"), 10)

@@ -22,7 +22,10 @@ BASE_DIR = Path(__file__).resolve().parent
 CORPUS_FILE = BASE_DIR / "evaluation" / "paraphrases.yaml"
 #: 문구 변형을 고른 뒤 검증에만 쓰는 corpus. 선택용과 intent·질문이 겹치면 안 된다.
 HOLDOUT_CORPUS_FILE = BASE_DIR / "evaluation" / "paraphrases_holdout.yaml"
-PARENT_FILES = ("stub_query_boundary.yaml", "stub_query.yaml")
+#: 개발용 corpus(paraphrases.yaml)의 부모. v2 업체 파일이 stub_query.yaml을 다섯 질의로
+#: 줄였으므로, corpus가 부모로 삼은 v1 stub 질의는 evaluation/stub_query_v1.yaml에 둔다.
+#: v2 stub 질의 문장은 모두 v1 stub에 있다.
+PARENT_FILES = ("stub_query_boundary.yaml", "evaluation/stub_query_v1.yaml")
 
 LABEL_KEYS = ("expected_concepts", "expected_macros", "expected_operators")
 COHORTS = frozenset({"taxi_type", "factor_stage", "relation", "aggregation_stage"})
@@ -73,6 +76,20 @@ def _read(path):
 def corpus_parents(path):
     """corpus가 선언한 부모 파일의 질의. 선언이 없으면 stub 평가셋이다."""
     return load_parents(_read(path).get("parents") or PARENT_FILES)
+
+
+def v2_retired(path):
+    """registry가 적은, 업체 v2 계약에서 지원 범위 밖이 된 intent(``v2_contract.retired``).
+
+    v1 계약으로 설계한 corpus의 구성(대조군 수, trigger 비율 등)을 검사할 때 이 intent를
+    따로 센다. 라벨은 이미 지원 범위 밖(NONE, golden unsupported)으로 고쳐져 있다.
+    """
+    registry = _read(BASE_DIR / "evaluation" / "corpus_registry.yaml")
+    relative = Path(path).resolve().relative_to(BASE_DIR).as_posix()
+    for entry in registry.get("corpora") or []:
+        if entry["path"] == relative:
+            return frozenset((entry.get("v2_contract") or {}).get("retired") or ())
+    return frozenset()
 
 
 def expand_aggregation(document):

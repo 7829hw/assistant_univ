@@ -62,6 +62,24 @@ class DateInterpretationTest(unittest.TestCase):
         value, _ = date_of("어제 수입은?", reference=date(2026, 1, 1))
         self.assertEqual(value, "20251231")
 
+    def test_current_period_tokens(self):
+        """업체 v2 pt_date의 this_week/this_month/this_year. 기준일까지로 푼다."""
+        cases = {
+            "이번 주 평균 수입은?": ("this_week", "20260921-20260925"),
+            "금주 수입은?": ("this_week", "20260921-20260925"),
+            "이번 달 수입은?": ("this_month", "20260901-20260925"),
+            "이달 수입은?": ("this_month", "20260901-20260925"),
+            "올해 수입은?": ("this_year", "20260101-20260925"),
+            "금년 수입은?": ("this_year", "20260101-20260925"),
+        }
+        for question, (token, interpreted) in cases.items():
+            with self.subTest(question=question):
+                value, record = date_of(question)
+                self.assertEqual((value, record["interpreted_range"]), (token, interpreted))
+        # LLM이 지난달로 적었어도 질문 표현을 따른다.
+        value, record = date_of("이번 달 수입은?", {"date": "last_month"})
+        self.assertEqual((value, record["action"]), ("this_month", "corrected"))
+
     def test_leap_years(self):
         _, record = date_of("지난달 수입은?", reference=date(2024, 3, 15))
         self.assertEqual(record["interpreted_range"], "20240201-20240229")
@@ -104,7 +122,7 @@ class DateInterpretationTest(unittest.TestCase):
 
     def test_recent_periods_are_not_normalized_to_calendar_tokens(self):
         for question in ("최근 한 달 수입은?", "최근 7일 수입은?", "최근 일주일 수입은?",
-                         "지난 3개월 수입은?", "이번 달 수입은?", "추석 연휴 수입은?"):
+                         "지난 3개월 수입은?", "이번 주말 수입은?", "추석 연휴 수입은?"):
             with self.subTest(question=question):
                 with self.assertRaises(PlannerError) as caught:
                     date_of(question, {"date": "last_month"})
@@ -312,7 +330,7 @@ class PipelineTest(unittest.TestCase):
     def test_default_path_is_unchanged(self):
         run = pipeline([WRONG_DATE_NO_TAXI], check=False).run(QUESTION)
         self.assertIsNone(run.condition_audit)
-        args = [hop["arguments"] for hop in run.hop_log if hop["tool"] == "get_operation_metrics"]
+        args = [hop["arguments"] for hop in run.hop_log if hop["tool"] == "get_billing_metrics"]
         self.assertEqual(args[0]["date"], "20260501-20260531")
         self.assertNotIn("taxi_type", args[0])
 
@@ -330,7 +348,7 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(run.condition_audit["date"]["action"], "corrected")
         self.assertEqual(run.condition_audit["taxi_type"]["action"], "filled")
         self.assertFalse([hop for hop in run.hop_log
-                          if hop.get("tool") == "get_operation_metrics"])
+                          if hop.get("tool") == "get_billing_metrics"])
         self.assertIsNone(run.final_answer)
 
     def test_single_day_is_executed_with_confirmed_semantics(self):
@@ -339,7 +357,7 @@ class PipelineTest(unittest.TestCase):
         run = pipeline([payload], check=True).run("어제 대구 개인택시 매출 합계는?")
         self.assertEqual(run.outcome, "answered", run.runtime_error)
         (args,) = [hop["arguments"] for hop in run.hop_log
-                   if hop["tool"] == "get_operation_metrics"]
+                   if hop["tool"] == "get_billing_metrics"]
         # 기준일 2026-09-25의 어제. LLM 값 20260823은 질문 표현으로 바로잡혔다.
         self.assertEqual((args["date"], args["taxi_type"], args["scope"]),
                          ("20260924", "private", DAEGU))
@@ -365,7 +383,7 @@ class PipelineTest(unittest.TestCase):
         run = pipeline([payload], check=True, profile=STRICT_TIMS).run(question)
         self.assertEqual(run.outcome, "unsupported")
         self.assertEqual(run.error["code"], "UNVERIFIED_TIMS_CONTRACT")
-        self.assertIn("day_records:get_operation_metrics", run.error["detail"])
+        self.assertIn("day_records:get_billing_metrics", run.error["detail"])
         legacy = pipeline([dict(payload, factors=dict(payload["factors"], date="last_month"))],
                           check=False).run(question)
         self.assertEqual(legacy.outcome, "answered", legacy.runtime_error)
@@ -440,7 +458,7 @@ from geoflow.compiler import DATE_POLICY_GUARANTEED, compile_plan  # noqa: E402
 from geoflow.executor import execute_plan  # noqa: E402
 
 ASSUMED_DAY_RECORDS = tims_contract.DEFAULT_CONTRACT.assuming(
-    **{"day_records:get_operation_metrics": "택시·일 기록"})
+    **{"day_records:get_billing_metrics": "택시·일 기록"})
 
 
 def compiled(factors, question, *, contract=tims_contract.DEFAULT_CONTRACT,
@@ -528,21 +546,21 @@ class DailyCompositionTest(unittest.TestCase):
         allowed = ASSUMED_DAY_RECORDS
         for reducer in ("sum", "max", "min"):
             self.assertTrue(tims_contract.daily_composition(
-                "get_operation_metrics", reducer, contract=allowed)[0], reducer)
+                "get_billing_metrics", reducer, contract=allowed)[0], reducer)
         for reducer in ("avg", "med", None):
             ok, reason, _ = tims_contract.daily_composition(
-                "get_operation_metrics", reducer, contract=allowed)
+                "get_billing_metrics", reducer, contract=allowed)
             self.assertFalse(ok, reducer)
             self.assertIn("다시 만들 수 없습니다", reason)
         # 목록 결과, 호출 상한, 데이터 계약.
         self.assertFalse(tims_contract.daily_composition(
-            "get_operation_metrics", "sum", grouped_arguments=("dimension",),
+            "get_billing_metrics", "sum", grouped_arguments=("dimension",),
             contract=allowed)[0])
         self.assertFalse(tims_contract.daily_composition(
-            "get_operation_metrics", "sum", days=63, contract=allowed)[0])
-        ok, reason, _ = tims_contract.daily_composition("get_operation_metrics", "sum")
+            "get_billing_metrics", "sum", days=63, contract=allowed)[0])
+        ok, reason, _ = tims_contract.daily_composition("get_billing_metrics", "sum")
         self.assertFalse(ok)
-        self.assertIn("day_records:get_operation_metrics", reason)
+        self.assertIn("day_records:get_billing_metrics", reason)
         # 개수 Tool(합)도 trip의 날짜 귀속이 계약에 없으면 합치지 않는다.
         self.assertFalse(tims_contract.daily_composition(
             "get_trip_count", "sum", contract=allowed)[0])
@@ -552,7 +570,7 @@ class DailyCompositionTest(unittest.TestCase):
             {"date": "last_month", "taxi_type": "private", "aggregation": "sum"},
             "지난달 대구 개인택시 매출 합계는?", contract=ASSUMED_DAY_RECORDS)
         calls = [step for step in execution.tool_steps
-                 if step.tool_name == "get_operation_metrics"]
+                 if step.tool_name == "get_billing_metrics"]
         self.assertEqual([step.arguments["date"] for step in calls],
                          [f"202608{day:02d}" for day in range(1, 32)])
         self.assertTrue(all(step.arguments["taxi_type"] == "private" for step in calls))

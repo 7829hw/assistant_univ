@@ -29,6 +29,7 @@
 # od_roles는 장소마다 승하차 표지가 붙어 있는지 확인한다.
 
 version: 1
+parents: [stub_query_boundary.yaml, evaluation/stub_query_v1.yaml]
 
 intents:
 
@@ -73,17 +74,12 @@ intents:
       - {id: b10_p5, question: "평균적으로 개인택시의 수입은 얼마인가요?", note: "집계어가 맨 앞"}
 
   - intent: b14_operating_count_private
+    # v2 계약: get_billing_metrics가 영업 횟수(operating_count)를 제공하지 않아 지원 범위 밖이다.
     cohorts: [taxi_type]
-    expected_tool_args: {metric: operating_count, taxi_type: private}
+    expected_tool_args: {}
     must_include: [["부산"], ["개인"], ["영업 횟수"]]
     must_exclude: ["법인"]
-    golden:
-      concepts:
-        - {id: busan, concept: LOCATION, subtype: place, role: SUBCOND, source: user,
-           value: {name: 부산, region: ""}}
-        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
-        - {id: count, concept: AMOUNT, subtype: operating_count, role: MEASURE, source: implicit}
-      factors: {taxi_type: private}
+    golden: {unsupported: true}
     paraphrases:
       - {id: b14_p0, question: "부산 개인택시의 영업 횟수는?", note: "원문. 장소 뒤"}
       - {id: b14_p1, question: "개인택시의 부산 영업 횟수는?", note: "맨 앞"}
@@ -154,13 +150,13 @@ intents:
 
   - intent: b04_operating_ratio_by_day
     cohorts: [factor_stage]
-    expected_tool_args: {metric: operating_ratio, dimension: dayofweek, bucket: null}
+    expected_tool_args: {metric: active_taxi_ratio, dimension: dayofweek, bucket: null}
     must_include: [["요일별"], ["운행률"]]
     must_exclude: ["주말", "주 단위", "월 단위"]
     golden:
       concepts:
         - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
-        - {id: ratio, concept: PROPORTION, subtype: operating_ratio, role: MEASURE, source: implicit}
+        - {id: ratio, concept: PROPORTION, subtype: active_taxi_ratio, role: MEASURE, source: implicit}
       factors: {dimension: dayofweek}
     paraphrases:
       - {id: b04_p0, question: "요일별 택시 운행률은?", note: "원문"}

@@ -97,7 +97,7 @@ class ContractTest(unittest.TestCase):
                          V.user_message(ITEM["question"],
                                         record["semantic_verification"]["signature_text"]))
         self.assertNotIn("expected", user["content"])
-        self.assertNotIn("get_operation_metrics", user["content"])
+        self.assertNotIn("get_billing_metrics", user["content"])
 
 
 class SignatureTest(unittest.TestCase):

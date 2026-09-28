@@ -1,11 +1,15 @@
 # -*- coding: utf-8 -*-
 """operator-local 조건부 계약을 못박는다.
 
-OPERATION_METRIC의 dimension은 vendor schema상 h3·sido·sigungu·emd·dayofweek를
-받지만 "scope가 설정되지 않은 경우는 sido, dayofweek만 가능"하다. 전에는 enum을
-{dayofweek, sido}로 좁혀 이 규칙을 대신했고, 그러면 지역이 있는 합법한 계획까지
-막혔다. 이제 enum은 전체를 적고, 일부 값이 area input을 요구한다는 것을 따로
-적는다. 합성과 Validator G4는 같은 규칙 하나를 쓴다.
+OPERATION_METRIC(get_billing_metrics)의 dimension은 vendor schema상 h3·sido·sigungu·
+emd·dayofweek를 받지만 두 문장이 값을 제한한다.
+
+- "scope가 설정되지 않은 경우는 sido, dayofweek만 가능함"
+- "scope에 대한 통계를 추출하는 경우는 dimension 설정 금지" (v2)
+
+enum은 schema 전체를 적고, 두 문장을 각각 area input에 대한 제약으로 적는다. 둘을
+합치면 h3·sigungu·emd는 어느 경우에도 쓸 수 없다. 합성과 Validator G4는 같은 규칙을
+쓴다.
 """
 
 import copy
@@ -28,8 +32,9 @@ from geoflow.grounding import parse_grounding
 from geoflow.macros import MacroLibrary
 from geoflow.operator_mapping import DERIVED_PARAMS
 from geoflow.operator_registry import (
-    OPERATORS, PARAM_VALUE_REQUIRES_INPUT, Operator, OperatorContractViolation,
-    ParamValueRequiresInput, check_input_constraints, get_operator,
+    OPERATORS, PARAM_VALUE_FORBIDS_INPUT, PARAM_VALUE_REQUIRES_INPUT, Operator,
+    OperatorContractViolation, ParamValueForbidsInput, ParamValueRequiresInput,
+    check_input_constraints, get_operator,
 )
 from geoflow.types import ValueRef
 from geoflow.validator import Rule
@@ -96,6 +101,16 @@ class ConstraintObjectTest(unittest.TestCase):
             "required_input": "area", "bound_inputs": ["event"],
         })
 
+    def test_forbidding_rule_fires_only_when_the_input_is_bound(self):
+        rule = ParamValueForbidsInput(param="dimension", values=frozenset({"sido"}),
+                                      input_name="area", reason="지역과 함께 쓸 수 없습니다.")
+        self.assertIsNone(rule.violation("OP", {"dimension": "sido"}, frozenset()))
+        self.assertIsNone(rule.violation("OP", {}, frozenset({"area"})))
+        violation = rule.violation("OP", {"dimension": "sido"}, frozenset({"area", "event"}))
+        self.assertEqual(violation.kind, PARAM_VALUE_FORBIDS_INPUT)
+        self.assertEqual(violation.bound_inputs, ("area", "event"))
+        self.assertIn("채워져 있으면 쓸 수 없습니다", violation.detail())
+
     def test_registration_rejects_a_meaningless_constraint(self):
         spec = get_operator(Operator.OPERATION_METRIC)
         outside = dataclasses.replace(spec, input_constraints=(dataclasses.replace(
@@ -117,10 +132,13 @@ class SchemaEnumTest(unittest.TestCase):
     def test_operation_metric_dimension_is_the_full_vendor_enum(self):
         spec = get_operator(Operator.OPERATION_METRIC)
         self.assertEqual(spec.allowed_values("dimension"),
-                         SCHEMA_ENUMS[("get_operation_metrics", "dimension")])
-        rule, = spec.input_constraints
-        self.assertEqual(rule.values, frozenset(AREA_DIMENSIONS))
-        self.assertEqual(rule.input_name, "area")
+                         SCHEMA_ENUMS[("get_billing_metrics", "dimension")])
+        requires, forbids = spec.input_constraints
+        self.assertIsInstance(requires, ParamValueRequiresInput)
+        self.assertEqual(requires.values, frozenset(AREA_DIMENSIONS))
+        self.assertIsInstance(forbids, ParamValueForbidsInput)
+        self.assertEqual(forbids.values, spec.allowed_values("dimension"))
+        self.assertEqual({requires.input_name, forbids.input_name}, {"area"})
         self.assertEqual(spec.inputs["area"].arg_name, "scope")
 
     def test_every_declared_enum_matches_the_vendor_schema(self):
@@ -171,12 +189,12 @@ class _ContractCase(unittest.TestCase):
         cls.tool_executor = new_tool_executor()
 
     def _compose(self, dimension, *, area):
-        concepts = [event("e", "operation"), measure("m", "AMOUNT", "operating_count")]
+        concepts = [event("e", "operation"), measure("m", "AMOUNT", "active_taxi_count")]
         if area:
             concepts.insert(0, place("p", "대구"))
-        question = ("대구 " if area else "") + f"{dimension} 기준 영업 횟수는?"
-        return self.composer.compose(
-            parse_grounding(payload(concepts, {"dimension": dimension}), question))
+        question = ("대구 " if area else "") + f"{dimension or ''} 기준 활성택시 대수는?"
+        factors = {"dimension": dimension} if dimension else {}
+        return self.composer.compose(parse_grounding(payload(concepts, factors), question))
 
     def _validate(self, plan):
         return geoflow_validator.validate(plan, available_tools=self.tool_executor.tool_names)
@@ -206,48 +224,58 @@ class ConditionalContractTest(_ContractCase):
                 self.assertNotIn("OPERATION_METRIC", error.user_message)
                 self.assertIn("지역", error.user_message)
 
-    def test_with_area_every_dimension_passes(self):
+    def test_with_area_every_dimension_is_rejected(self):
+        """v2: 소속 지역을 정한 통계에는 dimension을 쓰지 않는다."""
         for dimension in FREE_DIMENSIONS + AREA_DIMENSIONS:
             with self.subTest(dimension=dimension):
-                plan = self._compose(dimension, area=True)
-                self.assertEqual([t.operator for t in plan.transformations],
-                                 ["RESOLVE_PLACE_SCOPE", "OPERATION_METRIC"])
-                self.assertTrue(self._validate(plan).ok, self._validate(plan).errors)
-                steps = compile_plan(plan).steps
-                self.assertEqual([s.tool_name for s in steps],
-                                 ["get_place_scope", "get_operation_metrics"])
-                self.assertEqual(steps[-1].arguments["dimension"], dimension)
-                self.assertIsInstance(steps[-1].arguments["scope"], ValueRef)
+                with self.assertRaises(CompositionError) as caught:
+                    self._compose(dimension, area=True)
+                error = caught.exception
+                self.assertEqual(error.code, PARAM_VALUE_FORBIDS_INPUT)
+                self.assertEqual(error.context["value"], dimension)
+                self.assertIn("area", error.context["bound_inputs"])
+                self.assertNotIn("OPERATION_METRIC", error.user_message)
 
-    def test_scoped_grouping_runs_end_to_end(self):
-        """전에는 지역이 있어도 막히던 계획. 이제 합성·검증·컴파일·실행까지 간다."""
-        grounding = parse_grounding(payload(
-            [place("p", "대구"), event("e", "operation"),
-             measure("m", "AMOUNT", "operating_count")],
-            {"dimension": "sigungu", "order": "top", "limit": 3},
-        ), "대구에서 영업 횟수가 가장 많은 시군구 3곳은?")
-        plan = self.composer.compose(grounding)
-        self.assertTrue(self._validate(plan).ok)
-        result = execute_plan(compile_plan(plan), self.tool_executor)
+    def test_with_area_and_no_dimension_runs_end_to_end(self):
+        plan = self._compose(None, area=True)
+        self.assertEqual([t.operator for t in plan.transformations],
+                         ["RESOLVE_PLACE_SCOPE", "OPERATION_METRIC"])
+        self.assertTrue(self._validate(plan).ok, self._validate(plan).errors)
+        compiled = compile_plan(plan)
+        self.assertEqual([s.tool_name for s in compiled.steps],
+                         ["get_place_scope", "get_billing_metrics"])
+        self.assertNotIn("dimension", compiled.steps[-1].arguments)
+        self.assertIsInstance(compiled.steps[-1].arguments["scope"], ValueRef)
+        result = execute_plan(compiled, self.tool_executor)
         self.assertEqual(result.status, STATUS_OK, result.error)
+
+    def test_scoped_grouping_is_rejected_before_any_tool_call(self):
+        """v1에서는 실행까지 가던 계획. v2 schema는 scope와 dimension을 함께 받지 않는다."""
+        with self.assertRaises(CompositionError) as caught:
+            self.composer.compose(parse_grounding(payload(
+                [place("p", "대구"), event("e", "operation"),
+                 measure("m", "AMOUNT", "active_taxi_count")],
+                {"dimension": "sigungu", "order": "top", "limit": 3},
+            ), "대구에서 활성택시 대수가 가장 많은 시군구 3곳은?"))
+        self.assertEqual(caught.exception.code, PARAM_VALUE_FORBIDS_INPUT)
 
     def test_nationwide_sigungu_is_rejected_before_any_tool_call(self):
         with self.assertRaises(CompositionError) as caught:
             self.composer.compose(parse_grounding(payload(
-                [event("e", "operation"), measure("m", "AMOUNT", "operating_count")],
+                [event("e", "operation"), measure("m", "AMOUNT", "active_taxi_count")],
                 {"dimension": "sigungu", "order": "top", "limit": 3},
-            ), "전국에서 영업 횟수가 가장 많은 시군구 3곳은?"))
+            ), "전국에서 활성택시 대수가 가장 많은 시군구 3곳은?"))
         self.assertEqual(caught.exception.code, PARAM_VALUE_REQUIRES_INPUT)
 
 
 class SharedEvaluatorTest(_ContractCase):
     """합성을 거치지 않은 계획도 G4가 같은 규칙으로 막는다."""
 
-    def _g4(self, plan):
+    def _g4(self, plan, code=PARAM_VALUE_REQUIRES_INPUT):
         report = self._validate(plan)
         return [e for e in report.errors
                 if e["rule"] == Rule.EXECUTABILITY
-                and e["context"].get("code") == PARAM_VALUE_REQUIRES_INPUT]
+                and e["context"].get("code") == code]
 
     def _metric_step(self, plan):
         return next(t for t in plan.transformations if t.operator == "OPERATION_METRIC")
@@ -260,10 +288,12 @@ class SharedEvaluatorTest(_ContractCase):
         self.assertEqual(violations[0]["context"]["value"], "sigungu")
         self.assertEqual(violations[0]["context"]["required_input"], "area")
 
-    def test_g4_rejects_a_plan_whose_area_was_removed(self):
-        plan = copy.deepcopy(self._compose("emd", area=True))
-        del self._metric_step(plan).inputs["area"]
-        self.assertEqual(len(self._g4(plan)), 1)
+    def test_g4_rejects_a_dimension_added_to_a_scoped_plan(self):
+        plan = copy.deepcopy(self._compose(None, area=True))
+        self._metric_step(plan).params["dimension"] = "sido"
+        violations = self._g4(plan, PARAM_VALUE_FORBIDS_INPUT)
+        self.assertEqual(len(violations), 1)
+        self.assertEqual(violations[0]["context"]["value"], "sido")
 
     def test_g4_passes_the_same_edit_when_it_is_legal(self):
         plan = copy.deepcopy(self._compose("dayofweek", area=False))
@@ -351,6 +381,29 @@ class TripCountEnumTest(_ContractCase):
                           if e["rule"] == Rule.EXECUTABILITY
                           and e["context"].get("param") == "dimension"]
                 self.assertEqual(len(errors), 1)
+
+    def test_dimension_target_reaches_the_tool_argument(self):
+        """v2 get_trip_count.dimension_target. 승차 지역별이면 pickup이 그대로 인자가 된다."""
+        grounding = parse_grounding(payload(
+            [event("e", "trip"), measure("m", "AMOUNT", "trip_count")],
+            {"dimension": "emd", "dimension_target": "pickup", "order": "top", "limit": 2},
+        ), "승차가 많은 읍면동 상위 2곳은?")
+        plan = self.composer.compose(grounding)
+        self.assertTrue(self._validate(plan).ok)
+        compiled = compile_plan(plan)
+        self.assertEqual(compiled.steps[-1].arguments["dimension_target"], "pickup")
+        result = execute_plan(compiled, self.tool_executor)
+        self.assertEqual(result.status, STATUS_OK, result.error)
+        self.assertEqual([row["pickup"] for row in result.final_value], ["태평로동", "중앙로동"])
+
+    def test_dimension_target_needs_a_dimension(self):
+        grounding = parse_grounding(payload(
+            [event("e", "trip"), measure("m", "AMOUNT", "trip_count")],
+            {"dimension_target": "pickup"},
+        ), "승차 기준 실차 구간 건수는?")
+        with self.assertRaises(PlannerError) as caught:
+            self.composer.compose(grounding)
+        self.assertEqual(caught.exception.code, "INVALID_FACTOR_COMBINATION")
 
     def test_static_enum_and_conditional_contract_stay_separate(self):
         trip = get_operator(Operator.TRIP_COUNT)

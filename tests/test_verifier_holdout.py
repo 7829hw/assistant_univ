@@ -51,8 +51,14 @@ class VerifierHoldoutTest(unittest.TestCase):
                 self.assertEqual(len(members), 4)
                 self.assertEqual(sum(bool(i["control"]) for i in members), 1)
         unsupported = [i for i in self.intents if i["golden"] == {"unsupported": True}]
-        self.assertEqual({i["family"] for i in unsupported}, {"E_unsupported_collapse"})
-        self.assertEqual(len(unsupported), 3)
+        # 업체 v2 계약에서 영업 시간·영업 횟수 intent 7개가 지원 범위 밖이 되었다(registry
+        # v2_contract.retired). 설계상 지원 범위 밖은 E family의 비대조군 3개다.
+        retired = P.v2_retired(HOLDOUT)
+        self.assertEqual(len(retired), 7)
+        self.assertTrue(retired <= {i["intent"] for i in unsupported})
+        designed = [i for i in unsupported if i["intent"] not in retired]
+        self.assertEqual({i["family"] for i in designed}, {"E_unsupported_collapse"})
+        self.assertEqual(len(designed), 3)
 
     def test_disjoint_from_every_other_corpus_stub_and_census(self):
         for entry in REGISTRY["corpora"]:

@@ -86,11 +86,11 @@ class Subtype:
     RPM = "rpm"
     FARE = "fare"
     REVENUE = "revenue"
-    OPERATING_COUNT = "operating_count"
-    HOURS = "hours"
+    ACTIVE_TAXI_COUNT = "active_taxi_count"
+    OPERATING_DAYS = "operating_days"
     # PROPORTION
     VACANT_RATIO = "vacant_ratio"
-    OPERATING_RATIO = "operating_ratio"
+    ACTIVE_TAXI_RATIO = "active_taxi_ratio"
 
 
 #: CoreConcept별로 허용하는 subtype. IR 어휘의 단일 기준이다.
@@ -113,10 +113,10 @@ CONCEPT_SUBTYPES: dict[CoreConcept, frozenset[str]] = {
     CoreConcept.AMOUNT: frozenset({
         Subtype.PASSAGE_COUNT, Subtype.TRIP_COUNT, Subtype.SPEED,
         Subtype.RPM, Subtype.FARE, Subtype.REVENUE,
-        Subtype.OPERATING_COUNT, Subtype.HOURS,
+        Subtype.ACTIVE_TAXI_COUNT, Subtype.OPERATING_DAYS,
     }),
     CoreConcept.PROPORTION: frozenset({
-        Subtype.VACANT_RATIO, Subtype.OPERATING_RATIO,
+        Subtype.VACANT_RATIO, Subtype.ACTIVE_TAXI_RATIO,
     }),
     CoreConcept.OBJECT: frozenset(),
     CoreConcept.FIELD: frozenset(),

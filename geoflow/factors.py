@@ -33,7 +33,7 @@ from geoflow.errors import PlannerError
 _AGGREGATIONS = frozenset({"max", "min", "sum", "avg", "med"})
 _DATE_PATTERN = re.compile(
     r"^(\d{8}(-\d{8})?|last_week|last_month|last_year"
-    r"|weekday|weekend|holiday)$"
+    r"|weekday|weekend|holiday|this_week|this_month|this_year)$"
 )
 _TIME_PATTERN = re.compile(r"^\d{6}-\d{6}$")
 
@@ -148,6 +148,14 @@ FACTOR_SPECS: dict[str, FactorSpec] = {
             ),
         ),
         FactorSpec(
+            "dimension_target", values=frozenset({"pickup", "dropoff", "both"}),
+            meaning=(
+                "실차 구간(trip)을 그룹으로 나눌 때 dimension을 적용할 위치. "
+                "pickup=승차 지역별, dropoff=하차 지역별, both=승차지-하차지 "
+                "조합별. 질문에 승차나 하차 한쪽 기준이 없으면 넣지 않는다."
+            ),
+        ),
+        FactorSpec(
             "order", values=frozenset({"top", "bottom"}),
             meaning="그룹별 결과의 정렬 방향.",
         ),
@@ -177,9 +185,9 @@ FACTOR_STAGE_NOTE = """구간을 나누는 질문에서는 집계가 두 단계�
 
 - 질문에 "주 단위로", "월 단위로" 같은 구간 표현이 있으면, 함께 나온 집계어는
   구간별 값들을 합치는 rollup이다.
-  - "월 단위로 나눈 영업시간의 합은?" → bucket=month, rollup=sum
+  - "월 단위로 나눈 수입의 합은?" → bucket=month, rollup=sum
 - 구간 표현이 없으면 집계어는 aggregation이다.
-  - "평균 영업시간은?" → aggregation=avg (bucket과 rollup은 넣지 않는다)
+  - "평균 수입은?" → aggregation=avg (bucket과 rollup은 넣지 않는다)
 - rollup에 week나 month 같은 시간 단위를 넣지 않는다. rollup은 합치는
   방식이다."""
 
@@ -211,6 +219,10 @@ FACTOR_CONSTRAINTS: dict[str, FactorConstraint] = {
         FactorConstraint(
             "rollup", ("bucket",),
             "1차 집계 결과를 합치려면 어떤 단위로 나눌지도 필요합니다.",
+        ),
+        FactorConstraint(
+            "dimension_target", ("dimension",),
+            "승차·하차 기준을 정하려면 무엇을 기준으로 나눌지도 필요합니다.",
         ),
         FactorConstraint(
             "order", ("dimension",),

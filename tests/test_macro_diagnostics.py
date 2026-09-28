@@ -153,7 +153,7 @@ def _grid():
     places = (None, "plain", "pickup", "dropoff")
     for (concept, subtype), ev, first, second, factors in itertools.product(
             (("AMOUNT", "trip_count"), ("AMOUNT", "passage_count"), ("AMOUNT", "fare"),
-             ("AMOUNT", "hours"), ("AMOUNT", "speed")),
+             ("AMOUNT", "operating_days"), ("AMOUNT", "speed")),
             (None, "passage", "trip", "operation"), places, (None, "dropoff"),
             ({}, DAYOFWEEK, {"dimension": "sigungu"})):
         concepts = [measure("m", concept, subtype)]

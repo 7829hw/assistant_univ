@@ -143,9 +143,9 @@ sections:
                   subtype: passage, trip, drive, operation
      - AMOUNT     크기를 갖는 측정값
                   subtype: speed, rpm, passage_count, trip_count, fare,
-                           revenue, operating_count, hours
+                           revenue, active_taxi_count, operating_days
      - PROPORTION 비율로 표현되는 측정값
-                  subtype: vacant_ratio, operating_ratio
+                  subtype: vacant_ratio, active_taxi_ratio
      - OBJECT     개별 사물
      - FIELD      공간에 연속적으로 분포하는 값
      - NETWORK    연결 구조
@@ -193,11 +193,12 @@ sections:
     drive (기동부터 운행 종료까지 전체 경로)
      - vacant_ratio = 공차율, 공차로 운행되는 비율
 
-    operation (일 단위 택시 영업)
-     - revenue         = 1일 영업 수익금, 택시 수입
-     - operating_count = 영업 횟수
-     - operating_ratio = 영업 운행률
-     - hours           = 영업 시간
+    operation (과금 기록으로 요약한 일 단위 택시 영업)
+     - revenue           = 1일 영업 수익금, 택시 수입
+     - active_taxi_count = 활성택시 대수(하루 동안 영업한 택시 수)
+     - active_taxi_ratio = 가동률, 운행률(활성택시 / 등록된 전체 택시)
+     - operating_days    = 운행일수
+     - 영업 시간, 영업 횟수는 제공하지 않습니다.
 
     혼동하기 쉬운 쌍
      - "요금"은 AMOUNT/fare이며 EVENT/trip에 속합니다.
@@ -205,9 +206,9 @@ sections:
      - "수입"은 AMOUNT/revenue이며 EVENT/operation에 속합니다.
        AMOUNT/fare가 아닙니다.
      - "공차율"은 PROPORTION/vacant_ratio이며 EVENT/drive에 속합니다.
-       PROPORTION/operating_ratio가 아닙니다.
-     - "운행률"은 PROPORTION/operating_ratio이며 EVENT/operation에 속합니다.
-       PROPORTION/vacant_ratio가 아닙니다.
+       PROPORTION/active_taxi_ratio가 아닙니다.
+     - "가동률", "운행률"은 PROPORTION/active_taxi_ratio이며 EVENT/operation에
+       속합니다. PROPORTION/vacant_ratio가 아닙니다.
 
     질문의 측정 개념이 위 목록에 없으면 비슷한 값으로 바꾸지 말고
     {"unsupported": true}를 반환합니다. 값을 치환하는 것은 오답을 만드는
@@ -270,14 +271,20 @@ sections:
       - "요일별" → dayofweek, "시도별" → sido, "시군구별" → sigungu,
         "읍면동별" → emd
       - 단순히 평균이나 합계를 묻는 질문에는 dimension을 넣지 않습니다.
+    - 실차 구간(trip)을 나눌 때 승차·하차 한쪽 기준이 드러나면
+      dimension_target을 넣습니다.
+      - "승차가 많은 읍면동", "출발 지역별" → pickup
+      - "하차가 많은 읍면동", "도착 지역별" → dropoff
+      - "승하차 노선", "출발지-도착지 조합" → both
+      - 그런 표현이 없으면 넣지 않습니다.
     - 순위 표현
       - "가장 많은", "상위" → top
       - "가장 적은", "하위" → bottom
       - order와 limit은 dimension이 함께 있을 때만 의미를 가집니다.
     - 날짜는 YYYYMMDD 형식입니다. 범위는 YYYYMMDD-YYYYMMDD입니다.
       - "2026년 5월 30일" → "20260530"
-      - last_week, last_month, last_year, weekday, weekend, holiday도
-        사용 가능합니다.
+      - last_week, last_month, last_year, this_week, this_month, this_year,
+        weekday, weekend, holiday도 사용 가능합니다.
     - 시간 범위는 구분 기호 없는 HHMMSS-HHMMSS 형식입니다.
       - "오후 12시에서 1시 사이" → "120000-130000"
     - 택시 유형: 개인=private, 법인(회사)=corporate, 조건 없음=all

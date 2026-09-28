@@ -602,10 +602,11 @@ class OperatorMappingTest(ComposerCase):
             (CoreConcept.AMOUNT, Subtype.TRIP_COUNT): Operator.TRIP_COUNT,
             (CoreConcept.AMOUNT, Subtype.FARE): Operator.TRIP_METRIC,
             (CoreConcept.AMOUNT, Subtype.REVENUE): Operator.OPERATION_METRIC,
-            (CoreConcept.AMOUNT, Subtype.HOURS): Operator.OPERATION_METRIC,
+            (CoreConcept.AMOUNT, Subtype.ACTIVE_TAXI_COUNT): Operator.OPERATION_METRIC,
+            (CoreConcept.AMOUNT, Subtype.OPERATING_DAYS): Operator.OPERATION_METRIC,
             (CoreConcept.PROPORTION, Subtype.VACANT_RATIO):
                 Operator.DRIVE_METRIC,
-            (CoreConcept.PROPORTION, Subtype.OPERATING_RATIO):
+            (CoreConcept.PROPORTION, Subtype.ACTIVE_TAXI_RATIO):
                 Operator.OPERATION_METRIC,
             (CoreConcept.LOCATION, Subtype.PLACE): Operator.SCOPE_NAME,
         }
@@ -630,12 +631,12 @@ class OperatorMappingTest(ComposerCase):
             revenue.event_subtypes, frozenset({Subtype.OPERATION}),
         )
 
-    def test_vacant_ratio_and_operating_ratio_map_to_different_tools(self):
+    def test_vacant_ratio_and_active_taxi_ratio_map_to_different_tools(self):
         vacant = operator_mapping.candidates_for(
             CoreConcept.PROPORTION, Subtype.VACANT_RATIO,
         )[0]
         operating = operator_mapping.candidates_for(
-            CoreConcept.PROPORTION, Subtype.OPERATING_RATIO,
+            CoreConcept.PROPORTION, Subtype.ACTIVE_TAXI_RATIO,
         )[0]
         self.assertNotEqual(vacant.tool_name, operating.tool_name)
         self.assertEqual(vacant.event_subtypes, frozenset({Subtype.DRIVE}))
@@ -841,7 +842,7 @@ class ExecutionRegressionTest(ComposerCase):
             "개인택시의 평균 수입은?",
             [event("e", "operation"), measure("m", "AMOUNT", "revenue")],
             {"taxi_type": "private"},
-            ["get_operation_metrics"],
+            ["get_billing_metrics"],
         ),
         (
             "법인택시의 공차율은?",

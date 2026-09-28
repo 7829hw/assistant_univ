@@ -33,8 +33,8 @@ PLAN_SECTION = '''[집계 계획]
     안의 집계를 따로 말하지 않으면 unspecified로 적는다.
   - bucket을 넣으면 result도 함께 넣는다.
 - 질문에 집계 표현이 없으면 aggregation_plan을 넣지 않는다.
-  - "월 단위로 나눈 영업시간의 합은?" → bucket.unit=month, bucket.reducer=unspecified, result.reducer=sum
-  - "평균 영업시간은?" → result.reducer=avg (bucket은 넣지 않는다)
+  - "월 단위로 나눈 수입의 합은?" → bucket.unit=month, bucket.reducer=unspecified, result.reducer=sum
+  - "평균 수입은?" → result.reducer=avg (bucket은 넣지 않는다)
 '''
 
 REPLACEMENTS = (
@@ -63,9 +63,9 @@ REPLACEMENTS = (
      "    원시 값 --aggregation--> 구간별 값 --rollup--> 최종 값\n\n"
      '- 질문에 "주 단위로", "월 단위로" 같은 구간 표현이 있으면, 함께 나온 집계어는\n'
      "  구간별 값들을 합치는 rollup이다.\n"
-     '  - "월 단위로 나눈 영업시간의 합은?" → bucket=month, rollup=sum\n'
+     '  - "월 단위로 나눈 수입의 합은?" → bucket=month, rollup=sum\n'
      "- 구간 표현이 없으면 집계어는 aggregation이다.\n"
-     '  - "평균 영업시간은?" → aggregation=avg (bucket과 rollup은 넣지 않는다)\n'
+     '  - "평균 수입은?" → aggregation=avg (bucket과 rollup은 넣지 않는다)\n'
      "- rollup에 week나 month 같은 시간 단위를 넣지 않는다. rollup은 합치는\n"
      "  방식이다.\n",
      PLAN_SECTION),

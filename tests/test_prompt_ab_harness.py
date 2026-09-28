@@ -458,7 +458,7 @@ class ComparisonTest(unittest.TestCase):
     def test_canonical_form_keeps_meaning_differences(self):
         other = grounding({"taxi_type": "corporate", "aggregation": "avg"})
         subtype = grounding({"taxi_type": "private", "aggregation": "avg"},
-                            [CONCEPTS[0], dict(CONCEPTS[1], subtype="hours")])
+                            [CONCEPTS[0], dict(CONCEPTS[1], subtype="operating_days")])
         duplicate = grounding({}, [CONCEPTS[0], dict(CONCEPTS[1], id="op")])
         distinct = grounding({}, CONCEPTS)
         base = A.canonical_grounding(GOOD)
@@ -747,11 +747,12 @@ class SchemaDefaultTest(unittest.TestCase):
     def test_defaults_come_from_the_schema(self):
         import paraphrase_corpus as P
         self.assertEqual(P.tool_defaults("get_passage_metrics"), {"aggregation": "avg"})
-        self.assertEqual(P.tool_defaults("get_trip_count"), {})
+        # v2 schema: get_trip_count.dimension_target의 기본값은 both다.
+        self.assertEqual(P.tool_defaults("get_trip_count"), {"dimension_target": "both"})
 
     def test_default_value_equals_omission_both_ways(self):
         import paraphrase_corpus as P
-        defaults = P.tool_defaults("get_operation_metrics")
+        defaults = P.tool_defaults("get_billing_metrics")
         self.assertEqual(P.tool_arg_mismatches({"aggregation": "avg"}, {}, defaults), [])
         self.assertEqual(P.tool_arg_mismatches({"taxi_type": None},
                                                {"taxi_type": "all"}, defaults), [])
@@ -859,7 +860,8 @@ class CensusTest(unittest.TestCase):
         questions = [item["question"].strip() for item in items]
         self.assertEqual(len(questions), len(set(questions)))
         self.assertEqual(len(items), 211)
-        self.assertEqual(sum(len(item["census_aliases"]) for item in items), 13)
+        # 업체 v2 stub 다섯 질의는 v1 stub에도 있어 그만큼 alias가 늘었다(13 → 18).
+        self.assertEqual(sum(len(item["census_aliases"]) for item in items), 18)
         self.assertTrue(all(item["intent_id"] for item in items))
 
     def test_conflicting_labels_for_the_same_question_stop_the_census(self):

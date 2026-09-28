@@ -10,6 +10,11 @@ TIMS가 구간별 집계를 한 호출로 처리하지 못할 때, compiler는 �
   - last_week: 기준일이 속한 주(월요일 시작) 바로 앞 주
   - last_month: 기준일이 속한 달 바로 앞 달
   - last_year: 기준일이 속한 해 바로 앞 해
+- ``this_week``, ``this_month``, ``this_year``도 기준일이 있을 때만 푼다. 아직 오지
+  않은 날은 자료가 없으므로 기간의 시작일부터 기준일까지로 둔다.
+  - this_week: 기준일이 속한 주의 월요일부터 기준일까지
+  - this_month: 기준일이 속한 달의 1일부터 기준일까지
+  - this_year: 기준일이 속한 해의 1월 1일부터 기준일까지
 - ``weekday``, ``weekend``, ``holiday``는 연속 기간이 아니므로 나누지 않는다.
 - 기간이 없으면 나눌 범위를 알 수 없으므로 거부한다.
 
@@ -25,7 +30,9 @@ from datetime import date, timedelta
 from geoflow.errors import CompilerError
 
 _FORMAT = "%Y%m%d"
-RELATIVE_PERIODS = frozenset({"last_week", "last_month", "last_year"})
+RELATIVE_PERIODS = frozenset({
+    "last_week", "last_month", "last_year", "this_week", "this_month", "this_year",
+})
 NON_CONTIGUOUS_PERIODS = frozenset({"weekday", "weekend", "holiday"})
 
 #: 구간 경계 정의. 답변과 기록에 남는다.
@@ -100,6 +107,12 @@ def _relative(period, reference):
     if period == "last_month":
         end = reference.replace(day=1) - timedelta(days=1)
         return end.replace(day=1), end
+    if period == "this_week":
+        return reference - timedelta(days=reference.weekday()), reference
+    if period == "this_month":
+        return reference.replace(day=1), reference
+    if period == "this_year":
+        return date(reference.year, 1, 1), reference
     start = date(reference.year - 1, 1, 1)
     return start, date(reference.year - 1, 12, 31)
 

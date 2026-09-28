@@ -28,7 +28,7 @@ reference 계약 (geoflow/providers.py REFERENCE_CONTRACT가 이 문장들을 �
     [평균] avg의 분모는 조건에 맞는 결측 아닌 레코드 수이며 가중치는 없다.
     [기본 집계] aggregation을 생략하면 avg다.
     [택시 유형] taxi_type=all은 유형 조건 없음과 같다.
-    [반환] get_operation_metrics는 스칼라 숫자 하나를 반환한다. sum·max·min은 원 단위 정수, avg·med는 반올림하지 않은 원 단위 실수다.
+    [반환] get_billing_metrics는 스칼라 숫자 하나를 반환한다. sum·max·min은 원 단위 정수, avg·med는 반올림하지 않은 원 단위 실수다.
     [구간] bucket·rollup·dimension·order·limit은 지원하지 않는다. 주 단위 구간과 동률 처리는 이 provider가 아니라 로컬 분석 연산(geoflow/periods.py, geoflow/analysis_ops.py)이 정한다.
 """
 
@@ -48,7 +48,7 @@ PLACES = MappingProxyType({
 ALIASES = MappingProxyType({"가람": "가람구", "나래": "나래구"})
 SCOPE_NAMES = MappingProxyType({scope: name for name, scope in PLACES.items()})
 
-SUPPORTED_OPERATION_ARGUMENTS = frozenset({"metric", "scope", "date", "taxi_type", "aggregation"})
+SUPPORTED_BILLING_ARGUMENTS = frozenset({"metric", "scope", "date", "taxi_type", "aggregation"})
 SUPPORTED_METRICS = frozenset({"revenue"})
 DEFAULT_AGGREGATION = "avg"
 UNSUPPORTED = "UNSUPPORTED_BY_PROVIDER"
@@ -128,8 +128,8 @@ class ReferenceProvider:
     def __init__(self, records=None):
         self.records = load_records() if records is None else tuple(records)
 
-    def operation_metrics(self, arguments):
-        extra = sorted(set(arguments) - SUPPORTED_OPERATION_ARGUMENTS)
+    def billing_metrics(self, arguments):
+        extra = sorted(set(arguments) - SUPPORTED_BILLING_ARGUMENTS)
         if extra:
             return _unsupported(f"다음 인자를 지원하지 않습니다: {', '.join(extra)}")
         metric = arguments.get("metric")
@@ -181,7 +181,7 @@ def reference_handlers(provider=None):
     """ToolExecutor에 넘길 handler 사전. 부를 때마다 새 사전을 만든다."""
     provider = provider or ReferenceProvider()
     handlers = {
-        "get_operation_metrics": provider.operation_metrics,
+        "get_billing_metrics": provider.billing_metrics,
         "get_place_scope": provider.place_scope,
         "get_scope_name": provider.scope_name,
     }

@@ -97,16 +97,16 @@ class EndToEndTest(unittest.TestCase):
         import paraphrase_corpus as P
         from tests.test_prompt_ab_harness import run
         items = [item for item in P.load_corpus_items(B.HOLDOUT)
-                 if item["id"] in ("a01_p0", "a21_p0")]
+                 if item["id"] in ("a03_p0", "a21_p0")]
         concepts = [
             {"id": "op", "concept": "EVENT", "subtype": "operation", "role": "SUPPORT",
              "source": "implicit"},
-            {"id": "hours", "concept": "AMOUNT", "subtype": "hours", "role": "MEASURE",
+            {"id": "revenue", "concept": "AMOUNT", "subtype": "revenue", "role": "MEASURE",
              "source": "implicit"}]
         h0 = json.dumps({"concepts": concepts,
-                         "factors": {"bucket": "week", "aggregation": "sum", "rollup": "avg"}})
+                         "factors": {"bucket": "week", "aggregation": "max", "rollup": "avg"}})
         h2 = json.dumps({"concepts": concepts, "factors": {AP.PLAN_KEY: {
-            "bucket": {"unit": "week", "reducer": "sum"}, "result": {"reducer": "avg"}}}})
+            "bucket": {"unit": "week", "reducer": "max"}, "result": {"reducer": "avg"}}}})
         refuse = json.dumps({"unsupported": True})
         # arm_order: 첫 질문은 B(H2)부터, 둘째 질문은 A(H0)부터
         with tempfile.TemporaryDirectory() as tmp:

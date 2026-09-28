@@ -292,24 +292,31 @@ def _prompt_with_meaning(factor, meaning):
 #: 걸린다. 그때는 T0를 고치지 말고 새 이름을 붙인다. 같은 이름이 다른 prompt를
 #: 가리키면 이력 결과를 잘못 읽게 된다. 값은 각 commit의 git worktree에서
 #: 직접 렌더링해 얻었다.
+#:
+#: 업체 v2 계약(get_billing_metrics, 측정값 어휘 변경)을 반영하면서 production prompt의
+#: 측정값 목록이 바뀌어 모든 변형을 v2 어휘로 다시 렌더링해 고정했다. 변형 사이의 같음
+#: 관계(C=F00=F01, D_PRE=F10=F11=H0_AGG=L1_AGG=V0_VERIFY)는 그대로다. v2 이전 값은
+#: a4db7f29(C·F00·F01), 64bbceb4(D_PRE·F10·F11·H0_AGG·L1_AGG·V0_VERIFY), f268b2b2(T0),
+#: 71dcbaf6(T1), 3523abc5(T2), 04d7baed(H2_AGG)이며, 그 hash로 기록된 run은 더 이상
+#: 다시 만들 수 없다(``recorded_variant``가 거부한다).
 PINNED_SHA256 = {
-    "C": "a4db7f29955beeb7e83d3ec454b3d58b4024b80a9093a7184126cd2fb2489228",
-    "D_PRE": "64bbceb4e171085f38de782ceb413b3ee814c9df8c7f9576479a9324e123d45d",
-    "T0": "f268b2b28feb8b29211a0128798f9bb89d08a491184eaa3df9675cb7e139a02e",
-    "T1": "71dcbaf681fcd8c6bc58a9d203f625a7f8b797964ca3a90979b7f49317dde64a",
-    "T2": "3523abc587d303e48c0ba4812c2d507eda9e2077668f9cf249ae74ec7ad8e355",
+    "C": "0de6149dbf786d277b4f2d67c7039eb2b438d228e8d71121b2f852f3c15d3d2e",
+    "D_PRE": "db113124b2e26aa9b47b7f6d9e56387becd19e6add2debaab54657598c171ba8",
+    "T0": "4ec48827ae56d888069c5bbde17bd1b065afcbe85ed18a2c57a2e384d291cd21",
+    "T1": "2e0c8558289a8d14b9643e45b8d02c6c61a120c9ecae4514626d8145ba38c8c5",
+    "T2": "71a4a983c206429ce6adbb4a9f964e50f394ed4400b4b2608017c2e09996d1dc",
     # 50fae72 factorial. S = system 의미 절, R = factor 재질의 의미.
-    "F00": "a4db7f29955beeb7e83d3ec454b3d58b4024b80a9093a7184126cd2fb2489228",
-    "F10": "64bbceb4e171085f38de782ceb413b3ee814c9df8c7f9576479a9324e123d45d",
-    "F01": "a4db7f29955beeb7e83d3ec454b3d58b4024b80a9093a7184126cd2fb2489228",
-    "F11": "64bbceb4e171085f38de782ceb413b3ee814c9df8c7f9576479a9324e123d45d",
+    "F00": "0de6149dbf786d277b4f2d67c7039eb2b438d228e8d71121b2f852f3c15d3d2e",
+    "F10": "db113124b2e26aa9b47b7f6d9e56387becd19e6add2debaab54657598c171ba8",
+    "F01": "0de6149dbf786d277b4f2d67c7039eb2b438d228e8d71121b2f852f3c15d3d2e",
+    "F11": "db113124b2e26aa9b47b7f6d9e56387becd19e6add2debaab54657598c171ba8",
     # 두 단계 집계 grounding. H0 = 이 실험 시점의 production, H2 = 집계 계약만 바꿈.
-    "H0_AGG": "64bbceb4e171085f38de782ceb413b3ee814c9df8c7f9576479a9324e123d45d",
-    "H2_AGG": "04d7baed2220c1d5dc748b2b9593b15e28921ef1c0ff2411feeb30ab307224bc",
+    "H0_AGG": "db113124b2e26aa9b47b7f6d9e56387becd19e6add2debaab54657598c171ba8",
+    "H2_AGG": "1726bc76c573558492f41ea71543d9d61b4a5cc0136366ad429bb9fa488ca55f",
     # 국소 집계 보정. 첫 grounding은 H0 production 그대로다.
-    "L1_AGG": "64bbceb4e171085f38de782ceb413b3ee814c9df8c7f9576479a9324e123d45d",
+    "L1_AGG": "db113124b2e26aa9b47b7f6d9e56387becd19e6add2debaab54657598c171ba8",
     # reject-only 의미 검증. grounding과 재질의는 H0 production 그대로다.
-    "V0_VERIFY": "64bbceb4e171085f38de782ceb413b3ee814c9df8c7f9576479a9324e123d45d",
+    "V0_VERIFY": "db113124b2e26aa9b47b7f6d9e56387becd19e6add2debaab54657598c171ba8",
 }
 PINNED_REPAIR_SHA256 = {
     "C": "a5d9baa0bbbf73d1adb43f6a389dd8cef024bfee78c51d9fcc3ade518ed12850",
@@ -1958,8 +1965,11 @@ def cmd_run(args):
     print("PROMPT AB DONE", flush=True)
 
 
-#: census가 한 번에 모으는 평가셋. 사람이 검토한 것 전체다.
-CENSUS_QUERY_FILES = ("stub_query.yaml", "stub_query_boundary.yaml")
+#: census가 한 번에 모으는 평가셋. 사람이 검토한 것 전체다. 업체 v2 stub(다섯 질의)은
+#: v1 stub의 문장을 그대로 쓰므로, v1 stub(evaluation/stub_query_v1.yaml)을 함께 읽어
+#: v2에서 빠진 질의도 계속 잰다. 같은 문장은 v2 id로 남고 v1 id는 census_aliases가 된다.
+CENSUS_QUERY_FILES = ("stub_query.yaml", "evaluation/stub_query_v1.yaml",
+                      "stub_query_boundary.yaml")
 CENSUS_CORPORA = ("evaluation/paraphrases.yaml", "evaluation/paraphrases_holdout.yaml",
                   "evaluation/paraphrases_factor_holdout.yaml")
 

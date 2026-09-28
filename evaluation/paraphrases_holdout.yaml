@@ -19,15 +19,12 @@ intents:
   # --- taxi_type 값(개인/법인) x 측정값 x 위치 x 범위 ---------------------
 
   - intent: h01_private_hours_max
+    # v2 계약: get_billing_metrics가 영업 시간(hours)을 제공하지 않아 지원 범위 밖이다.
     cohorts: [taxi_type]
-    expected_tool_args: {metric: hours, taxi_type: private, aggregation: max}
+    expected_tool_args: {}
     must_include: [["개인"], ["영업 시간"], ["최대"]]
     must_exclude: ["법인", "단위"]
-    golden:
-      concepts:
-        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
-        - {id: hours, concept: AMOUNT, subtype: hours, role: MEASURE, source: implicit}
-      factors: {taxi_type: private, aggregation: max}
+    golden: {unsupported: true}
     paraphrases:
       - {id: h01_p0, question: "개인택시 영업 시간의 최대값은?", note: "원문. 맨 앞"}
       - {id: h01_p1, question: "영업 시간의 최대값을 개인택시 기준으로 알려줘", note: "측정값 뒤"}
@@ -52,7 +49,7 @@ intents:
 
   - intent: h03_corporate_operating_ratio_daegu
     cohorts: [taxi_type]
-    expected_tool_args: {metric: operating_ratio, taxi_type: corporate}
+    expected_tool_args: {metric: active_taxi_ratio, taxi_type: corporate}
     must_include: [["대구"], ["법인"], ["운행률"]]
     must_exclude: ["개인"]
     golden:
@@ -60,7 +57,7 @@ intents:
         - {id: daegu, concept: LOCATION, subtype: place, role: SUBCOND, source: user,
            value: {name: 대구, region: ""}}
         - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
-        - {id: ratio, concept: PROPORTION, subtype: operating_ratio, role: MEASURE, source: implicit}
+        - {id: ratio, concept: PROPORTION, subtype: active_taxi_ratio, role: MEASURE, source: implicit}
       factors: {taxi_type: corporate}
     paraphrases:
       - {id: h03_p0, question: "대구 법인택시의 운행률은?", note: "원문. 장소 뒤"}
@@ -141,16 +138,12 @@ intents:
       - {id: h07_p3, question: "scope:edge:1742에서 법인택시 통행량은 얼마인가요?", note: "조사 '에서'"}
 
   - intent: h10_private_operating_count_top_sido
+    # v2 계약: get_billing_metrics가 영업 횟수(operating_count)를 제공하지 않아 지원 범위 밖이다.
     cohorts: [taxi_type]
-    expected_tool_args: {metric: operating_count, taxi_type: private, dimension: sido,
-                         order: top, limit: 3}
+    expected_tool_args: {}
     must_include: [["개인"], ["영업 횟수"], ["시도"], ["3"]]
     must_exclude: ["법인"]
-    golden:
-      concepts:
-        - {id: op, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
-        - {id: count, concept: AMOUNT, subtype: operating_count, role: MEASURE, source: implicit}
-      factors: {taxi_type: private, dimension: sido, order: top, limit: 3}
+    golden: {unsupported: true}
     paraphrases:
       - {id: h10_p0, question: "개인택시 영업 횟수가 가장 많은 시도 3곳은?", note: "원문. 맨 앞"}
       - {id: h10_p1, question: "영업 횟수가 가장 많은 시도 3곳을 개인택시 기준으로 알려줘", note: "뒤"}

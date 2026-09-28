@@ -67,13 +67,13 @@ REFERENCE_ITEMS = {
     "taxi_type_all_unrestricted": _confirmed(
         "taxi_type_all_unrestricted", "[택시 유형] taxi_type=all은 유형 조건 없음과 같다.",
         "all ≡ 생략"),
-    "day_records:get_operation_metrics": _confirmed(
-        "day_records:get_operation_metrics",
+    "day_records:get_billing_metrics": _confirmed(
+        "day_records:get_billing_metrics",
         "[기록 단위] 각 레코드는 하나의 service_date에만 속하며 aggregation은 레코드에 바로 적용된다.",
         "택시·일"),
     **{key: _not_offered(key, "이 도구를 지원하지 않음")
        for key in tims_contract.ITEMS if key.startswith("day_records:")
-       and key != "day_records:get_operation_metrics"},
+       and key != "day_records:get_billing_metrics"},
 }
 REFERENCE_CONTRACT = tims_contract.TimsContract(dict(REFERENCE_ITEMS), provider=REFERENCE)
 

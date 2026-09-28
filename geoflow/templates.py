@@ -53,7 +53,7 @@ _SLOT_PATTERNS = {
     SLOT_TYPE_SCOPE: re.compile(r"^scope:[A-Za-z0-9_:.-]+$"),
     SLOT_TYPE_DATE: re.compile(
         r"^(\d{8}(-\d{8})?|last_week|last_month|last_year"
-        r"|weekday|weekend|holiday)$"
+        r"|weekday|weekend|holiday|this_week|this_month|this_year)$"
     ),
     SLOT_TYPE_TIME: re.compile(r"^\d{6}-\d{6}$"),
 }

@@ -288,11 +288,11 @@ class HoldoutSeparationTest(unittest.TestCase):
         taxi = {a.get("taxi_type", "absent") for a in args if "taxi_type" in a}
         self.assertTrue({"private", "corporate", None} <= taxi)
         metrics = {a.get("metric") for a in args}
-        self.assertTrue({"vacant_ratio", "revenue", "hours", "operating_count",
-                         "operating_ratio"} <= metrics)
+        # v1의 hours·operating_count intent는 v2에서 지원 범위 밖이 되었다.
+        self.assertTrue({"vacant_ratio", "revenue", "active_taxi_ratio"} <= metrics)
         tools = {get_operator(HOLDOUT_PARENTS[i["intent"]]["expected_operators"][-1]).tool_name
                  for i in HOLDOUT_INTENTS if HOLDOUT_PARENTS[i["intent"]]["expected_operators"]}
-        self.assertTrue({"get_drive_metrics", "get_operation_metrics",
+        self.assertTrue({"get_drive_metrics", "get_billing_metrics",
                          "get_passage_count"} <= tools)
         self.assertTrue(any(P.NONE_LABEL in HOLDOUT_PARENTS[i["intent"]]["expected_macros"]
                             for i in HOLDOUT_INTENTS))

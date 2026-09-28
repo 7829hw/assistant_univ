@@ -530,11 +530,14 @@ class OptionalConceptTest(unittest.TestCase):
 
         result = execute_plan(compile_plan(ranked), self.tool_executor)
         self.assertEqual(result.status, STATUS_OK, result.error)
-        self.assertEqual(len(result.final_value), 3)
+        # v2 mock_stub.yaml의 sigungu·top case는 이미 정렬된 두 행이다. limit=3은 자르기만 한다.
+        # v2 schema는 dimension 결과에 scope 대신 지역명을 돌려준다.
+        self.assertEqual([row["sigungu"] for row in result.final_value], ["달서구", "수성구"])
         answer = format_answer(ranked, result, answer=template.answer)
         self.assertIn("시군구별", answer)
         self.assertIn("상위", answer)
         self.assertIn("3개", answer)
+        self.assertIn("달서구: 320,822건", answer)
 
     def test_optional_drop_still_executes(self):
         _plan, steps = self._steps(
@@ -1180,16 +1183,16 @@ class PipelineScenarioTest(unittest.TestCase):
         )
         self.assertIsNotNone(run.final_answer)
 
-    def test_result_scopes_are_labeled_with_place_names(self):
-        """집계 결과의 scope는 장소명으로 바꿔 보여준다."""
+    def test_results_without_scopes_need_no_labeling(self):
+        """v2 schema는 dimension 없는 개수를 ``{"count": N}``로, dimension 결과를 지역명으로
+        돌려준다. 결과에 scope가 없으면 장소명 조회를 부르지 않는다."""
         pipeline, _client = new_pipeline([OD_GROUNDING])
         run = pipeline.run(OD_QUESTION)
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
-        self.assertEqual(
-            labeling_tools(run.hop_log),
-            ["get_scope_name", "get_scope_name"],
-        )
-        self.assertTrue(run.scope_labels)
+        self.assertEqual(labeling_tools(run.hop_log), [])
+        self.assertFalse(run.scope_labels)
+        self.assertIn("20건", run.final_answer)
+        self.assertNotIn("count", run.final_answer)
         # 답변에는 원본 scope 대신 장소명이 나와야 한다.
         self.assertNotIn("scope:", run.final_answer)
         for name in run.scope_labels.values():
@@ -1295,11 +1298,11 @@ class PipelineScenarioTest(unittest.TestCase):
 
         pipeline2, _c2 = new_pipeline([grounding_payload([
             event_concept("operation", "operation"),
-            measure_concept("count", "AMOUNT", "operating_count"),
+            measure_concept("count", "AMOUNT", "active_taxi_count"),
         ], {"taxi_type": "private"})])
-        run2 = pipeline2.run("부산 개인택시의 영업 횟수는?")
+        run2 = pipeline2.run("개인택시의 활성택시 대수는?")
         self.assertEqual(run2.stage, Stage.DONE, run2.runtime_error)
-        self.assertIn("영업 횟수", run2.final_answer)
+        self.assertIn("활성택시 대수", run2.final_answer)
 
     def test_labeling_failure_keeps_raw_scope(self):
         """장소명 조회가 실패해도 답변 생성은 계속한다."""
@@ -1428,7 +1431,7 @@ class PipelineScenarioTest(unittest.TestCase):
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
         self.assertEqual(run.applied_macros, ["EVENT_TO_MEASURE"])
         arguments = run.hop_log[0]["arguments"]
-        self.assertEqual(run.hop_log[0]["tool"], "get_operation_metrics")
+        self.assertEqual(run.hop_log[0]["tool"], "get_billing_metrics")
         self.assertEqual(arguments["dimension"], "dayofweek")
         self.assertEqual(arguments["taxi_type"], "private")
         self.assertIn("월", run.final_answer)
@@ -1440,13 +1443,14 @@ class RepairTest(unittest.TestCase):
     재계획은 개념 구조를 바꾸지 못하고 실패한 장소의 값만 고칠 수 있다.
     """
 
-    FARE_QUESTION = "대구시의 평균 택시 요금은?"
+    # v2 mock gazetteer에서 "부산시"는 NOT_FOUND, "부산"은 성공이다.
+    FARE_QUESTION = "부산시의 평균 택시 요금은?"
 
     def test_not_found_triggers_one_repair(self):
-        """대구시(NOT_FOUND) → 재계획 → 대구(성공)."""
+        """부산시(NOT_FOUND) → 재계획 → 부산(성공)."""
         pipeline, client = new_pipeline([
-            fare_grounding("대구시"),
-            place_patch("place_1", "대구"),
+            fare_grounding("부산시"),
+            place_patch("place_1", "부산"),
         ])
         run = pipeline.run(self.FARE_QUESTION)
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
@@ -1464,7 +1468,7 @@ class RepairTest(unittest.TestCase):
 
     def test_repair_is_capped_at_one_attempt(self):
         pipeline, client = new_pipeline([
-            fare_grounding("대구시"),
+            fare_grounding("부산시"),
             place_patch("place_1", "없는장소"),
         ])
         run = pipeline.run(self.FARE_QUESTION)
@@ -1478,10 +1482,10 @@ class RepairTest(unittest.TestCase):
         """재계획이 지어낸 scope를 끼워 넣어도 계획이 만들어지지 않는다."""
         # 수정안 schema 밖의 내용을 끼워 넣으면 patch 단계에서 걸린다.
         smuggled = {
-            "concept_id": "place_1", "name": "대구", "region": "",
+            "concept_id": "place_1", "name": "부산", "region": "",
             "concepts": [scope_concept("smuggled", "scope:district:999999999")],
         }
-        pipeline, _client = new_pipeline([fare_grounding("대구시"), smuggled])
+        pipeline, _client = new_pipeline([fare_grounding("부산시"), smuggled])
         run = pipeline.run(self.FARE_QUESTION)
         self.assertIsNotNone(run.runtime_error)
         self.assertEqual(run.attempts[-1]["status"], STATUS_REPAIR_FAILED)
@@ -1497,7 +1501,7 @@ class RepairTest(unittest.TestCase):
         보인다. 모델별 실패 원인을 나중에 판별하려면 attempt 기록이 필요하다.
         """
         client = ScriptedClient([
-            planner_response(fare_grounding("대구시")),
+            planner_response(fare_grounding("부산시")),
             # content 없음. 재시도 횟수만큼 반복되고 나서야 실패로 확정된다.
             *[{"message": {}}] * DEFAULT_MAX_ATTEMPTS,
         ])
@@ -1541,7 +1545,7 @@ class RepairTest(unittest.TestCase):
         """수정안이 개념을 바꾸려 하면 받지 않는다."""
         # 개념을 바꾸려는 수정안은 schema 자체가 받지 않는다.
         pipeline, _client = new_pipeline([
-            fare_grounding("대구시"),
+            fare_grounding("부산시"),
             grounding_payload([
                 event_concept("operation", "operation"),
                 measure_concept("revenue", "AMOUNT", "revenue"),
@@ -1557,8 +1561,8 @@ class RepairTest(unittest.TestCase):
 
     def test_repair_rejects_identical_values(self):
         pipeline, _client = new_pipeline([
-            fare_grounding("대구시"),
-            place_patch("place_1", "대구시"),
+            fare_grounding("부산시"),
+            place_patch("place_1", "부산시"),
         ])
         run = pipeline.run(self.FARE_QUESTION)
         self.assertEqual(run.repair_count, 0)
@@ -1572,18 +1576,18 @@ class RepairTest(unittest.TestCase):
 
     def test_repair_cannot_invent_a_region(self):
         """업체 지적: 재계획이 발화에 없는 상위 지역을 만들어 붙이는 문제."""
-        for invented in ("경상북도", "시", "대구광역시"):
+        for invented in ("경상남도", "시", "부산광역시"):
             with self.subTest(region=invented):
                 previous = self._grounding(
-                    fare_grounding("대구시"), self.FARE_QUESTION,
+                    fare_grounding("부산시"), self.FARE_QUESTION,
                 )
                 repaired = self._grounding(
-                    fare_grounding("대구", invented), self.FARE_QUESTION,
+                    fare_grounding("부산", invented), self.FARE_QUESTION,
                 )
                 drop_invented_regions(previous, repaired)
                 self.assertEqual(
                     repaired.get("place_1").value,
-                    {"name": "대구", "region": ""},
+                    {"name": "부산", "region": ""},
                 )
 
     def test_repair_keeps_region_the_user_actually_said(self):
@@ -1601,28 +1605,28 @@ class RepairTest(unittest.TestCase):
     def test_grounding_drops_a_region_absent_from_the_question(self):
         """최초 grounding도 발화에 없는 상위 지역을 만들 수 없다."""
         planner = GeoFlowPlanner(client=ScriptedClient([
-            planner_response(fare_grounding("대구", "경상북도")),
+            planner_response(fare_grounding("부산", "경상남도")),
         ]))
         output = planner.plan(self.FARE_QUESTION)
         self.assertEqual(
             output.grounding.get("place_1").value,
-            {"name": "대구", "region": ""},
+            {"name": "부산", "region": ""},
         )
 
     def test_repair_drops_invented_region_end_to_end(self):
-        """대구시 → 대구/시 로 고쳐 와도 region 없이 조회해 성공해야 한다."""
+        """부산시 → 부산/시 로 고쳐 와도 region 없이 조회해 성공해야 한다."""
         pipeline, _client = new_pipeline([
-            fare_grounding("대구시"),
-            place_patch("place_1", "대구", "시"),
+            fare_grounding("부산시"),
+            place_patch("place_1", "부산", "시"),
         ])
-        run = pipeline.run("대구시의 평균 택시 요금은?")
+        run = pipeline.run("부산시의 평균 택시 요금은?")
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
         self.assertEqual(run.repair_count, 1)
         resolved = [
             entry for entry in run.hop_log
             if entry["tool"] == "get_place_scope"
         ]
-        self.assertEqual(resolved[-1]["arguments"]["name"], "대구")
+        self.assertEqual(resolved[-1]["arguments"]["name"], "부산")
         self.assertNotIn("region", resolved[-1]["arguments"])
 
     def test_non_place_failure_is_not_repaired(self):

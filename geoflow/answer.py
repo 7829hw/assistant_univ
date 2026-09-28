@@ -37,6 +37,10 @@ _DIMENSION_LABEL = {
     "h3": "H3 셀별",
 }
 
+_DIMENSION_TARGET_LABEL = {
+    "pickup": "승차 지역 기준", "dropoff": "하차 지역 기준", "both": "승하차 지역 조합",
+}
+
 _ORDER_LABEL = {"top": "상위", "bottom": "하위"}
 
 _BUCKET_LABEL = {"week": "주 단위", "month": "월 단위"}
@@ -45,6 +49,9 @@ _DATE_LABEL = {
     "last_week": "지난주",
     "last_month": "지난달",
     "last_year": "작년",
+    "this_week": "이번 주",
+    "this_month": "이번 달",
+    "this_year": "올해",
     "weekday": "주중",
     "weekend": "주말",
     "holiday": "휴일",
@@ -57,9 +64,9 @@ _METRIC_LABEL = {
     "fare": "택시 요금",
     "vacant_ratio": "공차율",
     "revenue": "영업 수익",
-    "operating_count": "영업 횟수",
-    "operating_ratio": "영업 운행률",
-    "hours": "영업 시간",
+    "active_taxi_count": "활성택시 대수",
+    "active_taxi_ratio": "가동률",
+    "operating_days": "운행일수",
 }
 
 _COUNT_KEYS = ("count",)
@@ -87,17 +94,17 @@ ANSWER_SPECS = {
     (CoreConcept.AMOUNT, Subtype.REVENUE): {
         "kind": KIND_METRIC, "label": "영업 수익",
     },
-    (CoreConcept.AMOUNT, Subtype.OPERATING_COUNT): {
-        "kind": KIND_METRIC, "label": "영업 횟수",
+    (CoreConcept.AMOUNT, Subtype.ACTIVE_TAXI_COUNT): {
+        "kind": KIND_METRIC, "label": "활성택시 대수",
     },
-    (CoreConcept.AMOUNT, Subtype.HOURS): {
-        "kind": KIND_METRIC, "label": "영업 시간",
+    (CoreConcept.AMOUNT, Subtype.OPERATING_DAYS): {
+        "kind": KIND_METRIC, "label": "운행일수",
     },
     (CoreConcept.PROPORTION, Subtype.VACANT_RATIO): {
         "kind": KIND_METRIC, "label": "공차율",
     },
-    (CoreConcept.PROPORTION, Subtype.OPERATING_RATIO): {
-        "kind": KIND_METRIC, "label": "영업 운행률",
+    (CoreConcept.PROPORTION, Subtype.ACTIVE_TAXI_RATIO): {
+        "kind": KIND_METRIC, "label": "가동률",
     },
     (CoreConcept.LOCATION, Subtype.PLACE): {
         "kind": KIND_METRIC, "label": "장소명",
@@ -162,7 +169,7 @@ def _default_reducer_note(plan):
 
 
 def _single_stage_answer(plan, execution_result, settings, labels, subject):
-    value = execution_result.final_value
+    value = _unwrap_count(execution_result.final_value)
     label = _METRIC_LABEL.get(
         plan.slots.get("metric"), settings.get("label") or "결과",
     )
@@ -226,6 +233,9 @@ def _subject(plan, settings, labels=None, *, grouped=False, period=None):
     dimension = slots.get("dimension")
     if dimension:
         parts.append(_DIMENSION_LABEL.get(dimension, f"{dimension}별"))
+    dimension_target = slots.get("dimension_target")
+    if dimension_target:
+        parts.append(_DIMENSION_TARGET_LABEL.get(dimension_target, dimension_target))
     # 순위·개수 제한이 적용되었다면 답변에 드러낸다.
     order = slots.get("order")
     if order:
@@ -259,6 +269,13 @@ def _place_text(place):
     return f"{region} {name}".strip()
 
 
+def _unwrap_count(value):
+    """dimension 없는 개수 Tool은 ``{"count": N}`` object를 돌려준다(v2 schema)."""
+    if isinstance(value, dict) and set(value) == {"count"}:
+        return value["count"]
+    return value
+
+
 def _rows(value):
     if isinstance(value, list) and all(
         isinstance(item, dict) for item in value
@@ -284,6 +301,7 @@ def _row_text(row, unit, labels=None):
     label_keys = (
         "dayofweek", "day_of_week", "place_name", "district_name",
         "sido", "sigungu", "emd", "h3", "scope", "date", "month",
+        "pickup", "dropoff",
     )
     labels = labels or {}
 
@@ -298,6 +316,9 @@ def _row_text(row, unit, labels=None):
             break
     if "scope_pickup" in row and "scope_dropoff" in row:
         label = f"{shown(row['scope_pickup'])} → {shown(row['scope_dropoff'])}"
+    if "pickup" in row and "dropoff" in row:
+        # get_trip_count dimension_target=both. 승차지역명 → 하차지역명.
+        label = f"{shown(row['pickup'])} → {shown(row['dropoff'])}"
     value = _row_value(row)
     if isinstance(value, dict):
         return ", ".join(f"{key}={item}" for key, item in value.items())

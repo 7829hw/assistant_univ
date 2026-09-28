@@ -126,7 +126,11 @@ class CorpusRegistryTest(unittest.TestCase):
         self.assertTrue(all(3 <= n <= 4 for n in per_intent.values()))
         unsupported = {item["intent_id"] for item in items
                        if P.NONE_LABEL in item["expected_macros"]}
-        self.assertTrue(1 <= len(unsupported) <= 2)
+        # 업체 v2 계약에서 지원 범위 밖이 된 intent(registry v2_contract.retired)는
+        # 설계한 대조군이 아니다.
+        retired = P.v2_retired(FACTOR_HOLDOUT)
+        self.assertTrue(retired <= unsupported)
+        self.assertTrue(1 <= len(unsupported - retired) <= 2)
 
     def test_fresh_holdout_golden_meets_the_label(self):
         import evaluate_planner as E
@@ -170,12 +174,12 @@ class FactorSubsetTest(unittest.TestCase):
         self.assertEqual(sorted({item["intent_id"] for item in subset}), [
             "b04_operating_ratio_by_day", "b06_fare_max", "b10_revenue_without_grouping",
             "b16_weekend_speed", "b21_bucket_rollup", "b24_bucket_rollup_month",
-            "h01_private_hours_max", "h02_corporate_revenue_by_day",
+            "h02_corporate_revenue_by_day",
             "h05_corporate_vacant_ratio_last_month", "h08_control_revenue_max",
-            "h10_private_operating_count_top_sido", "h11_corporate_revenue_weekend",
-            "h12_private_revenue_week_min",
+            "h11_corporate_revenue_weekend", "h12_private_revenue_week_min",
         ])
-        self.assertEqual(len(subset), 64)
+        # v1에서는 h01·h10을 포함해 64건이었다. 두 intent는 v2에서 지원 범위 밖이다.
+        self.assertEqual(len(subset), 56)
         self.assertEqual(P.factor_subset(items), subset)
 
     def test_intent_without_a_factor_value_is_excluded(self):
@@ -193,7 +197,7 @@ def _row(arm_name, pid, *, raw, correct=True, repair=False, repaired=True,
         "raw_text": raw, "expected_macros": ["EVENT_TO_MEASURE"],
         "expected_operators": ["OPERATION_METRIC"],
         "expected_tool_args": factors_expected or {"bucket": "month", "rollup": "max"},
-        "final_tool": "get_operation_metrics",
+        "final_tool": "get_billing_metrics",
         "final_tool_args": None if not correct else {"bucket": "month", "rollup": "max"},
         "correct": correct, "status": status, "error": error,
         "repair_attempted": repair, "repair_kind": "factor_completion" if repair else None,

@@ -164,8 +164,21 @@ class HoldoutCorpusTest(unittest.TestCase):
         self.assertFalse(set(self.parents) & set(P.load_parents()))
 
     def test_semantic_matrix_is_covered(self):
+        """v1 설계는 A5·B4·C3·D4·E2·F2·G3(23 intent)였다.
+
+        업체 v2 계약에서 영업 시간·영업 횟수 intent 10개가 지원 범위 밖이 되었다
+        (registry v2_contract.retired). 설계 칸은 그 intent를 빼고 센다.
+        """
+        retired = P.v2_retired(HOLDOUT)
+        self.assertEqual(len(retired), 10)
+        for name in retired:
+            intent = next(i for i in self.intents if i["intent"] == name)
+            self.assertIsNone(intent["aggregation"])
+            self.assertEqual(intent["golden"], {"unsupported": True})
         cells = {}
         for intent in self.intents:
+            if intent["intent"] in retired:
+                continue
             semantic = intent["aggregation"]
             factors = (intent.get("golden") or {}).get("factors") or {}
             places = [c for c in (intent.get("golden") or {}).get("concepts") or []
@@ -185,13 +198,15 @@ class HoldoutCorpusTest(unittest.TestCase):
             else:
                 cell = "A_explicit_inner"
             cells.setdefault(cell, []).append(intent["intent"])
+        # E_taxi_type의 두 intent(a17·a18)는 모두 v2에서 지원 범위 밖이 되었다.
         self.assertEqual({cell: len(names) for cell, names in cells.items()}, {
-            "A_explicit_inner": 5, "B_inner_unspecified": 4, "C_inner_avg": 3,
-            "D_no_bucket": 4, "E_taxi_type": 2, "F_location": 2, "G_unsupported": 3,
+            "A_explicit_inner": 2, "B_inner_unspecified": 3, "C_inner_avg": 1,
+            "D_no_bucket": 2, "F_location": 2, "G_unsupported": 3,
         })
         pairs = {(i["aggregation"]["inner"], i["aggregation"]["final"])
                  for i in self.intents if i["aggregation"] and "bucket" in i["aggregation"]}
-        for pair in (("sum", "avg"), ("avg", "max"), ("sum", "max"), ("avg", "min")):
+        # v1에 있던 (sum, avg)·(avg, min)은 v2에서 지원 범위 밖이 된 intent에만 있었다.
+        for pair in (("avg", "max"), ("sum", "max"), ("max", "avg")):
             self.assertIn(pair, pairs)
 
     def test_both_lowerings_give_the_expected_tool_call(self):
@@ -251,14 +266,16 @@ class HoldoutCorpusTest(unittest.TestCase):
             factors = AP.semantic_to_flat(swapped)
             self.assertNotEqual(
                 P.tool_arg_mismatches(intent["expected_tool_args"], factors,
-                                      P.tool_defaults("get_operation_metrics")), [])
+                                      P.tool_defaults("get_billing_metrics")), [])
             self.assertIn(AP.STAGE_SWAPPED, AP.aggregation_errors(swapped, semantic))
             checked += 1
-        self.assertGreaterEqual(checked, 8)
+        # v1에서는 8개 이상이었다. v2에서 지원 범위 밖이 된 intent를 빼면 4개다.
+        self.assertGreaterEqual(checked, 4)
 
     def test_golden_derivation_rejects_a_second_source(self):
         document = yaml.safe_load(HOLDOUT.read_text(encoding="utf-8"))
-        document["intents"][0]["golden"]["factors"]["rollup"] = "avg"
+        intent = next(i for i in document["intents"] if "concepts" in (i.get("golden") or {}))
+        intent["golden"]["factors"]["rollup"] = "avg"
         self.assertTrue(P.expand_aggregation(document))
 
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """H0 architecture를 고정하고 grounding model만 바꾼 census를 비교한다. 평가 전용.
 
-모든 모델 arm은 같은 production prompt(64bbceb4)와 재질의 문구(5af4c744), 같은 생성 옵션
+모든 모델 arm은 같은 production prompt(측정 당시 64bbceb4, v2 어휘 반영 후 db113124)와 재질의 문구(5af4c744), 같은 생성 옵션
 (temperature 0, think 미지정), 같은 timeout(300초), 같은 isolation protocol을 쓴다.
 바뀌는 것은 model id 하나다. 채점과 실패 분류는 failure_census.py 그대로다.
 

@@ -493,7 +493,7 @@ class GroundingIntegrationTest(unittest.TestCase):
         self.assertIn(SECTION_HEADING, section)
         retrieved = [self.retriever.store.get(i) for i in run.retrieval["included"]]
         self.assertTrue(any("나래구" in example.question for example in retrieved))
-        calls = [hop for hop in run.hop_log if hop.get("tool") == "get_operation_metrics"]
+        calls = [hop for hop in run.hop_log if hop.get("tool") == "get_billing_metrics"]
         self.assertEqual([hop["arguments"] for hop in calls], [{
             "metric": "revenue", "scope": GARAM, "date": "20260801-20260815",
             "taxi_type": "private", "aggregation": "avg"}])
@@ -525,7 +525,7 @@ class GroundingIntegrationTest(unittest.TestCase):
             run = reference_pipeline(_Scripted(injected), selector).run(question)
             self.assertNotEqual(run.outcome, "answered")
             self.assertFalse([hop for hop in run.hop_log
-                              if hop.get("tool") == "get_operation_metrics"])
+                              if hop.get("tool") == "get_billing_metrics"])
 
     def test_run_records_retrieval_and_result_comes_from_reference_data(self):
         question = "지난달 가람구 개인택시의 매출 합계가 가장 컸던 주는 언제야?"

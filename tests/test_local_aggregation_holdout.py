@@ -60,16 +60,27 @@ class LocalHoldoutTest(unittest.TestCase):
         self.assertFalse(set(self.parents) & set(P.load_parents()))
 
     def test_half_triggers_and_half_are_controls(self):
-        trigger = [i["intent"] for i in self.intents if i["trigger_expected"]]
-        control = [i["intent"] for i in self.intents if not i["trigger_expected"]]
-        self.assertEqual(len(trigger), 13)
-        self.assertEqual(len(control), 11)
+        """v1 설계는 trigger 13, 대조군 11이었다.
+
+        업체 v2 계약에서 영업 시간·영업 횟수 intent 10개가 지원 범위 밖이 되었다
+        (registry v2_contract.retired, trigger_expected=false). 설계 비율은 그 intent를
+        빼고 센다.
+        """
+        retired = P.v2_retired(HOLDOUT)
+        self.assertEqual(len(retired), 10)
+        live = [i for i in self.intents if i["intent"] not in retired]
+        self.assertTrue(all(not i["trigger_expected"] for i in self.intents
+                            if i["intent"] in retired))
+        trigger = [i["intent"] for i in live if i["trigger_expected"]]
+        control = [i["intent"] for i in live if not i["trigger_expected"]]
+        self.assertEqual(len(trigger), 5)
+        self.assertEqual(len(control), 9)
         pairs = {(i["aggregation"]["inner"], i["aggregation"]["final"])
-                 for i in self.intents if i["trigger_expected"]}
-        for pair in (("sum", "avg"), ("sum", "max"), ("avg", "min"), ("min", "avg"),
-                     ("max", "sum"), ("unspecified", "min"), ("unspecified", "avg")):
+                 for i in live if i["trigger_expected"]}
+        for pair in (("sum", "avg"), ("max", "sum"), ("unspecified", "min"),
+                     ("unspecified", "max")):
             self.assertIn(pair, pairs)
-        unsupported = [i for i in self.intents if i.get("golden") == {"unsupported": True}]
+        unsupported = [i for i in live if i.get("golden") == {"unsupported": True}]
         self.assertEqual(len(unsupported), 2)
 
     def test_golden_trigger_matches_trigger_expected(self):
@@ -126,9 +137,10 @@ class LocalHoldoutTest(unittest.TestCase):
             swapped = {**semantic, "inner": semantic["final"], "final": semantic["inner"]}
             self.assertNotEqual(P.tool_arg_mismatches(
                 intent["expected_tool_args"], AP.semantic_to_flat(swapped),
-                P.tool_defaults("get_operation_metrics")), [], intent["intent"])
+                P.tool_defaults("get_billing_metrics")), [], intent["intent"])
             checked += 1
-        self.assertGreaterEqual(checked, 8)
+        # v1에서는 8개 이상이었다. v2에서 지원 범위 밖이 된 intent를 빼면 2개다.
+        self.assertGreaterEqual(checked, 2)
 
     def test_trigger_expected_must_agree_with_the_aggregation(self):
         document = yaml.safe_load(HOLDOUT.read_text(encoding="utf-8"))

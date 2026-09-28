@@ -35,9 +35,10 @@ unsupported. 규칙이 읽지 못했다는 것만으로 부재를 확정하지 �
            YYYY년 M월, YYYY년 M월부터 (YYYY년) M월까지, YYYY년 M월과 M월(연속),
            YYYY년 상반기/하반기, YYYY년
     상대   지난주/저번 주 → last_week, 지난달/저번 달 → last_month, 작년/지난해 → last_year,
+           이번 주/금주 → this_week, 이번 달/이달 → this_month, 올해/금년 → this_year,
            어제/오늘 → 기준일로 계산한 YYYYMMDD ("전주"는 지명과 겹쳐 쓰지 않는다), 주말/평일/주중/휴일/공휴일 → pt_date 토큰
-    미지원 최근·지난 N일/주/개월/달/년, 최근 한 달, 일주일, 이번 주/달, 이달, 올해, 금년,
-           그저께, 지난 주말, 분기, 연휴, 추석·설날 등 명절, 단독 "최근"
+    미지원 최근·지난 N일/주/개월/달/년, 최근 한 달, 일주일, 그저께, 지난·이번 주말, 분기,
+           연휴, 추석·설날 등 명절, 단독 "최근"
     모호   연도 없는 월·일("8월", "8월 3일")
 """
 
@@ -58,7 +59,8 @@ AMBIGUOUS = "ambiguous"
 UNSUPPORTED = "unsupported"
 
 #: pt_date 상대 토큰. TIMS의 해석은 계약에 없다(tims_contract relative_date_reference).
-RELATIVE_TOKENS = {"last_week", "last_month", "last_year"}
+RELATIVE_TOKENS = {"last_week", "last_month", "last_year",
+                   "this_week", "this_month", "this_year"}
 CALENDAR_TOKENS = {"weekday", "weekend", "holiday"}
 
 
@@ -104,8 +106,8 @@ def _range(start, end):
 _UNSUPPORTED_DATE = (
     r"(최근|지난)\s*(\d+|한|두|세|네|일)\s*(일|주일|주|개월|달|년)",
     r"최근\s*일주일|일주일\s*동안|일주일간",
-    r"지난\s*주말|저번\s*주말",
-    r"이번\s*(주|달|년)|이달|금주|올해|금년|그저께|그제|엊그제",
+    r"지난\s*주말|저번\s*주말|이번\s*주말",
+    r"그저께|그제|엊그제",
     r"\d\s*분기|분기|연휴|추석|설날|명절|크리스마스|성탄절|방학|휴가철",
     r"최근",
 )
@@ -113,6 +115,9 @@ _RELATIVE_DATE = (
     (r"지난\s*주|저번\s*주", "last_week", "직전 달력 주(월~일)"),
     (r"지난\s*달|저번\s*달|전월|지난\s*월", "last_month", "직전 달력 월"),
     (r"작년|지난\s*해|전년", "last_year", "직전 달력 연도"),
+    (r"이번\s*주|금주", "this_week", "기준일이 속한 달력 주(월요일부터 기준일까지)"),
+    (r"이번\s*달|이달|금월", "this_month", "기준일이 속한 달력 월(1일부터 기준일까지)"),
+    (r"올해|금년|이번\s*(해|년)", "this_year", "기준일이 속한 달력 연도(1월 1일부터 기준일까지)"),
     (r"어제", "yesterday", "기준일 하루 전"),
     (r"오늘", "today", "기준일"),
     (r"주말", "weekend", "주말(pt_date 토큰)"),
@@ -286,6 +291,8 @@ VERIFIED_STATUSES = frozenset({STATUS_INTERPRETED, STATUS_CONFLICT, STATUS_ABSEN
 _RELATIVE_ANCHORS = {
     "last_week": r"지난|저번|전주|주", "last_month": r"지난|저번|전월|달|월",
     "last_year": r"작년|지난|전년|해|년",
+    "this_week": r"이번|금주|주", "this_month": r"이번|이달|금월|달|월",
+    "this_year": r"올해|금년|이번|해|년",
     "weekday": r"평일|주중", "weekend": r"주말", "holiday": r"휴일",
 }
 

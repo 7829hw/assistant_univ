@@ -57,18 +57,23 @@ class DecisionTest(unittest.TestCase):
 class EndToEndTest(unittest.TestCase):
     def test_analyze_a_real_run_directory(self):
         items = [item for item in P.load_corpus_items(VA.HOLDOUT)
-                 if item["id"] in ("v05_p0", "v08_p0")]
-        ratio = {"id": "ratio", "concept": "PROPORTION", "subtype": "operating_ratio",
+                 if item["id"] in ("v05_p0", "v12_p0")]
+        ratio = {"id": "ratio", "concept": "PROPORTION", "subtype": "active_taxi_ratio",
                  "role": "MEASURE", "source": "implicit"}
-        hours = {"id": "hours", "concept": "AMOUNT", "subtype": "hours", "role": "MEASURE",
+        dongseongro = {"id": "p", "concept": "LOCATION", "subtype": "place", "role": "SUBCOND",
+                       "source": "user", "value": {"name": "동성로", "region": ""}}
+        passage = {"id": "passage", "concept": "EVENT", "subtype": "passage",
+                   "role": "SUPPORT", "source": "implicit"}
+        speed = {"id": "speed", "concept": "AMOUNT", "subtype": "speed", "role": "MEASURE",
                  "source": "implicit"}
-        # v05_p0: 개인택시를 빠뜨렸다(조용한 오답). v08_p0: 올바른 계획.
+        # v05_p0: 개인택시를 빠뜨렸다(조용한 오답). v12_p0: 올바른 계획.
         contents = [
             json.dumps({"concepts": [OP, ratio], "factors": {"aggregation": "avg"}}),
             json.dumps({"verdict": "inconsistent", "issues": [
                 {"kind": "missing_constraint", "question_evidence": "개인택시",
                  "plan_field": "taxi_type"}]}),
-            json.dumps({"concepts": [OP, hours], "factors": {"aggregation": "max"}}),
+            json.dumps({"concepts": [dongseongro, passage, speed],
+                        "factors": {"aggregation": "avg"}}),
             json.dumps({"verdict": "consistent", "issues": []}),
         ]
         server = FakeServer()
@@ -91,7 +96,8 @@ class EndToEndTest(unittest.TestCase):
         self.assertEqual(s["h0"]["silent_intents"], ["v05_private_avg_operating_ratio"])
         self.assertEqual(s["v0"]["silent_intents"], [])
         self.assertEqual(s["v0"]["supported_rejection"], 1)
-        self.assertEqual((s["h0"]["tool_calls"], s["v0"]["tool_calls"]), (2, 1))
+        # v12 계획은 장소 조회와 통행 통계 두 호출이다.
+        self.assertEqual((s["h0"]["tool_calls"], s["v0"]["tool_calls"]), (3, 2))
         self.assertEqual(s["v0_only_silent"], [])
         self.assertEqual(s["invariant_violations"], [])
         self.assertEqual(s["tp_families"], ["B_taxi_type"])

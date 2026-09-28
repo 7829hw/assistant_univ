@@ -280,7 +280,7 @@ class OtherDiagnosticsUnchangedTest(_ComposeCase):
              [place("p", "대구"), event("e", "passage"), measure("m", "AMOUNT", "passage_count")],
              {"dimension": "dayofweek"}),
             ("PARAM_VALUE_REQUIRES_INPUT",
-             [event("e", "operation"), measure("m", "AMOUNT", "operating_count")],
+             [event("e", "operation"), measure("m", "AMOUNT", "active_taxi_count")],
              {"dimension": "sigungu"}),
         )
         for code, concepts, factors in cases:
