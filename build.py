@@ -277,6 +277,7 @@ def check_enum_drift(tools: list[dict], prompt: str) -> list[str]:
     """
     warnings: list[str] = []
     seen: set[tuple[str, str]] = set()
+    _PT_MARKER = re.compile(r"\bpt_\w+")
 
     for tool in tools:
         fn = tool.get("function") or {}
@@ -284,6 +285,8 @@ def check_enum_drift(tools: list[dict], prompt: str) -> list[str]:
         props = ((fn.get("parameters") or {}).get("properties")) or {}
         for pname, pschema in props.items():
             if not isinstance(pschema, dict):
+                continue
+            if not _PT_MARKER.search(pschema.get("description") or ""):
                 continue
             for value in pschema.get("enum") or []:
                 key = (pname, str(value))

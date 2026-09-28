@@ -1,175 +1,106 @@
 # -*- coding: utf-8 -*-
 """YAML Direct Tool 8개를 위한 deterministic Stub 구현."""
 
-import hashlib
-import json
-import random
+from pathlib import Path
+
+import copy
+import yaml
 
 
-PLACE_FIXTURES = {
-    "동대구역": {
-        "scope": "scope:edge:11234",
-        "aliases": ["동대구"],
-        "parent": "scope:district:2721000000",
-    },
-    "동성로": {
-        "scope": "scope:edge:1742",
-        "aliases": ["동성로 거리"],
-        "parent": "scope:district:2723000000",
-    },
-    "어린이대공원": {
-        "scope": "scope:edge:busan_children_park",
-        "aliases": [],
-        "parent": "scope:district:2623010700",
-    },
-    "광안리": {
-        "scope": "scope:edge:gwangalli",
-        "aliases": [],
-        "parent": "scope:district:2650010400",
-    },
-    "도심지": {
-        "scope": "scope:h3:8830e1d8dffffff",
-        "aliases": ["중심지역", "중심지"],
-        "parent": "scope:district:2723000000",
-    },
+DEFAULT_MOCK_STUB_PATH = Path(__file__).resolve().parent / "mock_stub.yaml"
+_REQUIRED_TIMS_VALUES = {
+    "get_passage_count": ("count",),
+    "get_passage_metrics": ("speed", "rpm"),
+    "get_trip_count": ("count",),
+    "get_trip_metrics": ("fare",),
+    "get_drive_metrics": ("vacant_ratio",),
+    "get_billing_metrics": (
+        "revenue", "active_taxi_count", "active_taxi_ratio", "operating_days",
+    ),
 }
 
-DISTRICT_FIXTURES = {
-    "대구": {
-        "scope": "scope:district:2700000000",
-        "aliases": ["대구광역시"],
-        "level": "sido",
-        "parent": None,
-    },
-    "서울": {
-        "scope": "scope:district:1100000000",
-        "aliases": ["서울특별시"],
-        "level": "sido",
-        "parent": None,
-    },
-    "부산": {
-        "scope": "scope:district:2600000000",
-        "aliases": ["부산광역시"],
-        "level": "sido",
-        "parent": None,
-    },
-    "부산진구": {
-        "scope": "scope:district:2623000000",
-        "aliases": [],
-        "level": "sigungu",
-        "parent": "scope:district:2600000000",
-    },
-    "부산 동구": {
-        "scope": "scope:district:2617000000",
-        "aliases": [],
-        "level": "sigungu",
-        "parent": "scope:district:2600000000",
-    },
-    "수영구": {
-        "scope": "scope:district:2650000000",
-        "aliases": [],
-        "level": "sigungu",
-        "parent": "scope:district:2600000000",
-    },
-    "인천": {
-        "scope": "scope:district:2800000000",
-        "aliases": ["인천광역시"],
-        "level": "sido",
-        "parent": None,
-    },
-    "중구": {
-        "scope": "scope:district:2723000000",
-        "aliases": [],
-        "level": "sigungu",
-        "parent": "scope:district:2700000000",
-    },
-    "동구": {
-        "scope": "scope:district:2721000000",
-        "aliases": [],
-        "level": "sigungu",
-        "parent": "scope:district:2700000000",
-    },
-    "서구": {
-        "scope": "scope:district:2722000000",
-        "aliases": [],
-        "level": "sigungu",
-        "parent": "scope:district:2700000000",
-    },
-    "수성구": {
-        "scope": "scope:district:2726000000",
-        "aliases": [],
-        "level": "sigungu",
-        "parent": "scope:district:2700000000",
-    },
-    "달서구": {
-        "scope": "scope:district:2729000000",
-        "aliases": [],
-        "level": "sigungu",
-        "parent": "scope:district:2700000000",
-    },
-    "동인동": {
-        "scope": "scope:district:2723010200",
-        "aliases": [],
-        "level": "emd",
-        "parent": "scope:district:2723000000",
-    },
-    "중앙로동": {
-        "scope": "scope:district:2723010300",
-        "aliases": [],
-        "level": "emd",
-        "parent": "scope:district:2723000000",
-    },
-    "태평로동": {
-        "scope": "scope:district:2723010100",
-        "aliases": [],
-        "level": "emd",
-        "parent": "scope:district:2723000000",
-    },
-    "신천동": {
-        "scope": "scope:district:2723510100",
-        "aliases": [],
-        "level": "emd",
-        "parent": "scope:district:2721000000",
-    },
-    "두산동": {
-        "scope": "scope:district:2726010100",
-        "aliases": [],
-        "level": "emd",
-        "parent": "scope:district:2726000000",
-    },
-    "두류동": {
-        "scope": "scope:district:2729010100",
-        "aliases": [],
-        "level": "emd",
-        "parent": "scope:district:2729000000",
-    },
-    "초읍동": {
-        "scope": "scope:district:2623010700",
-        "aliases": [],
-        "level": "emd",
-        "parent": "scope:district:2623000000",
-    },
-    "초량동": {
-        "scope": "scope:district:2617010100",
-        "aliases": [],
-        "level": "emd",
-        "parent": "scope:district:2617000000",
-    },
-    "광안동": {
-        "scope": "scope:district:2650010400",
-        "aliases": [],
-        "level": "emd",
-        "parent": "scope:district:2650000000",
-    },
-}
 
-H3_FIXTURES = (
-    ("도심 H3-1", "scope:h3:8830e1d81ffffff", "scope:district:2723000000"),
-    ("도심 H3-2", "scope:h3:8830e1d83ffffff", "scope:district:2723000000"),
-    ("동구 H3-1", "scope:h3:8830e1d85ffffff", "scope:district:2721000000"),
-    ("수성 H3-1", "scope:h3:8830e1d87ffffff", "scope:district:2726000000"),
-    ("달서 H3-1", "scope:h3:8830e1d89ffffff", "scope:district:2729000000"),
-)
+class MockStubError(ValueError):
+    """mock_stub.yaml 구조나 필수 값이 올바르지 않음."""
+
+
+def load_mock_stub(path=DEFAULT_MOCK_STUB_PATH):
+    """Mock 데이터를 한 번 읽고 실행에 필요한 최소 계약을 검증한다."""
+    stub_path = Path(path).expanduser().resolve()
+    try:
+        document = yaml.safe_load(stub_path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as error:
+        raise MockStubError(
+            f"Mock Stub을 읽을 수 없습니다: {stub_path}\n{error}"
+        ) from error
+    if not isinstance(document, dict) or document.get("version") != 1:
+        raise MockStubError("mock_stub.yaml의 version은 1이어야 합니다.")
+
+    gazetteer = document.get("gazetteer")
+    tims = document.get("tims")
+    if not isinstance(gazetteer, dict) or not isinstance(tims, dict):
+        raise MockStubError("mock_stub.yaml에 gazetteer와 tims object가 필요합니다.")
+    for section in ("places", "districts"):
+        fixtures = gazetteer.get(section)
+        if not isinstance(fixtures, dict) or not fixtures:
+            raise MockStubError(f"gazetteer.{section}는 비어 있지 않은 object여야 합니다.")
+        for name, fixture in fixtures.items():
+            if not isinstance(name, str) or not isinstance(fixture, dict):
+                raise MockStubError(f"gazetteer.{section} entry가 잘못되었습니다.")
+            if not isinstance(fixture.get("scope"), str):
+                raise MockStubError(f"gazetteer.{section}.{name}.scope가 필요합니다.")
+            if not isinstance(fixture.get("aliases"), list):
+                raise MockStubError(f"gazetteer.{section}.{name}.aliases는 list여야 합니다.")
+            parent = fixture.get("parent")
+            if parent is not None and not isinstance(parent, str):
+                raise MockStubError(f"gazetteer.{section}.{name}.parent가 잘못되었습니다.")
+            if section == "districts" and fixture.get("level") not in {
+                "sido", "sigungu", "emd",
+            }:
+                raise MockStubError(f"gazetteer.districts.{name}.level이 잘못되었습니다.")
+    h3 = gazetteer.get("h3")
+    if not isinstance(h3, list) or any(
+        not isinstance(item, list)
+        or len(item) != 3
+        or not all(isinstance(value, str) for value in item)
+        for item in h3
+    ):
+        raise MockStubError("gazetteer.h3는 [name, scope, parent] 목록이어야 합니다.")
+    for tool_name, value_names in _REQUIRED_TIMS_VALUES.items():
+        values = tims.get(tool_name)
+        if not isinstance(values, dict):
+            raise MockStubError(f"tims.{tool_name} object가 필요합니다.")
+        for value_name in value_names:
+            value = values.get(value_name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise MockStubError(
+                    f"tims.{tool_name}.{value_name} 숫자 값이 필요합니다."
+                )
+        cases = values.get("cases", [])
+        if not isinstance(cases, list):
+            raise MockStubError(f"tims.{tool_name}.cases는 list여야 합니다.")
+        for index, case in enumerate(cases, start=1):
+            if not isinstance(case, dict):
+                raise MockStubError(
+                    f"tims.{tool_name}.cases[{index}]는 object여야 합니다."
+                )
+            if not isinstance(case.get("when"), dict):
+                raise MockStubError(
+                    f"tims.{tool_name}.cases[{index}].when은 object여야 합니다."
+                )
+            if "result" not in case:
+                raise MockStubError(
+                    f"tims.{tool_name}.cases[{index}].result가 필요합니다."
+                )
+    return document
+
+
+DEFAULT_MOCK_STUB = load_mock_stub()
+_GAZETTEER = DEFAULT_MOCK_STUB["gazetteer"]
+TIMS_STUB = DEFAULT_MOCK_STUB["tims"]
+PLACE_FIXTURES = _GAZETTEER["places"]
+DISTRICT_FIXTURES = _GAZETTEER["districts"]
+H3_FIXTURES = tuple(tuple(item) for item in _GAZETTEER["h3"])
 
 ALL_FIXTURES = {**DISTRICT_FIXTURES, **PLACE_FIXTURES}
 NAME_TO_FIXTURE = {}
@@ -178,14 +109,8 @@ for _canonical_name, _fixture in ALL_FIXTURES.items():
     for _alias in _fixture.get("aliases", []):
         NAME_TO_FIXTURE[_alias] = (_canonical_name, _fixture)
 
-SCOPE_TO_NAME = {
-    fixture["scope"]: name
-    for name, fixture in ALL_FIXTURES.items()
-}
-SCOPE_TO_NAME.update({
-    scope: name for name, scope, _parent in H3_FIXTURES
-})
-
+SCOPE_TO_NAME = {fixture["scope"]: name for name, fixture in ALL_FIXTURES.items()}
+SCOPE_TO_NAME.update({scope: name for name, scope, _parent in H3_FIXTURES})
 PARENT_BY_SCOPE = {
     fixture["scope"]: fixture.get("parent")
     for fixture in ALL_FIXTURES.values()
@@ -193,7 +118,6 @@ PARENT_BY_SCOPE = {
 PARENT_BY_SCOPE.update({
     scope: parent for _name, scope, parent in H3_FIXTURES
 })
-
 DIMENSION_SCOPES = {
     level: [
         fixture["scope"]
@@ -207,27 +131,7 @@ DIMENSION_SCOPES["h3"] = [
     for fixture in PLACE_FIXTURES.values()
     if fixture["scope"].startswith("scope:h3:")
 ] + [scope for _name, scope, _parent in H3_FIXTURES]
-
 DAY_OF_WEEK_LABELS = ["월", "화", "수", "목", "금", "토", "일"]
-
-
-TOOL_DEFAULTS = {
-    "get_place_scope": {"include_vicinity": False},
-    "get_passage_count": {
-        "taxi_type": "all",
-        "taxi_status": "all",
-    },
-    "get_passage_metrics": {"aggregation": "avg"},
-    "get_trip_metrics": {"aggregation": "avg"},
-    "get_drive_metrics": {
-        "taxi_type": "all",
-        "aggregation": "avg",
-    },
-    "get_operation_metrics": {
-        "taxi_type": "all",
-        "aggregation": "avg",
-    },
-}
 
 REGION_SCOPE_BY_TOKEN = {}
 for _name, _fixture in DISTRICT_FIXTURES.items():
@@ -242,33 +146,6 @@ def _error(error_code, message):
         "error_code": error_code,
         "message": message,
     }
-
-
-def _rng(tool_name, arguments, *, exclude=(), salt=None):
-    """YAML default를 보완한 의미상 arguments로 재현 가능한 난수기를 만든다."""
-    semantic_arguments = dict(arguments)
-    for key, default in TOOL_DEFAULTS.get(tool_name, {}).items():
-        semantic_arguments.setdefault(key, default)
-    excluded = set(exclude)
-    normalized = {
-        key: value
-        for key, value in semantic_arguments.items()
-        if key not in excluded
-    }
-    payload = {
-        "tool": tool_name,
-        "arguments": normalized,
-        "salt": salt,
-    }
-    encoded = json.dumps(
-        payload,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        default=str,
-    ).encode("utf-8")
-    seed = int.from_bytes(hashlib.sha256(encoded).digest()[:8], "big")
-    return random.Random(seed)
 
 
 def _aggregate(values, aggregation=None):
@@ -293,46 +170,33 @@ def _aggregate(values, aggregation=None):
     raise ValueError(f"지원하지 않는 aggregation: {aggregation}")
 
 
-def _metric_samples(tool_name, arguments, metric, *, salt=None, count=9):
-    """metric별 현실적인 범위 안에서 여러 deterministic sample을 만든다."""
-    rng = _rng(
-        tool_name,
-        arguments,
-        exclude=("aggregation", "order", "limit", "rollup"),
-        salt=salt,
-    )
-    if metric == "speed":
-        return [round(rng.uniform(15, 45), 3) for _ in range(count)]
-    if metric == "rpm":
-        return [rng.randint(700, 3000) for _ in range(count)]
-    if metric == "fare":
-        return [rng.randint(4000, 35000) for _ in range(count)]
-    if metric == "vacant_ratio":
-        return [round(rng.uniform(0.05, 0.75), 4) for _ in range(count)]
-    if metric == "revenue":
-        return [rng.randint(50000, 400000) for _ in range(count)]
-    if metric == "operating_count":
-        return [rng.randint(1, 30) for _ in range(count)]
-    if metric == "operating_ratio":
-        return [round(rng.uniform(0.1, 0.95), 4) for _ in range(count)]
-    if metric == "hours":
-        return [round(rng.uniform(2, 14), 3) for _ in range(count)]
-    raise ValueError(f"지원하지 않는 metric: {metric}")
+def _fixed_metric(tool_name, metric):
+    """YAML에 선언된 Tool metric 고정값을 반환한다."""
+    try:
+        return TIMS_STUB[tool_name][metric]
+    except KeyError as error:
+        raise ValueError(f"지원하지 않는 metric: {metric}") from error
 
 
-def _metric_value(tool_name, arguments, metric, *, salt=None):
-    samples = _metric_samples(tool_name, arguments, metric, salt=salt)
-    return _aggregate(samples, arguments.get("aggregation"))
+def _fixed_count(tool_name):
+    """YAML에 선언된 Tool count 고정값을 반환한다."""
+    return TIMS_STUB[tool_name]["count"]
 
 
-def _count_value(tool_name, arguments, *, salt=None):
-    rng = _rng(
-        tool_name,
-        arguments,
-        exclude=("order", "limit"),
-        salt=salt,
-    )
-    return rng.randint(10, 5000)
+def _find_mock_case(tool_name, arguments):
+    """arguments와 모든 when 항목이 같은 첫 YAML case 결과를 반환한다."""
+    for case in TIMS_STUB[tool_name].get("cases", []):
+        if all(arguments.get(key) == value for key, value in case["when"].items()):
+            return copy.deepcopy(case["result"])
+    return None
+
+
+def _apply_case_limit(result, arguments):
+    """YAML에 이미 정렬된 case 결과에는 재정렬 없이 limit만 적용한다."""
+    if not isinstance(result, list):
+        return result
+    limit = arguments.get("limit", 10000)
+    return result[:limit] if limit is not None else result
 
 
 def _is_within(candidate, root):
@@ -415,14 +279,15 @@ def mock_get_scope_name(arguments):
 
 
 def mock_get_passage_count(arguments):
-    """조건에 맞는 passage 건수를 Direct list 형태로 반환한다."""
+    """passage count를 object 또는 지명별 list 형태로 반환한다."""
     scope = arguments.get("scope")
     dimension = arguments.get("dimension")
     if not dimension:
-        return [{
-            "scope": scope,
-            "count": _count_value("get_passage_count", arguments, salt=scope),
-        }]
+        return {"count": _fixed_count("get_passage_count")}
+
+    case_result = _find_mock_case("get_passage_count", arguments)
+    if case_result is not None:
+        return _apply_case_limit(case_result, arguments)
 
     candidates = _candidate_scopes(dimension, scope)
     if not candidates:
@@ -432,12 +297,8 @@ def mock_get_passage_count(arguments):
         )
     rows = [
         {
-            "scope": candidate,
-            "count": _count_value(
-                "get_passage_count",
-                arguments,
-                salt=candidate,
-            ),
+            dimension: SCOPE_TO_NAME[candidate],
+            "count": _fixed_count("get_passage_count"),
         }
         for candidate in candidates
     ]
@@ -447,112 +308,101 @@ def mock_get_passage_count(arguments):
 def mock_get_passage_metrics(arguments):
     """passage metric을 집계한 Direct scalar를 반환한다."""
     metric = arguments.get("metric")
-    value = _metric_value("get_passage_metrics", arguments, metric)
+    value = _fixed_metric("get_passage_metrics", metric)
     if metric == "speed":
         return f"{value:g}km/h"
     return value
 
 
 def mock_get_trip_count(arguments):
-    """고정 O/D, 한쪽 고정 ranking, 전체 pair 또는 전체 count를 반환한다."""
-    pickup = arguments.get("scope_pickup")
-    dropoff = arguments.get("scope_dropoff")
+    """trip count를 object 또는 dimension_target별 지명 list로 반환한다."""
     dimension = arguments.get("dimension")
-
-    if pickup and dropoff:
-        return [{
-            "scope_pickup": pickup,
-            "scope_dropoff": dropoff,
-            "count": _count_value(
-                "get_trip_count",
-                arguments,
-                salt=f"{pickup}>{dropoff}",
-            ),
-        }]
-
     if not dimension:
-        row = {
-            "count": _count_value("get_trip_count", arguments, salt="total"),
-        }
-        if pickup:
-            row["scope_pickup"] = pickup
-        if dropoff:
-            row["scope_dropoff"] = dropoff
-        return [row]
+        return {"count": _fixed_count("get_trip_count")}
 
-    candidates = _candidate_scopes(dimension)
-    if not candidates:
-        return _error("INVALID_ARGUMENT", "지원하지 않는 dimension입니다.")
+    target = arguments.get("dimension_target") or "both"
+    pickup_scope = arguments.get("scope_pickup")
+    dropoff_scope = arguments.get("scope_dropoff")
+    target_scope = {
+        "pickup": pickup_scope,
+        "dropoff": dropoff_scope,
+    }.get(target)
 
-    if pickup:
-        rows = [
-            {
-                "scope_pickup": pickup,
-                "scope_dropoff": candidate,
-                "count": _count_value(
-                    "get_trip_count",
-                    arguments,
-                    salt=f"{pickup}>{candidate}",
-                ),
-            }
-            for candidate in candidates
+    if target != "both" and target_scope is None:
+        case_result = _find_mock_case("get_trip_count", arguments)
+        if case_result is not None:
+            return _apply_case_limit(case_result, arguments)
+
+    if target == "pickup":
+        names = [
+            SCOPE_TO_NAME[candidate]
+            for candidate in _candidate_scopes(dimension, pickup_scope)
         ]
-    elif dropoff:
         rows = [
-            {
-                "scope_pickup": candidate,
-                "scope_dropoff": dropoff,
-                "count": _count_value(
-                    "get_trip_count",
-                    arguments,
-                    salt=f"{candidate}>{dropoff}",
-                ),
-            }
-            for candidate in candidates
+            {"pickup": name, "count": _fixed_count("get_trip_count")}
+            for name in names
+        ]
+    elif target == "dropoff":
+        names = [
+            SCOPE_TO_NAME[candidate]
+            for candidate in _candidate_scopes(dimension, dropoff_scope)
+        ]
+        rows = [
+            {"dropoff": name, "count": _fixed_count("get_trip_count")}
+            for name in names
         ]
     else:
-        rows = [
-            {
-                "scope_pickup": candidate,
-                "scope_dropoff": candidates[(index + 1) % len(candidates)],
-                "count": _count_value(
-                    "get_trip_count",
-                    arguments,
-                    salt=f"pair:{candidate}",
-                ),
-            }
-            for index, candidate in enumerate(candidates)
+        pickup_names = [
+            SCOPE_TO_NAME[candidate]
+            for candidate in _candidate_scopes(dimension, pickup_scope)
         ]
+        dropoff_names = [
+            SCOPE_TO_NAME[candidate]
+            for candidate in _candidate_scopes(dimension, dropoff_scope)
+        ]
+        if not pickup_names or not dropoff_names:
+            rows = []
+        else:
+            row_count = max(len(pickup_names), len(dropoff_names))
+            rows = [
+                {
+                    "pickup": pickup_names[index % len(pickup_names)],
+                    "dropoff": dropoff_names[index % len(dropoff_names)],
+                    "count": _fixed_count("get_trip_count"),
+                }
+                for index in range(row_count)
+            ]
 
+    if not rows:
+        return _error(
+            "UNSUPPORTED_COMBINATION",
+            "지정한 승하차 scope와 dimension에 해당하는 후보가 없습니다.",
+        )
     return _apply_order_limit(rows, "count", arguments)
-
 
 def mock_get_trip_metrics(arguments):
     """택시 소속지역 조건을 반영한 fare Direct scalar를 반환한다."""
-    return _metric_value(
-        "get_trip_metrics",
-        arguments,
-        arguments.get("metric"),
-    )
+    return _fixed_metric("get_trip_metrics", arguments.get("metric"))
 
 
 def mock_get_drive_metrics(arguments):
-    """공차율을 여러 sample에서 집계해 percentage scalar로 반환한다."""
-    value = _metric_value(
-        "get_drive_metrics",
-        arguments,
-        arguments.get("metric"),
-    )
+    """YAML의 고정 공차율을 percentage scalar로 반환한다."""
+    value = _fixed_metric("get_drive_metrics", arguments.get("metric"))
     return f"{round(value * 100, 2):g}%"
 
 
-def mock_get_operation_metrics(arguments):
+def mock_get_billing_metrics(arguments):
     """일 단위 영업 metric을 scalar, dimension list 또는 rollup scalar로 반환한다."""
     metric = arguments.get("metric")
     dimension = arguments.get("dimension")
     bucket = arguments.get("bucket")
     rollup = arguments.get("rollup")
 
+    if arguments.get("scope") and dimension:
+        return _error(
+            "UNSUPPORTED_COMBINATION",
+            "scope와 dimension은 동시에 사용할 수 없습니다.",
+        )
     if dimension and bucket:
         return _error(
             "UNSUPPORTED_COMBINATION",
@@ -566,10 +416,14 @@ def mock_get_operation_metrics(arguments):
     if dimension in ("sigungu", "emd", "h3") and not arguments.get("scope"):
         return _error(
             "UNSUPPORTED_COMBINATION",
-            "sigungu, emd, h3 dimension을 사용하려면 scope가 필요합니다.",
+            "scope가 없을 때는 sido, dayofweek dimension만 사용할 수 있습니다.",
         )
 
     if dimension:
+        case_result = _find_mock_case("get_billing_metrics", arguments)
+        if case_result is not None:
+            return _apply_case_limit(case_result, arguments)
+
         if dimension == "dayofweek":
             candidates = DAY_OF_WEEK_LABELS
         else:
@@ -581,13 +435,12 @@ def mock_get_operation_metrics(arguments):
             )
         rows = [
             {
-                dimension: candidate,
-                metric: _metric_value(
-                    "get_operation_metrics",
-                    arguments,
-                    metric,
-                    salt=f"{dimension}:{candidate}",
+                dimension: (
+                    candidate
+                    if dimension == "dayofweek"
+                    else SCOPE_TO_NAME[candidate]
                 ),
+                metric: _fixed_metric("get_billing_metrics", metric),
             }
             for candidate in candidates
         ]
@@ -595,17 +448,12 @@ def mock_get_operation_metrics(arguments):
 
     if bucket:
         bucket_values = [
-            _metric_value(
-                "get_operation_metrics",
-                arguments,
-                metric,
-                salt=f"{bucket}:{index}",
-            )
-            for index in range(6)
+            _fixed_metric("get_billing_metrics", metric)
+            for _ in range(6)
         ]
         return _aggregate(bucket_values, rollup)
 
-    return _metric_value("get_operation_metrics", arguments, metric)
+    return _fixed_metric("get_billing_metrics", metric)
 
 
 MOCK_HANDLERS = {
@@ -616,5 +464,5 @@ MOCK_HANDLERS = {
     "get_trip_count": mock_get_trip_count,
     "get_trip_metrics": mock_get_trip_metrics,
     "get_drive_metrics": mock_get_drive_metrics,
-    "get_operation_metrics": mock_get_operation_metrics,
+    "get_billing_metrics": mock_get_billing_metrics,
 }

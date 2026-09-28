@@ -1,0 +1,237 @@
+version: 1
+
+# 사람이 수정하는 Mock 기준 데이터. scope 값은 provenance 회귀계약이다.
+gazetteer:
+  places:
+    동대구역:
+      scope: scope:edge:11234
+      aliases: [동대구]
+      parent: scope:district:2721000000
+    동성로:
+      scope: scope:edge:1742
+      aliases: [동성로 거리, 동성로길]
+      parent: scope:district:2723000000
+    어린이대공원:
+      scope: scope:gz:3982
+      aliases: []
+      parent: scope:district:2623010700
+    광안리:
+      scope: scope:gz:33212
+      aliases: []
+      parent: scope:district:2650010400
+    도심지:
+      scope: scope:h3:8830e1d8dffffff
+      aliases: [중심지역, 중심지]
+      parent: scope:district:2723000000
+
+  districts:
+    대구:
+      scope: scope:district:2700000000
+      aliases: [대구광역시,대구시]
+      level: sido
+      parent: null
+    서울:
+      scope: scope:district:1100000000
+      aliases: [서울특별시]
+      level: sido
+      parent: null
+    부산:
+      scope: scope:district:2600000000
+      aliases: [부산광역시]
+      level: sido
+      parent: null
+    부산진구:
+      scope: scope:district:2623000000
+      aliases: []
+      level: sigungu
+      parent: scope:district:2600000000
+    부산 동구:
+      scope: scope:district:2617000000
+      aliases: []
+      level: sigungu
+      parent: scope:district:2600000000
+    수영구:
+      scope: scope:district:2650000000
+      aliases: []
+      level: sigungu
+      parent: scope:district:2600000000
+    인천:
+      scope: scope:district:2800000000
+      aliases: [인천광역시]
+      level: sido
+      parent: null
+    중구:
+      scope: scope:district:2723000000
+      aliases: []
+      level: sigungu
+      parent: scope:district:2700000000
+    동구:
+      scope: scope:district:2721000000
+      aliases: []
+      level: sigungu
+      parent: scope:district:2700000000
+    서구:
+      scope: scope:district:2722000000
+      aliases: []
+      level: sigungu
+      parent: scope:district:2700000000
+    수성구:
+      scope: scope:district:2726000000
+      aliases: []
+      level: sigungu
+      parent: scope:district:2700000000
+    달서구:
+      scope: scope:district:2729000000
+      aliases: []
+      level: sigungu
+      parent: scope:district:2700000000
+    동인동:
+      scope: scope:district:2723010200
+      aliases: []
+      level: emd
+      parent: scope:district:2723000000
+    중앙로동:
+      scope: scope:district:2723010300
+      aliases: []
+      level: emd
+      parent: scope:district:2723000000
+    태평로동:
+      scope: scope:district:2723010100
+      aliases: []
+      level: emd
+      parent: scope:district:2723000000
+    동성로동:
+      scope: scope:district:2711012300
+      aliases: [ ]
+      level: emd
+      parent: scope:district:2711000000
+    신천동:
+      scope: scope:district:2723510100
+      aliases: []
+      level: emd
+      parent: scope:district:2721000000
+    두산동:
+      scope: scope:district:2726010100
+      aliases: []
+      level: emd
+      parent: scope:district:2726000000
+    두류동:
+      scope: scope:district:2729010100
+      aliases: []
+      level: emd
+      parent: scope:district:2729000000
+    초읍동:
+      scope: scope:district:2623010700
+      aliases: []
+      level: emd
+      parent: scope:district:2623000000
+    초량동:
+      scope: scope:district:2617010100
+      aliases: []
+      level: emd
+      parent: scope:district:2617000000
+    광안동:
+      scope: scope:district:2650010400
+      aliases: []
+      level: emd
+      parent: scope:district:2650000000
+
+  h3:
+    - [도심 H3-1, scope:h3:8830e1d81ffffff, scope:district:2723000000]
+    - [도심 H3-2, scope:h3:8830e1d83ffffff, scope:district:2723000000]
+    - [동구 H3-1, scope:h3:8830e1d85ffffff, scope:district:2721000000]
+    - [수성 H3-1, scope:h3:8830e1d87ffffff, scope:district:2726000000]
+    - [달서 H3-1, scope:h3:8830e1d89ffffff, scope:district:2729000000]
+
+tims:
+  get_passage_count:
+    count: 12345
+    cases:
+      - when:
+          dimension: sigungu
+          order: top
+        result:
+          - sigungu: 달서구
+            count: 320822
+          - sigungu: 수성구
+            count: 231200
+      - when:
+          dimension: sigungu
+          order: bottom
+        result:
+          - sigungu: 북구
+            count: 1280
+          - sigungu: 서구
+            count: 1502
+  get_passage_metrics:
+    speed: 30
+    rpm: 1500
+  get_trip_count:
+    count: 20
+    cases:
+      - when:
+          dimension: sigungu
+          dimension_target: pickup
+          order: top
+        result:
+          - pickup: 달서구
+            count: 13242
+          - pickup: 수성구
+            count: 11948
+      - when:
+          dimension: sigungu
+          dimension_target: pickup
+          order: bottom
+        result:
+          - pickup: 북구
+            count: 6722
+          - pickup: 서구
+            count: 5817
+      - when:
+          dimension: emd
+          dimension_target: pickup
+          order: top
+        result:
+          - pickup: 태평로동
+            count: 3122
+          - pickup: 중앙로동
+            count: 1232
+      - when:
+          dimension: emd
+          dimension_target: pickup
+          order: bottom
+        result:
+          - pickup: 신천동
+            count: 281
+          - pickup: 동인동
+            count: 352
+  get_trip_metrics:
+    fare: 12000
+  get_drive_metrics:
+    vacant_ratio: 0.35
+  get_billing_metrics:
+    revenue: 200000
+    active_taxi_count: 13172
+    active_taxi_ratio: 0.7
+    operating_days: 0.9
+    cases:
+      - when:
+          dimension: sido
+          metric: revenue
+        result:
+          - sido: 서울시
+            revenue: 257020
+          - sido: 부산시
+            revenue: 192030
+          - sido: 대구시
+            revenue: 201030
+      - when:
+          dimension: sido
+          metric: active_taxi_ratio
+        result:
+          - sido: 서울시
+            active_taxi_ratio: "59.2%"
+          - sido: 부산시
+            active_taxi_ratio: "43.9%"
+          - sido: 대구시
+            active_taxi_ratio: "55.1%"
