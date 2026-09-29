@@ -62,6 +62,8 @@ QUESTIONS_FILE = HERE / "assistant_univ_questions_100_v3.yaml"
 VARIANTS_FILE = VENDOR_DIR / "stated_variants.yaml"
 REFERENCE_DATE = date(2026, 9, 25)
 PROTOCOL = "vendor100_v1"
+#: 평가 문항 파일(--gold). None이면 업체 gold.yaml.
+GOLD_PATH = None
 
 _CALL = re.compile(r"^\s*(\w+)\((.*)\)\s*$")
 _BINDING = re.compile(r"^\$(\w+)\.scope$")
@@ -153,8 +155,17 @@ def cmd_extract(_args):
     return 0
 
 
-def load_gold():
-    return yaml.safe_load(GOLD_FILE.read_text(encoding="utf-8"))
+def load_gold(path=None):
+    """평가 문항. 업체 gold.yaml 또는 같은 표기의 다른 셋(``gold_text`` 줄, ``expected_outcome``)."""
+    path = Path(path) if path else GOLD_FILE
+    document = yaml.load(path.read_text(encoding="utf-8"), Loader=yaml.SafeLoader)
+    for item in document["items"]:
+        item["id"] = str(item["id"])
+        item.setdefault("expected_outcome", "answered")
+        item.setdefault("vendor_verdict", "-")
+        if "gold" not in item:
+            item["gold"] = parse_calls(item.get("gold_text") or "")
+    return document
 
 
 # -- 정답 grounding 역산 ---------------------------------------------------------------
@@ -262,10 +273,63 @@ def _pipeline(planner):
                            tool_executor=_executor(), clock=lambda: REFERENCE_DATE)
 
 
+class _RecordingClient:
+    """LLM 호출마다 소요 시간·요청 종류·원 응답을 남긴다. 호출 수와 지연을 재기 위한 것이다."""
+
+    def __init__(self, client):
+        self.client = client
+        self.model = getattr(client, "model", None)
+        self.calls = []
+
+    def __getattr__(self, name):
+        return getattr(self.client, name)
+
+    def chat(self, messages, tools=None, **kwargs):
+        import time
+        started = time.perf_counter()
+        response = self.client.chat(messages, tools=tools, **kwargs)
+        message = (response or {}).get("message") or {}
+        self.calls.append({
+            "kind": "plan" if len(messages) <= 2 else "repair",
+            "duration_ms": round((time.perf_counter() - started) * 1000, 1),
+            "load_duration_ms": round(((response or {}).get("load_duration") or 0) / 1e6, 1),
+            "content": message.get("content"),
+            "thinking_chars": len(message.get("thinking") or ""),
+        })
+        return response
+
+
+def _planner_trace(record):
+    """모델 원 출력과 각 시도의 오류(거부된 필드·값·규칙)를 모은다."""
+    error = record.get("error") or {}
+    context = error.get("context") or {}
+    attempts = []
+    for attempt in record.get("attempts") or []:
+        failure = attempt.get("error") or {}
+        attempts.append({key: attempt.get(key) for key in (
+            "index", "stage", "status", "error_code", "repair_kind", "repair_attempted",
+            "repair_result", "reason")} | {
+            "detail": failure.get("detail"),
+            "raw_text": (failure.get("context") or {}).get("raw_text")})
+    return {
+        "raw_text": ((record.get("planner") or {}).get("raw_text")
+                     or context.get("raw_text")),
+        "error_stage": error.get("stage"),
+        "error_detail": error.get("detail"),
+        "error_context": {key: value for key, value in context.items()
+                          if key not in ("raw_text",) and isinstance(value, (str, int, float,
+                                                                           list, dict, bool))},
+        "attempts": attempts,
+        "repairs": record.get("repairs"),
+        "durations": record.get("durations"),
+    }
+
+
 def run_item(pipeline, question):
     run = pipeline.run(question)
     record = run.to_dict()
     return {
+        "planner_trace": _planner_trace(record),
         "outcome": run.outcome,
         "error_code": (record.get("error") or {}).get("code"),
         "error_user_message": (record.get("error") or {}).get("user_message"),
@@ -316,6 +380,15 @@ def score(item, observed):
     gold = item["gold"]
     checks = {}
     calls = observed["calls"]
+    expected = item.get("expected_outcome", "answered")
+    if expected != "answered":
+        # 답하지 않아야 하는 문항. 기대한 결과 종류로 멈췄을 때만 맞음.
+        checks["expected_outcome"] = expected
+        if observed["outcome"] == expected:
+            return "expected_refusal", checks
+        if observed["outcome"] == "answered":
+            return "answered_instead_of_refusal", checks
+        return "wrong_refusal_kind", checks
     if observed["outcome"] != "answered" or not calls:
         category = {"unsupported": "refused_unsupported",
                     "needs_clarification": "refused_clarification"}.get(
@@ -438,7 +511,8 @@ def _meta(kind, extra=None):
                 path: hashlib.sha256((CODE_ROOT / path).read_bytes()).hexdigest()
                 for path in git("ls-files", "--others", "--exclude-standard", "--",
                                 "geoflow", "prompts", "schemas").splitlines()},
-            "gold_sha256": hashlib.sha256(GOLD_FILE.read_bytes()).hexdigest(),
+            "gold_file": str(Path(GOLD_PATH or GOLD_FILE).resolve().relative_to(HERE)),
+            "gold_sha256": hashlib.sha256(Path(GOLD_PATH or GOLD_FILE).read_bytes()).hexdigest(),
             "reference_date": REFERENCE_DATE.isoformat(), **(extra or {})}
 
 
@@ -448,26 +522,99 @@ def _summary(rows):
     by_verdict = {}
     for row in rows:
         by_verdict.setdefault(row["vendor_verdict"], Counter())[row["category"]] += 1
-    return {"items": len(rows), "categories": dict(categories),
+    calls = [row["llm_calls"] for row in rows if "llm_calls" in row]
+    latency = sorted((row.get("planner_trace") or {}).get("durations", {}).get("total_ms", 0)
+                     for row in rows if row.get("planner_trace"))
+    extra = {}
+    if calls:
+        extra["llm_calls"] = {"total": sum(len(c) for c in calls),
+                              "plan": sum(1 for c in calls for x in c if x["kind"] == "plan"),
+                              "repair": sum(1 for c in calls for x in c if x["kind"] == "repair"),
+                              "llm_ms_total": round(sum(x["duration_ms"] for c in calls for x in c))}
+    if latency:
+        extra["total_ms"] = {"median": latency[len(latency) // 2], "sum": round(sum(latency))}
+    judged = [row for row in rows if row.get("grounding_ok") is not None]
+    if judged:
+        extra["grounding_ok"] = {"count": sum(1 for row in judged if row["grounding_ok"]),
+                                 "of": len(judged)}
+    return {"items": len(rows), "categories": dict(categories), **extra,
             "by_vendor_verdict": {k: dict(v) for k, v in sorted(by_verdict.items())},
             "outcomes": dict(Counter(row["outcome"] for row in rows)),
             "error_codes": dict(Counter(row["error_code"] for row in rows if row["error_code"]))}
 
 
+def gold_grounding(item):
+    """문항의 정답 grounding. 명시된 것이 있으면 그것, 없으면 정답 호출에서 역산. 없으면 None."""
+    if item.get("gold_grounding"):
+        return json.loads(json.dumps(item["gold_grounding"], ensure_ascii=False))
+    if item["gold"]:
+        return derive_grounding(item["gold"])
+    return None
+
+
+def _grounding_view(payload):
+    """grounding 비교용 정규형: 측정값, 장소(이름·지역·od_role), 사용자 scope, factor(기본값 제외)."""
+    if not payload or not isinstance(payload, dict) or "concepts" not in payload:
+        return None
+    measure, places, scopes = None, [], []
+    for concept in payload.get("concepts") or []:
+        attributes = concept.get("attributes") or {}
+        role = attributes.get("od_role") or concept.get("od_role")
+        if concept.get("role") == "MEASURE":
+            measure = (concept.get("concept"), concept.get("subtype"))
+        elif concept.get("concept") == "LOCATION" and concept.get("subtype") == "place":
+            value = concept.get("value") or {}
+            places.append((value.get("name"), value.get("region") or "", role))
+        elif concept.get("concept") == "LOCATION" and concept.get("subtype") == "scope":
+            scopes.append((concept.get("value"), role))
+    defaults = {"taxi_type": "all", "taxi_status": "all", "dimension_target": "both",
+                "vicinity": False}
+    factors = {key: value for key, value in (payload.get("factors") or {}).items()
+               if value is not None and defaults.get(key, object()) != value}
+    if factors.get("aggregation") == "avg" and "bucket" not in factors:
+        factors.pop("aggregation")   # 한 단계 avg는 Tool 기본값과 같다(호출 채점과 같은 규칙).
+    return {"measure": measure, "places": sorted(places, key=str), "scopes": sorted(scopes, key=str),
+            "factors": factors}
+
+
+def grounding_check(item, grounding):
+    """최종 LLM grounding이 정답 grounding과 같은가. (같음 여부, 다른 항목)."""
+    want = _grounding_view(gold_grounding(item))
+    got = _grounding_view(grounding)
+    if want is None:
+        return None, []
+    if got is None:
+        return False, ["no_grounding"]
+    diffs = []
+    for key in ("measure", "places", "scopes"):
+        if want[key] != got[key]:
+            diffs.append([key, want[key], got[key]])
+    for key in sorted(set(want["factors"]) | set(got["factors"])):
+        if want["factors"].get(key) != got["factors"].get(key):
+            diffs.append(["factor:" + key, want["factors"].get(key), got["factors"].get(key)])
+    return not diffs, diffs
+
+
 def cmd_gold(args):
-    document = load_gold()
+    document = load_gold(GOLD_PATH)
     rows = []
     for item in document["items"]:
         if args.only and item["id"] not in args.only.split(","):
             continue
-        payload = derive_grounding(item["gold"])
+        payload = gold_grounding(item)
+        if payload is None:
+            rows.append({"id": item["id"], "question": item["question"],
+                         "vendor_verdict": item["vendor_verdict"], "category": "no_gold_grounding",
+                         "checks": {}, "outcome": None, "error_code": None, "calls": [],
+                         "final_answer": None})
+            continue
         observed = run_item(_pipeline(_GoldPlanner(payload)), item["question"])
         category, checks = score(item, observed)
         rows.append({"id": item["id"], "question": item["question"],
                      "vendor_verdict": item["vendor_verdict"], "gold_grounding": payload,
                      "category": category, "checks": checks, **observed})
     variants = []
-    if VARIANTS_FILE.is_file() and not args.only:
+    if VARIANTS_FILE.is_file() and not args.only and GOLD_PATH is None:
         for variant in yaml.safe_load(VARIANTS_FILE.read_text(encoding="utf-8"))["variants"]:
             base = next(item for item in document["items"] if item["id"] == variant["base"])
             payload = derive_grounding(base["gold"])
@@ -496,7 +643,7 @@ def cmd_llm(args):
     client = OllamaClient(args.host, args.model, {"temperature": 0},
                           chat_timeout=args.chat_timeout, think=resolve_think("auto"))
     version, digest, details = A._server_details(args.host, args.model)
-    document = load_gold()
+    document = load_gold(GOLD_PATH)
     items = [item for item in document["items"]
              if not args.only or item["id"] in args.only.split(",")]
     out = Path(args.out)
@@ -513,16 +660,20 @@ def cmd_llm(args):
             if item["id"] in done:
                 continue
             state = reset.reset()
+            recorder = _RecordingClient(client)
             pipeline = GeoFlowPipeline.create(
-                client=client, tool_executor=_executor(),
+                client=recorder, tool_executor=_executor(),
                 aggregation_grounding=structured_grounding.FLAT,
                 clock=lambda: REFERENCE_DATE,
                 execution_profile=providers.profile_for(providers.MOCK, providers.LEGACY))
             observed = run_item(pipeline, item["question"])
             category, checks = score(item, observed)
+            grounding_ok, grounding_diffs = grounding_check(item, observed["grounding"])
             row = {"id": item["id"], "question": item["question"],
                    "vendor_verdict": item["vendor_verdict"], "category": category,
-                   "checks": checks, "reset_ok": state.succeeded, **observed}
+                   "checks": checks, "reset_ok": state.succeeded,
+                   "grounding_ok": grounding_ok, "grounding_diffs": grounding_diffs,
+                   "llm_calls": recorder.calls, **observed}
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
             handle.flush()
             done[item["id"]] = row
@@ -545,7 +696,7 @@ def cmd_llm(args):
 def cmd_replay(args):
     """기록된 LLM grounding을 이 코드(--code-root)로 다시 실행한다(planner 차이를 없앤다)."""
     source = json.loads(Path(args.source).read_text(encoding="utf-8"))
-    gold = {item["id"]: item for item in load_gold()["items"]}
+    gold = {item["id"]: item for item in load_gold(GOLD_PATH)["items"]}
     rows = []
     for row in source["rows"]:
         grounding = row.get("grounding")
@@ -572,9 +723,12 @@ def cmd_rescore(args):
     """저장된 관측을 현재 채점 규칙으로 다시 채점한다(실행하지 않는다). 채점 규칙을 고친 뒤 쓴다."""
     path = Path(args.result)
     result = json.loads(path.read_text(encoding="utf-8"))
-    gold = {item["id"]: item for item in load_gold()["items"]}
+    gold = {item["id"]: item for item in load_gold(result["meta"].get("gold_file") or GOLD_PATH)["items"]}
     for row in result["rows"]:
         row["category"], row["checks"] = score(gold[row["id"]], row)
+        if result["meta"].get("kind") in ("llm", "llm_replay"):
+            row["grounding_ok"], row["grounding_diffs"] = grounding_check(
+                gold[row["id"]], row.get("grounding"))
     result["summary"] = _summary(result["rows"])
     result["meta"]["rescored_at"] = datetime.now(ZoneInfo("Asia/Seoul")).isoformat()
     result["meta"]["scorer_sha256"] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
@@ -628,6 +782,8 @@ def _print_summary(result):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--code-root", default=None, help="평가할 코드 디렉터리(기본: 이 저장소)")
+    parser.add_argument("--gold", default=None,
+                        help="평가 문항 파일(기본: evaluation/vendor100/gold.yaml)")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("extract")
     gold = sub.add_parser("gold")
@@ -650,6 +806,8 @@ def main(argv=None):
     compare.add_argument("--out", default="")
     compare.add_argument("--all", action="store_true")
     args = parser.parse_args(argv)
+    global GOLD_PATH
+    GOLD_PATH = Path(args.gold).resolve() if args.gold else None
     return {"extract": cmd_extract, "gold": cmd_gold, "llm": cmd_llm, "replay": cmd_replay,
             "rescore": cmd_rescore, "compare": cmd_compare}[args.command](args)
 
