@@ -71,7 +71,8 @@ UNSUPPORTED_CODES = frozenset({
     "UNSUPPORTED_AGGREGATION_COMBINATION", "UNVERIFIED_TIMS_CONTRACT",
     "UNSUPPORTED_PARTITION_SIZE", "UNSUPPORTED_PERIOD_FOR_GROUPING", "UNRESOLVED_PERIOD",
     "DATE_EXPRESSION_UNSUPPORTED", "DATE_MULTIPLE_UNSUPPORTED",
-    "TAXI_TYPE_EXPRESSION_UNSUPPORTED", "DATE_EXECUTION_UNVERIFIED",
+    "TAXI_TYPE_EXPRESSION_UNSUPPORTED", "TAXI_STATUS_EXPRESSION_UNSUPPORTED",
+    "DATE_EXECUTION_UNVERIFIED",
     "UNSUPPORTED_BY_PROVIDER", "UNDEFINED_MEASURE_AGGREGATION",
     # 질문이 명시한 구간 정의를 어느 경로도 보장하지 못함 / 온전한 구간이 없음.
     "CALENDAR_REQUIREMENT_UNSUPPORTED", "NO_COMPLETE_GROUP",
@@ -189,7 +190,7 @@ class GeoFlowPipeline:
     """planner/composer/validator/compiler/executor를 한 경로로 묶는다."""
 
     def __init__(self, *, planner, composer, tool_executor, clock=None,
-                 execution_profile=None):
+                 execution_profile=None, condition_notes=True):
         self.planner = planner
         self.composer = composer
         self.tool_executor = tool_executor
@@ -206,12 +207,15 @@ class GeoFlowPipeline:
         #: 서비스 사용자의 "지난달"은 한국 달력 기준으로 푼다(설계 선택이며 TIMS
         #: 계약이 아니다). 테스트는 고정 날짜를 넣는다.
         self.clock = clock or seoul_today
+        #: 조건 계층의 감사 기록(적용 조건·검증 범위)을 답변에 덧붙이는가. 기록 자체는 늘 남는다.
+        self.condition_notes = condition_notes
 
     @classmethod
     def create(cls, *, client, tool_executor, macro_directory=None,
                planner_prompt=None, model=None,
                aggregation_grounding=structured_grounding.FLAT, clock=None,
-               condition_check=False, execution_profile=None, example_selector=None):
+               condition_check=False, execution_profile=None, example_selector=None,
+               normalize_grounding=True, condition_notes=True):
         """CLI/Web이 동일하게 사용할 기본 구성으로 파이프라인을 만든다.
 
         ``example_selector``(geoflow/retrieval.py)는 structured grounding에 검토된 예시를 문맥으로
@@ -230,6 +234,7 @@ class GeoFlowPipeline:
             condition_check=condition_check,
             clock=clock,
             example_selector=example_selector,
+            normalize_grounding=normalize_grounding,
         )
         return cls(
             planner=planner,
@@ -237,6 +242,7 @@ class GeoFlowPipeline:
             tool_executor=tool_executor,
             clock=clock,
             execution_profile=execution_profile,
+            condition_notes=condition_notes,
         )
 
     def run(self, question, *, event_handler=None, cancel_checker=None):
@@ -474,7 +480,7 @@ class GeoFlowPipeline:
             note = conditions.describe_for_answer(
                 run.condition_audit, run.verification, execution_plan,
             )
-            if note:
+            if note and self.condition_notes:
                 run.final_answer = f"{run.final_answer}\n{note}"
             environment = describe_environment(self.execution_profile, execution_plan)
             if environment:

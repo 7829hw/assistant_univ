@@ -996,16 +996,19 @@ class MeasuredDefectRegressionTest(ComposerCase):
     # -- 2. MEASURE가 아닌 개념의 subtype 검증 ------------------------------
 
     def test_invalid_non_measure_subtype_is_rejected_at_grounding(self):
-        """OBJECT/taxi_type은 합성까지 흘러가지 않고 즉시 거부된다.
+        """정의되지 않은 OBJECT subtype은 합성까지 흘러가지 않고 즉시 거부된다.
 
         예전에는 grounding이 MEASURE의 subtype만 확인해서, 이런 개념이
         composer까지 내려간 뒤 "쓰이지 않은 개념"으로 나타났다. 원인에서
         먼 곳에서 실패하므로 진단이 어려웠다.
+
+        2026-09-29부터 조건 값이 정해지는 OBJECT/taxi_type(value=private)은 factor로 옮긴다
+        (tests/test_taxi_type_contract.py). 여기서는 옮길 수 없는 subtype으로 원래 계약을 본다.
         """
         with self.assertRaises(PlannerError) as caught:
             parse_grounding(
                 payload([
-                    {"id": "t", "concept": "OBJECT", "subtype": "taxi_type",
+                    {"id": "t", "concept": "OBJECT", "subtype": "vehicle",
                      "role": "COND", "source": "user", "value": "private"},
                     measure("m", "AMOUNT", "revenue"),
                 ]),

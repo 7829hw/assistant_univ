@@ -291,12 +291,53 @@ class _RecordingClient:
         message = (response or {}).get("message") or {}
         self.calls.append({
             "kind": "plan" if len(messages) <= 2 else "repair",
+            "replayed": bool((response or {}).get("replayed")),
             "duration_ms": round((time.perf_counter() - started) * 1000, 1),
             "load_duration_ms": round(((response or {}).get("load_duration") or 0) / 1e6, 1),
             "content": message.get("content"),
             "thinking_chars": len(message.get("thinking") or ""),
         })
         return response
+
+
+class _ReplayClient:
+    """기록된 계획 응답을 다시 돌려준다. 시스템 prompt hash와 질문이 같을 때만. 그 밖(재질의 등)은
+    실제 모델을 부른다. prompt를 바꾸지 않은 후보(코드 규칙)를 모델 호출 없이 비교하려는 것이다.
+    planner가 결정적(temperature 0)이라는 전제는 B0가 이전 run과 grounding 100개가 같았던 것으로 확인했다.
+    """
+
+    def __init__(self, client, cache):
+        self.client = client
+        self.model = getattr(client, "model", None)
+        self.cache = cache
+        self.hits = 0
+
+    def __getattr__(self, name):
+        return getattr(self.client, name)
+
+    def chat(self, messages, tools=None, **kwargs):
+        if len(messages) == 2 and messages[0]["role"] == "system":
+            key = (hashlib.sha256(messages[0]["content"].encode("utf-8")).hexdigest(),
+                   messages[1]["content"])
+            if key in self.cache:
+                self.hits += 1
+                return {"message": {"content": self.cache[key]}, "done_reason": "stop",
+                        "load_duration": 0, "replayed": True}
+        return self.client.chat(messages, tools=tools, **kwargs)
+
+
+def load_replay_cache(path):
+    """이전 llm 결과의 첫 계획 응답 → {(prompt sha, 질문): 응답}."""
+    result = json.loads(Path(path).read_text(encoding="utf-8"))
+    sha = result["meta"].get("planner_prompt_sha256")
+    if not sha:
+        raise ValueError(f"{path}: meta.planner_prompt_sha256이 없어 재생할 수 없습니다")
+    cache = {}
+    for row in result["rows"]:
+        plans = [call for call in row.get("llm_calls") or [] if call["kind"] == "plan"]
+        if plans:
+            cache[(sha, row["question"])] = plans[0]["content"]
+    return cache
 
 
 def _planner_trace(record):
@@ -653,18 +694,29 @@ def cmd_llm(args):
         for line in partial.read_text(encoding="utf-8").splitlines():
             row = json.loads(line)
             done[row["id"]] = row
-    A.unload_all_models(args.host)
+    cache = load_replay_cache(args.replay_from) if args.replay_from else None
+    if cache is None:
+        A.unload_all_models(args.host)
     reset = A.OllamaStateReset(args.host, args.model)
+    from geoflow.planner import GeoFlowPlanner
+    prompt_sha = hashlib.sha256(GeoFlowPlanner(client=None).system_prompt().encode(
+        "utf-8")).hexdigest()
     with partial.open("a", encoding="utf-8") as handle:
         for item in items:
             if item["id"] in done:
                 continue
-            state = reset.reset()
-            recorder = _RecordingClient(client)
+            replay = _ReplayClient(client, cache) if cache is not None else None
+            if replay is None or (prompt_sha, item["question"]) not in cache:
+                state = reset.reset()
+            else:
+                state = type("Skipped", (), {"succeeded": True})()
+            recorder = _RecordingClient(replay or client)
             pipeline = GeoFlowPipeline.create(
                 client=recorder, tool_executor=_executor(),
                 aggregation_grounding=structured_grounding.FLAT,
-                clock=lambda: REFERENCE_DATE,
+                clock=lambda: REFERENCE_DATE, condition_check=args.condition_check,
+                condition_notes=args.condition_notes,
+                normalize_grounding=not args.no_normalize,
                 execution_profile=providers.profile_for(providers.MOCK, providers.LEGACY))
             observed = run_item(pipeline, item["question"])
             category, checks = score(item, observed)
@@ -682,8 +734,12 @@ def cmd_llm(args):
     rows = [done[item["id"]] for item in items if item["id"] in done]
     result = {"meta": _meta("llm", {"model": args.model, "model_digest": digest,
                                     "ollama_version": version, "model_details": details,
+                                    "planner_prompt_sha256": prompt_sha,
+                                    "replay_from": args.replay_from,
                                     "pipeline": {"aggregation_grounding": "flat",
-                                                 "condition_check": False,
+                                                 "condition_check": args.condition_check,
+                                                 "condition_notes": args.condition_notes,
+                                                 "normalize_grounding": not args.no_normalize,
                                                  "provider": "mock", "tims_execution": "legacy",
                                                  "temperature": 0, "think": "auto",
                                                  "isolation": "unload_per_question"}}),
@@ -795,6 +851,14 @@ def main(argv=None):
     llm.add_argument("--chat-timeout", type=float, default=300.0)
     llm.add_argument("--out", required=True)
     llm.add_argument("--only", default="")
+    llm.add_argument("--condition-check", action="store_true",
+                     help="질문 원문으로 날짜·택시 유형·운행 상태를 다시 정한다(geoflow/conditions.py)")
+    llm.add_argument("--condition-notes", action="store_true",
+                     help="조건 계층의 감사 문구를 답변에 덧붙인다(CLI --condition-check와 같음)")
+    llm.add_argument("--no-normalize", action="store_true",
+                     help="장소 값 자리 바로잡기를 끈다(이전 동작)")
+    llm.add_argument("--replay-from", default=None,
+                     help="이전 llm 결과의 계획 응답을 prompt hash가 같을 때 재생(나머지는 실제 호출)")
     replay = sub.add_parser("replay")
     replay.add_argument("source")
     replay.add_argument("--out", required=True)

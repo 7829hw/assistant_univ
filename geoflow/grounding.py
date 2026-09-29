@@ -120,6 +120,8 @@ class Grounding:
     #: 닫힌 어휘로 원문에서 읽는다(``geoflow/calendar_terms.py``). 비어 있으면 질문이 정하지
     #: 않은 것이고, 계산 경로가 제공자 정의나 애플리케이션 정책을 쓴다.
     calendar: calendar_terms.CalendarRequirements = calendar_terms.NONE
+    #: 파싱 전에 자리를 바로잡은 기록(``normalize_place_concepts``). 값을 만들지 않았다는 근거다.
+    normalizations: list = field(default_factory=list)
 
     @property
     def aggregation(self):
@@ -153,11 +155,12 @@ class Grounding:
             "factors": dict(self.factors),
             "aggregation": self.aggregation.to_dict(),
             **({"calendar": self.calendar.to_dict()} if self.calendar else {}),
+            **({"normalizations": list(self.normalizations)} if self.normalizations else {}),
         }
 
 
 def parse_grounding(payload, question, *, raw_text="",
-                    structured_aggregation=False):
+                    structured_aggregation=False, normalize=True):
     """Planner 출력 payload를 검증된 ``Grounding``으로 바꾼다.
 
     ``structured_aggregation``이 참이면 ``factors.aggregation_plan``(구조화 집계
@@ -174,6 +177,13 @@ def parse_grounding(payload, question, *, raw_text="",
         )
 
     raw_concepts, hoisted = _hoist_structural_factors(payload.get("concepts"))
+    notes = []
+    if normalize:
+        raw_concepts, notes = normalize_place_concepts(raw_concepts)
+        raw_concepts, moved, condition_notes = hoist_condition_concepts(
+            raw_concepts, payload.get("factors") or {})
+        hoisted.update(moved)
+        notes += condition_notes
     if not isinstance(raw_concepts, list) or not raw_concepts:
         raise PlannerError(
             "grounding의 concepts는 비어 있지 않은 list여야 합니다.",
@@ -203,6 +213,7 @@ def parse_grounding(payload, question, *, raw_text="",
     grounding = Grounding(
         question=question, concepts=concepts, factors=factors,
         aggregation_plan=plan, calendar=calendar_terms.read(question),
+        normalizations=notes,
     )
     _check_measure(grounding, raw_text)
     return grounding
@@ -237,6 +248,108 @@ def _hoist_structural_factors(raw_concepts):
             raw["attributes"] = attributes
         cleaned.append(raw)
     return cleaned, hoisted
+
+
+#: 행정 단위·집계 범위를 가리키는 말. 장소명이 아니다("읍면동별", "시도 간", "전국"). 그룹
+#: 기준은 dimension factor, "전국"은 장소 조건 없음이다.
+NON_PLACE_WORDS = frozenset({"읍면동", "시군구", "시도", "h3", "H3", "H3 셀", "h3 셀", "셀",
+                             "전국", "전 지역", "전체 지역"})
+
+
+def normalize_place_concepts(raw_concepts):
+    """장소 값의 자리만 바로잡는다. (개념 목록, 기록). 값을 새로 만들지 않는다.
+
+    1. name이 비었고 region만 있으면 region이 장소다. 마지막 낱말이 name, 앞은 region
+       ("대구 소속"을 {"name": "", "region": "대구"}로 적은 경우).
+    2. region이 name과 같으면 region을 비운다(장소는 자기 자신의 상위 지역이 아니다).
+    3. name이 행정 단위·범위 말(``NON_PLACE_WORDS``)이면 장소가 아니다. region이 있으면 1과
+       같이 region이 장소이고, 없으면 그 개념을 뺀다.
+
+    어느 규칙에도 해석의 선택이 없다. 이름이 질문에 있는지는 condition_check와 조회가 따로 본다.
+    """
+    if not isinstance(raw_concepts, list):
+        return raw_concepts, []
+    notes, cleaned = [], []
+    for raw in raw_concepts:
+        if not (isinstance(raw, dict) and raw.get("concept") == "LOCATION"
+                and raw.get("subtype") == "place" and isinstance(raw.get("value"), dict)):
+            cleaned.append(raw)
+            continue
+        value = dict(raw["value"])
+        name = (value.get("name") or "").strip()
+        region = (value.get("region") or "").strip()
+        before = {"name": value.get("name"), "region": value.get("region")}
+        rule = None
+        if name in NON_PLACE_WORDS:
+            if not region:
+                notes.append({"concept": raw.get("id"), "rule": "non_place_word_dropped",
+                              "before": before})
+                continue
+            name, rule = "", "non_place_word_region_is_place"
+        if not name and region:
+            *upper, name = region.split()
+            region = " ".join(upper)
+            rule = rule or "empty_name_region_is_place"
+        elif name and region == name:
+            region, rule = "", "region_equals_name"
+        if rule:
+            raw = {**raw, "value": {**value, "name": name, "region": region}}
+            notes.append({"concept": raw.get("id"), "rule": rule, "before": before,
+                          "after": {"name": name, "region": region}})
+        cleaned.append(raw)
+    return cleaned, notes
+
+
+#: 조건 값을 개념으로 적은 경우의 대응(OBJECT/private 등). 값이 factor enum 안에 있을 때만.
+_CONDITION_SUBTYPES = {
+    "private": "taxi_type", "corporate": "taxi_type",
+    "occupied": "taxi_status", "vacant": "taxi_status", "stationary": "taxi_status",
+}
+
+
+#: 조건 이름 자체를 subtype으로 적은 경우(OBJECT/taxi_type, LOCATION/taxi_type 등).
+_CONDITION_NAMES = frozenset(_CONDITION_SUBTYPES.values())
+
+
+def hoist_condition_concepts(raw_concepts, factors):
+    """조건(택시 유형·운행 상태)을 개념으로 적은 것을 factor로 옮긴다. (개념, factor, 기록).
+
+    두 형태만 다룬다. 어느 core concept에도 이런 subtype은 없으므로 개념으로 읽을 여지가 없다.
+    - subtype이 조건 값(OBJECT/private): 그 값을 factor로.
+    - subtype이 조건 이름(OBJECT/taxi_type): value가 조건 값이면 factor로. value가 없으면 같은
+      factor가 이미 있을 때만(질문 표현으로 정해진 값) 개념을 뺀다. 없으면 두어 검증이 거부한다.
+    같은 factor에 다른 값이 이미 있으면 옮기지 않는다(어느 쪽이 맞는지 고르지 않는다).
+    """
+    if not isinstance(raw_concepts, list):
+        return raw_concepts, {}, []
+    moved, notes, cleaned = {}, [], []
+    for raw in raw_concepts:
+        if not isinstance(raw, dict) or raw.get("role") == "MEASURE":
+            cleaned.append(raw)
+            continue
+        subtype = raw.get("subtype")
+        name, value = None, None
+        if raw.get("concept") == "OBJECT" and subtype in _CONDITION_SUBTYPES:
+            name, value = _CONDITION_SUBTYPES[subtype], subtype
+        elif subtype in _CONDITION_NAMES:
+            name = subtype
+            value = raw.get("value") if FACTOR_SPECS[name].values and raw.get(
+                "value") in FACTOR_SPECS[name].values else None
+        if name is None:
+            cleaned.append(raw)
+            continue
+        present = factors.get(name, moved.get(name))
+        if value is not None and present in (None, value):
+            moved[name] = value
+            notes.append({"concept": raw.get("id"), "rule": "condition_concept_to_factor",
+                          "factor": name, "value": value})
+            continue
+        if value is None and raw.get("value") in (None, "") and present is not None:
+            notes.append({"concept": raw.get("id"), "rule": "redundant_condition_concept_dropped",
+                          "factor": name, "kept": present})
+            continue
+        cleaned.append(raw)
+    return cleaned, moved, notes
 
 
 def _parse_concept(where, raw, question, raw_text):

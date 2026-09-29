@@ -97,8 +97,15 @@ class TaxiTypeAsFactorTest(unittest.TestCase):
                 self.assertEqual(caught.exception.code, "INVALID_FACTOR")
 
 
-class TaxiTypeAsConceptIsRejectedTest(unittest.TestCase):
-    """factor를 개념으로 적은 형태는 전부 grounding 단계에서 막는다."""
+class TaxiTypeAsConceptTest(unittest.TestCase):
+    """factor를 개념으로 적은 형태는 개념으로 합성 단계에 가지 않는다.
+
+    2026-09-29 개정: 값이 조건 enum으로 정해지는 형태(OBJECT/corporate, <concept>/taxi_type +
+    value corporate)는 거부하지 않고 factor로 옮긴다(``grounding.hoist_condition_concepts``, 기록
+    ``normalizations``). 근거: 업체 100문항 실측에서 이 형태가 질문의 조건을 온전히 담은 채
+    거부되었다(014, 043, 100). 조건을 잃지 않으므로 "조용히 흘러가는" 것이 아니다. 값이 없거나
+    다른 값과 충돌하면 이전처럼 INVALID_SUBTYPE으로 거부한다.
+    """
 
     CASES = (
         ("OBJECT", "taxi_type"),
@@ -109,45 +116,43 @@ class TaxiTypeAsConceptIsRejectedTest(unittest.TestCase):
         ("EVENT", "taxi_type"),
     )
 
-    def test_rejected_at_grounding_with_invalid_subtype(self):
-        for concept, subtype in self.CASES:
-            with self.subTest(concept=concept, subtype=subtype):
-                with self.assertRaises(PlannerError) as caught:
-                    parse_grounding(
-                        payload({"id": "t", "concept": concept,
-                                 "subtype": subtype, "role": "COND",
-                                 "source": "user", "value": "corporate"}),
-                        QUESTION,
-                    )
-                self.assertEqual(caught.exception.code, "INVALID_SUBTYPE")
-                # 원인을 바로 알 수 있어야 한다. 어느 concept이 문제인지와
-                # 그 concept에 무엇을 붙일 수 있는지가 메시지에 있어야 한다.
-                self.assertIn(concept, caught.exception.detail)
-                self.assertIn(subtype, caught.exception.detail)
+    def concept(self, concept, subtype, value="corporate"):
+        return {"id": "t", "concept": concept, "subtype": subtype, "role": "COND",
+                "source": "user", **({"value": value} if value is not None else {})}
 
-    def test_never_reaches_composition(self):
-        """잘못된 개념이 조용히 macro로 흘러가지 않는다."""
+    def test_recoverable_forms_become_the_factor(self):
         composer = MacroComposer(MacroLibrary.from_directory())
         for concept, subtype in self.CASES:
             with self.subTest(concept=concept, subtype=subtype):
-                with self.assertRaises(PlannerError):
-                    grounding = parse_grounding(
-                        payload({"id": "t", "concept": concept,
-                                 "subtype": subtype, "role": "COND",
-                                 "source": "user", "value": "corporate"}),
-                        QUESTION,
-                    )
-                    composer.compose(grounding)
+                grounding = parse_grounding(payload(self.concept(concept, subtype)), QUESTION)
+                expected = subtype if subtype in ("private", "corporate") else "corporate"
+                self.assertEqual(grounding.factors["taxi_type"], expected)
+                self.assertTrue(all(c.id != "t" for c in grounding.concepts))
+                self.assertEqual(grounding.normalizations[0]["rule"],
+                                 "condition_concept_to_factor")
+                plan = composer.compose(grounding)
+                self.assertEqual(plan.transformations[-1].params["taxi_type"], expected)
 
-    def test_is_not_opened_up_for_planning_repair(self):
-        """개념을 조건으로 옮기는 것은 값 수정이 아니라 구조 변경이다."""
+    def test_unrecoverable_or_conflicting_forms_are_rejected(self):
+        cases = (
+            (self.concept("OBJECT", "taxi_type", value=None), {}),       # 값이 어디에도 없음
+            (self.concept("OBJECT", "private"), {"taxi_type": "corporate"}),  # 충돌
+            (self.concept("OBJECT", "taxi_type", value="회사"), {}),     # enum 밖의 값
+        )
+        for extra, factors in cases:
+            with self.subTest(extra=extra, factors=factors):
+                with self.assertRaises(PlannerError) as caught:
+                    parse_grounding(payload(extra, factors), QUESTION)
+                self.assertEqual(caught.exception.code, "INVALID_SUBTYPE")
+                # 원인을 바로 알 수 있어야 한다. 어느 concept이 문제인지와
+                # 그 concept에 무엇을 붙일 수 있는지가 메시지에 있어야 한다.
+                self.assertIn(extra["concept"], caught.exception.detail)
+                self.assertIn(extra["subtype"], caught.exception.detail)
+
+    def test_rejected_forms_are_not_opened_up_for_planning_repair(self):
+        """개념을 조건으로 옮기는 것은 값 수정이 아니라 구조 변경이다. 재질의로 하지 않는다."""
         with self.assertRaises(PlannerError) as caught:
-            parse_grounding(
-                payload({"id": "t", "concept": "OBJECT",
-                         "subtype": "corporate", "role": "COND",
-                         "source": "user", "value": "corporate"}),
-                QUESTION,
-            )
+            parse_grounding(payload(self.concept("OBJECT", "taxi_type", value=None)), QUESTION)
         self.assertFalse(decide(caught.exception).repairable)
 
 

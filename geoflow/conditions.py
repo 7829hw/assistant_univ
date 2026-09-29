@@ -159,8 +159,18 @@ _DATE_CUES = (r"\d+\s*(년|월|일)|(?<!\d)\d{1,2}\s*[/.]\s*\d{1,2}(?!\d)|지난
               r"|(?:^|\s)(?:초|말)(?=\s|$|에|부터|까지|의)")
 
 
+#: 사용자 scope 문자열("scope:district:2726000000"). 안의 숫자는 날짜가 아니다.
+_SCOPE_LITERAL = re.compile(r"scope:[A-Za-z0-9_:.-]+")
+
+
+def _mask_scopes(question):
+    """scope 문자열을 같은 길이의 공백으로 가린다. 위치(start)는 그대로 둔다."""
+    return _SCOPE_LITERAL.sub(lambda match: " " * len(match.group(0)), question)
+
+
 def scan_dates(question, *, reference_date):
     """질문에서 날짜 표현을 찾는다. 결과: (mentions, 남은 단서 여부)."""
+    question = _mask_scopes(question)
     taken = [False] * len(question)
     mentions = []
 
@@ -225,9 +235,11 @@ def scan_dates(question, *, reference_date):
     return sorted(mentions, key=lambda item: item.start), cues_left
 
 
+#: 유형과 "택시" 사이에 운행 상태 단어가 올 수 있다("법인 실차 택시", "개인 대기영업 택시").
+_STATUS_BETWEEN = r"(?:(?:실차|공차|빈\s*차|대기\s*영업)\s*)?"
 _TAXI = (
-    (r"개인(용)?\s*택시", "private"),
-    (r"(법인|회사)(용)?\s*택시", "corporate"),
+    (r"개인(용)?\s*" + _STATUS_BETWEEN + r"택시", "private"),
+    (r"(법인|회사)(용)?\s*" + _STATUS_BETWEEN + r"택시", "corporate"),
     (r"(전체|모든)\s*택시|택시\s*전체", "all"),
 )
 _NEGATION = r"제외|빼고|말고|아닌|이외|외에"
@@ -388,6 +400,65 @@ def reconcile_date(factors, question, reference_date, raw_text=""):
 
 _TAXI_ANCHORS = {"private": r"개인", "corporate": r"법인|회사"}
 
+#: 운행 상태(taxi_status). 상태 단어 뒤에 (택시 유형 단어와) "택시" 또는 "통행량"이 올 때만 조건이다.
+#: "공차율"은 측정값(vacant_ratio), "실차 구간", "실차 중", "실차의"는 trip 개체를 가리키므로
+#: 조건으로 읽지 않는다(아래 단서로만 남는다).
+_STATUS_WORDS = {"occupied": r"실차", "vacant": r"공차|빈\s*차", "stationary": r"대기\s*영업"}
+_STATUS_TAIL = r"(?=\s*(?:(?:개인|법인|회사)(?:용)?\s*)?(?:택시|통행량|차량\s*통행))"
+_STATUS = tuple((rf"(?:{word}){_STATUS_TAIL}", value) for value, word in _STATUS_WORDS.items())
+_STATUS_CUES = r"실차|공차|빈\s*차|대기\s*영업"
+
+
+def scan_taxi_status(question):
+    mentions = []
+    for pattern, value in _STATUS:
+        for match in re.finditer(pattern, question):
+            mentions.append(Mention("taxi_status", match.group(0), SUPPORTED, value,
+                                    start=match.start()))
+    return sorted(mentions, key=lambda item: item.start)
+
+
+def reconcile_taxi_status(factors, question, raw_text=""):
+    """운행 상태를 질문 표현으로 정한다. 규칙은 택시 유형과 같다(근거 없는 값만 지우고, 단서가
+    남으면 보류). 상태 조건을 받는 Tool은 통행량(get_passage_count)뿐이므로, 다른 측정값에 붙으면
+    합성 단계가 반영할 수 없는 조건으로 멈춘다(조용히 버리지 않는다)."""
+    llm_value = factors.get("taxi_status")
+    mentions = scan_taxi_status(question)
+    record = {"mentions": [m.to_dict() for m in mentions], "llm_value": llm_value}
+    values = {m.value for m in mentions}
+    if len(values) > 1:
+        record.update(status=STATUS_UNSUPPORTED, action="unsupported", basis="multiple_statuses")
+        raise _error("TAXI_STATUS_EXPRESSION_UNSUPPORTED",
+                     "여러 운행 상태를 함께 묻는 질문은 지원하지 않습니다: "
+                     + ", ".join(m.text for m in mentions),
+                     context={"taxi_status": record}, raw_text=raw_text)
+    if mentions and re.search(_NEGATION, question):
+        record.update(status=STATUS_UNSUPPORTED, action="unsupported", basis="negation")
+        raise _error("TAXI_STATUS_EXPRESSION_UNSUPPORTED",
+                     "운행 상태를 제외하는 표현은 지원하지 않습니다.",
+                     context={"taxi_status": record}, raw_text=raw_text)
+    cue = bool(re.search(_STATUS_CUES, question))
+    if values:
+        (value,) = values
+        record.update(value=value, status=STATUS_INTERPRETED if llm_value in (None, value)
+                      else STATUS_CONFLICT,
+                      action="confirmed" if llm_value == value else (
+                          "corrected" if llm_value not in (None, "all") else "filled"),
+                      basis="question_expression" if llm_value in (None, value)
+                      else "question_expression_over_llm_value")
+        factors["taxi_status"] = value
+    elif llm_value not in (None, "all") and not cue:
+        record.update(value=None, status=STATUS_ABSENT, action="removed_no_evidence",
+                      basis="llm_value_has_no_status_cue")
+        factors.pop("taxi_status", None)
+    elif llm_value not in (None, "all"):
+        record.update(value=llm_value, status=STATUS_UNVERIFIABLE, action="held",
+                      basis="unparsed_status_cue")
+    else:
+        record.update(value=llm_value, status=STATUS_ABSENT, action="none",
+                      basis="status_word_not_a_condition" if cue else "no_value_no_cue")
+    return record
+
 
 def reconcile_taxi_type(factors, question, raw_text=""):
     llm_value = factors.get("taxi_type")
@@ -437,6 +508,56 @@ def reconcile_taxi_type(factors, question, raw_text=""):
         record.update(value=llm_value, stated="not_stated", status=STATUS_ABSENT, action="none",
                       basis="no_value_no_cue" if llm_value is None
                       else "llm_all_equivalent_to_unstated")
+    return record
+
+
+#: 개수 표현("3곳", "2개", "5위", "상위 3")이 있으면 limit은 LLM 값을 따른다.
+_COUNT = r"\d+\s*(?:곳|개|위|군데)|(?:상위|하위)\s*\d+"
+
+
+def reconcile_ranking(factors, question):
+    """"가장 많은 곳"처럼 하나를 고르는 순위에서 빠진 limit=1을 채운다. 채우기만 한다.
+
+    업체 규칙(prompts/system.yaml tool_calling): top이나 bottom 값만 필요하면 limit을 1로 제한한다.
+    order가 있고, "가장"이 있고, 개수 표현이 없고, limit이 비었을 때만이다. 값이 있으면 바꾸지 않는다.
+    """
+    record = {"llm_value": factors.get("limit")}
+    if (factors.get("order") and factors.get("dimension") and factors.get("limit") is None
+            and re.search(r"가장", question) and not re.search(_COUNT, question)):
+        factors["limit"] = 1
+        record.update(value=1, action="filled", basis="single_superlative_without_count")
+    else:
+        record.update(value=factors.get("limit"), action="none", basis="not_applicable")
+    return record
+
+
+#: 승차·하차 한쪽 기준을 가리키는 말. 둘 다 있거나 "승하차", "노선", "간"이면 조합(both)이다.
+_PICKUP_WORDS = r"승차|탑승"
+_DROPOFF_WORDS = r"하차"
+_BOTH_WORDS = r"승하차|노선|OD|\s간\s|\s간의"
+
+
+def reconcile_dimension_target(factors, question, concepts=None):
+    """실차 구간을 나누는 기준(dimension_target)이 빠졌고 질문이 한쪽을 분명히 말하면 채운다.
+
+    dimension이 있을 때만, 값이 비었을 때만 채운다. "출발한 … 도착 읍면동"처럼 승차·하차 말이
+    없는 표현은 읽지 않는다(LLM 값 유지). 이 조건을 받는 것은 실차 구간 건수(trip_count)뿐이므로
+    측정값이 trip_count일 때만 채운다.
+    """
+    record = {"llm_value": factors.get("dimension_target")}
+    trip_count = any(isinstance(item, dict) and item.get("role") == "MEASURE"
+                     and item.get("subtype") == "trip_count" for item in concepts or [])
+    if trip_count and factors.get("dimension") and factors.get("dimension_target") is None:
+        both = re.search(_BOTH_WORDS, question)
+        pickup = re.search(_PICKUP_WORDS, question.replace("승하차", ""))
+        dropoff = re.search(_DROPOFF_WORDS, question.replace("승하차", ""))
+        value = ("both" if both or (pickup and dropoff) else
+                 "pickup" if pickup else "dropoff" if dropoff else None)
+        if value is not None:
+            factors["dimension_target"] = value
+            record.update(value=value, action="filled", basis="question_expression")
+            return record
+    record.update(value=factors.get("dimension_target"), action="none", basis="not_applicable")
     return record
 
 
@@ -507,25 +628,31 @@ def reconcile_payload(payload, question, *, reference_date, raw_text=""):
         "timezone": str(SERVICE_TIMEZONE),
         "date": reconcile_date(factors, question, reference_date, raw_text),
         "taxi_type": reconcile_taxi_type(factors, question, raw_text),
+        "taxi_status": reconcile_taxi_status(factors, question, raw_text),
         "places": check_places(fixed.get("concepts"), question, raw_text),
+        "limit": reconcile_ranking(factors, question),
+        "dimension_target": reconcile_dimension_target(factors, question,
+                                                       fixed.get("concepts")),
         "place_completeness": "unchecked",
         "not_checked": list(NOT_CHECKED),
     }
+    owned = ("date", "taxi_type", "taxi_status", "limit", "dimension_target")
     before = {key: value for key, value in (payload.get("factors") or {}).items()
-              if key not in ("date", "taxi_type")}
-    after = {key: value for key, value in factors.items() if key not in ("date", "taxi_type")}
+              if key not in owned}
+    after = {key: value for key, value in factors.items() if key not in owned}
     if before != after or fixed.get("concepts") != payload.get("concepts"):
-        raise AssertionError("조건 보정이 date·taxi_type 밖을 바꿨습니다.")
+        raise AssertionError("조건 보정이 소유한 factor 밖을 바꿨습니다.")
     audit["corrections"] = [
         {"condition": key, "from": audit[key]["llm_value"], "to": audit[key].get("value"),
          "action": audit[key]["action"], "basis": audit[key]["basis"]}
-        for key in ("date", "taxi_type")
+        for key in ("date", "taxi_type", "taxi_status", "limit", "dimension_target")
         if audit[key]["action"] in ("corrected", "filled", "removed_no_evidence")
     ]
     audit["held"] = [
         {"condition": key, "value": audit[key].get("value"), "action": audit[key]["action"],
          "basis": audit[key]["basis"]}
-        for key in ("date", "taxi_type") if audit[key]["status"] == STATUS_UNVERIFIABLE
+        for key in ("date", "taxi_type", "taxi_status")
+        if audit[key]["status"] == STATUS_UNVERIFIABLE
     ]
     return fixed, audit
 

@@ -75,7 +75,7 @@ class FakeLLMPrefix:
 class ContractTest(unittest.TestCase):
     def test_generation_is_the_production_contract(self):
         variant = A.build_variant("V0_VERIFY")
-        self.assertEqual(variant.prompt, A._production_prompt())
+        self.assertEqual(variant.prompt, A._pinned_base_prompt())  # 고정 변형의 바탕은 v2 반영 시점 production(db113124). 2026-09-29부터 production과 다르다.
         self.assertEqual(variant.sha256, A.PINNED_SHA256["H0_AGG"])
         self.assertEqual(variant.repair_sha256, A.PINNED_REPAIR_SHA256["H0_AGG"])
         self.assertIsNone(variant.aggregation_refiner)

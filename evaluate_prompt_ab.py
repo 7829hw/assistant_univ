@@ -275,7 +275,31 @@ class _StubClient:
 
 
 def _production_prompt():
+    """실행 시점의 production prompt. PRODUCTION 변형만 쓴다."""
     return GeoFlowPlanner(client=_StubClient()).system_prompt()
+
+
+#: 고정 변형의 바탕(업체 v2 반영 시점 production, sha256 db113124…). production prompt가 바뀌어도
+#: 고정 이름이 같은 계약을 가리키도록 그때의 원천 두 개를 보관한다(2026-09-29 grounding 개선에서
+#: planner YAML과 두 단계 집계 설명이 바뀌었다). 나머지 원천(측정값 어휘, factor 정의)은 그대로다.
+PINNED_BASE_DIR = RESULT_DIR / "pinned" / "v2_db113124"
+
+
+def _pinned_base_prompt():
+    """고정 변형이 쓰는 바탕 prompt. 보관한 YAML과 두 단계 설명으로 만든다."""
+    import geoflow.planner as planner_module
+    from geoflow.planner import load_planner_prompt
+
+    stage_note = (PINNED_BASE_DIR / "stage_note.txt").read_text(encoding="utf-8")
+    original = planner_module.FACTOR_STAGE_NOTE
+    planner_module.FACTOR_STAGE_NOTE = stage_note
+    try:
+        return GeoFlowPlanner(
+            client=_StubClient(),
+            prompt=load_planner_prompt(PINNED_BASE_DIR / "geoflow_planner.yaml"),
+        ).system_prompt()
+    finally:
+        planner_module.FACTOR_STAGE_NOTE = original
 
 
 def _prompt_with_meaning(factor, meaning):
@@ -283,7 +307,7 @@ def _prompt_with_meaning(factor, meaning):
     original = F.FACTOR_SPECS[factor]
     F.FACTOR_SPECS[factor] = dataclasses.replace(original, meaning=meaning)
     try:
-        return _production_prompt()
+        return _pinned_base_prompt()
     finally:
         F.FACTOR_SPECS[factor] = original
 
@@ -408,7 +432,7 @@ def _c_variant():
         encoding="utf-8",
     )
     return {
-        "prompt": E._without_semantics(_production_prompt()),
+        "prompt": E._without_semantics(_pinned_base_prompt()),
         "repair_templates": {RepairKind.FACTOR_COMPLETION: template},
         "allowed_renderer": "values",
     }
@@ -432,16 +456,16 @@ _BUILDERS = {
     "F10": (lambda: _factorial(True, False), "S1 R0 = system 의미 절만"),
     "F01": (lambda: _factorial(False, True), "S0 R1 = 재질의 의미만"),
     "F11": (lambda: _factorial(True, True), "S1 R1 = 50fae72의 factor 계약"),
-    "H0_AGG": (lambda: {"prompt": _production_prompt()},
+    "H0_AGG": (lambda: {"prompt": _pinned_base_prompt()},
                "H0: flat bucket·aggregation·rollup (production)"),
     # 재질의 문구는 H0와 같다. H2 전용 재질의는 만들지 않는다.
-    "H2_AGG": (lambda: {"prompt": aggregation_prompt.h2_prompt(_production_prompt()),
+    "H2_AGG": (lambda: {"prompt": aggregation_prompt.h2_prompt(_pinned_base_prompt()),
                         "grounding_adapter": "aggregation_plan"},
                "H2: aggregation_plan(bucket.reducer, result.reducer)"),
-    "L1_AGG": (lambda: {"prompt": _production_prompt(),
+    "L1_AGG": (lambda: {"prompt": _pinned_base_prompt(),
                         "aggregation_refiner": aggregation_refinement.system_prompt()},
                "L1: H0 grounding + bucket이 있을 때만 집계 전용 호출"),
-    "V0_VERIFY": (lambda: {"prompt": _production_prompt(),
+    "V0_VERIFY": (lambda: {"prompt": _pinned_base_prompt(),
                            "semantic_verifier": semantic_verifier.SYSTEM_PROMPT},
                   "V0: H0 최종 계획 + reject-only 의미 검증"),
 }
@@ -494,7 +518,9 @@ class FixedPromptPlanner(GeoFlowPlanner):
     """확정한 계약만 쓰는 측정용 Planner. 재질의도 같은 계약을 쓴다."""
 
     def __init__(self, *, client, variant=None, prompt=None):
-        super().__init__(client=client)
+        # 고정 변형은 측정 당시의 grounding 계약으로 읽는다. 장소 값 자리 바로잡기·조건 개념 옮기기
+        # (2026-09-29, grounding.normalize_place_concepts)는 그 뒤에 생겼으므로 끈다.
+        super().__init__(client=client, normalize_grounding=False)
         if variant is None:
             variant = PromptVariant(name="ad-hoc", prompt=prompt, note="")
         self.variant = variant

@@ -53,7 +53,7 @@ class ContractTest(unittest.TestCase):
     def test_first_call_is_the_production_prompt(self):
         l1, h0 = A.build_variant("L1_AGG"), A.build_variant("H0_AGG")
         self.assertEqual(l1.prompt, h0.prompt)
-        self.assertEqual(l1.prompt, A._production_prompt())
+        self.assertEqual(l1.prompt, A._pinned_base_prompt())  # 고정 변형의 바탕은 v2 반영 시점 production(db113124). 2026-09-29부터 production과 다르다.
         self.assertEqual(l1.repair_sha256, h0.repair_sha256)
         self.assertIsNone(l1.grounding_adapter)
         self.assertIsNone(h0.aggregation_refiner)

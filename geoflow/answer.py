@@ -26,6 +26,7 @@ _AGGREGATION_LABEL = {
     "sum": "합계",
     "med": "중간값",
 }
+_TAXI_STATUS_LABEL = {"occupied": "실차", "vacant": "공차", "stationary": "대기영업"}
 _TAXI_TYPE_LABEL = {
     "private": "개인",
     "corporate": "법인",
@@ -230,8 +231,15 @@ def _subject(plan, settings, labels=None, *, grouped=False, period=None):
     if slots.get("time"):
         parts.append(str(slots["time"]))
     taxi_type = slots.get("taxi_type")
+    taxi_status = slots.get("taxi_status")
+    # 운행 상태도 질문의 조건이다("공차 법인 택시"). 빠지면 답이 다른 값을 말하는 것처럼 읽힌다.
+    words = []
+    if taxi_status and taxi_status != "all":
+        words.append(_TAXI_STATUS_LABEL.get(taxi_status, taxi_status))
     if taxi_type and taxi_type != "all":
-        parts.append(f"{_TAXI_TYPE_LABEL.get(taxi_type, taxi_type)} 택시")
+        words.append(_TAXI_TYPE_LABEL.get(taxi_type, taxi_type))
+    if words:
+        parts.append(" ".join(words) + " 택시")
     dimension = slots.get("dimension")
     if dimension:
         parts.append(_DIMENSION_LABEL.get(dimension, f"{dimension}별"))

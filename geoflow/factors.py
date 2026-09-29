@@ -183,9 +183,15 @@ FACTOR_STAGE_NOTE = """구간을 나누는 질문에서는 집계가 두 단계�
 
     원시 값 --aggregation--> 구간별 값 --rollup--> 최종 값
 
-- 질문에 "주 단위로", "월 단위로" 같은 구간 표현이 있으면, 함께 나온 집계어는
-  구간별 값들을 합치는 rollup이다.
-  - "월 단위로 나눈 수입의 합은?" → bucket=month, rollup=sum
+- 질문에 "주별", "월별", "주 단위로" 같은 구간 표현이 있으면 집계어가 놓인 자리로 단계를 정한다.
+  - 구간 표현과 측정값 사이의 집계어(각 구간 안에서 모으는 방법)는 aggregation이다.
+  - 구간별 값들 가운데서 고르거나 합치는 집계어("~ 중 가장 큰 값", "~의 평균", "~의 중간값")는
+    rollup이다.
+  - "지난해 월별 평균 활성택시 대수 중 가장 작은 값은?" → bucket=month, aggregation=avg, rollup=min
+  - "주별 수입 합계의 중간값은?" → bucket=week, aggregation=sum, rollup=med
+  - 구간 안 집계어가 없으면 aggregation을 넣지 않는다.
+    "월 단위로 나눈 수입의 합은?" → bucket=month, rollup=sum
+- "총", "합계", "모두 더한"은 sum이다. "가장 큰 값", "최댓값"은 값을 묻는 집계(max)이다.
 - 구간 표현이 없으면 집계어는 aggregation이다.
   - "평균 수입은?" → aggregation=avg (bucket과 rollup은 넣지 않는다)
 - rollup에 week나 month 같은 시간 단위를 넣지 않는다. rollup은 합치는

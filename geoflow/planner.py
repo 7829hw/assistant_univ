@@ -210,6 +210,7 @@ class GeoFlowPlanner:
         max_attempts=DEFAULT_MAX_ATTEMPTS,
         aggregation_grounding=structured_grounding.FLAT,
         condition_check=False,
+        normalize_grounding=True,
         clock=None,
         example_selector=None,
     ):
@@ -225,6 +226,8 @@ class GeoFlowPlanner:
         #: 질문 원문으로 날짜·택시 유형·장소 조건을 다시 정하는 선택 기능(geoflow/conditions.py).
         #: prompt는 바꾸지 않는다. 같은 LLM 응답에 켜고 끈 결과를 비교할 수 있다.
         self.condition_check = bool(condition_check)
+        #: 장소 값의 자리 바로잡기(``grounding.normalize_place_concepts``). 끄면 이전 동작.
+        self.normalize_grounding = bool(normalize_grounding)
         self.clock = clock
         #: 질문–graph 예시 선택기(geoflow/retrieval.py). None이면 기존 prompt 그대로다.
         #: 예시는 구조화 표기로 적혀 있으므로 structured 계약에서만 받는다.
@@ -499,6 +502,7 @@ class GeoFlowPlanner:
         grounding = parse_grounding(
             payload, question, raw_text=text,
             structured_aggregation=self.structured,
+            normalize=self.normalize_grounding,
         )
         grounding.condition_audit = audit
         # 발화에 없는 상위 지역은 조회를 어긋나게 만들 뿐이므로 덜어 낸다.

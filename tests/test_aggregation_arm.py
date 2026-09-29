@@ -47,7 +47,7 @@ def _observe(variant, factors):
 class PromptTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.production = A._production_prompt()
+        cls.production = A._pinned_base_prompt()  # 고정 변형의 바탕은 v2 반영 시점 production(db113124). 2026-09-29부터 production과 다르다.
         cls.h0 = A.build_variant("H0_AGG")
         cls.h2 = A.build_variant("H2_AGG")
 

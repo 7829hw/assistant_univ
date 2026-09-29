@@ -44,7 +44,7 @@ class FactorialArmTest(unittest.TestCase):
         self.assertEqual(arm("F00").repair_sha256, A.PINNED_REPAIR_SHA256["C"])
         self.assertEqual(arm("F11").sha256, A.PINNED_SHA256["D_PRE"])
         self.assertEqual(arm("F11").repair_sha256, A.PINNED_REPAIR_SHA256["D_PRE"])
-        production = GeoFlowPlanner(client=A._StubClient()).system_prompt()
+        production = A._pinned_base_prompt()  # 고정 변형의 바탕은 v2 반영 시점 production(db113124). 2026-09-29부터 production과 다르다.
         self.assertEqual(arm("F11").prompt, production)
 
     def test_each_arm_differs_in_one_axis_only(self):

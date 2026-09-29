@@ -1190,8 +1190,9 @@ class StructuredGroundingPathTest(unittest.TestCase):
         import hashlib
         flat = self.planner("flat").system_prompt()
         structured = self.planner("structured").system_prompt()
-        # 업체 v2 측정값 어휘를 반영한 production prompt(v2 이전: 64bbceb4).
-        self.assertEqual(hashlib.sha256(flat.encode()).hexdigest()[:8], "db113124")
+        # grounding 개선 r1(2026-09-29: 두 단계 집계 규칙, 통행량과 운행 상태 구분) production prompt.
+        # 이전: db113124(업체 v2 어휘), 64bbceb4(v2 이전). 고정 변형은 db113124 바탕을 쓴다.
+        self.assertEqual(hashlib.sha256(flat.encode()).hexdigest()[:8], "238ac8d6")
         self.assertIn("[집계 계획]", structured)
         self.assertIn('"select"', structured)
         self.assertNotIn("- bucket: month | week", structured)

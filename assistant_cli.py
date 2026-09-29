@@ -59,7 +59,10 @@ AGENT_MODE = DEFAULT_AGENT_MODE
 #: GeoFlow planner의 집계 grounding 계약. flat이 production 기본값이다.
 AGGREGATION_GROUNDING = structured_grounding.FLAT
 #: 질문 원문으로 날짜·택시 유형·장소 조건을 다시 정하는 선택 기능. 기본은 끔.
-CONDITION_CHECK = False
+#: 질문 원문으로 날짜·택시 유형·운행 상태·순위 개수·승하차 기준을 다시 정한다(geoflow/conditions.py).
+#: 2026-09-29부터 기본으로 켠다(evaluation/grounding_v1). 답변의 감사 문구는 --condition-check일 때만.
+CONDITION_CHECK = True
+CONDITION_NOTES = False
 #: mock(TIMS schema) 경로의 실행 모드. legacy=미확인 TIMS 항목을 가정하는 기존 동작(기본),
 #: strict=확인된 TIMS 계약만 실행. reference provider에는 적용되지 않는다.
 TIMS_EXECUTION = "legacy"
@@ -539,6 +542,7 @@ def _new_runtime(tools, system_prompt, *, tool_handlers=None, agent_mode=None):
                 model=MODEL_NAME,
                 aggregation_grounding=AGGREGATION_GROUNDING,
                 condition_check=CONDITION_CHECK,
+                condition_notes=CONDITION_NOTES,
                 execution_profile=providers.profile_for(provider_name, TIMS_EXECUTION),
                 example_selector=selector,
             )
@@ -1003,9 +1007,15 @@ def parse_args(argv=None):
         "--condition-check",
         action="store_true",
         help=(
-            "geoflow 모드에서 질문 원문으로 날짜·택시 유형을 다시 정하고 장소 근거를 확인한다. "
-            "상대 날짜는 Asia/Seoul 기준일로 해석을 기록한다. 기본은 끔."
+            "geoflow 모드의 조건 계층(질문 원문으로 날짜·택시 유형·운행 상태·순위 개수·승하차 기준을 "
+            "다시 정하고 장소 근거를 확인)은 기본으로 켜져 있다. 이 옵션은 답변에 적용 조건과 검증 "
+            "범위 문구도 덧붙인다."
         ),
+    )
+    parser.add_argument(
+        "--no-condition-check",
+        action="store_true",
+        help="조건 계층을 끈다(2026-09-29 이전 기본 동작).",
     )
     parser.add_argument(
         "--tims-execution",
@@ -1107,12 +1117,15 @@ def main(argv=None):
         raise SystemExit(str(error)) from error
 
     configure_agent_mode(args.agent_mode)
-    global AGGREGATION_GROUNDING, CONDITION_CHECK, TIMS_EXECUTION, EXAMPLE_RETRIEVAL
+    global AGGREGATION_GROUNDING, CONDITION_CHECK, CONDITION_NOTES, TIMS_EXECUTION, EXAMPLE_RETRIEVAL
     if args.example_retrieval != "off" and args.aggregation_grounding != structured_grounding.STRUCTURED:
         raise SystemExit("--example-retrieval은 --aggregation-grounding structured에서만 쓸 수 있습니다.")
     EXAMPLE_RETRIEVAL = args.example_retrieval
     AGGREGATION_GROUNDING = args.aggregation_grounding
-    CONDITION_CHECK = args.condition_check
+    if args.condition_check and args.no_condition_check:
+        raise SystemExit("--condition-check와 --no-condition-check는 함께 쓸 수 없습니다.")
+    CONDITION_CHECK = not args.no_condition_check
+    CONDITION_NOTES = args.condition_check
     TIMS_EXECUTION = args.tims_execution
     configure_ollama_client(
         args.ollama_host,
