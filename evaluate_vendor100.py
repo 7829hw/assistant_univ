@@ -765,6 +765,8 @@ def cmd_llm(args):
                 options["condition_notes"] = False   # production CLI 기본(감사 문구 없음)
             if args.no_normalize:
                 options["normalize_grounding"] = False
+            if args.no_semantic:
+                options["semantic_reinterpretation"] = False
             pipeline = GeoFlowPipeline.create(
                 client=recorder, tool_executor=_executor(),
                 aggregation_grounding=structured_grounding.FLAT,
@@ -798,6 +800,7 @@ def cmd_llm(args):
                                                  "condition_check": args.condition_check,
                                                  "condition_notes": args.condition_notes,
                                                  "normalize_grounding": not args.no_normalize,
+                                                 "semantic_reinterpretation": not args.no_semantic,
                                                  "provider": "mock", "tims_execution": "legacy",
                                                  "temperature": 0, "think": "auto",
                                                  "isolation": "unload_per_question"},
@@ -974,7 +977,8 @@ def cmd_report(args):
             judged = [r for r in result["rows"] if r.get("grounding_ok") is not None]
             excluded = [r["id"] for r in result["rows"] if r.get("grounding_ok") is None]
             if result["meta"].get("kind") in ("llm", "llm_replay"):
-                lines.append(f"- LLM grounding 정확({label}): {sum(1 for r in judged if r['grounding_ok'])}"
+                lines.append(f"- 최종 grounding 정확({label}, 조건 계층·정규화·재질의 뒤): "
+                             f"{sum(1 for r in judged if r['grounding_ok'])}"
                              f"/{len(judged)}" + (f" — 제외 {', '.join(excluded)}(정답 grounding 없음)"
                                                   if excluded else ""))
         lines.append("")
@@ -1027,6 +1031,147 @@ def cmd_report(args):
     return 0
 
 
+#: grounding 층. 모델 원출력에서 최종 grounding까지 한 층씩 더한다(재질의 전).
+LAYERS = ("raw", "normalized", "preserved", "reinterpreted")
+LAYER_LABELS = {
+    "raw": "모델 원출력",
+    "normalized": "형식 정규화 뒤(의미 불변)",
+    "preserved": "조건 보존 뒤(날짜·유형·상태, 장소 근거)",
+    "reinterpreted": "의미 재해석 뒤(측정값·관계·집계 다시 읽기)",
+}
+
+
+def _first_plan(row):
+    return next((call.get("content") for call in row.get("llm_calls") or []
+                 if call["kind"] == "plan" and not call.get("failed")), None)
+
+
+def grounding_layers(item, row):
+    """행 하나의 층별 (형식 유효, 의미 정확, 멈춘 코드). 기록된 원출력을 현재 코드로 다시 통과시킨다.
+
+    각 층은 앞 층에 한 단계만 더한다. 재질의는 하지 않는다(재질의는 최종 grounding에만 반영된다).
+    - raw: 원출력 payload 그대로. 형식 유효 = grounding 계약(parse, 정규화 끔)을 통과.
+    - normalized: 의미를 바꾸지 않는 자리 바로잡기(parse 정규화).
+    - preserved: + 조건 계층의 날짜·택시 유형·운행 상태 보존과 장소 근거 확인(의미 재해석 끔).
+    - reinterpreted: + 측정값·사건·관계·집계 다시 읽기(grounding_v2 전체 경로).
+    """
+    from geoflow import conditions
+    from geoflow.errors import PlannerError
+    from geoflow.grounding import parse_grounding
+    from geoflow.planner import parse_planner_json
+
+    out = {}
+    text = _first_plan(row)
+    try:
+        payload = parse_planner_json(text) if text else None
+    except PlannerError as error:
+        payload = None
+        out["parse_error"] = error.code
+    if not isinstance(payload, dict) or "concepts" not in payload:
+        return {layer: {"valid": False, "ok": None if gold_grounding(item) is None else False,
+                        "code": out.get("parse_error", "NO_PAYLOAD")} for layer in LAYERS}
+    for layer in LAYERS:
+        try:
+            current = payload
+            if layer in ("preserved", "reinterpreted"):
+                current, _ = conditions.reconcile_payload(
+                    payload, item["question"], reference_date=REFERENCE_DATE, raw_text=text,
+                    semantic_reinterpretation=layer == "reinterpreted")
+            grounding = parse_grounding(current, item["question"], raw_text=text,
+                                        normalize=layer != "raw")
+            view_source = current if layer == "raw" else grounding.to_dict()
+            ok, diffs = grounding_check(item, view_source)
+            out[layer] = {"valid": True, "ok": ok, "code": None, "diffs": diffs}
+        except PlannerError as error:
+            # 형식 무효라도 의미 정확도는 원출력 payload로 따로 본다(raw만).
+            ok = grounding_check(item, current if layer == "raw" else None)[0] \
+                if layer == "raw" else (None if gold_grounding(item) is None else False)
+            out[layer] = {"valid": False, "ok": ok, "code": error.code}
+        except AssertionError as error:
+            out[layer] = {"valid": False, "ok": False, "code": f"ASSERTION: {error}"}
+    return out
+
+
+def cmd_layers(args):
+    """층별 grounding 성능과 보정의 이득·훼손. LLM을 부르지 않는다(기록된 원출력 재통과)."""
+    lines = ["# grounding 층별 성능 (`evaluate_vendor100.py layers`)", "",
+             "원출력(`llm_calls`의 첫 계획 응답)을 현재 코드의 각 층에 다시 통과시킨다. 재질의는 하지 않는다.",
+             "의미 정확 = 정답 grounding과 같은 측정값·장소(이름·지역·역할)·scope·factor(기본값 정규화).", ""]
+    for name, path in args.run:
+        result = _rescored(path)
+        gold = {item["id"]: item for item in load_gold(
+            HERE / result["meta"]["gold_file"] if result["meta"].get("gold_file") else None)["items"]}
+        rows = result["rows"]
+        layers = {row["id"]: grounding_layers(gold[row["id"]], row) for row in rows}
+        judged = [row["id"] for row in rows if gold_grounding(gold[row["id"]]) is not None]
+        lines += [f"## {name}", "", f"`{path}` · 의미 정확 분모 {len(judged)}"
+                  f"(정답 grounding 없는 {len(rows) - len(judged)}문항 제외)", "",
+                  "| 층 | 형식 유효 | 의미 정확 | 앞 층 대비 고침 | 앞 층 대비 훼손 |", "|---|---|---|---|---|"]
+        previous = None
+        for layer in LAYERS:
+            valid = sum(1 for key in layers if layers[key][layer]["valid"])
+            ok = sum(1 for key in judged if layers[key][layer]["ok"])
+            fixed = damaged = "-"
+            if previous:
+                fixed = sorted(k for k in judged if layers[k][layer]["ok"] and not layers[k][previous]["ok"])
+                damaged = sorted(k for k in judged if not layers[k][layer]["ok"] and layers[k][previous]["ok"])
+                fixed = f"{len(fixed)} {', '.join(fixed)}".strip()
+                damaged = f"{len(damaged)} {', '.join(damaged)}".strip()
+            lines.append(f"| {LAYER_LABELS[layer]} | {valid}/{len(rows)} | {ok}/{len(judged)} | "
+                         f"{fixed} | {damaged} |")
+            previous = layer
+        final_ok = sum(1 for row in rows if row.get("grounding_ok"))
+        correct = sum(1 for row in rows if row["result_class"] in ("정상 답변", "정당한 거부"))
+        lines += ["", f"- 이 run의 최종 grounding(그 run의 경로 + 재질의) 정확: {final_ok}/{len(judged)}",
+                  f"- 이 run의 최종 호출·답변 맞음(정상 답변 + 정당한 거부): {correct}/{len(rows)}", ""]
+        if args.json:
+            Path(args.json).parent.mkdir(parents=True, exist_ok=True)
+            with open(args.json, "a", encoding="utf-8") as handle:
+                handle.write(json.dumps({"name": name, "path": path, "layers": layers},
+                                        ensure_ascii=False, default=str) + "\n")
+    text = "\n".join(lines) + "\n"
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+    print(text)
+    return 0
+
+
+def cmd_gold_audit(args):
+    """정답 grounding을 조건 계층에 통과시켜 훼손 여부를 본다(실행기 평가와 별개). LLM 없음."""
+    from geoflow import conditions
+    from geoflow.errors import PlannerError
+
+    lines = ["# 정답 grounding의 보정 계층 통과 (`evaluate_vendor100.py gold-audit`)", "",
+             "정답 grounding은 이미 맞다. 여기서 바뀌거나 멈춘 것은 모두 보정의 훼손이다. 정답 grounding을 실행기에",
+             "넣는 평가(`gold`)와 다르다. 한쪽으로 다른 쪽의 정확성을 주장하지 않는다.", "",
+             "| 셋 | 정답 grounding | 조건 보존만: 바뀜 / 멈춤 | 의미 재해석까지: 바뀜 / 멈춤 |",
+             "|---|---|---|---|"]
+    for path in args.gold_files:
+        items = [item for item in load_gold(path)["items"] if gold_grounding(item) is not None]
+        cells = []
+        for semantic in (False, True):
+            changed, stopped = [], []
+            for item in items:
+                try:
+                    _, audit = conditions.reconcile_payload(
+                        gold_grounding(item), item["question"], reference_date=REFERENCE_DATE,
+                        semantic_reinterpretation=semantic)
+                except PlannerError as error:
+                    if item.get("expected_outcome", "answered") == "answered":
+                        stopped.append(f"{item['id']}({error.code})")
+                    continue
+                if audit["corrections"]:
+                    changed.append(item["id"] + "(" + ",".join(
+                        f"{c['condition']}:{c['from']}→{c['to']}" for c in audit["corrections"]) + ")")
+            cells.append(f"{len(changed)} {' '.join(changed)} / {len(stopped)} {' '.join(stopped)}")
+        lines.append(f"| `{path}` | {len(items)} | {cells[0]} | {cells[1]} |")
+    text = "\n".join(lines) + "\n"
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+    print(text)
+    return 0
+
+
 def _write(path, result):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1065,6 +1210,9 @@ def main(argv=None):
                      help="조건 계층의 감사 문구를 답변에 덧붙인다(CLI --condition-check와 같음)")
     llm.add_argument("--no-normalize", action="store_true",
                      help="장소 값 자리 바로잡기를 끈다(이전 동작)")
+    llm.add_argument("--no-semantic", action="store_true",
+                     help="조건 계층의 의미 재해석(측정값·관계·집계 다시 읽기)을 끈다. 날짜·유형·상태 보존과 "
+                          "장소 근거 확인은 그대로다")
     llm.add_argument("--replay-from", default=None,
                      help="이전 llm 결과의 계획 응답을 prompt hash가 같을 때 재생(나머지는 실제 호출)")
     replay = sub.add_parser("replay")
@@ -1077,6 +1225,13 @@ def main(argv=None):
     compare.add_argument("after")
     compare.add_argument("--out", default="")
     compare.add_argument("--all", action="store_true")
+    layers = sub.add_parser("layers")
+    layers.add_argument("--run", nargs=2, action="append", required=True, metavar=("NAME", "RUN"))
+    layers.add_argument("--out", default="")
+    layers.add_argument("--json", default="")
+    gold_audit = sub.add_parser("gold-audit")
+    gold_audit.add_argument("gold_files", nargs="+")
+    gold_audit.add_argument("--out", default="")
     report = sub.add_parser("report")
     report.add_argument("--pair", nargs=3, action="append", required=True,
                         metavar=("NAME", "BEFORE", "AFTER"))
@@ -1087,7 +1242,8 @@ def main(argv=None):
     GOLD_PATH = Path(args.gold).resolve() if args.gold else None
     return {"extract": cmd_extract, "gold": cmd_gold, "llm": cmd_llm, "replay": cmd_replay,
             "rescore": cmd_rescore, "compare": cmd_compare,
-            "report": cmd_report}[args.command](args)
+            "report": cmd_report, "layers": cmd_layers,
+            "gold-audit": cmd_gold_audit}[args.command](args)
 
 
 if __name__ == "__main__":

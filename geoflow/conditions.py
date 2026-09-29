@@ -951,7 +951,14 @@ def _structure(concepts, added, aligned=()):
     return out
 
 
-def reconcile_payload(payload, question, *, reference_date, raw_text="", structured=False):
+def _inactive(slot, factors=None, key=None):
+    value = (factors or {}).get(key or slot)
+    return {"slot": slot, "llm_value": value, "value": value, "action": "none",
+            "basis": "semantic_reinterpretation_off", "evidence": []}
+
+
+def reconcile_payload(payload, question, *, reference_date, raw_text="", structured=False,
+                      semantic_reinterpretation=True):
     """LLM payload의 조건과 관계를 질문 원문 기준으로 다시 정한다. (새 payload, 감사 기록).
 
     바꿀 수 있는 것은 ``OWNED_FACTORS``, 장소 개념의 od_role, 같은 사건 계열 안의 측정값 subtype,
@@ -974,10 +981,20 @@ def reconcile_payload(payload, question, *, reference_date, raw_text="", structu
         "taxi_type": reconcile_taxi_type(factors, question, raw_text),
         "taxi_status": reconcile_taxi_status(factors, question, raw_text, fixed.get("concepts")),
         "places": check_places(fixed.get("concepts"), question, raw_text),
-        "measure": check_measure(fixed.get("concepts"), question, raw_text),
     }
-    audit["event"] = align_event(fixed.get("concepts"), audit["measure"])
-    audit.update(reconcile_relations(fixed, question, raw_text, structured=structured))
+    if semantic_reinterpretation:
+        audit["measure"] = check_measure(fixed.get("concepts"), question, raw_text)
+        audit["event"] = align_event(fixed.get("concepts"), audit["measure"])
+        audit.update(reconcile_relations(fixed, question, raw_text, structured=structured))
+    else:
+        # 질문 원문을 다시 읽어 측정값·사건·관계·집계를 정하는 보정을 끈다. 날짜·택시 유형·운행 상태의
+        # 조건 보존과 장소 근거 확인은 그대로다(비교할 때 달력·안전 검증까지 함께 꺼지지 않게).
+        audit["measure"] = _inactive("measure")
+        audit["event"] = _inactive("event")
+        audit["od_roles"] = []
+        for slot in ("answer_target", "dimension", "dimension_target", "order", "limit", "bucket",
+                     "aggregation", "rollup"):
+            audit[slot] = _inactive(slot, factors)
     audit["place_completeness"] = "unchecked"
     audit["not_checked"] = list(NOT_CHECKED)
     before = {key: value for key, value in (payload.get("factors") or {}).items()

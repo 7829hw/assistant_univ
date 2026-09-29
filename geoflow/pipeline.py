@@ -217,7 +217,8 @@ class GeoFlowPipeline:
                planner_prompt=None, model=None,
                aggregation_grounding=structured_grounding.FLAT, clock=None,
                condition_check=False, execution_profile=None, example_selector=None,
-               normalize_grounding=True, condition_notes=True):
+               normalize_grounding=True, condition_notes=True,
+               semantic_reinterpretation=True):
         """CLI/Web이 동일하게 사용할 기본 구성으로 파이프라인을 만든다.
 
         ``example_selector``(geoflow/retrieval.py)는 structured grounding에 검토된 예시를 문맥으로
@@ -237,6 +238,7 @@ class GeoFlowPipeline:
             clock=clock,
             example_selector=example_selector,
             normalize_grounding=normalize_grounding,
+            semantic_reinterpretation=semantic_reinterpretation,
         )
         return cls(
             planner=planner,

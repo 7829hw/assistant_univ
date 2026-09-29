@@ -213,6 +213,7 @@ class GeoFlowPlanner:
         normalize_grounding=True,
         clock=None,
         example_selector=None,
+        semantic_reinterpretation=True,
     ):
         if max_attempts < 1:
             raise ValueError(f"max_attempts는 1 이상이어야 합니다: {max_attempts}")
@@ -228,6 +229,8 @@ class GeoFlowPlanner:
         self.condition_check = bool(condition_check)
         #: 장소 값의 자리 바로잡기(``grounding.normalize_place_concepts``). 끄면 이전 동작.
         self.normalize_grounding = bool(normalize_grounding)
+        #: 조건 계층이 질문 원문으로 측정값·관계·집계를 다시 읽어 바꾸는 보정(conditions.reconcile_relations).
+        self.semantic_reinterpretation = bool(semantic_reinterpretation)
         self.clock = clock
         #: 질문–graph 예시 선택기(geoflow/retrieval.py). None이면 기존 prompt 그대로다.
         #: 예시는 구조화 표기로 적혀 있으므로 structured 계약에서만 받는다.
@@ -499,6 +502,7 @@ class GeoFlowPlanner:
             payload, audit = conditions.reconcile_payload(
                 payload, question, reference_date=reference, raw_text=text,
                 structured=self.structured,
+                semantic_reinterpretation=self.semantic_reinterpretation,
             )
         grounding = parse_grounding(
             payload, question, raw_text=text,
