@@ -24,7 +24,7 @@ import copy
 from dataclasses import dataclass, field
 from typing import Any
 
-from geoflow.factors import FACTOR_CONSTRAINTS
+from geoflow.factors import FACTOR_CONSTRAINTS, companions_for
 from geoflow.operator_registry import OPERATORS
 
 
@@ -158,9 +158,7 @@ def _decide_factor(context):
             reason="어떤 조건이 빠졌는지 오류에 적혀 있지 않습니다.",
             context=context,
         )
-    unknown = sorted(set(missing) - set(FACTOR_CONSTRAINTS.get(factor).requires
-                                        if factor in FACTOR_CONSTRAINTS else ())
-                     )
+    unknown = sorted(set(missing) - set(companions_for(factor)))
     if unknown:
         return RepairDecision(
             repairable=False,

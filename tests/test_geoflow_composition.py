@@ -1485,7 +1485,9 @@ class FactorSemanticsTest(ComposerCase):
 
     def test_grounding_prompt_carries_the_semantics(self):
         from geoflow.factors import (
+            FACTOR_SPECS,
             FACTOR_STAGE_NOTE,
+            FLAT_PROMPT_EXCLUDED,
             describe_factor_semantics,
         )
         from geoflow.planner import GeoFlowPlanner
@@ -1494,7 +1496,8 @@ class FactorSemanticsTest(ComposerCase):
             model = "x"
 
         prompt = GeoFlowPlanner(client=Client()).system_prompt()
-        self.assertIn(describe_factor_semantics(), prompt)
+        flat = sorted(set(FACTOR_SPECS) - FLAT_PROMPT_EXCLUDED)
+        self.assertIn(describe_factor_semantics(flat), prompt)
         self.assertIn(FACTOR_STAGE_NOTE, prompt)
 
     def test_repair_prompt_carries_the_same_semantics(self):

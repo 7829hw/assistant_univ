@@ -1190,10 +1190,10 @@ class StructuredGroundingPathTest(unittest.TestCase):
         import hashlib
         flat = self.planner("flat").system_prompt()
         structured = self.planner("structured").system_prompt()
-        # grounding_v3(2026-09-30: flat select, order→limit, od_role both·사건 기준 역할) production prompt. f3506380 뒤 select 범위 한 줄.
-        # 이전: 238ac8d6(grounding_v1), db113124(업체 v2 어휘), 64bbceb4(v2 이전). 고정 변형은 db113124 바탕을 쓴다.
-        self.assertEqual(hashlib.sha256(flat.encode()).hexdigest()[:8], "d4f1c1f8")
-        self.assertIn("- select:", flat)          # flat은 구간 선택을 select 하나로 표현한다
+        # production flat prompt는 grounding_v1의 238ac8d6 그대로다(grounding_v3: select·order→limit은 계약에만 두고
+        # prompt에 안내하지 않는다. 안내한 변형은 업체 100 실측 91 → 85). 이전: db113124, 64bbceb4.
+        self.assertEqual(hashlib.sha256(flat.encode()).hexdigest()[:8], "238ac8d6")
+        self.assertNotIn("- select:", flat)
         self.assertNotIn("- select:", structured)  # 구조화 표기는 aggregation_plan.result.select로 적는다
         self.assertIn("[집계 계획]", structured)
         self.assertIn('"select"', structured)

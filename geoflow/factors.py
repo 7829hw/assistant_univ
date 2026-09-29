@@ -122,7 +122,7 @@ FACTOR_SPECS: dict[str, FactorSpec] = {
             "bucket", values=frozenset({"week", "month"}),
             meaning=(
                 "분석 기간을 나누는 시간 구간. 지정하면 구간마다 값을 먼저 "
-                "구한 뒤 rollup으로 합치거나 select로 한 구간을 고른다. 자료가 일 단위이므로 day는 없다."
+                "구한 뒤 rollup으로 합친다. 자료가 일 단위이므로 day는 없다."
             ),
         ),
         FactorSpec(
@@ -169,7 +169,7 @@ FACTOR_SPECS: dict[str, FactorSpec] = {
         ),
         FactorSpec(
             "limit", kind="integer",
-            meaning="그룹별 결과에서 보여 줄 개수. 순위에는 늘 적는다. 하나만 묻는 순위(\"가장 많은 곳\")는 1.",
+            meaning="그룹별 결과에서 보여 줄 개수.",
         ),
         FactorSpec(
             "vicinity", kind="boolean",
@@ -202,10 +202,6 @@ FACTOR_STAGE_NOTE = """구간을 나누는 질문에서는 집계가 두 단계�
 - "총", "합계", "모두 더한"은 sum이다. "가장 큰 값", "최댓값"은 값을 묻는 집계(max)이다.
 - 구간 표현이 없으면 집계어는 aggregation이다.
   - "평균 수입은?" → aggregation=avg (bucket과 rollup은 넣지 않는다)
-- 값이 아니라 그 값을 가진 구간(어느 주, 어느 달)을 물으면 rollup 대신 select를 쓴다. select는 주·월
-  구간을 고를 때만 쓴다. 지역·요일을 고르는 순위("가장 많은 곳")는 dimension·order·limit이다.
-  - "주별 운행 일수 평균이 가장 작은 주는?" → bucket=week, aggregation=avg, select=min
-  - "주별 운행 일수 평균 중 가장 작은 값은?" → bucket=week, aggregation=avg, rollup=min
 - rollup에 week나 month 같은 시간 단위를 넣지 않는다. rollup은 합치는
   방식이다."""
 
@@ -232,8 +228,7 @@ FACTOR_CONSTRAINTS: dict[str, FactorConstraint] = {
     item.factor: item for item in (
         FactorConstraint(
             "bucket", ("rollup",),
-            "주·월 단위로 1차 집계하려면 그 결과를 합치는 방법(rollup)이나 한 구간을 고르는 방법(select)도 "
-            "필요합니다.",
+            "주·월 단위로 1차 집계하려면 그 결과를 합치는 방법도 필요합니다.",
         ),
         FactorConstraint(
             "select", ("bucket",),
@@ -248,8 +243,8 @@ FACTOR_CONSTRAINTS: dict[str, FactorConstraint] = {
             "승차·하차 기준을 정하려면 무엇을 기준으로 나눌지도 필요합니다.",
         ),
         FactorConstraint(
-            "order", ("dimension", "limit"),
-            "순위를 매기려면 무엇을 기준으로 나눌지와 몇 개를 보일지도 필요합니다.",
+            "order", ("dimension",),
+            "순위를 매기려면 무엇을 기준으로 나눌지도 필요합니다.",
         ),
         FactorConstraint(
             "limit", ("dimension",),
@@ -312,10 +307,35 @@ def describe_constraints(exclude=()):
     )
 
 
+#: flat planner prompt가 아직 안내하지 않는 factor. grounding 계약(parse·검증·합성)은 받는다.
+#: select: 구간 선택을 flat에서 표현한다(구조화 표기의 result.select와 같은 IR). production prompt에 안내하면
+#: qwen3:8b 업체 100 실측이 91 → 85로 떨어졌다(select 오용, 무관한 문항의 측정값 변동, grounding_v3 s2b).
+#: 안내 여부는 격리 실측으로 정한다. 구조화 prompt는 aggregation_plan.result.select로 안내한다.
+FLAT_PROMPT_EXCLUDED = frozenset({"select"})
+
+#: Tool 계약이 요구하는 짝. factor 자체의 성립 조건(FACTOR_CONSTRAINTS)과 달리 업체 Tool 호출 규칙에서 온다.
+#: prompt에 적지 않고 검증과 factor 재질의로 지킨다(재질의 요청문이 그 factor의 뜻을 보여 준다).
+#: - order → limit: 업체 system prompt "top이나 bottom값만 필요하다면 limit를 1개로 제한", "3곳" → limit=3.
+#:   정답 96문항이 모두 limit을 적는다. 빠지면 Tool 기본 개수로 다른 답이 된다.
+CONTRACT_COMPANIONS = {
+    "order": (("limit",), "순위를 매기려면 몇 개를 보일지(하나만 물으면 1)도 필요합니다."),
+}
+
+
 def companions_for(factor):
-    """``factor``와 함께 있어야 하는 factor 이름."""
+    """``factor``와 함께 있어야 하는 factor 이름(factor 성립 조건 + Tool 계약)."""
     constraint = FACTOR_CONSTRAINTS.get(factor)
-    return () if constraint is None else constraint.requires
+    own = () if constraint is None else constraint.requires
+    return own + CONTRACT_COMPANIONS.get(factor, ((), ""))[0]
+
+
+def companion_reason(factor, missing):
+    """빠진 짝에 대한 사용자 설명. Tool 계약 짝만 빠졌으면 그 설명을 쓴다."""
+    constraint = FACTOR_CONSTRAINTS.get(factor)
+    own = set(constraint.requires) if constraint else set()
+    if not set(missing) & own and factor in CONTRACT_COMPANIONS:
+        return CONTRACT_COMPANIONS[factor][1]
+    return constraint.reason if constraint else CONTRACT_COMPANIONS[factor][1]
 
 
 def missing_companions(factors, factor):
@@ -345,11 +365,11 @@ def validate_factors(factors, *, raw_text=""):
         missing = missing_companions(factors, name)
         if not missing:
             continue
-        constraint = FACTOR_CONSTRAINTS[name]
+        reason = companion_reason(name, missing)
         raise PlannerError(
             f"{name} 조건을 쓰려면 {', '.join(missing)} 조건도 함께 "
-            f"필요합니다. {constraint.reason}",
-            user_message=constraint.reason,
+            f"필요합니다. {reason}",
+            user_message=reason,
             code="INVALID_FACTOR_COMBINATION",
             context={
                 "raw_text": raw_text,

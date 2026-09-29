@@ -868,10 +868,10 @@ class PlannerTest(unittest.TestCase):
 
     def test_prompt_states_the_factor_pairs_from_one_source(self):
         """짝 규칙 문구를 Prompt에 손으로 또 적어 두지 않는다."""
-        from geoflow.factors import describe_constraints
+        from geoflow.factors import FLAT_PROMPT_EXCLUDED, describe_constraints
 
         prompt = self._planner("{}").system_prompt()
-        self.assertIn(describe_constraints(), prompt)
+        self.assertIn(describe_constraints(exclude=FLAT_PROMPT_EXCLUDED), prompt)
 
     def test_prompt_makes_the_od_qualifier_explicit(self):
         prompt = self._planner("{}").system_prompt()

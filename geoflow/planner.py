@@ -25,6 +25,7 @@ from geoflow.errors import GeoFlowError, PlannerError
 from geoflow.factors import (
     FACTOR_SPECS,
     FACTOR_STAGE_NOTE,
+    FLAT_PROMPT_EXCLUDED,
     describe_constraints,
     describe_factor,
     describe_factor_semantics,
@@ -259,10 +260,11 @@ class GeoFlowPlanner:
         return "\n\n".join([
             self.base_prompt,
             f"{_VOCABULARY_HEADING}\n{describe_vocabulary()}",
-            f"{_FACTOR_HEADING}\n{describe_factors()}",
-            f"{_SEMANTICS_HEADING}\n{describe_factor_semantics()}"
+            f"{_FACTOR_HEADING}\n{describe_factors(exclude=FLAT_PROMPT_EXCLUDED)}",
+            f"{_SEMANTICS_HEADING}\n"
+            f"{describe_factor_semantics(sorted(set(FACTOR_SPECS) - FLAT_PROMPT_EXCLUDED))}"
             f"\n\n{FACTOR_STAGE_NOTE}",
-            f"{_CONSTRAINT_HEADING}\n{describe_constraints()}",
+            f"{_CONSTRAINT_HEADING}\n{describe_constraints(exclude=FLAT_PROMPT_EXCLUDED)}",
         ])
 
     def _structured_system_prompt(self):
