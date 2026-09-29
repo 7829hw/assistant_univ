@@ -56,7 +56,17 @@ GROUNDED_SOURCES = frozenset({NodeSource.USER, NodeSource.IMPLICIT})
 
 #: 승하차 구분 속성. OD 변환의 port 선택 근거가 된다.
 OD_ROLE = "od_role"
-OD_ROLES = frozenset({"pickup", "dropoff"})
+OD_ROLES = frozenset({"pickup", "dropoff", "both"})
+#: 한 장소가 출발과 도착을 함께 거른다("부산 안에서 이동한 노선"). pickup port와 dropoff port를 모두
+#: 채우고, 조회는 한 번이다(같은 scope가 두 인자로 간다).
+OD_BOTH = "both"
+
+
+def attribute_satisfies(key, have, want):
+    """node 속성 ``have``가 port가 요구하는 ``want``를 만족하는가. od_role=both는 양쪽을 만족한다."""
+    if have == want:
+        return True
+    return key == OD_ROLE and have == OD_BOTH and want in ("pickup", "dropoff")
 
 _PLACE_FIELDS = ("name", "region")
 
@@ -180,7 +190,8 @@ def parse_grounding(payload, question, *, raw_text="",
     raw_concepts, hoisted = _hoist_structural_factors(payload.get("concepts"))
     notes = []
     if normalize:
-        payload = {**payload, "factors": _hoist_date_token_keys(payload.get("factors"), notes)}
+        payload = {**payload, "factors": _drop_default_target(
+            _hoist_date_token_keys(payload.get("factors"), notes), notes)}
         raw_concepts, notes_places = normalize_place_concepts(
             raw_concepts, payload.get("factors") or {})
         notes += notes_places
@@ -257,6 +268,18 @@ def _hoist_structural_factors(raw_concepts):
 #: pt_date 토큰. factor 이름 자리에 적히는 경우가 있다({"holiday": true}).
 _DATE_TOKENS = frozenset({"weekday", "weekend", "holiday", "last_week", "last_month",
                           "last_year", "this_week", "this_month", "this_year"})
+
+
+def _drop_default_target(factors, notes):
+    """dimension 없이 적힌 dimension_target=both를 뺀다. both는 schema 기본값(출발·도착 조합)이고, 나눌
+    기준이 없으면 적용할 곳도 없으므로 생략과 뜻이 같다. pickup/dropoff는 뜻이 있으므로 두어 짝 검사가
+    재질의로 보낸다."""
+    if (isinstance(factors, dict) and factors.get("dimension_target") == "both"
+            and not factors.get("dimension")):
+        factors = {key: value for key, value in factors.items() if key != "dimension_target"}
+        notes.append({"rule": "default_target_without_dimension_dropped",
+                      "factor": "dimension_target", "value": "both"})
+    return factors
 
 
 def _hoist_date_token_keys(factors, notes):

@@ -247,6 +247,8 @@ def _bind_ports(spec: OperatorSpec, inputs):
     """
     assigned: dict[str, ConceptNode] = {}
     problems: list[BindProblem] = []
+    # 같은 node가 두 input으로 들어올 수 있다(od_role=both 장소가 출발·도착 두 자리를 채움).
+    inputs = list({node.id: node for node in inputs}.values())
     for port, port_spec in spec.inputs.items():
         matches = [
             node for node in inputs

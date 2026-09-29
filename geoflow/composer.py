@@ -1153,10 +1153,13 @@ def _rename_produced(node, build):
 
 def _satisfies(node, demand):
     """node가 속성 조건을 만족하는지 본다."""
+    from geoflow.grounding import attribute_satisfies
+
     if not demand:
         return True
     return all(
-        node.attributes.get(name) == value for name, value in demand.items()
+        attribute_satisfies(name, node.attributes.get(name), value)
+        for name, value in demand.items()
     )
 
 

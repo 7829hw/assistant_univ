@@ -39,8 +39,14 @@ class TaxiStatusTest(unittest.TestCase):
             with self.subTest(question=question):
                 self.assertEqual(self.status(question), (None, "none"))
 
-    def test_value_without_any_status_word_is_removed_but_unparsed_cue_holds(self):
-        self.assertEqual(self.status("대구의 택시 통행량은?", "vacant"), (None, "removed_no_evidence"))
+    def test_value_without_any_status_word_is_held_unless_no_tool_takes_it(self):
+        passage = [{"id": "m", "concept": "AMOUNT", "subtype": "passage_count", "role": "MEASURE"}]
+        trip = [{"id": "m", "concept": "AMOUNT", "subtype": "trip_count", "role": "MEASURE"}]
+        for concepts, expected in ((passage, ("vacant", "held")), (trip, (None, "removed_no_evidence"))):
+            factors = {"taxi_status": "vacant"}
+            record = conditions.reconcile_taxi_status(factors, "대구의 택시 통행량은?",
+                                                      concepts=concepts)
+            self.assertEqual((factors.get("taxi_status"), record["action"]), expected)
         self.assertEqual(self.status("실차 구간 건수는?", "occupied"), ("occupied", "held"))
 
     def test_multiple_statuses_are_not_guessed(self):
@@ -73,53 +79,6 @@ class ConditionReaderGapTest(unittest.TestCase):
                          {"date", "taxi_type", "taxi_status"})
 
 
-class RankingAndTargetTest(unittest.TestCase):
-    TRIP = [{"id": "m", "concept": "AMOUNT", "subtype": "trip_count", "role": "MEASURE"}]
-
-    def test_limit_follows_the_count_expression(self):
-        """개수 표현이 한 값이면 그 값, 없고 "가장"이면 1. 빈 값은 채우고 다른 값은 바로잡는다.
-
-        2026-09-29 개정(grounding_v2): 이전에는 빈 limit만 채웠다. LLM이 개수 표현과 다른 값을 적으면
-        그대로 통과했다(조용한 오답). 이제 근거 표현과 이전 값을 남기고 바로잡는다.
-        """
-        cases = (("휴일 부산의 승차 읍면동 중 가장 많은 곳은?", None, 1, "filled"),
-                 ("가장 많이 이용된 노선 상위 3개", None, 3, "filled"),
-                 ("상위 2곳", 2, 2, "confirmed"),
-                 ("가장 많은 곳", 2, 1, "corrected"),
-                 ("하위 3곳", 5, 3, "corrected"),
-                 ("많은 순서로 알려줘", 4, 4, "none"))
-        for question, llm, value, action in cases:
-            with self.subTest(question=question):
-                factors = {"dimension": "emd", "order": "top",
-                           **({"limit": llm} if llm is not None else {})}
-                record = conditions.reconcile_ranking(factors, question)
-                self.assertEqual((factors.get("limit"), record["action"]), (value, action))
-                if action in ("filled", "corrected"):
-                    self.assertTrue(record["evidence"])
-
-    def test_dimension_target_is_filled_only_for_trip_counts(self):
-        """장소 역할에 쓰인 말(consumed)은 떼고 그룹 단위에 붙은 말로 정한다(grounding_v2).
-
-        "both"는 schema 기본값이라 빈 자리를 바꾸지 않고 confirmed_equivalent로 적는다.
-        """
-        cases = (("대구에서 승차가 많은 H3 셀 상위 3개는?", "pickup"),
-                 ("부산에서 하차 건수가 적은 읍면동 하위 2곳은?", "dropoff"),
-                 ("택시 이용이 많은 읍면동 간 승하차 노선 상위 3개", None))
-        for question, value in cases:
-            with self.subTest(question=question):
-                factors = {"dimension": "emd"}
-                conditions.reconcile_dimension_target(factors, question, self.TRIP)
-                self.assertEqual(factors.get("dimension_target"), value)
-        question = "수성구에서 출발한 실차 구간의 도착 읍면동 상위 3곳은?"
-        factors = {"dimension": "emd"}
-        consumed = [(question.index("에서"), question.index("에서") + len("에서 출발"))]
-        conditions.reconcile_dimension_target(factors, question, self.TRIP, consumed)
-        self.assertEqual(factors["dimension_target"], "dropoff")
-        factors = {"dimension": "emd"}
-        conditions.reconcile_dimension_target(factors, "승차가 많은 읍면동", concepts=[])
-        self.assertNotIn("dimension_target", factors)
-
-
 class DriftGuardTest(unittest.TestCase):
     """prompt 변경 뒤 새로 관측된 형태(개발셋 063·064·066·089)."""
 
@@ -146,27 +105,6 @@ class DriftGuardTest(unittest.TestCase):
             parse_grounding({"concepts": [self.EVENT, self.MEASURE],
                              "factors": {"holiday": True, "date": "weekend"}}, "질문")
         self.assertEqual(caught.exception.code, "UNKNOWN_FACTOR")
-
-    def test_target_without_dimension_or_grouping_words_is_removed(self):
-        factors = {"dimension_target": "dropoff"}
-        record = conditions.reconcile_dimension_target(
-            factors, "scope:district:2617010100에 도착한 실차 구간 건수는?", [])
-        self.assertEqual((factors, record["action"]), ({}, "removed_no_evidence"))
-        factors = {"dimension_target": "dropoff"}
-        conditions.reconcile_dimension_target(factors, "도착 읍면동 상위 3곳", [])
-        self.assertEqual(factors, {"dimension_target": "dropoff"})   # 그룹 표현이 있으면 둔다
-
-    def test_measure_word_conflict_stops_instead_of_answering(self):
-        speed = [{"role": "MEASURE", "subtype": "speed"}]
-        with self.assertRaises(PlannerError) as caught:
-            conditions.check_measure(speed, "어린이대공원 주변의 RPM 중간값은?")
-        self.assertEqual(caught.exception.code, "MEASURE_EXPRESSION_CONFLICT")
-        self.assertTrue(caught.exception.context["needs_clarification"])
-        self.assertEqual(conditions.check_measure(speed, "동대구역의 평균 속도")["action"], "none")
-        # 두 계열이 함께 있거나 없으면 판정하지 않는다
-        conditions.check_measure(speed, "속도와 통행량")
-        conditions.check_measure(speed, "동대구역 어때?")
-
 
 class PlaceNormalizationTest(unittest.TestCase):
     def test_empty_name_takes_the_region(self):

@@ -100,9 +100,12 @@ class PortSpec:
     def matches_attributes(self, attributes):
         if not self.match_attributes:
             return True
+        from geoflow.grounding import attribute_satisfies
+
         attributes = attributes or {}
         return all(
-            attributes.get(key) == value for key, value in self.match_attributes
+            attribute_satisfies(key, attributes.get(key), value)
+            for key, value in self.match_attributes
         )
 
     def describe(self):

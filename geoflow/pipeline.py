@@ -72,8 +72,6 @@ UNSUPPORTED_CODES = frozenset({
     "UNSUPPORTED_PARTITION_SIZE", "UNSUPPORTED_PERIOD_FOR_GROUPING", "UNRESOLVED_PERIOD",
     "DATE_EXPRESSION_UNSUPPORTED", "DATE_MULTIPLE_UNSUPPORTED",
     "TAXI_TYPE_EXPRESSION_UNSUPPORTED", "TAXI_STATUS_EXPRESSION_UNSUPPORTED",
-    # 값이 아니라 그 값을 가진 구간(주·달)을 묻는 질문(geoflow/relations.py 답의 대상).
-    "BUCKET_SELECTION_UNSUPPORTED",
     "DATE_EXECUTION_UNVERIFIED",
     "UNSUPPORTED_BY_PROVIDER", "UNDEFINED_MEASURE_AGGREGATION",
     # 질문이 명시한 구간 정의를 어느 경로도 보장하지 못함 / 온전한 구간이 없음.
@@ -217,8 +215,7 @@ class GeoFlowPipeline:
                planner_prompt=None, model=None,
                aggregation_grounding=structured_grounding.FLAT, clock=None,
                condition_check=False, execution_profile=None, example_selector=None,
-               normalize_grounding=True, condition_notes=True,
-               semantic_reinterpretation=True):
+               normalize_grounding=True, condition_notes=True):
         """CLI/Web이 동일하게 사용할 기본 구성으로 파이프라인을 만든다.
 
         ``example_selector``(geoflow/retrieval.py)는 structured grounding에 검토된 예시를 문맥으로
@@ -238,7 +235,6 @@ class GeoFlowPipeline:
             clock=clock,
             example_selector=example_selector,
             normalize_grounding=normalize_grounding,
-            semantic_reinterpretation=semantic_reinterpretation,
         )
         return cls(
             planner=planner,

@@ -71,9 +71,11 @@ class OperatorInput:
 
     def matches_attributes(self, attributes):
         """node가 선언한 속성만 검사한다. 없는 속성은 제약으로 보지 않는다."""
+        from geoflow.grounding import attribute_satisfies
+
         attributes = attributes or {}
         for key, value in self.match_attributes:
-            if key in attributes and attributes[key] != value:
+            if key in attributes and not attribute_satisfies(key, attributes[key], value):
                 return False
         return True
 
@@ -85,9 +87,12 @@ class OperatorInput:
         """
         if concept != self.concept or subtype not in self.subtypes:
             return False
+        from geoflow.grounding import attribute_satisfies
+
         attributes = attributes or {}
         return all(
-            attributes.get(key) == value for key, value in self.match_attributes
+            attribute_satisfies(key, attributes.get(key), value)
+            for key, value in self.match_attributes
         )
 
 

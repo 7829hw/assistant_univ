@@ -1070,13 +1070,22 @@ def grounding_layers(item, row):
     if not isinstance(payload, dict) or "concepts" not in payload:
         return {layer: {"valid": False, "ok": None if gold_grounding(item) is None else False,
                         "code": out.get("parse_error", "NO_PAYLOAD")} for layer in LAYERS}
+    import inspect
+    has_semantic = "semantic_reinterpretation" in inspect.signature(
+        conditions.reconcile_payload).parameters
     for layer in LAYERS:
+        if layer == "reinterpreted" and not has_semantic:
+            # 이 코드에는 의미 재해석이 없다(grounding_v3). 조건 보존 층과 같다.
+            out[layer] = dict(out["preserved"], absent_in_code=True)
+            continue
         try:
             current = payload
             if layer in ("preserved", "reinterpreted"):
+                options = ({"semantic_reinterpretation": layer == "reinterpreted"}
+                           if has_semantic else {})
                 current, _ = conditions.reconcile_payload(
                     payload, item["question"], reference_date=REFERENCE_DATE, raw_text=text,
-                    semantic_reinterpretation=layer == "reinterpreted")
+                    **options)
             grounding = parse_grounding(current, item["question"], raw_text=text,
                                         normalize=layer != "raw")
             view_source = current if layer == "raw" else grounding.to_dict()
@@ -1149,13 +1158,19 @@ def cmd_gold_audit(args):
     for path in args.gold_files:
         items = [item for item in load_gold(path)["items"] if gold_grounding(item) is not None]
         cells = []
+        import inspect
+        has_semantic = "semantic_reinterpretation" in inspect.signature(
+            conditions.reconcile_payload).parameters
         for semantic in (False, True):
+            if semantic and not has_semantic:
+                cells.append("(이 코드에 없음)")
+                continue
             changed, stopped = [], []
             for item in items:
                 try:
                     _, audit = conditions.reconcile_payload(
                         gold_grounding(item), item["question"], reference_date=REFERENCE_DATE,
-                        semantic_reinterpretation=semantic)
+                        **({"semantic_reinterpretation": semantic} if has_semantic else {}))
                 except PlannerError as error:
                     if item.get("expected_outcome", "answered") == "answered":
                         stopped.append(f"{item['id']}({error.code})")

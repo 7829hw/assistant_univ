@@ -186,10 +186,20 @@ class TaxiTypeTest(unittest.TestCase):
         self.assertEqual((value, record["action"]), ("private", "corrected"))
         self.assertEqual(self.taxi("개인택시 평균 수입은?", "all")[0], "private")
 
-    def test_added_corporate_without_evidence_is_removed(self):
-        value, record = self.taxi("대구 평균 수입은?", "corporate")
-        self.assertIsNone(value)
-        self.assertEqual(record["action"], "removed_no_evidence")
+    def test_added_corporate_without_evidence_is_held_or_removed_by_the_tool_contract(self):
+        """근거 어휘가 없는 값은 그 조건을 받을 Tool이 없을 때만 지운다(grounding_v3).
+
+        받을 수 있으면 어휘 밖 표현일 수 있어 보류한다. 닫힌 어휘에 없다는 것만으로 모델 값을 지우지 않는다.
+        """
+        from geoflow import conditions
+        revenue = [{"id": "m", "concept": "AMOUNT", "subtype": "revenue", "role": "MEASURE"}]
+        fare = [{"id": "m", "concept": "AMOUNT", "subtype": "fare", "role": "MEASURE"}]
+        factors = {"taxi_type": "corporate"}
+        record = conditions.reconcile_taxi_type(factors, "대구 평균 수입은?", concepts=revenue)
+        self.assertEqual((factors.get("taxi_type"), record["action"]), ("corporate", "held"))
+        factors = {"taxi_type": "corporate"}
+        record = conditions.reconcile_taxi_type(factors, "대구 평균 요금은?", concepts=fare)
+        self.assertEqual((factors.get("taxi_type"), record["action"]), (None, "removed_no_evidence"))
 
     def test_explicit_all_and_unspecified_are_distinct(self):
         self.assertEqual(self.taxi("전체 택시 평균 수입은?")[0], "all")
