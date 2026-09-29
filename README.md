@@ -1008,7 +1008,35 @@ development가 되었다.
 > grounding 층이 업체 100에서 98/100이었다. 정답 grounding 기반 실행은 양쪽 모두 100/100, 41+2/43로 같다(차이는 모두 grounding에서 옴).
 `evaluate_v2.py`는 사전 등록한 설정(condition_check 끔)을 그대로 쓴다.
 
+### 책임 경계 재정렬 grounding_v3 (2026-09-30)
+
+`geoflow/dev`(`f984306`)의 역할 분리로 되돌렸다. LLM이 개념·관계·조건·집계 의미를 grounding하고, 코드는 형식 정규화·계약
+검증·operator mapping·컴파일·실행을 맡는다. 설계·결과: `evaluation/grounding_v3/analysis.md`, 사전 등록 `preregistration.md`.
+
+* 삭제: grounding_v1·v2의 질문 재해석(`geoflow/relations.py`, 측정값 보정·채움·충돌 확인 요청, 사건 맞춤, 역할·그룹·순위·개수·
+  집계 단계·답의 대상 다시 읽기). 닫힌 어휘로 "분명하다"고 판정해 맞는 grounding을 덮어썼다. 처음 본 셋에서 정답 grounding
+  38개 중 5개를 바꿨다.
+* 유지: 형식 정규화(의미 불변), 날짜·택시 유형·운행 상태의 명시 조건 보존(양의 근거만. 근거 없는 값 삭제는 그 조건을 받을 Tool이
+  없을 때만), 장소 이름 근거, 계약 검증, 같은 장소 조회 재사용.
+* 계약에 더함: `od_role: both`(한 장소가 출발·도착), flat `select`(구간 선택, 집계 IR과 같음. 실행 여부는 provider 계약:
+  TIMS legacy는 `UNVERIFIED_TIMS_CONTRACT`), Tool 계약 짝 order→limit(빠지면 factor 재질의), 관계 재질의 요청문의 사건 기준·both.
+  planner prompt는 바꾸지 않았다(238ac8d6). select와 역할 문구를 prompt에 안내한 변형은 업체 100 실측 85였다.
+* 평가기: `layers`(원출력 → 형식 정규화 → 조건 보존 층별 형식 유효·의미 정확·고침·훼손), `gold-audit`(정답 grounding → 보정
+  계층), report의 "최종 grounding 정확" 표기 정정.
+
+| qwen3:8b 격리 실측, 맞음/합계(오답) | v2 전체 보정 `3d72ec3` | 최종 `cad3bb8` |
+|---|---|---|
+| **새 독립 v4 40(사전 등록)** | 25 (6) | 24 (4) |
+| 업체 100(개발) | 99 (0) | 93 (3) |
+| 기존 44 / 대조 31 / 1차 독립 40 / 2차 독립 40(개발) | 44 / 31 / 33 / 24 | 36 / 26 / 23 / 21 |
+| 모델 원출력 → 형식 정규화 → 조건 보존의 의미 정확(업체 100) | | 57 → 63 → 78 (훼손 0) |
+
+개발셋의 하락은 규칙을 만든 셋에서 재해석이 맡던 몫이며, 남은 오류는 모델 grounding 오류다. v4는 해석 코드·prompt를 보지 않은
+하위 에이전트가 쓴 사람 검토 없는 40문항이라 차이 1~2는 잡음 범위다.
+
 ### 관계·의미 해석 개선 grounding_v2 (2026-09-30)
+
+> grounding_v3에서 이 절의 의미 재해석(`geoflow/relations.py`)은 삭제했다. 아래 수치는 삭제 전 코드의 기록이다.
 
 질문의 공간 역할, 순위 방향, 집계 단계가 grounding부터 최종 호출까지 보존되도록 조건 계층에 관계 읽기를 더했다
 (`geoflow/relations.py`). 설계·결과: `evaluation/grounding_v2/analysis.md`, 사전 등록 `preregistration.md`, 기록 점검 `audit.md`.
