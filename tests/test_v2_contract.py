@@ -8,6 +8,7 @@ provider, 로컬 계산, 답변, 평가 라벨이 schema와 같은 어휘를 쓰
 
 import os
 import unittest
+from dataclasses import replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -17,7 +18,7 @@ os.environ.setdefault("ASSISTANT_TOOL_PROVIDER", "mock")
 
 import mock_responses  # noqa: E402
 import paraphrase_corpus as P  # noqa: E402
-from geoflow import analysis_ops, conditions, measures, periods, tims_contract  # noqa: E402
+from geoflow import analysis_ops, conditions, measures, periods, providers, tims_contract  # noqa: E402
 from geoflow.answer import ANSWER_SPECS, _METRIC_LABEL  # noqa: E402
 from geoflow.compiler import compile_plan  # noqa: E402
 from geoflow.composer import MacroComposer  # noqa: E402
@@ -157,14 +158,24 @@ class MeasureAggregationTest(unittest.TestCase):
         self.assertEqual(run.error["code"], "UNDEFINED_MEASURE_AGGREGATION")
         self.assertIn("가동률", run.error["user_message"])
 
-    def grouped(self, subtype, concept, ev, inner, places=()):
+    #: 기록이 하루에만 속한다고 가정한 계약(테스트 가정). 로컬 재계산의 수학 조건만 보려고 쓴다.
+    DAY_RECORDS = tims_contract.DEFAULT_CONTRACT.assuming(**{
+        f"day_records:{tool}": "하루 기록" for tool in (
+            "get_billing_metrics", "get_drive_metrics", "get_trip_metrics")})
+
+    def grouped(self, subtype, concept, ev, inner, places=(), **options):
         plan = self.compose(subtype, concept, ev,
                             {"date": "last_month", "bucket": "week", "aggregation": inner,
                              "rollup": "avg"}, places=places)
-        return compile_plan(plan, reference_date=REF)
+        return compile_plan(plan, reference_date=REF, **options)
 
     def test_daily_partition_follows_the_measure(self):
-        """구간 안 집계를 하루 값으로 다시 만드는 분해는 측정값마다 성립 여부가 다르다."""
+        """구간 안 집계를 하루 값으로 다시 만드는 분해는 측정값마다 성립 여부가 다르다.
+
+        로컬 재계산만 보려고 위임을 끄고(delegation=False) 기록 계약을 가정한다. 수학 조건은
+        계약과 무관하게 막는다.
+        """
+        local = {"contract": self.DAY_RECORDS, "delegation": False}
         allowed = [("revenue", "AMOUNT", "operation", "max"),
                    ("revenue", "AMOUNT", "operation", "sum"),
                    ("operating_days", "AMOUNT", "operation", "sum"),
@@ -172,7 +183,7 @@ class MeasureAggregationTest(unittest.TestCase):
                    ("fare", "AMOUNT", "trip", "sum")]
         for subtype, concept, ev, inner in allowed:
             with self.subTest(subtype=subtype, inner=inner):
-                execution = self.grouped(subtype, concept, ev, inner)
+                execution = self.grouped(subtype, concept, ev, inner, **local)
                 self.assertEqual(next(iter(execution.lowering.values()))["strategy"],
                                  "daily_partition")
         refused = [("active_taxi_count", "AMOUNT", "operation", "max"),
@@ -181,10 +192,27 @@ class MeasureAggregationTest(unittest.TestCase):
         for subtype, concept, ev, inner in refused:
             with self.subTest(subtype=subtype, inner=inner):
                 with self.assertRaises(CompilerError) as caught:
-                    self.grouped(subtype, concept, ev, inner)
+                    self.grouped(subtype, concept, ev, inner, **local)
                 self.assertEqual(caught.exception.code, "UNVERIFIED_TIMS_CONTRACT")
                 reasons = " ".join(item["reason"] for item in caught.exception.context["rejected"])
                 self.assertIn(f"측정값 {subtype}", reasons)
+
+    def test_local_math_does_not_block_delegation_and_vice_versa(self):
+        """로컬로 다시 만들 수 없는 조합도 업체 bucket 호출로는 위임된다. 반대로 bucket을 받지
+        않는 Tool은 위임할 수 없고, 로컬 근거(day_records)가 없으면 계산하지 않는다."""
+        for subtype, concept in (("active_taxi_count", "AMOUNT"),
+                                 ("active_taxi_ratio", "PROPORTION"),
+                                 ("operating_days", "AMOUNT")):
+            with self.subTest(subtype=subtype):
+                execution = self.grouped(subtype, concept, "operation", "max")
+                lowering = next(iter(execution.lowering.values()))
+                self.assertEqual(lowering["path"], "provider_delegated")
+        for subtype, concept, ev in (("fare", "AMOUNT", "trip"),
+                                     ("vacant_ratio", "PROPORTION", "drive")):
+            with self.subTest(subtype=subtype):
+                with self.assertRaises(CompilerError) as caught:
+                    self.grouped(subtype, concept, ev, "min")
+                self.assertIn("day_records:", str(caught.exception))
 
     def test_single_stage_daily_composition_is_measure_aware(self):
         allowed = tims_contract.DEFAULT_CONTRACT.assuming(
@@ -222,25 +250,37 @@ class ResultFormatTest(unittest.TestCase):
             analysis_ops.run(step, {"a": "30km/h", "b": 42})
         self.assertEqual(caught.exception.code, "MIXED_UNITS")
 
-    def run_pipeline(self, concepts, factors, question, *, clock=REF):
+    def run_pipeline(self, concepts, factors, question, *, clock=REF, profile=None):
         client = ScriptedClient([planner_response(grounding_payload(concepts, factors))])
         pipeline = GeoFlowPipeline.create(client=client, tool_executor=new_tool_executor(),
-                                          clock=lambda: clock)
+                                          clock=lambda: clock, execution_profile=profile)
         return pipeline.run(question)
 
     def test_grouped_unit_values_are_answered_with_their_unit(self):
+        # bucket을 받지 않는 Tool의 구간별 값은 로컬 재계산으로만 만들 수 있다. 그 근거
+        # (기록이 하루에만 속함)는 TIMS 계약에 없으므로 여기서는 테스트 가정으로 넣는다.
+        contract = tims_contract.DEFAULT_CONTRACT.assuming(**{
+            "day_records:get_passage_metrics": "하루 기록",
+            "day_records:get_drive_metrics": "하루 기록"})
+        local = replace(providers.profile_for(), contract=contract)
         speed = self.run_pipeline(
             [place_concept("p", "동대구역"), event_concept("e", "passage"),
              measure_concept("m", "AMOUNT", "speed")],
             {"date": "last_month", "bucket": "week", "aggregation": "max", "rollup": "avg"},
-            "지난달 동대구역의 주별 최고 속도 평균은?")
+            "지난달 동대구역의 주별 최고 속도 평균은?", profile=local)
         self.assertEqual(speed.stage, Stage.DONE, speed.runtime_error)
         self.assertEqual(speed.execution["final_value"], "30km/h")
         self.assertIn("30km/h", speed.final_answer)
+        refused = self.run_pipeline(
+            [place_concept("p", "동대구역"), event_concept("e", "passage"),
+             measure_concept("m", "AMOUNT", "speed")],
+            {"date": "last_month", "bucket": "week", "aggregation": "max", "rollup": "avg"},
+            "지난달 동대구역의 주별 최고 속도 평균은?")
+        self.assertEqual(refused.error["code"], "UNVERIFIED_TIMS_CONTRACT")
         ratio = self.run_pipeline(
             [event_concept("e", "drive"), measure_concept("m", "PROPORTION", "vacant_ratio")],
             {"date": "last_month", "bucket": "week", "aggregation": "min", "rollup": "max"},
-            "지난달 주별 최저 공차율 중 가장 큰 값은?")
+            "지난달 주별 최저 공차율 중 가장 큰 값은?", profile=local)
         self.assertEqual(ratio.stage, Stage.DONE, ratio.runtime_error)
         self.assertEqual(ratio.execution["final_value"], "35%")
         self.assertNotIn("%%", ratio.final_answer)
@@ -359,9 +399,23 @@ class CurrentPeriodPolicyTest(unittest.TestCase):
             [event("e", "operation"), measure("m", "AMOUNT", "revenue")],
             {"date": "this_month", "bucket": "week", "aggregation": "sum", "rollup": "max"}),
             "이번 달 주별 수입 합계의 최댓값은?"))
-        detail = next(iter(compile_plan(grouped, reference_date=REF).periods.values()))
+        # 위임 호출: 토큰을 그대로 보내고 기간 경계는 제공자가 정한다.
+        delegated = compile_plan(grouped, reference_date=REF)
+        record = next(iter(delegated.date_semantics.values()))
+        self.assertEqual((record["request"], record["responsibility"]),
+                         (["this_month"], "provider"))
+        lowering = next(iter(delegated.lowering.values()))
+        self.assertEqual(lowering["semantics"]["relative_date"]["value"], "provider_defined")
+        self.assertEqual(delegated.periods, {})
+        # 로컬 재계산: 애플리케이션 정책으로 푼 기간과 그 출처가 남는다.
+        local = compile_plan(grouped, reference_date=REF, delegation=False,
+                             contract=tims_contract.DEFAULT_CONTRACT.assuming(
+                                 **{"day_records:get_billing_metrics": "택시·일"}))
+        detail = next(iter(local.periods.values()))
         self.assertEqual(detail["resolved"], "20260901-20260925")
         self.assertEqual(detail["interpretation"]["source"], "application_policy")
+        self.assertEqual(next(iter(local.lowering.values()))["semantics"]["relative_date"]
+                         ["source"], "application")
 
 
 class MockGazetteerHierarchyTest(unittest.TestCase):

@@ -580,18 +580,18 @@ class FactorCompletionReproducerTest(unittest.TestCase):
             run.repairs["factor_completion"],
             {"attempted": 1, "succeeded": 1},
         )
-        # 보완된 rollup은 구간별 값의 집계가 된다. TIMS bucket 경계가 확인되지 않아
-        # 호출 하나로 합치지 않고 하루마다 부른다.
+        # 보완된 rollup은 구간별 값의 집계가 된다. 질문이 구간 정의를 정하지 않았으므로
+        # 업체 bucket/rollup 호출 하나로 위임한다.
         steps = run.execution_plan["steps"]
         tool_steps = [step for step in steps if step["kind"] == "tool"]
-        self.assertEqual(len(tool_steps), 62)
-        self.assertEqual(steps[-1]["operator"], "REDUCE_GROUPS")
-        self.assertEqual(steps[-1]["arguments"], {"reducer": "max"})
-        for step in tool_steps:
-            self.assertNotIn("bucket", step["arguments"])
-            # 기존 조건은 그대로 살아 있다.
-            self.assertEqual(step["arguments"]["taxi_type"], "private")
-            self.assertEqual(step["arguments"]["aggregation"], "max")
+        (step,) = tool_steps
+        self.assertEqual(step["arguments"]["rollup"], "max")
+        self.assertIn("bucket", step["arguments"])
+        # 기존 조건은 그대로 살아 있다.
+        self.assertEqual(step["arguments"]["taxi_type"], "private")
+        self.assertEqual(step["arguments"]["aggregation"], "max")
+        (lowering,) = run.execution_plan["lowering"].values()
+        self.assertEqual(lowering["path"], "provider_delegated")
 
     def test_wrong_rollup_value_is_rejected(self):
         """bucket 단위를 rollup에 넣는 혼동은 값 검증이 막는다.

@@ -1,0 +1,2070 @@
+source: evaluation/vendor100/질문 결과 및 정답 설명_100문항.xlsx
+source_sha256: 2f84f6b1e7e1dae7071e94578bd0c1c88b7746b7b12705d53b25c95a04bf17a6
+questions_file: assistant_univ_questions_100_v3.yaml
+note: evaluate_vendor100.py extract가 xlsx에서 생성. 손으로 고치지 않는다.
+conflicts: []
+items:
+- id: '001'
+  question: 주말 오후 6시부터 8시까지 광안리 주변의 공차 법인택시 통행량은?
+  vendor_verdict: Tool 정상 / 최종답변 오류
+  vendor_note: Tool 호출은 정확하지만 최종 답변이 Tool 결과 12,345건을 18,345건으로 바꿈.
+  vendor_result: 'get_place_scope(name=광안리, include_vicinity=true)
+
+    get_passage_count(scope=scope:gz:33212, date=weekend, time=180000-200000, taxi_type=corporate, taxi_status=vacant)'
+  gold_text: 'get_place_scope(name=광안리, include_vicinity=true)
+
+    get_passage_count(scope=$resolve.scope, date=weekend, time=180000-200000, taxi_type=corporate, taxi_status=vacant)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 광안리
+      include_vicinity: true
+  - tool: get_passage_count
+    args:
+      scope: $resolve.scope
+      date: weekend
+      time: 180000-200000
+      taxi_type: corporate
+      taxi_status: vacant
+- id: '002'
+  question: 이번 주 부산의 시군구별 택시 통행량을 적은 순서로 2곳 알려줘.
+  vendor_verdict: Tool은 맞음 / 인자 오류
+  vendor_note: 이번 주 조건(date=this_week)을 누락함.
+  vendor_result: 'get_place_scope(name=부산, region=)
+
+    get_passage_count(scope=scope:district:2600000000, dimension=sigungu, order=bottom, limit=2)'
+  gold_text: 'get_place_scope(name=부산)
+
+    get_passage_count(scope=$resolve.scope, date=this_week, dimension=sigungu, order=bottom, limit=2)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 부산
+  - tool: get_passage_count
+    args:
+      scope: $resolve.scope
+      date: this_week
+      dimension: sigungu
+      order: bottom
+      limit: 2
+- id: '003'
+  question: 동대구역 주변의 택시 통행량은?
+  vendor_verdict: Tool은 맞음 / 인자 오류
+  vendor_note: 질문에 없는 taxi_status=occupied를 임의로 추가함.
+  vendor_result: 'get_place_scope(name=동대구역, include_vicinity=true)
+
+    get_passage_count(scope=scope:edge:11234, taxi_status=occupied)'
+  gold_text: 'get_place_scope(name=동대구역, include_vicinity=true)
+
+    get_passage_count(scope=$resolve.scope)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 동대구역
+      include_vicinity: true
+  - tool: get_passage_count
+    args:
+      scope: $resolve.scope
+- id: '004'
+  question: 휴일 인천 소속 개인택시의 공차율 중간값은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=인천, region=)
+
+    get_drive_metrics(scope=scope:district:2800000000, metric=vacant_ratio, date=holiday, taxi_type=private, aggregation=med)'
+  gold_text: 'get_place_scope(name=인천)
+
+    get_drive_metrics(scope=$resolve.scope, metric=vacant_ratio, date=holiday, taxi_type=private, aggregation=med)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 인천
+  - tool: get_drive_metrics
+    args:
+      scope: $resolve.scope
+      metric: vacant_ratio
+      date: holiday
+      taxi_type: private
+      aggregation: med
+- id: '005'
+  question: 이번 달 부산의 시군구별 법인 실차 택시 통행량 상위 2곳은?
+  vendor_verdict: Tool은 맞음 / 인자 오류
+  vendor_note: 법인 실차 조건 중 taxi_status=occupied를 누락함.
+  vendor_result: 'get_place_scope(name=부산, region=)
+
+    get_passage_count(scope=scope:district:2600000000, date=this_month, taxi_type=corporate, dimension=sigungu, order=top,
+    limit=2)'
+  gold_text: 'get_place_scope(name=부산)
+
+    get_passage_count(scope=$resolve.scope, date=this_month, taxi_type=corporate, taxi_status=occupied, dimension=sigungu,
+    order=top, limit=2)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 부산
+  - tool: get_passage_count
+    args:
+      scope: $resolve.scope
+      date: this_month
+      taxi_type: corporate
+      taxi_status: occupied
+      dimension: sigungu
+      order: top
+      limit: 2
+- id: '006'
+  question: 대구에서 부산으로 이동한 읍면동 간 OD 노선 상위 3개는?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=대구, region=)
+
+    get_place_scope(name=부산, region=)
+
+    get_trip_count(scope_pickup=scope:district:2700000000, scope_dropoff=scope:district:2600000000, dimension=emd, dimension_target=both,
+    order=top, limit=3)'
+  gold_text: 'get_place_scope(name=대구)
+
+    get_place_scope(name=부산)
+
+    get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, dimension=emd, dimension_target=both, order=top,
+    limit=3)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 대구
+  - tool: get_place_scope
+    args:
+      name: 부산
+  - tool: get_trip_count
+    args:
+      scope_pickup: $pickup.scope
+      scope_dropoff: $dropoff.scope
+      dimension: emd
+      dimension_target: both
+      order: top
+      limit: 3
+- id: '007'
+  question: 지난달 대구에서 승차가 많은 H3 셀 상위 3개는?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=대구, region=)
+
+    get_trip_count(scope_pickup=scope:district:2700000000, date=last_month, dimension=h3, dimension_target=pickup, order=top,
+    limit=3)'
+  gold_text: 'get_place_scope(name=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=last_month, dimension=h3, dimension_target=pickup, order=top, limit=3)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 대구
+  - tool: get_trip_count
+    args:
+      scope_pickup: $pickup.scope
+      date: last_month
+      dimension: h3
+      dimension_target: pickup
+      order: top
+      limit: 3
+- id: 008
+  question: 지난 주 대구의 읍면동별 공차 택시 통행량 하위 3곳은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=대구, region=)
+
+    get_passage_count(scope=scope:district:2700000000, date=last_week, taxi_status=vacant, dimension=emd, order=bottom, limit=3)'
+  gold_text: 'get_place_scope(name=대구)
+
+    get_passage_count(scope=$resolve.scope, date=last_week, taxi_status=vacant, dimension=emd, order=bottom, limit=3)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 대구
+  - tool: get_passage_count
+    args:
+      scope: $resolve.scope
+      date: last_week
+      taxi_status: vacant
+      dimension: emd
+      order: bottom
+      limit: 3
+- id: 009
+  question: 휴일 자정부터 오전 4시까지 scope:district:2726000000의 개인 대기영업 택시 통행량은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: get_passage_count(scope=scope:district:2726000000, date=holiday, time=000000-040000, taxi_type=private, taxi_status=stationary)
+  gold_text: get_passage_count(scope=scope:district:2726000000, date=holiday, time=000000-040000, taxi_type=private, taxi_status=stationary)
+  gold:
+  - tool: get_passage_count
+    args:
+      scope: scope:district:2726000000
+      date: holiday
+      time: 000000-040000
+      taxi_type: private
+      taxi_status: stationary
+- id: '010'
+  question: 전국 택시의 평균 요금은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: get_trip_metrics(metric=fare, aggregation=avg)
+  gold_text: get_trip_metrics(metric=fare, aggregation=avg)
+  gold:
+  - tool: get_trip_metrics
+    args:
+      metric: fare
+      aggregation: avg
+- id: '011'
+  question: 부산 소속 택시의 평균 요금은?
+  vendor_verdict: 잘못된 Tool 선택
+  vendor_note: 요금(fare) 질문을 수입(revenue)으로 해석해 get_billing_metrics를 선택함.
+  vendor_result: 'get_place_scope(name=부산, region=)
+
+    get_billing_metrics(scope=scope:district:2600000000, metric=revenue, aggregation=avg)'
+  gold_text: 'get_place_scope(name=부산)
+
+    get_trip_metrics(scope=$resolve.scope, metric=fare, aggregation=avg)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 부산
+  - tool: get_trip_metrics
+    args:
+      scope: $resolve.scope
+      metric: fare
+      aggregation: avg
+- id: '012'
+  question: 지난달 부산에서 대구로 이동한 읍면동 간 OD 노선 하위 2개는?
+  vendor_verdict: Tool은 맞음 / 인자 오류
+  vendor_note: 하위 2개 질문인데 order=top으로 반대로 조회함.
+  vendor_result: 'get_place_scope(name=부산, region=)
+
+    get_place_scope(name=대구, region=)
+
+    get_trip_count(scope_pickup=scope:district:2600000000, scope_dropoff=scope:district:2700000000, date=last_month, dimension=emd,
+    dimension_target=both, order=top, limit=2)'
+  gold_text: 'get_place_scope(name=부산)
+
+    get_place_scope(name=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, date=last_month, dimension=emd, dimension_target=both,
+    order=bottom, limit=2)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 부산
+  - tool: get_place_scope
+    args:
+      name: 대구
+  - tool: get_trip_count
+    args:
+      scope_pickup: $pickup.scope
+      scope_dropoff: $dropoff.scope
+      date: last_month
+      dimension: emd
+      dimension_target: both
+      order: bottom
+      limit: 2
+- id: '013'
+  question: 2026년 6월 4일 대구 동성로의 실차 통행량은?
+  vendor_verdict: 잘못된 Tool 선택
+  vendor_note: 통행량(passage) 질문에 get_trip_count를 선택함.
+  vendor_result: "get_place_scope(name=동성로, region=대구)\nget_trip_count(scope_pickup=scope:edge:1742, date=20260604, taxi_status=occupied)\
+    \ \nINVALID_ARGUMENT\nget_trip_count(scope_pickup=scope:edge:1742, date=20260604)"
+  gold_text: 'get_place_scope(name=동성로, region=대구)
+
+    get_passage_count(scope=$resolve.scope, date=20260604, taxi_status=occupied)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 동성로
+      region: 대구
+  - tool: get_passage_count
+    args:
+      scope: $resolve.scope
+      date: '20260604'
+      taxi_status: occupied
+- id: '014'
+  question: 지난 주 개인택시의 평균 가동률은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: get_billing_metrics(metric=active_taxi_ratio, date=last_week, taxi_type=private)
+  gold_text: get_billing_metrics(metric=active_taxi_ratio, date=last_week, taxi_type=private, aggregation=avg)
+  gold:
+  - tool: get_billing_metrics
+    args:
+      metric: active_taxi_ratio
+      date: last_week
+      taxi_type: private
+      aggregation: avg
+- id: '015'
+  question: 이번 달 요일별 법인택시 평균 가동률 중 가장 높은 요일은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: get_billing_metrics(metric=active_taxi_ratio, date=this_month, taxi_type=corporate, dimension=dayofweek,
+    order=top, limit=1)
+  gold_text: get_billing_metrics(metric=active_taxi_ratio, date=this_month, taxi_type=corporate, aggregation=avg, dimension=dayofweek,
+    order=top, limit=1)
+  gold:
+  - tool: get_billing_metrics
+    args:
+      metric: active_taxi_ratio
+      date: this_month
+      taxi_type: corporate
+      aggregation: avg
+      dimension: dayofweek
+      order: top
+      limit: 1
+- id: '016'
+  question: 대구 수성구에서 출발한 실차 구간의 도착 읍면동 상위 3곳은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=수성구, region=대구)
+
+    get_trip_count(scope_pickup=scope:district:2726000000, dimension=emd, dimension_target=dropoff, order=top, limit=3)'
+  gold_text: 'get_place_scope(name=수성구, region=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope, dimension=emd, dimension_target=dropoff, order=top, limit=3)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 수성구
+      region: 대구
+  - tool: get_trip_count
+    args:
+      scope_pickup: $pickup.scope
+      dimension: emd
+      dimension_target: dropoff
+      order: top
+      limit: 3
+- id: '017'
+  question: 지난해 시도별 평균 활성택시 대수 하위 2곳은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: get_billing_metrics(metric=active_taxi_count, date=last_year, dimension=sido, order=bottom, limit=2)
+  gold_text: get_billing_metrics(metric=active_taxi_count, date=last_year, aggregation=avg, dimension=sido, order=bottom,
+    limit=2)
+  gold:
+  - tool: get_billing_metrics
+    args:
+      metric: active_taxi_count
+      date: last_year
+      aggregation: avg
+      dimension: sido
+      order: bottom
+      limit: 2
+- id: 018
+  question: 동대구역의 택시 통행량은?
+  vendor_verdict: Tool은 맞음 / 인자 오류
+  vendor_note: POI 자체 조회는 맞지만 질문에 없는 taxi_status=occupied를 임의로 추가함.
+  vendor_result: 'get_place_scope(name=동대구역, region=)
+
+    get_passage_count(scope=scope:edge:11234, taxi_status=occupied)'
+  gold_text: 'get_place_scope(name=동대구역, include_vicinity=false)
+
+    get_passage_count(scope=$resolve.scope)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 동대구역
+      include_vicinity: false
+  - tool: get_passage_count
+    args:
+      scope: $resolve.scope
+- id: 019
+  question: 지난 주 대구 신천동의 공차 택시 통행량은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=신천동, region=대구)
+
+    get_passage_count(scope=scope:district:2723510100, date=last_week, taxi_status=vacant)'
+  gold_text: 'get_place_scope(name=신천동, region=대구)
+
+    get_passage_count(scope=$resolve.scope, date=last_week, taxi_status=vacant)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 신천동
+      region: 대구
+  - tool: get_passage_count
+    args:
+      scope: $resolve.scope
+      date: last_week
+      taxi_status: vacant
+- id: '020'
+  question: 택시 이용이 많은 읍면동 간 승하차 노선 상위 3개를 알려줘.
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: get_trip_count(dimension=emd, dimension_target=both, order=top, limit=3)
+  gold_text: get_trip_count(dimension=emd, dimension_target=both, order=top, limit=3)
+  gold:
+  - tool: get_trip_count
+    args:
+      dimension: emd
+      dimension_target: both
+      order: top
+      limit: 3
+- id: '021'
+  question: 휴일 인천 소속 택시의 최소 요금은?
+  vendor_verdict: 잘못된 Tool 선택
+  vendor_note: 요금(fare) 질문을 수입(revenue)으로 해석해 get_billing_metrics를 선택함.
+  vendor_result: 'get_place_scope(name=인천, region=)
+
+    get_billing_metrics(scope=scope:district:2800000000, metric=revenue, date=holiday, aggregation=min)'
+  gold_text: 'get_place_scope(name=인천)
+
+    get_trip_metrics(scope=$resolve.scope, metric=fare, date=holiday, aggregation=min)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 인천
+  - tool: get_trip_metrics
+    args:
+      scope: $resolve.scope
+      metric: fare
+      date: holiday
+      aggregation: min
+- id: '022'
+  question: 지난달 오후 6시부터 8시까지 대구 신천동에서 부산 초량동에 도착한 실차 구간 건수는?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=신천동, region=대구)
+
+    get_place_scope(name=초량동, region=부산)
+
+    get_trip_count(scope_pickup=scope:district:2723510100, scope_dropoff=scope:district:2617010100, date=last_month, time=180000-200000,
+    dimension_target=both)'
+  gold_text: 'get_place_scope(name=신천동, region=대구)
+
+    get_place_scope(name=초량동, region=부산)
+
+    get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, date=last_month, time=180000-200000)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 신천동
+      region: 대구
+  - tool: get_place_scope
+    args:
+      name: 초량동
+      region: 부산
+  - tool: get_trip_count
+    args:
+      scope_pickup: $pickup.scope
+      scope_dropoff: $dropoff.scope
+      date: last_month
+      time: 180000-200000
+- id: '023'
+  question: 주말 부산 광안동에서 출발해 대구 두류동에 도착한 실차 구간 건수는?
+  vendor_verdict: Tool은 맞음 / 인자 오류
+  vendor_note: 단순 O/D 건수 질문에 dimension=emd와 taxi_status=occupied를 불필요하게 추가함.
+  vendor_result: "get_place_scope(name=광안동, region=부산)\nget_place_scope(name=두류동, region=대구)\nget_trip_count(scope_pickup=scope:district:2650010400,\
+    \ scope_dropoff=scope:district:2729010100, date=weekend, taxi_status=occupied, dimension=emd, dimension_target=both) \n\
+    INVALID_ARGUMENT\nget_trip_count(scope_pickup=scope:district:2650010400, scope_dropoff=scope:district:2729010100, date=weekend,\
+    \ dimension=emd, dimension_target=both)"
+  gold_text: 'get_place_scope(name=광안동, region=부산)
+
+    get_place_scope(name=두류동, region=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, date=weekend)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 광안동
+      region: 부산
+  - tool: get_place_scope
+    args:
+      name: 두류동
+      region: 대구
+  - tool: get_trip_count
+    args:
+      scope_pickup: $pickup.scope
+      scope_dropoff: $dropoff.scope
+      date: weekend
+- id: '024'
+  question: 지난 주 가장 많이 이용된 읍면동 간 택시 노선 상위 5개는?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: get_trip_count(date=last_week, dimension=emd, dimension_target=both, order=top, limit=5)
+  gold_text: get_trip_count(date=last_week, dimension=emd, dimension_target=both, order=top, limit=5)
+  gold:
+  - tool: get_trip_count
+    args:
+      date: last_week
+      dimension: emd
+      dimension_target: both
+      order: top
+      limit: 5
+- id: '025'
+  question: 2026년 6월 2일 대구의 시군구별 택시 통행량 중 가장 적은 곳은?
+  vendor_verdict: Tool은 맞음 / 인자 오류
+  vendor_note: 가장 적은 곳 1개에 필요한 limit=1을 누락하고 taxi_status=occupied를 임의 추가함.
+  vendor_result: 'get_place_scope(name=대구, region=)
+
+    get_passage_count(scope=scope:district:2700000000, date=20260602, taxi_status=occupied, dimension=sigungu, order=bottom)'
+  gold_text: 'get_place_scope(name=대구)
+
+    get_passage_count(scope=$resolve.scope, date=20260602, dimension=sigungu, order=bottom, limit=1)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 대구
+  - tool: get_passage_count
+    args:
+      scope: $resolve.scope
+      date: '20260602'
+      dimension: sigungu
+      order: bottom
+      limit: 1
+- id: '026'
+  question: 대구에서 출발해 부산에 도착한 실차 중 대구의 승차 읍면동 상위 2곳은?
+  vendor_verdict: 실행 실패
+  vendor_note: 첫 모델 호출이 timeout되어 Tool 호출을 시작하지 못함.
+  vendor_result: 'Tool 호출 없음
+
+    (timed out)'
+  gold_text: 'get_place_scope(name=대구)
+
+    get_place_scope(name=부산)
+
+    get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, dimension=emd, dimension_target=pickup, order=top,
+    limit=2)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 대구
+  - tool: get_place_scope
+    args:
+      name: 부산
+  - tool: get_trip_count
+    args:
+      scope_pickup: $pickup.scope
+      scope_dropoff: $dropoff.scope
+      dimension: emd
+      dimension_target: pickup
+      order: top
+      limit: 2
+- id: '027'
+  question: 2026년 6월 3일 대구 동구의 RPM 중간값은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=동구, region=대구)
+
+    get_passage_metrics(scope=scope:district:2721000000, metric=rpm, date=20260603, aggregation=med)'
+  gold_text: 'get_place_scope(name=동구, region=대구)
+
+    get_passage_metrics(scope=$resolve.scope, metric=rpm, date=20260603, aggregation=med)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 동구
+      region: 대구
+  - tool: get_passage_metrics
+    args:
+      scope: $resolve.scope
+      metric: rpm
+      date: '20260603'
+      aggregation: med
+- id: 028
+  question: 부산 소속 법인택시의 평균 공차율은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=부산, region=)
+
+    get_drive_metrics(scope=scope:district:2600000000, metric=vacant_ratio, taxi_type=corporate, aggregation=avg)'
+  gold_text: 'get_place_scope(name=부산)
+
+    get_drive_metrics(scope=$resolve.scope, metric=vacant_ratio, taxi_type=corporate, aggregation=avg)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 부산
+  - tool: get_drive_metrics
+    args:
+      scope: $resolve.scope
+      metric: vacant_ratio
+      taxi_type: corporate
+      aggregation: avg
+- id: 029
+  question: 2026년 6월 5일 오후 6시부터 8시까지 scope:edge:11234의 속도 중간값은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: get_passage_metrics(scope=scope:edge:11234, metric=speed, date=20260605, time=180000-200000, aggregation=med)
+  gold_text: get_passage_metrics(scope=scope:edge:11234, metric=speed, date=20260605, time=180000-200000, aggregation=med)
+  gold:
+  - tool: get_passage_metrics
+    args:
+      scope: scope:edge:11234
+      metric: speed
+      date: '20260605'
+      time: 180000-200000
+      aggregation: med
+- id: '030'
+  question: 2026년 6월 3일 오전 7시부터 9시까지 부산에서 승차가 적은 읍면동 2곳은?
+  vendor_verdict: Tool은 맞음 / 인자 오류
+  vendor_note: 질문의 날짜 20260603을 20260707-20260709로 잘못 변환함.
+  vendor_result: 'get_place_scope(name=부산, region=)
+
+    get_trip_count(scope_pickup=scope:district:2600000000, date=20260707-20260709, time=070000-090000, dimension=emd, dimension_target=pickup,
+    order=bottom, limit=2)'
+  gold_text: 'get_place_scope(name=부산)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=20260603, time=070000-090000, dimension=emd, dimension_target=pickup,
+    order=bottom, limit=2)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 부산
+  - tool: get_trip_count
+    args:
+      scope_pickup: $pickup.scope
+      date: '20260603'
+      time: 070000-090000
+      dimension: emd
+      dimension_target: pickup
+      order: bottom
+      limit: 2
+- id: '031'
+  question: 이번 주 대구 동인동에서 출발한 실차 구간 건수는?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=동인동, region=대구)
+
+    get_trip_count(scope_pickup=scope:district:2723010200, date=this_week, dimension_target=pickup)'
+  gold_text: 'get_place_scope(name=동인동, region=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=this_week)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 동인동
+      region: 대구
+  - tool: get_trip_count
+    args:
+      scope_pickup: $pickup.scope
+      date: this_week
+- id: '032'
+  question: 주말 대구 중구의 H3 셀별 개인택시 통행량 상위 2개는?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=중구, region=대구)
+
+    get_passage_count(scope=scope:district:2723000000, date=weekend, taxi_type=private, dimension=h3, order=top, limit=2)'
+  gold_text: 'get_place_scope(name=중구, region=대구)
+
+    get_passage_count(scope=$resolve.scope, date=weekend, taxi_type=private, dimension=h3, order=top, limit=2)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 중구
+      region: 대구
+  - tool: get_passage_count
+    args:
+      scope: $resolve.scope
+      date: weekend
+      taxi_type: private
+      dimension: h3
+      order: top
+      limit: 2
+- id: '033'
+  question: 대구 중구의 택시 평균 속도는?
+  vendor_verdict: Tool은 맞음 / 인자 오류
+  vendor_note: 질문에 없는 date=this_month를 임의로 추가함.
+  vendor_result: 'get_place_scope(name=중구, region=대구)
+
+    get_passage_metrics(scope=scope:district:2723000000, metric=speed, date=this_month, aggregation=avg)'
+  gold_text: 'get_place_scope(name=중구, region=대구)
+
+    get_passage_metrics(scope=$resolve.scope, metric=speed, aggregation=avg)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 중구
+      region: 대구
+  - tool: get_passage_metrics
+    args:
+      scope: $resolve.scope
+      metric: speed
+      aggregation: avg
+- id: '034'
+  question: 부산 광안동의 택시 통행량은?
+  vendor_verdict: Tool은 맞음 / 인자 오류
+  vendor_note: 질문에 없는 taxi_status=occupied를 임의로 추가함.
+  vendor_result: 'get_place_scope(name=광안동, region=부산)
+
+    get_passage_count(scope=scope:district:2650010400, taxi_status=occupied)'
+  gold_text: 'get_place_scope(name=광안동, region=부산)
+
+    get_passage_count(scope=$resolve.scope)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 광안동
+      region: 부산
+  - tool: get_passage_count
+    args:
+      scope: $resolve.scope
+- id: '035'
+  question: 대구에서 부산으로 이동한 실차 구간 건수는?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=대구, region=)
+
+    get_place_scope(name=부산, region=)
+
+    get_trip_count(scope_pickup=scope:district:2700000000, scope_dropoff=scope:district:2600000000, dimension_target=both)'
+  gold_text: 'get_place_scope(name=대구)
+
+    get_place_scope(name=부산)
+
+    get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 대구
+  - tool: get_place_scope
+    args:
+      name: 부산
+  - tool: get_trip_count
+    args:
+      scope_pickup: $pickup.scope
+      scope_dropoff: $dropoff.scope
+- id: '036'
+  question: 주말 오후 6시부터 8시까지 부산 소속 법인택시의 평균 공차율은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=부산, region=)
+
+    get_drive_metrics(scope=scope:district:2600000000, metric=vacant_ratio, date=weekend, time=180000-200000, taxi_type=corporate)'
+  gold_text: 'get_place_scope(name=부산)
+
+    get_drive_metrics(scope=$resolve.scope, metric=vacant_ratio, date=weekend, time=180000-200000, taxi_type=corporate, aggregation=avg)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 부산
+  - tool: get_drive_metrics
+    args:
+      scope: $resolve.scope
+      metric: vacant_ratio
+      date: weekend
+      time: 180000-200000
+      taxi_type: corporate
+      aggregation: avg
+- id: '037'
+  question: 지난달 대구 수성구의 읍면동별 실차 택시 통행량 중 가장 많은 곳은?
+  vendor_verdict: Tool은 맞음 / 인자 오류
+  vendor_note: 실차 조건 taxi_status=occupied를 누락함. 최종 답변 수치도 Tool 결과와 불일치함.
+  vendor_result: 'get_place_scope(name=수성구, region=대구)
+
+    get_passage_count(scope=scope:district:2726000000, date=last_month, dimension=emd, order=top, limit=1)'
+  gold_text: 'get_place_scope(name=수성구, region=대구)
+
+    get_passage_count(scope=$resolve.scope, date=last_month, taxi_status=occupied, dimension=emd, order=top, limit=1)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 수성구
+      region: 대구
+  - tool: get_passage_count
+    args:
+      scope: $resolve.scope
+      date: last_month
+      taxi_status: occupied
+      dimension: emd
+      order: top
+      limit: 1
+- id: 038
+  question: 시도 간 택시 OD 노선 중 가장 많이 이용된 3개를 알려줘.
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: get_trip_count(dimension=sido, dimension_target=both, order=top, limit=3)
+  gold_text: get_trip_count(dimension=sido, dimension_target=both, order=top, limit=3)
+  gold:
+  - tool: get_trip_count
+    args:
+      dimension: sido
+      dimension_target: both
+      order: top
+      limit: 3
+- id: 039
+  question: 2026년 6월 3일 자정부터 오전 4시까지 대구 소속 개인택시의 최소 공차율은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=대구, region=)
+
+    get_drive_metrics(scope=scope:district:2700000000, metric=vacant_ratio, date=20260603, time=000000-040000, taxi_type=private,
+    aggregation=min)'
+  gold_text: 'get_place_scope(name=대구)
+
+    get_drive_metrics(scope=$resolve.scope, metric=vacant_ratio, date=20260603, time=000000-040000, taxi_type=private, aggregation=min)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 대구
+  - tool: get_drive_metrics
+    args:
+      scope: $resolve.scope
+      metric: vacant_ratio
+      date: '20260603'
+      time: 000000-040000
+      taxi_type: private
+      aggregation: min
+- id: '040'
+  question: 휴일 오후 6시부터 8시까지 부산의 승차 읍면동 중 가장 많은 곳은?
+  vendor_verdict: Tool은 맞음 / 인자 오류
+  vendor_note: 가장 많은 1곳을 요구했지만 limit=1을 누락함.
+  vendor_result: 'get_place_scope(name=부산, region=)
+
+    get_trip_count(scope_pickup=scope:district:2600000000, date=holiday, time=180000-200000, dimension=emd, dimension_target=pickup,
+    order=top)'
+  gold_text: 'get_place_scope(name=부산)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=holiday, time=180000-200000, dimension=emd, dimension_target=pickup, order=top,
+    limit=1)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 부산
+  - tool: get_trip_count
+    args:
+      scope_pickup: $pickup.scope
+      date: holiday
+      time: 180000-200000
+      dimension: emd
+      dimension_target: pickup
+      order: top
+      limit: 1
+- id: '041'
+  question: 이번 달 부산에서 하차 건수가 적은 읍면동 하위 2곳은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=부산, region=)
+
+    get_trip_count(scope_dropoff=scope:district:2600000000, date=this_month, dimension=emd, dimension_target=dropoff, order=bottom,
+    limit=2)'
+  gold_text: 'get_place_scope(name=부산)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, date=this_month, dimension=emd, dimension_target=dropoff, order=bottom, limit=2)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 부산
+  - tool: get_trip_count
+    args:
+      scope_dropoff: $dropoff.scope
+      date: this_month
+      dimension: emd
+      dimension_target: dropoff
+      order: bottom
+      limit: 2
+- id: '042'
+  question: 지난 주 scope:district:2700000000의 공차 택시 통행량은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: get_passage_count(scope=scope:district:2700000000, date=last_week, taxi_status=vacant)
+  gold_text: get_passage_count(scope=scope:district:2700000000, date=last_week, taxi_status=vacant)
+  gold:
+  - tool: get_passage_count
+    args:
+      scope: scope:district:2700000000
+      date: last_week
+      taxi_status: vacant
+- id: '043'
+  question: 이번 달 법인택시의 주별 평균 가동률 중 가장 낮은 값은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: get_billing_metrics(metric=active_taxi_ratio, date=this_month, taxi_type=corporate, bucket=week, rollup=min)
+  gold_text: get_billing_metrics(metric=active_taxi_ratio, date=this_month, taxi_type=corporate, aggregation=avg, bucket=week,
+    rollup=min)
+  gold:
+  - tool: get_billing_metrics
+    args:
+      metric: active_taxi_ratio
+      date: this_month
+      taxi_type: corporate
+      aggregation: avg
+      bucket: week
+      rollup: min
+- id: '044'
+  question: 지난 주 대구에서 승차 건수가 적은 읍면동 하위 2곳은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=대구, region=)
+
+    get_trip_count(scope_pickup=scope:district:2700000000, date=last_week, dimension=emd, dimension_target=pickup, order=bottom,
+    limit=2)'
+  gold_text: 'get_place_scope(name=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=last_week, dimension=emd, dimension_target=pickup, order=bottom, limit=2)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 대구
+  - tool: get_trip_count
+    args:
+      scope_pickup: $pickup.scope
+      date: last_week
+      dimension: emd
+      dimension_target: pickup
+      order: bottom
+      limit: 2
+- id: '045'
+  question: 지난 주 대구 소속 개인택시의 평균 공차율은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=대구, region=)
+
+    get_drive_metrics(scope=scope:district:2700000000, metric=vacant_ratio, date=last_week, taxi_type=private, aggregation=avg)'
+  gold_text: 'get_place_scope(name=대구)
+
+    get_drive_metrics(scope=$resolve.scope, metric=vacant_ratio, date=last_week, taxi_type=private, aggregation=avg)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 대구
+  - tool: get_drive_metrics
+    args:
+      scope: $resolve.scope
+      metric: vacant_ratio
+      date: last_week
+      taxi_type: private
+      aggregation: avg
+- id: '046'
+  question: 주중 오후 6시부터 8시까지 대구의 읍면동별 공차 법인택시 통행량 상위 2곳은?
+  vendor_verdict: 최종 성공 / 복구 개선
+  vendor_note: time=1800-2000으로 실패한 뒤 180000-200000으로 수정하여 최종 성공함.
+  vendor_result: "get_place_scope(name=대구, region=)\nget_passage_count(scope=scope:district:2700000000, date=weekday, time=1800-2000,\
+    \ taxi_type=corporate, taxi_status=vacant, dimension=emd, order=top, limit=2) \nINVALID_ARGUMENT\nget_passage_count(scope=scope:district:2700000000,\
+    \ date=weekday, time=180000-200000, taxi_type=corporate, taxi_status=vacant, dimension=emd, order=top, limit=2)"
+  gold_text: 'get_place_scope(name=대구)
+
+    get_passage_count(scope=$resolve.scope, date=weekday, time=180000-200000, taxi_type=corporate, taxi_status=vacant, dimension=emd,
+    order=top, limit=2)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 대구
+  - tool: get_passage_count
+    args:
+      scope: $resolve.scope
+      date: weekday
+      time: 180000-200000
+      taxi_type: corporate
+      taxi_status: vacant
+      dimension: emd
+      order: top
+      limit: 2
+- id: '047'
+  question: 지난달 대구 수성구에서 출발한 실차 구간 건수는?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=수성구, region=대구)
+
+    get_trip_count(scope_pickup=scope:district:2726000000, date=last_month)'
+  gold_text: 'get_place_scope(name=수성구, region=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=last_month)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 수성구
+      region: 대구
+  - tool: get_trip_count
+    args:
+      scope_pickup: $pickup.scope
+      date: last_month
+- id: 048
+  question: 2026년 6월 2일 자정부터 오전 4시까지 대구 두산동에서 부산 광안동까지의 실차 구간 건수는?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=두산동, region=대구)
+
+    get_place_scope(name=광안동, region=부산)
+
+    get_trip_count(scope_pickup=scope:district:2726010100, scope_dropoff=scope:district:2650010400, date=20260602, time=000000-040000)'
+  gold_text: 'get_place_scope(name=두산동, region=대구)
+
+    get_place_scope(name=광안동, region=부산)
+
+    get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, date=20260602, time=000000-040000)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 두산동
+      region: 대구
+  - tool: get_place_scope
+    args:
+      name: 광안동
+      region: 부산
+  - tool: get_trip_count
+    args:
+      scope_pickup: $pickup.scope
+      scope_dropoff: $dropoff.scope
+      date: '20260602'
+      time: 000000-040000
+- id: 049
+  question: 이번 달 서울 소속 법인택시의 평균 활성택시 대수는?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=서울, region=)
+
+    get_billing_metrics(scope=scope:district:1100000000, metric=active_taxi_count, date=this_month, taxi_type=corporate, aggregation=avg)'
+  gold_text: 'get_place_scope(name=서울)
+
+    get_billing_metrics(scope=$resolve.scope, metric=active_taxi_count, date=this_month, taxi_type=corporate, aggregation=avg)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 서울
+  - tool: get_billing_metrics
+    args:
+      scope: $resolve.scope
+      metric: active_taxi_count
+      date: this_month
+      taxi_type: corporate
+      aggregation: avg
+- id: '050'
+  question: 주말 오전 7시부터 9시까지 대구 달서구의 평균 속도는?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=달서구, region=대구)
+
+    get_passage_metrics(scope=scope:district:2729000000, metric=speed, date=weekend, time=070000-090000, aggregation=avg)'
+  gold_text: 'get_place_scope(name=달서구, region=대구)
+
+    get_passage_metrics(scope=$resolve.scope, metric=speed, date=weekend, time=070000-090000, aggregation=avg)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 달서구
+      region: 대구
+  - tool: get_passage_metrics
+    args:
+      scope: $resolve.scope
+      metric: speed
+      date: weekend
+      time: 070000-090000
+      aggregation: avg
+- id: '051'
+  question: 주말 오전 8시부터 10시까지 scope:h3:8830e1d87ffffff의 최대 RPM은?
+  vendor_verdict: Tool은 맞음 / 인자 오류
+  vendor_note: 주말 조건(date=weekend)을 누락함.
+  vendor_result: get_passage_metrics(scope=scope:h3:8830e1d87ffffff, metric=rpm, time=080000-100000, aggregation=max)
+  gold_text: get_passage_metrics(scope=scope:h3:8830e1d87ffffff, metric=rpm, date=weekend, time=080000-100000, aggregation=max)
+  gold:
+  - tool: get_passage_metrics
+    args:
+      scope: scope:h3:8830e1d87ffffff
+      metric: rpm
+      date: weekend
+      time: 080000-100000
+      aggregation: max
+- id: '052'
+  question: 이번 달 대구 소속 택시의 최대 요금은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=대구, region=)
+
+    get_trip_metrics(scope=scope:district:2700000000, metric=fare, date=this_month, aggregation=max)'
+  gold_text: 'get_place_scope(name=대구)
+
+    get_trip_metrics(scope=$resolve.scope, metric=fare, date=this_month, aggregation=max)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 대구
+  - tool: get_trip_metrics
+    args:
+      scope: $resolve.scope
+      metric: fare
+      date: this_month
+      aggregation: max
+- id: '053'
+  question: 대구 신천동에서 부산 초량동까지의 실차 구간 건수는?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=신천동, region=대구)
+
+    get_place_scope(name=초량동, region=부산)
+
+    get_trip_count(scope_pickup=scope:district:2723510100, scope_dropoff=scope:district:2617010100, dimension_target=both)'
+  gold_text: 'get_place_scope(name=신천동, region=대구)
+
+    get_place_scope(name=초량동, region=부산)
+
+    get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 신천동
+      region: 대구
+  - tool: get_place_scope
+    args:
+      name: 초량동
+      region: 부산
+  - tool: get_trip_count
+    args:
+      scope_pickup: $pickup.scope
+      scope_dropoff: $dropoff.scope
+- id: '054'
+  question: 부산 광안동의 실차 택시 통행량은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=광안동, region=부산)
+
+    get_passage_count(scope=scope:district:2650010400, taxi_status=occupied)'
+  gold_text: 'get_place_scope(name=광안동, region=부산)
+
+    get_passage_count(scope=$resolve.scope, taxi_status=occupied)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 광안동
+      region: 부산
+  - tool: get_passage_count
+    args:
+      scope: $resolve.scope
+      taxi_status: occupied
+- id: '055'
+  question: 휴일 대구 두류동의 개인 대기영업 택시 통행량은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=두류동, region=대구)
+
+    get_passage_count(scope=scope:district:2729010100, date=holiday, taxi_type=private, taxi_status=stationary)'
+  gold_text: 'get_place_scope(name=두류동, region=대구)
+
+    get_passage_count(scope=$resolve.scope, date=holiday, taxi_type=private, taxi_status=stationary)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 두류동
+      region: 대구
+  - tool: get_passage_count
+    args:
+      scope: $resolve.scope
+      date: holiday
+      taxi_type: private
+      taxi_status: stationary
+- id: '056'
+  question: 지난 주 오전 7시부터 9시까지 대구 동인동에서 부산 초읍동까지의 실차 구간 건수는?
+  vendor_verdict: Tool 흐름/인자 오류
+  vendor_note: 장소명을 영문으로 임의 변환해 Gazetteer 조회에 실패하고 get_trip_count까지 진행하지 못함.
+  vendor_result: "get_place_scope(name=Dongin-dong, region=Daegu) \nNOT_FOUND\nget_place_scope(name=Dongin-myeon, region=Daegu)\
+    \ \nNOT_FOUND"
+  gold_text: 'get_place_scope(name=동인동, region=대구)
+
+    get_place_scope(name=초읍동, region=부산)
+
+    get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, date=last_week, time=070000-090000)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 동인동
+      region: 대구
+  - tool: get_place_scope
+    args:
+      name: 초읍동
+      region: 부산
+  - tool: get_trip_count
+    args:
+      scope_pickup: $pickup.scope
+      scope_dropoff: $dropoff.scope
+      date: last_week
+      time: 070000-090000
+- id: '057'
+  question: 지난달 부산 소속 택시의 평균 수입은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=부산, region=)
+
+    get_billing_metrics(scope=scope:district:2600000000, metric=revenue, date=last_month, aggregation=avg)'
+  gold_text: 'get_place_scope(name=부산)
+
+    get_billing_metrics(scope=$resolve.scope, metric=revenue, date=last_month, aggregation=avg)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 부산
+  - tool: get_billing_metrics
+    args:
+      scope: $resolve.scope
+      metric: revenue
+      date: last_month
+      aggregation: avg
+- id: 058
+  question: 이번 주 대구 동성로 부근의 최소 속도는?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=동성로, region=대구, include_vicinity=true)
+
+    get_passage_metrics(scope=scope:edge:1742, metric=speed, date=this_week, aggregation=min)'
+  gold_text: 'get_place_scope(name=동성로, region=대구, include_vicinity=true)
+
+    get_passage_metrics(scope=$resolve.scope, metric=speed, date=this_week, aggregation=min)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 동성로
+      region: 대구
+      include_vicinity: true
+  - tool: get_passage_metrics
+    args:
+      scope: $resolve.scope
+      metric: speed
+      date: this_week
+      aggregation: min
+- id: 059
+  question: 주말 오후 6시부터 8시까지 대구 소속 택시의 평균 요금은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=대구, region=)
+
+    get_trip_metrics(scope=scope:district:2700000000, metric=fare, date=weekend, time=180000-200000)'
+  gold_text: 'get_place_scope(name=대구)
+
+    get_trip_metrics(scope=$resolve.scope, metric=fare, date=weekend, time=180000-200000, aggregation=avg)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 대구
+  - tool: get_trip_metrics
+    args:
+      scope: $resolve.scope
+      metric: fare
+      date: weekend
+      time: 180000-200000
+      aggregation: avg
+- id: '060'
+  question: 부산의 읍면동별 택시 통행량을 많은 순서로 3곳 알려줘.
+  vendor_verdict: Tool 정상 / 최종답변 오류
+  vendor_note: Tool 호출은 정확하지만 최종 답변이 Tool 결과 12,345건을 18,432건으로 바꿈.
+  vendor_result: 'get_place_scope(name=부산, region=)
+
+    get_passage_count(scope=scope:district:2600000000, dimension=emd, order=top, limit=3)'
+  gold_text: 'get_place_scope(name=부산)
+
+    get_passage_count(scope=$resolve.scope, dimension=emd, order=top, limit=3)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 부산
+  - tool: get_passage_count
+    args:
+      scope: $resolve.scope
+      dimension: emd
+      order: top
+      limit: 3
+- id: '061'
+  question: 지난해 부산 소속 택시의 요금 중간값은?
+  vendor_verdict: 잘못된 Tool 선택
+  vendor_note: 요금(fare) 질문을 수입(revenue)으로 해석해 get_billing_metrics를 선택함.
+  vendor_result: 'get_place_scope(name=부산, region=)
+
+    get_billing_metrics(scope=scope:district:2600000000, metric=revenue, date=last_year, aggregation=med)'
+  gold_text: 'get_place_scope(name=부산)
+
+    get_trip_metrics(scope=$resolve.scope, metric=fare, date=last_year, aggregation=med)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 부산
+  - tool: get_trip_metrics
+    args:
+      scope: $resolve.scope
+      metric: fare
+      date: last_year
+      aggregation: med
+- id: '062'
+  question: 지난 주 서울 소속 택시의 요금 중간값은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=서울, region=)
+
+    get_trip_metrics(scope=scope:district:1100000000, metric=fare, date=last_week, aggregation=med)'
+  gold_text: 'get_place_scope(name=서울)
+
+    get_trip_metrics(scope=$resolve.scope, metric=fare, date=last_week, aggregation=med)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 서울
+  - tool: get_trip_metrics
+    args:
+      scope: $resolve.scope
+      metric: fare
+      date: last_week
+      aggregation: med
+- id: '063'
+  question: 지난 주 개인택시의 평균 운행 일수는?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: get_billing_metrics(metric=operating_days, date=last_week, taxi_type=private, aggregation=avg)
+  gold_text: get_billing_metrics(metric=operating_days, date=last_week, taxi_type=private, aggregation=avg)
+  gold:
+  - tool: get_billing_metrics
+    args:
+      metric: operating_days
+      date: last_week
+      taxi_type: private
+      aggregation: avg
+- id: '064'
+  question: 주말 오후 6시부터 8시까지 부산 초읍동 어린이대공원 주변의 RPM 중간값은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=어린이대공원, region=부산 초읍동, include_vicinity=true)
+
+    get_passage_metrics(scope=scope:gz:3982, metric=rpm, date=weekend, time=180000-200000, aggregation=med)'
+  gold_text: 'get_place_scope(name=어린이대공원, region=부산 초읍동, include_vicinity=true)
+
+    get_passage_metrics(scope=$resolve.scope, metric=rpm, date=weekend, time=180000-200000, aggregation=med)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 어린이대공원
+      region: 부산 초읍동
+      include_vicinity: true
+  - tool: get_passage_metrics
+    args:
+      scope: $resolve.scope
+      metric: rpm
+      date: weekend
+      time: 180000-200000
+      aggregation: med
+- id: '065'
+  question: 지난달 요일별 개인택시 평균 수입을 많은 순서로 2개 요일 알려줘.
+  vendor_verdict: Tool은 맞음 / 인자 오류
+  vendor_note: 개인택시 조건 taxi_type=private를 누락함.
+  vendor_result: get_billing_metrics(metric=revenue, date=last_month, aggregation=avg, dimension=dayofweek, order=top, limit=2)
+  gold_text: get_billing_metrics(metric=revenue, date=last_month, taxi_type=private, aggregation=avg, dimension=dayofweek,
+    order=top, limit=2)
+  gold:
+  - tool: get_billing_metrics
+    args:
+      metric: revenue
+      date: last_month
+      taxi_type: private
+      aggregation: avg
+      dimension: dayofweek
+      order: top
+      limit: 2
+- id: '066'
+  question: scope:district:2617010100에 도착한 실차 구간 건수는?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: get_trip_count(scope_dropoff=scope:district:2617010100)
+  gold_text: get_trip_count(scope_dropoff=scope:district:2617010100)
+  gold:
+  - tool: get_trip_count
+    args:
+      scope_dropoff: scope:district:2617010100
+- id: '067'
+  question: 부산에서 하차가 많은 읍면동 상위 3곳은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=부산, region=)
+
+    get_trip_count(scope_dropoff=scope:district:2600000000, dimension=emd, dimension_target=dropoff, order=top, limit=3)'
+  gold_text: 'get_place_scope(name=부산)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, dimension=emd, dimension_target=dropoff, order=top, limit=3)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 부산
+  - tool: get_trip_count
+    args:
+      scope_dropoff: $dropoff.scope
+      dimension: emd
+      dimension_target: dropoff
+      order: top
+      limit: 3
+- id: 068
+  question: 동대구역 주변의 평균 속도는?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=동대구역, include_vicinity=true)
+
+    get_passage_metrics(scope=scope:edge:11234, metric=speed, aggregation=avg)'
+  gold_text: 'get_place_scope(name=동대구역, include_vicinity=true)
+
+    get_passage_metrics(scope=$resolve.scope, metric=speed, aggregation=avg)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 동대구역
+      include_vicinity: true
+  - tool: get_passage_metrics
+    args:
+      scope: $resolve.scope
+      metric: speed
+      aggregation: avg
+- id: 069
+  question: 부산 초량동에 도착한 실차 구간 건수는?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=초량동, region=부산)
+
+    get_trip_count(scope_dropoff=scope:district:2617010100, dimension_target=dropoff)'
+  gold_text: 'get_place_scope(name=초량동, region=부산)
+
+    get_trip_count(scope_dropoff=$dropoff.scope)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 초량동
+      region: 부산
+  - tool: get_trip_count
+    args:
+      scope_dropoff: $dropoff.scope
+- id: '070'
+  question: 휴일 부산의 읍면동별 대기영업 개인택시 통행량 중 가장 많은 곳은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=부산, region=)
+
+    get_passage_count(scope=scope:district:2600000000, date=holiday, taxi_type=private, taxi_status=stationary, dimension=emd,
+    order=top, limit=1)'
+  gold_text: 'get_place_scope(name=부산)
+
+    get_passage_count(scope=$resolve.scope, date=holiday, taxi_type=private, taxi_status=stationary, dimension=emd, order=top,
+    limit=1)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 부산
+  - tool: get_passage_count
+    args:
+      scope: $resolve.scope
+      date: holiday
+      taxi_type: private
+      taxi_status: stationary
+      dimension: emd
+      order: top
+      limit: 1
+- id: '071'
+  question: 대구 수성구에서 출발한 실차 구간 건수는?
+  vendor_verdict: Tool은 맞음 / 인자 오류
+  vendor_note: 단순 출발 건수 질문에 dimension=emd를 불필요하게 추가함.
+  vendor_result: 'get_place_scope(name=수성구, region=대구)
+
+    get_trip_count(scope_pickup=scope:district:2726000000, dimension=emd, dimension_target=pickup)'
+  gold_text: 'get_place_scope(name=수성구, region=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 수성구
+      region: 대구
+  - tool: get_trip_count
+    args:
+      scope_pickup: $pickup.scope
+- id: '072'
+  question: 주중 오전 8시 30분부터 10시까지 부산 초읍동의 공차 개인택시 통행량은?
+  vendor_verdict: 최종 성공 / 복구 개선
+  vendor_note: time=0830-1000으로 실패한 뒤 083000-100000으로 수정하여 최종 성공함.
+  vendor_result: "get_place_scope(name=초읍동, region=부산)\nget_passage_count(scope=scope:district:2623010700, date=weekday, time=0830-1000,\
+    \ taxi_type=private, taxi_status=vacant) \nINVALID_ARGUMENT\nget_passage_count(scope=scope:district:2623010700, date=weekday,\
+    \ time=083000-100000, taxi_type=private, taxi_status=vacant)"
+  gold_text: 'get_place_scope(name=초읍동, region=부산)
+
+    get_passage_count(scope=$resolve.scope, date=weekday, time=083000-100000, taxi_type=private, taxi_status=vacant)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 초읍동
+      region: 부산
+  - tool: get_passage_count
+    args:
+      scope: $resolve.scope
+      date: weekday
+      time: 083000-100000
+      taxi_type: private
+      taxi_status: vacant
+- id: '073'
+  question: 부산에서 승차가 많은 읍면동 상위 3곳은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=부산, region=)
+
+    get_trip_count(scope_pickup=scope:district:2600000000, dimension=emd, dimension_target=pickup, order=top, limit=3)'
+  gold_text: 'get_place_scope(name=부산)
+
+    get_trip_count(scope_pickup=$pickup.scope, dimension=emd, dimension_target=pickup, order=top, limit=3)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 부산
+  - tool: get_trip_count
+    args:
+      scope_pickup: $pickup.scope
+      dimension: emd
+      dimension_target: pickup
+      order: top
+      limit: 3
+- id: '074'
+  question: 휴일 부산 초읍동 어린이대공원 주변의 실차 택시 통행량은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=어린이대공원, region=부산 초읍동, include_vicinity=true)
+
+    get_passage_count(scope=scope:gz:3982, date=holiday, taxi_status=occupied)'
+  gold_text: 'get_place_scope(name=어린이대공원, region=부산 초읍동, include_vicinity=true)
+
+    get_passage_count(scope=$resolve.scope, date=holiday, taxi_status=occupied)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 어린이대공원
+      region: 부산 초읍동
+      include_vicinity: true
+  - tool: get_passage_count
+    args:
+      scope: $resolve.scope
+      date: holiday
+      taxi_status: occupied
+- id: '075'
+  question: 2026년 6월 4일 자정부터 오전 4시까지 대구에서 부산으로 이동한 읍면동 간 OD 상위 2개는?
+  vendor_verdict: Tool 흐름/인자 오류
+  vendor_note: 장소 조회에 질문에 없는 region을 추가해 scope 연결이 깨지고 get_trip_count까지 정상 연결되지 못함.
+  vendor_result: 'get_place_scope(name=대구, region=대구)
+
+    get_place_scope(name=부산, region=부산)
+
+    get_trip_count(scope_pickup=scope:district:2700000000, scope_dropoff=scope:district:2600000000, date=20260604, time=000000-040000,
+    dimension=emd, dimension_target=both, order=top, limit=2)'
+  gold_text: 'get_place_scope(name=대구)
+
+    get_place_scope(name=부산)
+
+    get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, date=20260604, time=000000-040000, dimension=emd,
+    dimension_target=both, order=top, limit=2)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 대구
+  - tool: get_place_scope
+    args:
+      name: 부산
+  - tool: get_trip_count
+    args:
+      scope_pickup: $pickup.scope
+      scope_dropoff: $dropoff.scope
+      date: '20260604'
+      time: 000000-040000
+      dimension: emd
+      dimension_target: both
+      order: top
+      limit: 2
+- id: '076'
+  question: 지난달 시도별 개인택시 평균 수입 상위 3곳은?
+  vendor_verdict: Tool은 맞음 / 인자 오류
+  vendor_note: 개인택시 조건 taxi_type=private를 누락함.
+  vendor_result: get_billing_metrics(metric=revenue, date=last_month, aggregation=avg, dimension=sido, order=top, limit=3)
+  gold_text: get_billing_metrics(metric=revenue, date=last_month, taxi_type=private, aggregation=avg, dimension=sido, order=top,
+    limit=3)
+  gold:
+  - tool: get_billing_metrics
+    args:
+      metric: revenue
+      date: last_month
+      taxi_type: private
+      aggregation: avg
+      dimension: sido
+      order: top
+      limit: 3
+- id: '077'
+  question: 지난달 대구 소속 법인택시의 총 수입은?
+  vendor_verdict: Tool은 맞음 / 인자 오류
+  vendor_note: 총 수입 질문에 필요한 aggregation=sum을 누락함.
+  vendor_result: 'get_place_scope(name=대구, region=)
+
+    get_billing_metrics(scope=scope:district:2700000000, metric=revenue, date=last_month, taxi_type=corporate)'
+  gold_text: 'get_place_scope(name=대구)
+
+    get_billing_metrics(scope=$resolve.scope, metric=revenue, date=last_month, taxi_type=corporate, aggregation=sum)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 대구
+  - tool: get_billing_metrics
+    args:
+      scope: $resolve.scope
+      metric: revenue
+      date: last_month
+      taxi_type: corporate
+      aggregation: sum
+- id: 078
+  question: 지난 주 시군구 간 택시 OD 노선 중 이용이 적은 3개는?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: get_trip_count(date=last_week, dimension=sigungu, dimension_target=both, order=bottom, limit=3)
+  gold_text: get_trip_count(date=last_week, dimension=sigungu, dimension_target=both, order=bottom, limit=3)
+  gold:
+  - tool: get_trip_count
+    args:
+      date: last_week
+      dimension: sigungu
+      dimension_target: both
+      order: bottom
+      limit: 3
+- id: 079
+  question: 이번 달 부산 초량동의 법인택시 통행량은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=초량동, region=부산)
+
+    get_passage_count(scope=scope:district:2617010100, date=this_month, taxi_type=corporate)'
+  gold_text: 'get_place_scope(name=초량동, region=부산)
+
+    get_passage_count(scope=$resolve.scope, date=this_month, taxi_type=corporate)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 초량동
+      region: 부산
+  - tool: get_passage_count
+    args:
+      scope: $resolve.scope
+      date: this_month
+      taxi_type: corporate
+- id: 080
+  question: 지난 주 대구의 읍면동별 공차 택시 통행량 상위 3곳은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=대구, region=)
+
+    get_passage_count(scope=scope:district:2700000000, date=last_week, taxi_status=vacant, dimension=emd, order=top, limit=3)'
+  gold_text: 'get_place_scope(name=대구)
+
+    get_passage_count(scope=$resolve.scope, date=last_week, taxi_status=vacant, dimension=emd, order=top, limit=3)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 대구
+  - tool: get_passage_count
+    args:
+      scope: $resolve.scope
+      date: last_week
+      taxi_status: vacant
+      dimension: emd
+      order: top
+      limit: 3
+- id: 081
+  question: 2026년 6월 5일 오전 7시부터 9시까지 부산 소속 택시의 최대 요금은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=부산, region=)
+
+    get_trip_metrics(scope=scope:district:2600000000, metric=fare, date=20260605, time=070000-090000, aggregation=max)'
+  gold_text: 'get_place_scope(name=부산)
+
+    get_trip_metrics(scope=$resolve.scope, metric=fare, date=20260605, time=070000-090000, aggregation=max)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 부산
+  - tool: get_trip_metrics
+    args:
+      scope: $resolve.scope
+      metric: fare
+      date: '20260605'
+      time: 070000-090000
+      aggregation: max
+- id: 082
+  question: scope:h3:8830e1d87ffffff가 가리키는 지역명을 알려줘.
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: get_scope_name(scope=scope:h3:8830e1d87ffffff)
+  gold_text: get_scope_name(scope=scope:h3:8830e1d87ffffff)
+  gold:
+  - tool: get_scope_name
+    args:
+      scope: scope:h3:8830e1d87ffffff
+- id: 083
+  question: 이번 달 대구 중구의 택시 평균 속도는?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=중구, region=대구)
+
+    get_passage_metrics(scope=scope:district:2723000000, metric=speed, date=this_month, aggregation=avg)'
+  gold_text: 'get_place_scope(name=중구, region=대구)
+
+    get_passage_metrics(scope=$resolve.scope, metric=speed, date=this_month, aggregation=avg)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 중구
+      region: 대구
+  - tool: get_passage_metrics
+    args:
+      scope: $resolve.scope
+      metric: speed
+      date: this_month
+      aggregation: avg
+- id: 084
+  question: 주말 대구에서 출발해 부산에 도착한 실차 중 부산의 하차 읍면동 상위 3곳은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=대구, region=)
+
+    get_place_scope(name=부산, region=)
+
+    get_trip_count(scope_pickup=scope:district:2700000000, scope_dropoff=scope:district:2600000000, date=weekend, dimension=emd,
+    dimension_target=dropoff, order=top, limit=3)'
+  gold_text: 'get_place_scope(name=대구)
+
+    get_place_scope(name=부산)
+
+    get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, date=weekend, dimension=emd, dimension_target=dropoff,
+    order=top, limit=3)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 대구
+  - tool: get_place_scope
+    args:
+      name: 부산
+  - tool: get_trip_count
+    args:
+      scope_pickup: $pickup.scope
+      scope_dropoff: $dropoff.scope
+      date: weekend
+      dimension: emd
+      dimension_target: dropoff
+      order: top
+      limit: 3
+- id: 085
+  question: 이번 주 대구에 도착한 실차의 하차 읍면동을 많은 순서로 3곳 알려줘.
+  vendor_verdict: Tool은 맞음 / 인자 오류
+  vendor_note: 도착 기준 질문인데 대구 scope를 scope_pickup에 넣고 scope_dropoff를 누락함.
+  vendor_result: 'get_place_scope(name=대구, region=)
+
+    get_trip_count(scope_pickup=scope:district:2700000000, date=this_week, dimension=emd, dimension_target=dropoff, order=top,
+    limit=3)'
+  gold_text: 'get_place_scope(name=대구)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, date=this_week, dimension=emd, dimension_target=dropoff, order=top, limit=3)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 대구
+  - tool: get_trip_count
+    args:
+      scope_dropoff: $dropoff.scope
+      date: this_week
+      dimension: emd
+      dimension_target: dropoff
+      order: top
+      limit: 3
+- id: 086
+  question: 올해 대구 소속 택시의 평균 요금은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=대구, region=)
+
+    get_trip_metrics(scope=scope:district:2700000000, metric=fare, date=this_year, aggregation=avg)'
+  gold_text: 'get_place_scope(name=대구)
+
+    get_trip_metrics(scope=$resolve.scope, metric=fare, date=this_year, aggregation=avg)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 대구
+  - tool: get_trip_metrics
+    args:
+      scope: $resolve.scope
+      metric: fare
+      date: this_year
+      aggregation: avg
+- id: 087
+  question: 지난달 대구 수성구에서 기록된 최대 RPM은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=수성구, region=대구)
+
+    get_passage_metrics(scope=scope:district:2726000000, metric=rpm, date=last_month, aggregation=max)'
+  gold_text: 'get_place_scope(name=수성구, region=대구)
+
+    get_passage_metrics(scope=$resolve.scope, metric=rpm, date=last_month, aggregation=max)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 수성구
+      region: 대구
+  - tool: get_passage_metrics
+    args:
+      scope: $resolve.scope
+      metric: rpm
+      date: last_month
+      aggregation: max
+- id: 088
+  question: 이번 달 scope:district:2600000000의 법인 실차 택시 통행량은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: get_passage_count(scope=scope:district:2600000000, date=this_month, taxi_type=corporate, taxi_status=occupied)
+  gold_text: get_passage_count(scope=scope:district:2600000000, date=this_month, taxi_type=corporate, taxi_status=occupied)
+  gold:
+  - tool: get_passage_count
+    args:
+      scope: scope:district:2600000000
+      date: this_month
+      taxi_type: corporate
+      taxi_status: occupied
+- id: 089
+  question: 휴일 오후 6시부터 8시까지 대구에서 부산으로 이동한 읍면동 간 OD 중 가장 많은 노선은?
+  vendor_verdict: Tool은 맞음 / 인자 오류
+  vendor_note: 가장 많은 노선 1개를 요구했지만 limit=1을 누락함.
+  vendor_result: 'get_place_scope(name=대구, region=)
+
+    get_place_scope(name=부산, region=)
+
+    get_trip_count(scope_pickup=scope:district:2700000000, scope_dropoff=scope:district:2600000000, date=holiday, time=180000-200000,
+    dimension=emd, dimension_target=both, order=top)'
+  gold_text: 'get_place_scope(name=대구)
+
+    get_place_scope(name=부산)
+
+    get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, date=holiday, time=180000-200000, dimension=emd,
+    dimension_target=both, order=top, limit=1)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 대구
+  - tool: get_place_scope
+    args:
+      name: 부산
+  - tool: get_trip_count
+    args:
+      scope_pickup: $pickup.scope
+      scope_dropoff: $dropoff.scope
+      date: holiday
+      time: 180000-200000
+      dimension: emd
+      dimension_target: both
+      order: top
+      limit: 1
+- id: 090
+  question: 이번 달 서울 소속 택시의 최대 공차율은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=서울, region=)
+
+    get_drive_metrics(scope=scope:district:1100000000, metric=vacant_ratio, date=this_month, taxi_type=all, aggregation=max)'
+  gold_text: 'get_place_scope(name=서울)
+
+    get_drive_metrics(scope=$resolve.scope, metric=vacant_ratio, date=this_month, aggregation=max)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 서울
+  - tool: get_drive_metrics
+    args:
+      scope: $resolve.scope
+      metric: vacant_ratio
+      date: this_month
+      aggregation: max
+- id: 091
+  question: 지난달 부산 소속 택시의 평균 요금은?
+  vendor_verdict: 잘못된 Tool 선택
+  vendor_note: 요금(fare) 질문을 수입(revenue)으로 해석해 get_billing_metrics를 선택함.
+  vendor_result: 'get_place_scope(name=부산, region=)
+
+    get_billing_metrics(scope=scope:district:2600000000, metric=revenue, date=last_month, aggregation=avg)'
+  gold_text: 'get_place_scope(name=부산)
+
+    get_trip_metrics(scope=$resolve.scope, metric=fare, date=last_month, aggregation=avg)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 부산
+  - tool: get_trip_metrics
+    args:
+      scope: $resolve.scope
+      metric: fare
+      date: last_month
+      aggregation: avg
+- id: 092
+  question: 주중 오후 6시부터 8시까지 부산 수영구의 최소 속도는?
+  vendor_verdict: Tool은 맞음 / 인자 오류
+  vendor_note: 최소 속도 질문에 필요한 aggregation=min을 누락함.
+  vendor_result: 'get_place_scope(name=수영구, region=부산)
+
+    get_passage_metrics(scope=scope:district:2650000000, metric=speed, date=weekday, time=180000-200000)'
+  gold_text: 'get_place_scope(name=수영구, region=부산)
+
+    get_passage_metrics(scope=$resolve.scope, metric=speed, date=weekday, time=180000-200000, aggregation=min)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 수영구
+      region: 부산
+  - tool: get_passage_metrics
+    args:
+      scope: $resolve.scope
+      metric: speed
+      date: weekday
+      time: 180000-200000
+      aggregation: min
+- id: 093
+  question: 이번 달 부산 안에서 이용이 적은 읍면동 간 OD 노선 하위 2개는?
+  vendor_verdict: 정상
+  vendor_note: 동일 부산 scope를 1회 조회한 뒤 pickup/dropoff 양쪽에 재사용함. Tool 흐름 정상.
+  vendor_result: 'get_place_scope(name=부산, region=)
+
+    get_trip_count(scope_pickup=scope:district:2600000000, scope_dropoff=scope:district:2600000000, date=this_month, dimension=emd,
+    dimension_target=both, order=bottom, limit=2)'
+  gold_text: 'get_place_scope(name=부산)
+
+    get_trip_count(scope_pickup=$area.scope, scope_dropoff=$area.scope, date=this_month, dimension=emd, dimension_target=both,
+    order=bottom, limit=2)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 부산
+  - tool: get_trip_count
+    args:
+      scope_pickup: $area.scope
+      scope_dropoff: $area.scope
+      date: this_month
+      dimension: emd
+      dimension_target: both
+      order: bottom
+      limit: 2
+- id: 094
+  question: 이번 달 scope:edge:1742의 평균 속도는?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: get_passage_metrics(scope=scope:edge:1742, metric=speed, date=this_month, aggregation=avg)
+  gold_text: get_passage_metrics(scope=scope:edge:1742, metric=speed, date=this_month, aggregation=avg)
+  gold:
+  - tool: get_passage_metrics
+    args:
+      scope: scope:edge:1742
+      metric: speed
+      date: this_month
+      aggregation: avg
+- id: 095
+  question: 주말 대구 안에서 이용이 많은 읍면동 간 OD 노선 상위 3개는?
+  vendor_verdict: 최종 성공 / 복구 개선
+  vendor_note: 처음 'Daegu' 조회는 실패했지만 '대구'로 복구했고, 동일 scope를 pickup/dropoff 양쪽에 재사용하여 최종 성공함.
+  vendor_result: "get_place_scope(name=Daegu, region=) \nNOT_FOUND\nget_place_scope(name=대구, region=)\nget_trip_count(scope_pickup=scope:district:2700000000,\
+    \ scope_dropoff=scope:district:2700000000, date=weekend, dimension=emd, dimension_target=both, order=top, limit=3)"
+  gold_text: 'get_place_scope(name=대구)
+
+    get_trip_count(scope_pickup=$area.scope, scope_dropoff=$area.scope, date=weekend, dimension=emd, dimension_target=both,
+    order=top, limit=3)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 대구
+  - tool: get_trip_count
+    args:
+      scope_pickup: $area.scope
+      scope_dropoff: $area.scope
+      date: weekend
+      dimension: emd
+      dimension_target: both
+      order: top
+      limit: 3
+- id: 096
+  question: 지난달 부산 광안리 근처의 최대 속도는?
+  vendor_verdict: Tool은 맞음 / 인자 오류
+  vendor_note: 최대 속도 질문에 필요한 aggregation=max를 누락함.
+  vendor_result: 'get_place_scope(name=광안리, region=부산, include_vicinity=true)
+
+    get_passage_metrics(scope=scope:gz:33212, metric=speed, date=last_month)'
+  gold_text: 'get_place_scope(name=광안리, region=부산, include_vicinity=true)
+
+    get_passage_metrics(scope=$resolve.scope, metric=speed, date=last_month, aggregation=max)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 광안리
+      region: 부산
+      include_vicinity: true
+  - tool: get_passage_metrics
+    args:
+      scope: $resolve.scope
+      metric: speed
+      date: last_month
+      aggregation: max
+- id: 097
+  question: scope:district:2723510100에서 출발한 실차 구간 건수는?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: get_trip_count(scope_pickup=scope:district:2723510100, dimension_target=pickup)
+  gold_text: get_trip_count(scope_pickup=scope:district:2723510100)
+  gold:
+  - tool: get_trip_count
+    args:
+      scope_pickup: scope:district:2723510100
+- id: 098
+  question: 지난달 대구 소속 개인택시의 주별 평균 운행 일수의 중간값은?
+  vendor_verdict: Tool은 맞음 / 인자 오류
+  vendor_note: 택시별 평균 운행일수(aggregation=avg)와 주별 중간값(rollup=med)의 역할을 뒤바꿈.
+  vendor_result: "get_place_scope(name=대구, region=)\nget_billing_metrics(scope=scope:district:2700000000, metric=operating_days,\
+    \ date=last_month, taxi_type=private, aggregation=med, bucket=week) \nINVALID_ARGUMENT\nget_billing_metrics(scope=scope:district:2700000000,\
+    \ metric=operating_days, date=last_month, taxi_type=private, aggregation=med, bucket=week, rollup=avg)"
+  gold_text: 'get_place_scope(name=대구)
+
+    get_billing_metrics(scope=$resolve.scope, metric=operating_days, date=last_month, taxi_type=private, aggregation=avg,
+    bucket=week, rollup=med)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 대구
+  - tool: get_billing_metrics
+    args:
+      scope: $resolve.scope
+      metric: operating_days
+      date: last_month
+      taxi_type: private
+      aggregation: avg
+      bucket: week
+      rollup: med
+- id: 099
+  question: 올해 부산 소속 택시의 평균 공차율은?
+  vendor_verdict: 정상
+  vendor_note: 질문의 Tool 흐름과 명시 조건을 정확히 반영함.
+  vendor_result: 'get_place_scope(name=부산, region=)
+
+    get_drive_metrics(scope=scope:district:2600000000, metric=vacant_ratio, date=this_year, taxi_type=all)'
+  gold_text: 'get_place_scope(name=부산)
+
+    get_drive_metrics(scope=$resolve.scope, metric=vacant_ratio, date=this_year, aggregation=avg)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 부산
+  - tool: get_drive_metrics
+    args:
+      scope: $resolve.scope
+      metric: vacant_ratio
+      date: this_year
+      aggregation: avg
+- id: '100'
+  question: 지난해 대구 소속 법인택시의 월별 총 수입 중 가장 큰 값은?
+  vendor_verdict: Tool 흐름/인자 오류
+  vendor_note: scope 조회 전에 billing을 잘못 호출했고, 최종 호출에서도 taxi_type=corporate와 aggregation=sum을 누락함.
+  vendor_result: "get_billing_metrics(metric=revenue, date=last_year, dimension=sido, bucket=month, rollup=max) \nUNSUPPORTED_COMBINATION\n\
+    get_place_scope(name=대구, region=대구)\nget_billing_metrics(scope=scope:district:2700000000, metric=revenue, date=last_year,\
+    \ aggregation=max, bucket=month) \nINVALID_ARGUMENT\nget_billing_metrics(scope=scope:district:2700000000, metric=revenue,\
+    \ date=last_year, bucket=month, rollup=max)"
+  gold_text: 'get_place_scope(name=대구)
+
+    get_billing_metrics(scope=$resolve.scope, metric=revenue, date=last_year, taxi_type=corporate, aggregation=sum, bucket=month,
+    rollup=max)'
+  gold:
+  - tool: get_place_scope
+    args:
+      name: 대구
+  - tool: get_billing_metrics
+    args:
+      scope: $resolve.scope
+      metric: revenue
+      date: last_year
+      taxi_type: corporate
+      aggregation: sum
+      bucket: month
+      rollup: max

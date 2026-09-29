@@ -29,6 +29,12 @@ lowering·실행·답변이 질문과 같은 계산을 하는지만 본다.
     전체 평균            = 1150 / 38 = 30.263…
     부분 주를 버리는 bucket의 합계 평균 = (370+390+260+70) / 4 = 272.5
 
+위 표의 주 정의(월요일 시작, 기간 경계에서 자름)는 질문의 뜻이 아니다. 질문이 주 정의를
+말하지 않으면 업체 Tool에 맡긴 호출(bucket/rollup)은 제공자의 정의를 따르고, GeoFlow가 기간을
+나눠 다시 계산하면 애플리케이션 정책(이 표의 정의)을 따른다. 두 결과가 같다고 주장하지
+않는다. 로컬 재계산은 기록이 하루에만 속한다는 계약(day_records)이 필요하므로, 그 경로를
+검증하는 테스트는 ``LOCAL_CONTRACT``(테스트 가정)를 명시한다.
+
 조건을 잃으면 값이 달라지도록 섞인 자료를 둔다.
 
     대구·법인 8/5 5000   → taxi_type을 잃으면 W2 합계 5370
@@ -47,6 +53,9 @@ os.environ.setdefault("ASSISTANT_TOOL_PROVIDER", "mock")
 
 from agent_graph import extract_scopes  # noqa: E402
 
+from dataclasses import replace  # noqa: E402
+
+from geoflow import providers  # noqa: E402
 from geoflow import validator as geoflow_validator  # noqa: E402
 from geoflow.answer import format_answer  # noqa: E402
 from geoflow.compiler import compile_plan, verify_lowering  # noqa: E402
@@ -226,6 +235,11 @@ MATCHING_BUCKET_CONTRACT = DEFAULT_CONTRACT.assuming(
 )
 #: 날짜 범위의 양 끝 포함이 확인되었다고 가정한 계약.
 RANGE_CONTRACT = DEFAULT_CONTRACT.assuming(range_inclusive="inclusive")
+#: 기록이 하루 하나에만 속한다고 가정한 계약. 로컬 재계산(하루 단위 분할)을 검증할 때만 쓴다.
+LOCAL_CONTRACT = DEFAULT_CONTRACT.assuming(**{
+    "day_records:get_billing_metrics": "택시·일", "day_records:get_passage_metrics": "passage·일"})
+#: 기본 실행 프로필(mock + legacy)에 LOCAL_CONTRACT만 바꿔 넣은 것. pipeline 테스트용.
+LOCAL_PROFILE = replace(providers.profile_for(), contract=LOCAL_CONTRACT)
 
 
 def place(node_id, name):
@@ -272,6 +286,12 @@ Q_SUM_THEN_MAX = "지난달 대구 개인택시 주별 매출 합계의 최댓�
 Q_AVG_THEN_MAX = "지난달 대구 개인택시 주별 매출 평균의 최댓값은?"
 Q_OVERALL_AVG = "지난달 대구 개인택시 전체 매출의 평균은?"
 Q_WEEK_WITH_MAX_SUM = "지난달 대구 개인택시 매출 합계가 가장 큰 주는?"
+#: 주 정의를 명시한 질문. 제공자 계약이 그 정의를 보장하지 않으므로 위임할 수 없다.
+Q_MONDAY_SUM_THEN_AVG = "지난달 대구 개인택시 월요일부터 시작하는 주별 매출 합계의 평균은?"
+Q_MONDAY_AVG_THEN_MAX = "지난달 대구 개인택시 월요일 시작 주별 매출 평균의 최댓값은?"
+Q_MONDAY_MAX_THEN_AVG = "지난달 대구 개인택시 월요일 시작 주별 매출 최댓값의 평균은?"
+Q_INCLUDE_PARTIAL = "지난달 대구 개인택시 주별 매출 합계의 평균은? 잘린 주도 포함해서"
+Q_COMPLETE_WEEKS = "지난달 대구 개인택시 온전한 주만 놓고 주별 매출 합계의 평균은?"
 
 
 class Case(unittest.TestCase):
@@ -288,14 +308,15 @@ class Case(unittest.TestCase):
         return self.composer.compose(self.ground(payload, question))
 
     def run_golden(self, payload, question, *, reference=REFERENCE,
-                   contract=DEFAULT_CONTRACT):
+                   contract=DEFAULT_CONTRACT, delegation=None):
         """pipeline._prepare/_finish와 같은 순서. Planner만 정답 grounding으로 바꾼다."""
         plan = self.compose(payload, question)
         scopes = set(extract_scopes(question))
         geoflow_validator.validate(
             plan, available_tools=self.tims.tool_names, user_scopes=scopes,
         ).raise_if_failed()
-        execution = compile_plan(plan, reference_date=reference, contract=contract)
+        execution = compile_plan(plan, reference_date=reference, contract=contract,
+                                 delegation=delegation)
         result = execute_plan(execution, self.tims, known_scopes=scopes)
         answer = (format_answer(plan, result, execution_plan=execution)
                   if result.status == STATUS_OK else None)
@@ -419,25 +440,59 @@ class SemanticGraphTest(Case):
 
 
 class LoweringStrategyTest(Case):
-    def test_unconfirmed_bucket_contract_is_never_fused(self):
+    def test_unstated_calendar_is_delegated_to_the_provider(self):
+        """주 정의를 말하지 않은 질문은 업체 bucket/rollup 호출로 옮기고 정의는 제공자에게 맡긴다."""
         plan = self.compose(SUM_THEN_AVG, Q_SUM_THEN_AVG)
         execution = compile_plan(plan, reference_date=REFERENCE)
         lowering = execution.lowering["measure_groups"]
-        self.assertEqual(lowering["strategy"], "daily_partition")
-        rejected = {item["strategy"]: item["reason"] for item in lowering["rejected"]}
-        for key in ("bucket_week_start", "bucket_partial", "bucket_empty"):
-            self.assertIn(key, rejected["fused_bucket_rollup"])
-        self.assertIn("range_inclusive", rejected["range_partition"])
-        for step in execution.tool_steps:
-            self.assertNotIn("bucket", step.arguments)
-            self.assertNotIn("rollup", step.arguments)
+        self.assertEqual((lowering["strategy"], lowering["path"]),
+                         ("fused_bucket_rollup", "provider_delegated"))
+        self.assertEqual(lowering["rejected"], [])
+        self.assertEqual(lowering["requires"], ["inner_is_aggregation", "rollup_unweighted"])
+        self.assertEqual(sorted(lowering["delegated"]),
+                         ["empty", "partial", "relative_date", "week_start"])
+        for key in ("week_start", "partial", "empty", "relative_date"):
+            self.assertEqual(lowering["semantics"][key]["value"], "provider_defined")
+        self.assertIn("stage_mapping", lowering["checks"])
+        self.assertTrue(lowering["not_verified"][0].startswith("provider_calculation"))
+        (step,) = execution.tool_steps[1:]
+        self.assertEqual({key: step.arguments[key] for key in
+                          ("date", "aggregation", "bucket", "rollup")},
+                         {"date": "last_month", "aggregation": "sum", "bucket": "week",
+                          "rollup": "avg"})
+        self.assertEqual(execution.date_semantics["measure_groups"]["responsibility"],
+                         "provider")
+
+    def test_local_impossibility_does_not_block_delegation(self):
+        """구간 안 평균은 하루 값으로 다시 만들 수 없지만, 제공자에게 맡긴 호출은 막지 않는다."""
+        execution = compile_plan(self.compose(AVG_THEN_MAX, Q_AVG_THEN_MAX),
+                                 reference_date=REFERENCE)
+        self.assertEqual(execution.lowering["measure_groups"]["strategy"],
+                         "fused_bucket_rollup")
+
+    def test_delegation_does_not_make_local_recomputation_valid(self):
+        """위임할 수 없는 선택 질문은 로컬 근거(day_records)가 없으면 계산하지 않는다."""
+        with self.assertRaises(CompilerError) as caught:
+            compile_plan(self.compose(WEEK_WITH_MAX_SUM, Q_WEEK_WITH_MAX_SUM),
+                         reference_date=REFERENCE)
+        self.assertEqual(caught.exception.code, "UNVERIFIED_TIMS_CONTRACT")
+        reasons = {item["strategy"]: item["reason"]
+                   for item in caught.exception.context["rejected"]}
+        self.assertIn("한 호출로 받지 않습니다", reasons["fused_bucket_rollup"])
+        self.assertIn("range_inclusive", reasons["range_partition"])
+        self.assertIn("day_records:get_billing_metrics", reasons["daily_partition"])
 
     def test_daily_calls_cover_the_period_one_day_each(self):
-        plan = self.compose(SUM_THEN_AVG, Q_SUM_THEN_AVG)
-        execution = compile_plan(plan, reference_date=REFERENCE)
+        plan = self.compose(WEEK_WITH_MAX_SUM, Q_WEEK_WITH_MAX_SUM)
+        execution = compile_plan(plan, reference_date=REFERENCE, contract=LOCAL_CONTRACT)
+        lowering = execution.lowering["measure_groups"]
+        self.assertEqual((lowering["strategy"], lowering["path"]),
+                         ("daily_partition", "local_recomputation"))
+        self.assertEqual(lowering["semantics"]["week_start"],
+                         {"value": "monday", "source": "application"})
+        self.assertEqual(lowering["delegated"], [])
         calls = [step for step in execution.tool_steps if step.group is not None]
         self.assertEqual([step.arguments["date"] for step in calls], AUGUST_DAYS)
-        # 기본 경로는 하루 합성의 데이터 조건(기록이 하루에만 속함)을 가정으로 적는다.
         self.assertTrue(all(step.assumptions == [
             "single_date", "day_records:get_billing_metrics"] for step in calls))
         collect = next(s for s in execution.steps if s.operator == "COLLECT_GROUPS")
@@ -445,18 +500,18 @@ class LoweringStrategyTest(Case):
                          [2, 7, 7, 7, 7, 1])
         self.assertEqual(collect.arguments["reducer"], "sum")
 
-    def test_inner_average_needs_a_range_contract(self):
+    def test_inner_average_cannot_be_rebuilt_from_days(self):
         """평균은 하루 평균들로 다시 만들 수 없다(표본 수가 없다). 범위 계약도 없다."""
-        plan = self.compose(AVG_THEN_MAX, Q_AVG_THEN_MAX)
+        plan = self.compose(WEEK_WITH_MAX_AVG, "지난달 대구 개인택시 매출 평균이 가장 큰 주는?")
         with self.assertRaises(CompilerError) as caught:
-            compile_plan(plan, reference_date=REFERENCE)
+            compile_plan(plan, reference_date=REFERENCE, contract=LOCAL_CONTRACT)
         self.assertEqual(caught.exception.code, "UNVERIFIED_TIMS_CONTRACT")
         reasons = {item["strategy"]: item["reason"]
                    for item in caught.exception.context["rejected"]}
         self.assertIn("avg", reasons["daily_partition"])
 
     def test_confirmed_range_contract_allows_range_calls(self):
-        plan = self.compose(AVG_THEN_MAX, Q_AVG_THEN_MAX)
+        plan = self.compose(WEEK_WITH_MAX_AVG, "지난달 대구 개인택시 매출 평균이 가장 큰 주는?")
         execution = compile_plan(plan, reference_date=REFERENCE, contract=RANGE_CONTRACT)
         self.assertEqual(execution.lowering["measure_groups"]["strategy"], "range_partition")
         self.assertEqual([s.arguments["date"] for s in execution.tool_steps[1:]], AUGUST_WEEKS)
@@ -470,35 +525,97 @@ class LoweringStrategyTest(Case):
                           step.arguments["rollup"]), ("week", "sum", "avg"))
         self.assertEqual(step.covers, ["measure_groups", "combine_groups"])
         self.assertEqual(step.argument_sources["rollup"], "combine_groups.params.reducer")
+        semantics = execution.lowering["measure_groups"]["semantics"]
+        self.assertEqual(semantics["week_start"],
+                         {"value": "monday", "source": "contract",
+                          "contract": "bucket_week_start"})
 
-    def test_confirmed_but_different_bucket_definition_is_not_fused(self):
+    def test_confirmed_but_different_bucket_definition(self):
+        """제공자 정의가 확인되었고 질문이 정하지 않았으면 위임한다. 위임을 허용하지 않는 프로필
+        이나 질문이 다른 정의를 명시하면 합치지 않는다."""
         contract = DEFAULT_CONTRACT.assuming(
             bucket_week_start="sunday", bucket_partial="clip_to_period",
             bucket_empty="undefined", relative_date_reference="Asia/Seoul calendar",
+            **{"day_records:get_billing_metrics": "택시·일"},
         )
         execution = compile_plan(self.compose(SUM_THEN_AVG, Q_SUM_THEN_AVG),
                                  reference_date=REFERENCE, contract=contract)
-        lowering = execution.lowering["measure_groups"]
+        self.assertEqual(execution.lowering["measure_groups"]["strategy"],
+                         "fused_bucket_rollup")
+        self.assertEqual(execution.lowering["measure_groups"]["semantics"]["week_start"]
+                         ["value"], "sunday")
+        strict = compile_plan(self.compose(SUM_THEN_AVG, Q_SUM_THEN_AVG),
+                              reference_date=REFERENCE, contract=contract, delegation=False)
+        lowering = strict.lowering["measure_groups"]
         self.assertEqual(lowering["strategy"], "daily_partition")
         self.assertIn("bucket_week_start", lowering["rejected"][0]["reason"])
+        stated = compile_plan(self.compose(SUM_THEN_AVG, Q_MONDAY_SUM_THEN_AVG),
+                              reference_date=REFERENCE, contract=contract)
+        lowering = stated.lowering["measure_groups"]
+        self.assertEqual(lowering["strategy"], "daily_partition")
+        self.assertIn("질문이 정한 주 시작 요일 월요일", lowering["rejected"][0]["reason"])
+        self.assertEqual(lowering["semantics"]["week_start"],
+                         {"value": "monday", "source": "question"})
+
+    def test_stated_definition_is_used_when_the_contract_guarantees_it(self):
+        contract = DEFAULT_CONTRACT.assuming(bucket_week_start="monday")
+        execution = compile_plan(self.compose(SUM_THEN_AVG, Q_MONDAY_SUM_THEN_AVG),
+                                 reference_date=REFERENCE, contract=contract)
+        lowering = execution.lowering["measure_groups"]
+        self.assertEqual(lowering["strategy"], "fused_bucket_rollup")
+        self.assertEqual(lowering["semantics"]["week_start"],
+                         {"value": "monday", "source": "question",
+                          "guaranteed_by": "bucket_week_start"})
+        self.assertNotIn("week_start", lowering["delegated"])
+
+    def test_stated_definition_is_never_replaced_by_the_provider_default(self):
+        """제공자가 주 정의를 보장하지 않으면, 로컬 근거도 없을 때 계산하지 않는다."""
+        for question in (Q_MONDAY_SUM_THEN_AVG, Q_INCLUDE_PARTIAL, Q_COMPLETE_WEEKS):
+            with self.subTest(question=question):
+                with self.assertRaises(CompilerError) as caught:
+                    compile_plan(self.compose(SUM_THEN_AVG, question),
+                                 reference_date=REFERENCE)
+                self.assertEqual(caught.exception.code, "CALENDAR_REQUIREMENT_UNSUPPORTED")
+                self.assertIn("TIMS 기본 구간 정의로 바꿔 계산하지 않습니다",
+                              caught.exception.user_message)
 
     def test_select_is_never_fused(self):
+        contract = MATCHING_BUCKET_CONTRACT.assuming(
+            **{"day_records:get_billing_metrics": "택시·일"})
         execution = compile_plan(self.compose(WEEK_WITH_MAX_SUM, Q_WEEK_WITH_MAX_SUM),
-                                 reference_date=REFERENCE, contract=MATCHING_BUCKET_CONTRACT)
+                                 reference_date=REFERENCE, contract=contract)
         self.assertNotEqual(execution.lowering["measure_groups"]["strategy"],
                             "fused_bucket_rollup")
 
     def test_too_many_daily_calls_are_refused(self):
-        payload = {**SUM_THEN_AVG, "date": "20260101-20260630"}
+        payload = {**WEEK_WITH_MAX_SUM, "date": "20260101-20260630"}
         with self.assertRaises(CompilerError) as caught:
-            compile_plan(self.compose(payload, "상반기 주별 매출 합계의 평균은?"),
-                         reference_date=REFERENCE)
+            compile_plan(self.compose(payload, "상반기 주별 매출 합계가 가장 큰 주는?"),
+                         reference_date=REFERENCE, contract=LOCAL_CONTRACT)
         self.assertEqual(caught.exception.code, "UNSUPPORTED_PARTITION_SIZE")
 
+    def test_long_period_is_delegated_without_a_call_limit(self):
+        payload = {**SUM_THEN_AVG, "date": "20260101-20260630"}
+        execution = compile_plan(self.compose(payload, "상반기 주별 매출 합계의 평균은?"),
+                                 reference_date=REFERENCE)
+        self.assertEqual(len(execution.tool_steps), 2)
+
     def test_lowering_rejects_a_strategy_the_contract_does_not_allow(self):
+        plan = self.compose(WEEK_WITH_MAX_SUM, Q_WEEK_WITH_MAX_SUM)
+        execution = compile_plan(plan, reference_date=REFERENCE, contract=LOCAL_CONTRACT)
+        with self.assertRaises(CompilerError) as caught:
+            verify_lowering(plan, execution, reference_date=REFERENCE)
+        self.assertEqual(caught.exception.code, "LOWERING_MISMATCH")
         plan = self.compose(SUM_THEN_AVG, Q_SUM_THEN_AVG)
-        execution = compile_plan(plan, reference_date=REFERENCE,
-                                 contract=MATCHING_BUCKET_CONTRACT)
+        execution = compile_plan(plan, reference_date=REFERENCE)
+        with self.assertRaises(CompilerError) as caught:
+            verify_lowering(plan, execution, reference_date=REFERENCE, delegation=False)
+        self.assertEqual(caught.exception.code, "LOWERING_MISMATCH")
+
+    def test_delegated_call_with_a_list_argument_is_rejected(self):
+        plan = self.compose(SUM_THEN_AVG, Q_SUM_THEN_AVG)
+        execution = compile_plan(plan, reference_date=REFERENCE)
+        execution.tool_steps[-1].arguments.update(order="top", limit=1)
         with self.assertRaises(CompilerError) as caught:
             verify_lowering(plan, execution, reference_date=REFERENCE)
         self.assertEqual(caught.exception.code, "LOWERING_MISMATCH")
@@ -508,17 +625,33 @@ class LoweringStrategyTest(Case):
 
 
 class ExecutionTest(Case):
-    def test_1_sum_then_avg(self):
-        _plan, _execution, result, answer = self.run_golden(SUM_THEN_AVG, Q_SUM_THEN_AVG)
+    def test_1_sum_then_avg_delegated(self):
+        _plan, execution, result, answer = self.run_golden(SUM_THEN_AVG, Q_SUM_THEN_AVG)
+        self.assertEqual(result.status, STATUS_OK, result.error)
+        # fake 제공자의 정의(월요일, 경계에서 자름)로 계산된 값. GeoFlow가 보장한 정의가 아니다.
+        self.assertAlmostEqual(result.final_value, 1150 / 6)
+        (call,) = self.metric_calls()
+        self.assertEqual((call["bucket"], call["aggregation"], call["rollup"]),
+                         ("week", "sum", "avg"))
+        self.assertIn("주별 합계의 평균: 191.667", answer)
+        self.assertIn("TIMS가 주 구간마다 합계를 구한 뒤 그 값들의 평균을 계산했습니다", answer)
+        self.assertIn("주 시작 요일, 기간 경계에서 잘린 주, 자료가 없는 주의 처리와 상대 기간의 "
+                      "날짜 범위는 TIMS 기준을 따릅니다", answer)
+        self.assertNotIn("rollup=", answer)
+
+    def test_1_sum_then_avg_local_with_a_stated_week(self):
+        _plan, execution, result, answer = self.run_golden(
+            SUM_THEN_AVG, Q_MONDAY_SUM_THEN_AVG, contract=LOCAL_CONTRACT)
         self.assertEqual(result.status, STATUS_OK, result.error)
         self.assertAlmostEqual(result.final_value, 1150 / 6)
         self.assertEqual(len(self.metric_calls()), 31)
-        self.assertIn("주별 합계의 평균: 191.667", answer)
         self.assertIn("하루마다 합계를 조회하고", answer)
+        self.assertIn("월요일 시작 7일, 기간 경계에서 잘림, 질문에서 정한 주 시작 요일 월요일 외에는 "
+                      "이 계산의 기준", answer)
 
     def test_2_avg_then_max_under_a_range_contract(self):
         _plan, _execution, result, answer = self.run_golden(
-            AVG_THEN_MAX, Q_AVG_THEN_MAX, contract=RANGE_CONTRACT)
+            AVG_THEN_MAX, Q_MONDAY_AVG_THEN_MAX, contract=RANGE_CONTRACT)
         self.assertEqual(result.final_value, 46.25)
         self.assertEqual([call["date"] for call in self.metric_calls()], AUGUST_WEEKS)
         self.assertIn("주별 평균의 최댓값: 46.25", answer)
@@ -533,7 +666,8 @@ class ExecutionTest(Case):
         self.tims.calls.clear()
         avg_of_avgs = {**BASE, **grouped("avg", reducer="avg")}
         _plan, _execution, grouped_result, _ = self.run_golden(
-            avg_of_avgs, "지난달 대구 개인택시 주별 매출 평균의 평균은?", contract=RANGE_CONTRACT)
+            avg_of_avgs, "지난달 대구 개인택시 월요일 시작 주별 매출 평균의 평균은?",
+            contract=RANGE_CONTRACT)
         self.assertAlmostEqual(grouped_result.final_value,
                                (10 + 46.25 + 390 / 11 + 32.5 + 10 + 20) / 6)
         self.assertNotAlmostEqual(overall.final_value, grouped_result.final_value)
@@ -543,8 +677,8 @@ class ExecutionTest(Case):
         self.assertEqual(value.final_value, 390)
         self.assertIn("주별 합계의 최댓값: 390", value_answer)
         self.tims.calls.clear()
-        _plan, _execution, week, week_answer = self.run_golden(WEEK_WITH_MAX_SUM,
-                                                               Q_WEEK_WITH_MAX_SUM)
+        _plan, _execution, week, week_answer = self.run_golden(
+            WEEK_WITH_MAX_SUM, Q_WEEK_WITH_MAX_SUM, contract=LOCAL_CONTRACT)
         self.assertEqual(week.final_value["value"], 390)
         self.assertEqual([g["label"] for g in week.final_value["groups"]], [W3])
         self.assertIn("주별 합계가 가장 큰 주: 20260810-20260816", week_answer)
@@ -558,7 +692,7 @@ class ExecutionTest(Case):
 
     def test_inner_max_is_rebuilt_from_daily_maxima(self):
         _plan, _execution, result, _answer = self.run_golden(
-            MAX_THEN_AVG, "지난달 대구 개인택시 주별 매출 최댓값의 평균은?")
+            MAX_THEN_AVG, Q_MONDAY_MAX_THEN_AVG, contract=LOCAL_CONTRACT)
         self.assertAlmostEqual(result.final_value, 620 / 6)
         rows = result.state["revenue_groups"]
         self.assertEqual([row["value"] for row in rows], [10, 300, 80, 190, 10, 30])
@@ -566,43 +700,67 @@ class ExecutionTest(Case):
         self.assertEqual(rows[0]["parts_reducer"], "max")
 
     def test_partial_weeks_at_the_month_boundary(self):
-        _plan, _execution, week, answer = self.run_golden(WEEK_WITH_MAX_SUM, Q_WEEK_WITH_MAX_SUM)
+        _plan, _execution, week, answer = self.run_golden(
+            WEEK_WITH_MAX_SUM, Q_WEEK_WITH_MAX_SUM, contract=LOCAL_CONTRACT)
         rows = week.state["revenue_groups"]
         self.assertEqual([row["group"]["label"] for row in rows], AUGUST_WEEKS)
         self.assertEqual([row["value"] for row in rows], [20, 370, 390, 260, 70, 40])
         self.assertEqual([row["group"]["complete"] for row in rows],
                          [False, True, True, True, True, False])
         self.assertIn("20260801-20260802(부분 구간): 20", answer)
+        self.assertIn("이 계산의 기준", answer)
 
-    def test_a_bucket_that_drops_partial_weeks_would_answer_differently(self):
-        """병합을 막는 이유. TIMS가 부분 주를 버린다면 같은 인자로 다른 값이 나온다."""
-        tims = FakeTims(drop_partial_buckets=True)
-        fused = tims.execute("get_billing_metrics", {
-            "metric": "revenue", "scope": DAEGU, "date": "last_month", "taxi_type": "private",
-            "aggregation": "sum", "bucket": "week", "rollup": "avg"})
-        self.assertEqual(fused, 272.5)
-        tims.calls.clear()
-        self.tims = tims
-        _plan, _execution, result, _answer = self.run_golden(SUM_THEN_AVG, Q_SUM_THEN_AVG)
-        # 기본 계약에서는 병합하지 않으므로 의미 graph의 정의대로 계산된다.
-        self.assertAlmostEqual(result.final_value, 1150 / 6)
+    def test_a_provider_that_drops_partial_weeks(self):
+        """질문이 부분 주를 말하지 않으면 제공자의 정의(여기서는 부분 주를 버림)가 답이 된다.
+        질문이 정의를 말하면 그 정의를 보장하는 경로로만 계산한다."""
+        self.tims = FakeTims(drop_partial_buckets=True)
+        _plan, execution, delegated, answer = self.run_golden(SUM_THEN_AVG, Q_SUM_THEN_AVG)
+        self.assertEqual(delegated.final_value, 272.5)
+        self.assertEqual(execution.lowering["measure_groups"]["semantics"]["partial"]["value"],
+                         "provider_defined")
+        self.assertIn("기간 경계에서 잘린 주", answer)
+        self.tims.calls.clear()
+        _plan, _execution, included, _ = self.run_golden(
+            SUM_THEN_AVG, Q_INCLUDE_PARTIAL, contract=LOCAL_CONTRACT)
+        self.assertAlmostEqual(included.final_value, 1150 / 6)
         self.assertTrue(all("bucket" not in call for call in self.metric_calls()))
+        self.tims.calls.clear()
+        _plan, execution, complete, answer = self.run_golden(
+            SUM_THEN_AVG, Q_COMPLETE_WEEKS, contract=LOCAL_CONTRACT)
+        self.assertEqual(complete.final_value, 272.5)
+        self.assertEqual(execution.periods["measure_groups"]["dropped_groups"], [W1, W6])
+        self.assertEqual(len(self.metric_calls()), 28)  # W2~W5, 7일씩
+        self.assertIn("잘린 구간 2개 제외", answer)
 
-    def test_fused_path_agrees_only_when_the_contract_matches(self):
-        _plan, _execution, fused, _ = self.run_golden(
-            SUM_THEN_AVG, Q_SUM_THEN_AVG, contract=MATCHING_BUCKET_CONTRACT)
-        _plan, _execution, daily, _ = self.run_golden(SUM_THEN_AVG, Q_SUM_THEN_AVG)
-        self.assertAlmostEqual(fused.final_value, daily.final_value)
+    def test_delegated_and_local_results_are_separate_claims(self):
+        """두 경로가 같은 값을 내는 것은 fake의 정의가 애플리케이션 정책과 같을 때뿐이다."""
+        _plan, delegated_plan, delegated, _ = self.run_golden(SUM_THEN_AVG, Q_SUM_THEN_AVG)
+        _plan, local_plan, local, _ = self.run_golden(
+            SUM_THEN_AVG, Q_MONDAY_SUM_THEN_AVG, contract=LOCAL_CONTRACT)
+        self.assertAlmostEqual(delegated.final_value, local.final_value)
+        self.assertEqual(delegated_plan.lowering["measure_groups"]["path"], "provider_delegated")
+        self.assertEqual(local_plan.lowering["measure_groups"]["path"], "local_recomputation")
+        self.tims = FakeTims(drop_partial_buckets=True)
+        _plan, _execution, other, _ = self.run_golden(SUM_THEN_AVG, Q_SUM_THEN_AVG)
+        self.assertNotAlmostEqual(other.final_value, local.final_value)
 
     def test_local_reduction_when_the_tool_has_no_bucket(self):
         payload = {"concepts": [place("place", "대구"), event("passage"), measure("speed")],
                    "factors": {"date": "last_month", **grouped("max", reducer="max")}}
         _plan, _execution, result, _answer = self.run_golden(
-            payload, "지난달 대구 주별 최고 속도의 최댓값은?")
+            payload, "지난달 대구 주별 최고 속도의 최댓값은?", contract=LOCAL_CONTRACT)
         self.assertEqual(result.status, STATUS_OK, result.error)
         self.assertEqual(result.final_value, 50)
         speed = [a for n, a in self.tims.calls if n == "get_passage_metrics"]
         self.assertEqual([call["date"] for call in speed], AUGUST_DAYS)
+
+    def test_tool_without_bucket_needs_the_day_record_contract(self):
+        payload = {"concepts": [place("place", "대구"), event("passage"), measure("speed")],
+                   "factors": {"date": "last_month", **grouped("max", reducer="max")}}
+        with self.assertRaises(CompilerError) as caught:
+            self.run_golden(payload, "지난달 대구 주별 최고 속도의 최댓값은?")
+        self.assertEqual(caught.exception.code, "UNVERIFIED_TIMS_CONTRACT")
+        self.assertIn("day_records:get_passage_metrics", str(caught.exception))
 
 
 # -- 5. 조건 보존 --------------------------------------------------------------------
@@ -610,7 +768,7 @@ class ExecutionTest(Case):
 
 class ConditionPreservationTest(Case):
     def test_every_partition_call_keeps_every_condition(self):
-        self.run_golden(WEEK_WITH_MAX_SUM, Q_WEEK_WITH_MAX_SUM)
+        self.run_golden(WEEK_WITH_MAX_SUM, Q_WEEK_WITH_MAX_SUM, contract=LOCAL_CONTRACT)
         calls = self.metric_calls()
         self.assertEqual(len(calls), 31)
         for call in calls:
@@ -621,37 +779,40 @@ class ConditionPreservationTest(Case):
     def test_lost_conditions_would_change_the_answer(self):
         no_taxi = {"date": "last_month", **grouped("sum", select="max")}
         _plan, _execution, result, _answer = self.run_golden(
-            no_taxi, "지난달 대구 매출 합계가 가장 큰 주는?")
+            no_taxi, "지난달 대구 매출 합계가 가장 큰 주는?", contract=LOCAL_CONTRACT)
         self.assertEqual([g["label"] for g in result.final_value["groups"]], [W2])
         self.assertEqual(result.final_value["value"], 5370)
 
     def test_lowering_that_drops_a_condition_is_rejected(self):
         plan = self.compose(WEEK_WITH_MAX_SUM, Q_WEEK_WITH_MAX_SUM)
-        execution = compile_plan(plan, reference_date=REFERENCE)
+        execution = compile_plan(plan, reference_date=REFERENCE, contract=LOCAL_CONTRACT)
         next(s for s in execution.steps if s.group is not None).arguments.pop("taxi_type")
         with self.assertRaises(CompilerError) as caught:
-            verify_lowering(plan, execution, reference_date=REFERENCE)
+            verify_lowering(plan, execution, reference_date=REFERENCE,
+                            contract=LOCAL_CONTRACT)
         self.assertEqual(caught.exception.code, "LOWERING_MISMATCH")
 
     def test_lowering_with_a_missing_day_is_rejected(self):
         plan = self.compose(WEEK_WITH_MAX_SUM, Q_WEEK_WITH_MAX_SUM)
-        execution = compile_plan(plan, reference_date=REFERENCE)
+        execution = compile_plan(plan, reference_date=REFERENCE, contract=LOCAL_CONTRACT)
         dropped = next(s for s in execution.steps if s.group is not None)
         execution.steps.remove(dropped)
         for ids in execution.semantic_map.values():
             if dropped.id in ids:
                 ids.remove(dropped.id)
         with self.assertRaises(CompilerError) as caught:
-            verify_lowering(plan, execution, reference_date=REFERENCE)
+            verify_lowering(plan, execution, reference_date=REFERENCE,
+                            contract=LOCAL_CONTRACT)
         self.assertEqual(caught.exception.code, "LOWERING_MISMATCH")
 
     def test_lowering_with_a_wrong_collect_reducer_is_rejected(self):
-        plan = self.compose(SUM_THEN_AVG, Q_SUM_THEN_AVG)
-        execution = compile_plan(plan, reference_date=REFERENCE)
+        plan = self.compose(WEEK_WITH_MAX_SUM, Q_WEEK_WITH_MAX_SUM)
+        execution = compile_plan(plan, reference_date=REFERENCE, contract=LOCAL_CONTRACT)
         next(s for s in execution.steps if s.operator == "COLLECT_GROUPS").arguments[
             "reducer"] = "max"
         with self.assertRaises(CompilerError):
-            verify_lowering(plan, execution, reference_date=REFERENCE)
+            verify_lowering(plan, execution, reference_date=REFERENCE,
+                            contract=LOCAL_CONTRACT)
 
     def test_lowering_with_swapped_fused_stages_is_rejected(self):
         plan = self.compose(SUM_THEN_AVG, Q_SUM_THEN_AVG)
@@ -686,14 +847,15 @@ class ConditionPreservationTest(Case):
         self.assertEqual(caught.exception.code, "UNCONSUMED_CONDITION")
 
     def test_answer_shows_period_scope_taxi_type_and_semantics(self):
-        *_rest, answer = self.run_golden(WEEK_WITH_MAX_SUM, Q_WEEK_WITH_MAX_SUM)
+        *_rest, answer = self.run_golden(WEEK_WITH_MAX_SUM, Q_WEEK_WITH_MAX_SUM,
+                                         contract=LOCAL_CONTRACT)
         for text in ("대구", "지난달(20260801-20260831)", "개인 택시", "주별 합계가 가장 큰 주",
                      "월요일 시작 7일", "- 계산:"):
             self.assertIn(text, answer)
 
     def test_trace_links_every_step_to_a_semantic_step(self):
-        plan, execution, result, _answer = self.run_golden(WEEK_WITH_MAX_SUM,
-                                                           Q_WEEK_WITH_MAX_SUM)
+        plan, execution, result, _answer = self.run_golden(
+            WEEK_WITH_MAX_SUM, Q_WEEK_WITH_MAX_SUM, contract=LOCAL_CONTRACT)
         self.assertEqual(set(execution.semantic_map), {t.id for t in plan.transformations})
         self.assertTrue(all(entry["covers"] for entry in result.trace))
         local = [entry for entry in result.trace if entry["phase"] == "local"]
@@ -708,26 +870,38 @@ class ConditionPreservationTest(Case):
 class RefusalTest(Case):
     def test_relative_period_without_reference_date(self):
         with self.assertRaises(CompilerError) as caught:
-            compile_plan(self.compose(WEEK_WITH_MAX_SUM, Q_WEEK_WITH_MAX_SUM))
+            compile_plan(self.compose(WEEK_WITH_MAX_SUM, Q_WEEK_WITH_MAX_SUM),
+                         contract=LOCAL_CONTRACT)
         self.assertEqual(caught.exception.code, "UNRESOLVED_PERIOD")
+        # 위임 호출은 상대 기간을 그대로 넘기므로 기준일이 필요 없다(경계는 제공자가 정한다).
+        execution = compile_plan(self.compose(SUM_THEN_AVG, Q_SUM_THEN_AVG))
+        self.assertEqual(execution.tool_steps[-1].arguments["date"], "last_month")
 
     def test_no_period_to_partition(self):
         payload = {k: v for k, v in WEEK_WITH_MAX_SUM.items() if k != "date"}
         with self.assertRaises(CompilerError) as caught:
             compile_plan(self.compose(payload, "대구 개인택시 매출 합계가 가장 큰 주는?"),
-                         reference_date=REFERENCE)
+                         reference_date=REFERENCE, contract=LOCAL_CONTRACT)
         self.assertEqual(caught.exception.code, "UNRESOLVED_PERIOD")
+        # 기간 없는 위임 호출은 제공자의 기본 기간을 쓴다(vendor: 생략 시 도구가 자동 산출).
+        payload = {k: v for k, v in SUM_THEN_AVG.items() if k != "date"}
+        execution = compile_plan(self.compose(payload, "대구 개인택시 주별 매출 합계의 평균은?"),
+                                 reference_date=REFERENCE)
+        self.assertNotIn("date", execution.tool_steps[-1].arguments)
+        self.assertEqual(execution.date_semantics["measure_groups"]["provider"],
+                         "not_requested")
 
     def test_non_contiguous_period_is_not_partitioned(self):
         payload = {**WEEK_WITH_MAX_SUM, "date": "weekend"}
         with self.assertRaises(CompilerError) as caught:
             compile_plan(self.compose(payload, "주말 매출 합계가 가장 큰 주는?"),
-                         reference_date=REFERENCE)
+                         reference_date=REFERENCE, contract=LOCAL_CONTRACT)
         self.assertEqual(caught.exception.code, "UNSUPPORTED_PERIOD_FOR_GROUPING")
 
     def test_explicit_range_needs_no_reference_date(self):
         payload = {**WEEK_WITH_MAX_SUM, "date": "20260803-20260816"}
-        execution = compile_plan(self.compose(payload, "그 기간 매출 합계가 가장 큰 주는?"))
+        execution = compile_plan(self.compose(payload, "그 기간 매출 합계가 가장 큰 주는?"),
+                                 contract=LOCAL_CONTRACT)
         self.assertEqual(len([s for s in execution.tool_steps if s.group]), 14)
 
     def test_count_measure_cannot_be_grouped(self):
@@ -753,14 +927,14 @@ class RefusalTest(Case):
         """부산은 8/12에만 자료가 있다. 빈 날의 반환값(null)의 뜻은 계약에 없다."""
         _plan, _execution, result, answer = self.run_golden(
             revenue_grounding(WEEK_WITH_MAX_SUM, where="부산"),
-            "지난달 부산 개인택시 매출 합계가 가장 큰 주는?")
+            "지난달 부산 개인택시 매출 합계가 가장 큰 주는?", contract=LOCAL_CONTRACT)
         self.assertEqual(result.error["code"], "EMPTY_GROUP_VALUE")
         self.assertIsNone(answer)
 
     def test_tool_error_in_one_partition_stops_the_plan(self):
         self.tims = FakeTims(fail_on_date="20260804")
-        _plan, _execution, result, answer = self.run_golden(WEEK_WITH_MAX_SUM,
-                                                            Q_WEEK_WITH_MAX_SUM)
+        _plan, _execution, result, answer = self.run_golden(
+            WEEK_WITH_MAX_SUM, Q_WEEK_WITH_MAX_SUM, contract=LOCAL_CONTRACT)
         self.assertEqual(result.status, "TOOL_ERROR")
         self.assertIsNone(answer)
         self.assertEqual(self.metric_calls()[-1]["date"], "20260804")
@@ -904,13 +1078,14 @@ class _StubPlanner:
 
 
 class RegressionTest(Case):
-    def pipeline(self, payload, **kwargs):
+    def pipeline(self, payload, profile=None, **kwargs):
         return GeoFlowPipeline(planner=_StubPlanner(payload, **kwargs),
                                composer=self.composer, tool_executor=self.tims,
-                               clock=lambda: REFERENCE)
+                               clock=lambda: REFERENCE, execution_profile=profile)
 
     def test_pipeline_runs_the_local_path_with_the_injected_clock(self):
-        run = self.pipeline(revenue_grounding(WEEK_WITH_MAX_SUM)).run(Q_WEEK_WITH_MAX_SUM)
+        run = self.pipeline(revenue_grounding(WEEK_WITH_MAX_SUM),
+                            profile=LOCAL_PROFILE).run(Q_WEEK_WITH_MAX_SUM)
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
         self.assertIn("20260810-20260816", run.final_answer)
         self.assertEqual(run.execution_plan["periods"]["measure_groups"]["reference_date"],
@@ -926,10 +1101,27 @@ class RegressionTest(Case):
         self.assertEqual(self.tims.calls, [])
 
     def test_pipeline_reports_unverified_contract_as_unsupported(self):
-        run = self.pipeline(revenue_grounding(AVG_THEN_MAX)).run(Q_AVG_THEN_MAX)
+        question = "지난달 대구 개인택시 매출 평균이 가장 큰 주는?"
+        run = self.pipeline(revenue_grounding(WEEK_WITH_MAX_AVG)).run(question)
         self.assertEqual(run.error["code"], "UNVERIFIED_TIMS_CONTRACT")
         self.assertEqual(run.outcome, "unsupported")
         self.assertEqual(self.tims.calls, [])
+
+    def test_pipeline_delegates_what_it_cannot_recompute(self):
+        run = self.pipeline(revenue_grounding(AVG_THEN_MAX)).run(Q_AVG_THEN_MAX)
+        self.assertEqual(run.outcome, "answered", run.runtime_error)
+        self.assertEqual(len(self.metric_calls()), 1)
+        lowering = run.execution_plan["lowering"]["measure_groups"]
+        self.assertEqual(lowering["path"], "provider_delegated")
+        self.assertTrue(run.execution_profile["delegation"])
+        self.assertIn("bucket_week_start", run.execution_profile["delegated_semantics"])
+
+    def test_pipeline_reports_an_unguaranteed_stated_week_as_unsupported(self):
+        run = self.pipeline(revenue_grounding(SUM_THEN_AVG)).run(Q_MONDAY_SUM_THEN_AVG)
+        self.assertEqual(run.error["code"], "CALENDAR_REQUIREMENT_UNSUPPORTED")
+        self.assertEqual(run.outcome, "unsupported")
+        self.assertEqual(self.tims.calls, [])
+        self.assertEqual(run.plan["calendar"], {"week_start": "monday"})
 
     def test_user_scope_in_a_grouped_plan_is_accepted(self):
         payload = {"concepts": [
@@ -1016,7 +1208,8 @@ class StructuredGroundingPathTest(unittest.TestCase):
         tims = FakeTims()
         pipeline = GeoFlowPipeline(
             planner=GeoFlowPlanner(client=client, aggregation_grounding="structured"),
-            composer=MacroComposer(), tool_executor=tims, clock=lambda: REFERENCE)
+            composer=MacroComposer(), tool_executor=tims, clock=lambda: REFERENCE,
+            execution_profile=LOCAL_PROFILE)
         run = pipeline.run(Q_WEEK_WITH_MAX_SUM)
         self.assertEqual(run.outcome, "answered", run.runtime_error)
         self.assertIn("주별 합계가 가장 큰 주: 20260810-20260816", run.final_answer)

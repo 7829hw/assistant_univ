@@ -25,11 +25,16 @@ TIMS가 구간별 집계를 한 호출로 처리하지 못할 때, compiler는 �
 - ``weekday``, ``weekend``, ``holiday``는 연속 기간이 아니므로 나누지 않는다.
 - 기간이 없으면 나눌 범위를 알 수 없으므로 거부한다.
 
-구간 경계는 이 모듈의 설계 선택이다. TIMS의 ``bucket=week`` 경계는 schema에
-적혀 있지 않다. 그래서 여기서 나눈 구간은 답변과 trace에 그대로 드러낸다.
+구간 경계는 이 모듈의 설계 선택(애플리케이션 정책)이며 **GeoFlow가 기간을 나눠 다시
+계산할 때만** 쓰인다. TIMS의 ``bucket=week`` 경계는 schema에 적혀 있지 않고, 업체 Tool에
+구간 계산을 맡긴 호출에는 이 정책이 적용되지 않는다(제공자의 정의를 따른다). 그래서 여기서
+나눈 구간은 답변과 trace에 그대로 드러낸다.
 
 - week: 월요일에 시작하는 7일. 기간의 처음과 끝에서 잘린다.
 - month: 달력의 달. 기간의 처음과 끝에서 잘린다.
+
+질문이 주 시작 요일을 명시하면(``geoflow/calendar_terms.py``) 월요일 대신 그 요일을 쓴다.
+last_week·this_week도 같은 요일로 푼다.
 """
 
 from datetime import date, timedelta
@@ -54,11 +59,31 @@ RELATIVE_PERIOD_POLICY = {
 #: 위 규칙의 출처. TIMS 계약이 아니라는 표시다.
 RELATIVE_PERIOD_POLICY_SOURCE = "application_policy"
 
-#: 구간 경계 정의. 답변과 기록에 남는다.
+#: 구간 경계 정의(애플리케이션 정책의 기본값). 답변과 기록에 남는다.
 BOUNDARY_RULES = {
     "week": "월요일 시작 7일, 기간 경계에서 잘림",
     "month": "달력 월, 기간 경계에서 잘림",
 }
+DEFAULT_WEEK_START = "monday"
+_WEEKDAY_INDEX = {name: index for index, name in enumerate(
+    ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"))}
+_WEEKDAY_KOREAN = dict(zip(_WEEKDAY_INDEX, "월화수목금토일"))
+
+
+def boundary_rule(unit, week_start=DEFAULT_WEEK_START, *, partial="include"):
+    """구간 경계를 사람이 읽는 문장으로. 기본값이면 ``BOUNDARY_RULES``와 같다."""
+    if unit == "week":
+        head = f"{_WEEKDAY_KOREAN[week_start]}요일 시작 7일"
+    else:
+        head = "달력 월"
+    tail = ("기간 경계에서 잘린 구간 제외" if partial == "exclude"
+            else "기간 경계에서 잘림")
+    return f"{head}, {tail}"
+
+
+def _week_offset(day, week_start):
+    """``day``가 속한 주(``week_start`` 시작)의 첫날까지 며칠 앞인가."""
+    return (day.weekday() - _WEEKDAY_INDEX[week_start]) % 7
 
 
 def _text(day):
@@ -77,8 +102,11 @@ def _parse_day(text, period):
         ) from error
 
 
-def resolve_period(period, *, reference_date=None):
-    """기간을 ``(시작일, 종료일)``로 푼다. 둘 다 포함한다."""
+def resolve_period(period, *, reference_date=None, week_start=DEFAULT_WEEK_START):
+    """기간을 ``(시작일, 종료일)``로 푼다. 둘 다 포함한다.
+
+    ``week_start``는 last_week·this_week의 주 시작 요일이다(애플리케이션 정책 기본 월요일).
+    """
     if period in (None, ""):
         raise CompilerError(
             "구간으로 나눌 기간이 없습니다.",
@@ -104,7 +132,7 @@ def resolve_period(period, *, reference_date=None):
                 user_message="기준일을 알 수 없어 상대 기간을 날짜로 바꾸지 못했습니다.",
                 context={"period": period},
             )
-        return _relative(period, reference_date)
+        return _relative(period, reference_date, week_start)
     head, _, tail = str(period).partition("-")
     start = _parse_day(head, period)
     end = _parse_day(tail, period) if tail else start
@@ -118,16 +146,16 @@ def resolve_period(period, *, reference_date=None):
     return start, end
 
 
-def _relative(period, reference):
+def _relative(period, reference, week_start=DEFAULT_WEEK_START):
+    week_begin = reference - timedelta(days=_week_offset(reference, week_start))
     if period == "last_week":
-        this_monday = reference - timedelta(days=reference.weekday())
-        start = this_monday - timedelta(days=7)
+        start = week_begin - timedelta(days=7)
         return start, start + timedelta(days=6)
     if period == "last_month":
         end = reference.replace(day=1) - timedelta(days=1)
         return end.replace(day=1), end
     if period == "this_week":
-        return reference - timedelta(days=reference.weekday()), reference
+        return week_begin, reference
     if period == "this_month":
         return reference.replace(day=1), reference
     if period == "this_year":
@@ -136,7 +164,7 @@ def _relative(period, reference):
     return start, date(reference.year - 1, 12, 31)
 
 
-def partition(start, end, unit):
+def partition(start, end, unit, *, week_start=DEFAULT_WEEK_START):
     """``[start, end]``를 unit 구간으로 나눈다. 빈틈과 겹침이 없다."""
     if unit not in BOUNDARY_RULES:
         raise CompilerError(
@@ -148,7 +176,7 @@ def partition(start, end, unit):
     cursor = start
     while cursor <= end:
         if unit == "week":
-            natural_start = cursor - timedelta(days=cursor.weekday())
+            natural_start = cursor - timedelta(days=_week_offset(cursor, week_start))
             natural_end = natural_start + timedelta(days=6)
         else:
             natural_start = cursor.replace(day=1)

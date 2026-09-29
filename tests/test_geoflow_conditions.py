@@ -374,7 +374,7 @@ class PipelineTest(unittest.TestCase):
 
     def test_partitioned_calls_need_the_day_record_contract(self):
         """구간별 집계의 하루 단위 합성은 기록이 하루에만 속한다는 계약이 필요하다.
-        legacy 프로필은 이를 가정으로 적고 실행하지만, strict 프로필은 멈춘다."""
+        로컬 재계산의 근거이므로 어느 프로필도 가정하지 않는다(2026-09-29 전 legacy는 가정했다)."""
         payload = {"concepts": [place("place", "대구"), event("operation"), measure("revenue")],
                    "factors": {"date": "20260401-20260430", "taxi_type": "private",
                                "aggregation_plan": {"bucket": {"unit": "week", "reducer": "sum"},
@@ -386,7 +386,8 @@ class PipelineTest(unittest.TestCase):
         self.assertIn("day_records:get_billing_metrics", run.error["detail"])
         legacy = pipeline([dict(payload, factors=dict(payload["factors"], date="last_month"))],
                           check=False).run(question)
-        self.assertEqual(legacy.outcome, "answered", legacy.runtime_error)
+        self.assertEqual(legacy.outcome, "unsupported")
+        self.assertIn("day_records:get_billing_metrics", legacy.error["detail"])
 
     def test_correct_grounding_is_accepted_without_corrections(self):
         payload = {"concepts": [place("place", "대구"), event("operation"), measure("revenue")],

@@ -64,7 +64,8 @@ PIPELINE_CONFIG = {
 }
 SETS = {
     "stub": {"queries": "stub_query.yaml", "gold": "evaluation/v2/stub_v2_gold.yaml"},
-    "holdout_v2": {"corpus": "evaluation/v2/paraphrases_holdout_v2.yaml"},
+    "holdout_v2": {"corpus": "evaluation/v2/paraphrases_holdout_v2.yaml",
+                   "revisions": "evaluation/v2/label_revisions.yaml"},
 }
 ANSWERED = "answered"
 REFUSALS = ("unsupported", "needs_clarification")
@@ -73,18 +74,40 @@ REFUSALS = ("unsupported", "needs_clarification")
 # -- 문항 -------------------------------------------------------------------------
 
 
-def load_items(names, base=BASE_DIR):
-    """평가 문항. 모든 문항이 expected_outcome을 갖는다."""
+def load_revisions(spec, base=BASE_DIR):
+    """사전 등록 라벨의 정책 개정(evaluation/v2/label_revisions.yaml). 없으면 빈 개정."""
+    if "revisions" not in spec:
+        return {"revision": None, "intents": {}}
+    document = yaml.safe_load((base / spec["revisions"]).read_text(encoding="utf-8"))
+    if document.get("base") != spec["corpus"]:
+        raise ValueError(f"{spec['revisions']}의 base가 {spec['corpus']}가 아니다")
+    return document
+
+
+def load_items(names, base=BASE_DIR, *, revised=True):
+    """평가 문항. 모든 문항이 expected_outcome을 갖는다.
+
+    ``revised``이면 사전 등록 라벨에 정책 개정을 적용한다. 사전 등록 값은
+    ``expected_outcome_prereg``로 남는다. 개정은 기대 결과만 바꾸고 뜻(집계·인자)은 바꾸지 않는다.
+    """
     items = []
     for name in names:
         spec = SETS[name]
         if "corpus" in spec:
             goldens = {intent["intent"]: intent.get("golden")
                        for intent in P.load_corpus(base / spec["corpus"])}
+            revisions = load_revisions(spec, base) if revised else {"intents": {}}
             for item in P.load_corpus_items(base / spec["corpus"]):
                 golden = goldens[item["intent_id"]]
                 factors = golden.get("factors") if isinstance(golden, dict) else None
-                items.append({**item, "set": name,
+                revision = revisions["intents"].get(item["intent_id"])
+                extra = {"expected_outcome_prereg": item["expected_outcome"]}
+                if revision is not None:
+                    if revision["prereg"] != item["expected_outcome"]:
+                        raise ValueError(f"{item['intent_id']}: 개정의 prereg 값이 사전 등록과 다르다")
+                    extra.update(expected_outcome=revision["expected_outcome"],
+                                 label_revision=revisions["revision"])
+                items.append({**item, "set": name, **extra,
                               "golden_factors": None if factors is None else dict(factors)})
             continue
         gold = yaml.safe_load((base / spec["gold"]).read_text(encoding="utf-8"))["queries"]
@@ -109,6 +132,8 @@ def input_files(names):
             files.append(spec["corpus"])
             document = yaml.safe_load((BASE_DIR / spec["corpus"]).read_text(encoding="utf-8"))
             files.extend(document.get("parents") or [])
+            if "revisions" in spec:
+                files.append(spec["revisions"])
         else:
             files.extend([spec["queries"], spec["gold"]])
     return files
@@ -305,6 +330,9 @@ def observe(item, *, client, reset, tools, model, restarts=A.MAX_FRESH_RESTARTS)
         "protocol": PROTOCOL,
         "id": item["id"], "set": item["set"], "intent_id": item.get("intent_id"),
         "question": item["question"], "expected_outcome": item["expected_outcome"],
+        "expected_outcome_prereg": item.get("expected_outcome_prereg",
+                                            item["expected_outcome"]),
+        "label_revision": item.get("label_revision"),
         "capability": item.get("capability"), "restores": item.get("restores"),
         "expected_tool_args": item.get("expected_tool_args"),
         "semantic_aggregation": item.get("semantic_aggregation"),

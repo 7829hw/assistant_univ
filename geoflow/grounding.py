@@ -34,6 +34,7 @@ from typing import Any
 from agent_graph import extract_scopes
 
 from geoflow import aggregation as aggregation_semantics
+from geoflow import calendar_terms
 from geoflow.errors import PlannerError
 from geoflow.factors import FACTOR_SPECS, STRUCTURAL_FACTORS, FactorSpec
 from geoflow.operator_mapping import measure_types
@@ -115,6 +116,10 @@ class Grounding:
     #: 조건 보존 기능(condition_check)이 남긴 기록. 질문의 근거 표현, LLM 값, 해석된 값,
     #: 보정 내역, 장소 수정 이력. 기능을 끄면 None이다.
     condition_audit: dict | None = None
+    #: 질문 원문이 명시한 구간 정의(주 시작 요일, 부분 구간, 빈 구간). LLM 출력이 아니라
+    #: 닫힌 어휘로 원문에서 읽는다(``geoflow/calendar_terms.py``). 비어 있으면 질문이 정하지
+    #: 않은 것이고, 계산 경로가 제공자 정의나 애플리케이션 정책을 쓴다.
+    calendar: calendar_terms.CalendarRequirements = calendar_terms.NONE
 
     @property
     def aggregation(self):
@@ -147,6 +152,7 @@ class Grounding:
             "concepts": [item.to_dict() for item in self.concepts],
             "factors": dict(self.factors),
             "aggregation": self.aggregation.to_dict(),
+            **({"calendar": self.calendar.to_dict()} if self.calendar else {}),
         }
 
 
@@ -196,7 +202,7 @@ def parse_grounding(payload, question, *, raw_text="",
     factors = _parse_factors({**hoisted, **(raw_factors or {})}, raw_text)
     grounding = Grounding(
         question=question, concepts=concepts, factors=factors,
-        aggregation_plan=plan,
+        aggregation_plan=plan, calendar=calendar_terms.read(question),
     )
     _check_measure(grounding, raw_text)
     return grounding

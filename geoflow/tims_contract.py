@@ -18,6 +18,17 @@ provider가 없고(``tool_handlers``는 mock만 허용), mock 동작은 계약�
 ``verify_lowering``은 실행 계획이 의미 graph를 빠짐없이 옮겼는지(내부 일관성)만
 확인한다. TIMS가 아래 항목대로 동작하는지는 확인할 수 없다. 그 외부 가정은 실행
 단계마다 ``assumptions``로 남는다.
+
+전략은 계산 책임에 따라 두 경로로 나뉜다(``PATH_*``, 2026-09-29).
+
+- 업체 Tool에 위임(``FUSED_BUCKET_ROLLUP``): 인자가 질문의 집계 단계를 뜻한다는 항목만
+  요구한다. 주 시작일·부분 구간·빈 구간·상대 날짜 기준은 ``delegates``이며 선행 조건이
+  아니다. 질문이 정하지 않았다면 제공자 정의를 따르고, 정했다면 ``REQUIREMENT_ITEMS``의
+  항목이 그 값으로 확인되어야 한다. 이전에는 이 네 항목의 확인과 로컬 정책과의 일치까지
+  요구해서, 업체가 정상으로 제시한 호출(업체 100문항 43·98·100)이 막혔다.
+- GeoFlow가 기간을 나눠 다시 계산(``RANGE_PARTITION``, ``DAILY_PARTITION``): 분해 전후가
+  같은 계산이라는 근거를 모두 요구한다. 일 단위 분할은 ``day_records:<tool>``도 요구하며
+  (``strategy_requires``) 어떤 실행 프로필에서도 가정하지 않는다.
 """
 
 import re
@@ -156,6 +167,19 @@ ITEMS = {
 }
 
 
+#: 계산 책임이 누구에게 있는가. 두 경로는 검증 기준이 다르다.
+#: - provider_delegated: 질문의 집계를 업체 Tool 인자로 온전히 옮겨 제공자가 계산한다.
+#:   GeoFlow는 Tool 선택, 집계 단계 ↔ 인자 매핑, 인자 조합, 조건 보존, scope 출처,
+#:   반환값 ↔ 답변을 검증한다. 질문이 정하지 않은 구간 정의(``delegates``)는 제공자의
+#:   의미에 맡기고, 그 세부 계산을 검증했다고 주장하지 않는다.
+#: - local_recomputation: GeoFlow가 기간을 나눠 여러 번 부르고 로컬에서 합친다. 분해 전후
+#:   계산이 같다는 근거(날짜 경계, 빈틈·겹침, 부분 구간, 빈 결과, 측정값의 합성 가능성)가
+#:   ``requires``에 모두 있어야 한다. 구간 정의는 애플리케이션 정책(``geoflow/periods.py``)이
+#:   정하고 기록에 그렇게 남는다.
+PATH_PROVIDER = "provider_delegated"
+PATH_LOCAL = "local_recomputation"
+
+
 @dataclass(frozen=True)
 class Strategy:
     """lowering 전략 하나와 그 전략이 맞으려면 필요한 계약 항목."""
@@ -163,16 +187,24 @@ class Strategy:
     name: str
     requires: tuple[str, ...]
     description: str
+    path: str = PATH_LOCAL
+    #: 질문이 정하지 않았을 때 이 전략이 제공자에게 맡기는 의미(계약 항목 key).
+    #: 선행 조건이 아니다. 기록에 "provider_defined"로 남는다.
+    delegates: tuple[str, ...] = ()
 
 
-#: 구간 안 집계와 구간별 값의 집계를 bucket/rollup 호출 하나로 합친다.
-#: 의미 graph의 구간 정의(주 시작일, 부분 구간, 빈 구간)와 TIMS의 정의가 같아야
-#: 같은 계산이다. 상대 기간을 TIMS가 풀게 되므로 그 기준도 같아야 한다.
+#: 구간 안 집계와 구간별 값의 집계를 bucket/aggregation/rollup 호출 하나로 옮긴다.
+#: 필요한 것은 인자가 질문의 집계 단계를 뜻한다는 계약(aggregation = 구간 안 집계,
+#: rollup = 구간별 값의 비가중 집계)뿐이다. 주 시작일·부분 구간·빈 구간·상대 날짜의
+#: 기준은 질문이 정하지 않았다면 제공자의 정의를 따른다. 질문이 정했다면
+#: ``REQUIREMENT_ITEMS``의 항목이 그 값으로 확인되어야 한다(``compiler``).
 FUSED_BUCKET_ROLLUP = Strategy(
     "fused_bucket_rollup",
-    ("inner_is_aggregation", "rollup_unweighted", "bucket_week_start",
-     "bucket_partial", "bucket_empty", "relative_date_reference"),
-    "TIMS bucket/aggregation/rollup 호출 하나",
+    ("inner_is_aggregation", "rollup_unweighted"),
+    "TIMS bucket/aggregation/rollup 호출 하나(제공자 계산)",
+    path=PATH_PROVIDER,
+    delegates=("bucket_week_start", "bucket_partial", "bucket_empty",
+               "relative_date_reference"),
 )
 #: 구간마다 날짜 범위로 한 번씩 호출한다. 범위 양 끝의 포함 여부가 필요하다.
 RANGE_PARTITION = Strategy(
@@ -180,11 +212,47 @@ RANGE_PARTITION = Strategy(
     "구간마다 날짜 범위 호출 후 로컬 계산",
 )
 #: 하루마다 한 번씩 호출하고 구간 값을 로컬에서 만든다. 구간 안 집계가 하루 값들로
-#: 정확히 다시 만들어지는 경우(sum, max, min)에만 쓴다.
+#: 정확히 다시 만들어지는 경우(sum, max, min)에만 쓴다. 하루 값의 합성이 기간 값과
+#: 같으려면 Tool 기록이 하루 하나에만 속해야 하므로 ``day_records:<tool>``도 요구한다
+#: (``strategy_requires``). 이 항목은 어떤 실행 프로필에서도 가정하지 않는다.
 DAILY_PARTITION = Strategy(
     "daily_partition", ("single_date",),
     "하루마다 호출 후 구간 값을 로컬에서 합침",
 )
+
+#: 사용자가 명시한 구간 정의(``geoflow/calendar_terms.py``) → 그것을 보장해야 하는 계약
+#: 항목과, 그 항목의 확인된 값으로 표현한 같은 정의. 제공자 경로는 항목이 확인되고 값이
+#: 같을 때만 사용자의 정의를 보장한다. Tool에는 이 정의를 바꾸는 인자가 없다.
+REQUIREMENT_ITEMS = {
+    "week_start": "bucket_week_start",
+    "partial": "bucket_partial",
+    "empty": "bucket_empty",
+}
+#: 계약 값 어휘 ↔ calendar_terms 어휘. 계약 값이 이 표에 없으면 같은 정의로 보지 않는다.
+REQUIREMENT_VALUES = {
+    "bucket_partial": {"clip_to_period": "include", "complete_only": "exclude"},
+    "bucket_empty": {"zero_filled": "zero", "excluded": "skip"},
+}
+
+
+def requirement_guaranteed(contract, key, value):
+    """제공자 계약이 사용자가 명시한 구간 정의 ``key=value``를 보장하는가. (보장, 이유)."""
+    item_key = REQUIREMENT_ITEMS[key]
+    item = contract.items.get(item_key)
+    if item is None or not contract.satisfied(item_key):
+        status = "없음" if item is None else item.status
+        return False, f"계약 {item_key}가 확인되지 않았습니다({status})"
+    provided = REQUIREMENT_VALUES.get(item_key, {}).get(item.value, item.value)
+    if provided != value:
+        return False, f"계약 {item_key}의 값({item.value})이 요구({value})와 다릅니다"
+    return True, ""
+
+
+def strategy_requires(strategy, tool_name):
+    """전략이 그 Tool에서 요구하는 계약 항목. 일 단위 분할은 기록 계약도 요구한다."""
+    if strategy is DAILY_PARTITION:
+        return (*strategy.requires, day_records_key(tool_name))
+    return strategy.requires
 
 #: 하루 값들로 구간 값을 정확히 다시 만들 수 있는 구간 안 집계와 그 방법.
 #: avg는 표본 수가, med는 원시 값이 없으면 다시 만들 수 없다.
@@ -215,12 +283,15 @@ class TimsContract:
         status = self.status(key)
         return status == CONFIRMED or (status == ASSUMED and self.allow_assumptions)
 
-    def missing(self, strategy):
-        """전략이 요구하는 항목 중 확인되지 않은 것."""
-        return tuple(key for key in strategy.requires if not self.satisfied(key))
+    def missing(self, strategy, tool_name=None):
+        """전략이 요구하는 항목 중 확인되지 않은 것. Tool을 주면 Tool별 항목도 본다."""
+        requires = (strategy.requires if tool_name is None
+                    else strategy_requires(strategy, tool_name))
+        return tuple(key for key in requires
+                     if key not in self.items or not self.satisfied(key))
 
-    def allows(self, strategy):
-        return not self.missing(strategy)
+    def allows(self, strategy, tool_name=None):
+        return not self.missing(strategy, tool_name)
 
     def assuming(self, **values):
         """항목을 확인된 것으로 바꾼 계약. 테스트에서 가정을 명시할 때만 쓴다."""

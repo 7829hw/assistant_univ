@@ -217,14 +217,35 @@ class GoldenScoringTest(unittest.TestCase):
                 self.assertEqual(record["category"], "correct",
                                  (record["outcome"], record["error_code"], record["checks"],
                                   record["final_answer"]))
-                self.assertEqual(record["outcome"], intent["expected_outcome"])
+                self.assertEqual(record["outcome"], self.item(name)["expected_outcome"])
+
+    def test_label_revisions_change_only_the_policy_outcome(self):
+        """정책 개정은 기대 결과만 바꾼다. 사전 등록 파일과 값이 대조되고 기록에 함께 남는다."""
+        revisions = V.load_revisions(V.SETS["holdout_v2"])
+        self.assertEqual(revisions["revision"], "r1")
+        prereg = {item["id"]: item for item in V.load_items(["holdout_v2"], revised=False)}
+        for item in V.load_items(["holdout_v2"]):
+            with self.subTest(item=item["id"]):
+                before = prereg[item["id"]]
+                self.assertEqual(item["expected_outcome_prereg"], before["expected_outcome"])
+                revision = revisions["intents"].get(item["intent_id"])
+                if revision is None:
+                    self.assertEqual(item["expected_outcome"], before["expected_outcome"])
+                    continue
+                self.assertEqual(item["expected_outcome"], revision["expected_outcome"])
+                for key in ("aggregation", "expected_tool_args", "expected_macros",
+                            "expected_operators", "golden_factors"):
+                    self.assertEqual(item.get(key), before.get(key))
+        causes = {entry["cause"] for entry in revisions["intents"].values()}
+        self.assertEqual(causes, {"local_recomputation_without_evidence", "provider_delegation"})
 
     def test_a_swapped_stage_is_an_aggregation_error(self):
-        checked = 0
+        """answered 기대 문항에서 단계를 뒤바꾸면 정답이 아니다. 거부 기대 문항에서도 의미 graph
+        검사(aggregation_ok)는 뒤바뀜을 잡는다(거부 문항의 범주는 결과 종류로만 정한다)."""
+        checked = refused = 0
         for name, intent in self.intents.items():
             semantic = intent["aggregation"]
-            if (intent["expected_outcome"] != "answered" or not isinstance(semantic, dict)
-                    or "bucket" not in semantic
+            if (not isinstance(semantic, dict) or "bucket" not in semantic
                     or semantic["inner"] in (AP.UNSPECIFIED, semantic["final"])):
                 continue
             swapped = {**semantic, "inner": semantic["final"], "final": semantic["inner"]}
@@ -233,9 +254,14 @@ class GoldenScoringTest(unittest.TestCase):
                                      if k not in AP.FLAT_KEYS}, **AP.semantic_to_flat(swapped)}
             with self.subTest(intent=name):
                 record = observe(self.item(name), payload)
-                self.assertNotEqual(record["category"], "correct")
-                checked += 1
-        self.assertGreaterEqual(checked, 11)
+                if self.item(name)["expected_outcome"] == "answered":
+                    self.assertNotEqual(record["category"], "correct")
+                    checked += 1
+                elif "aggregation_ok" in record["checks"]:
+                    self.assertFalse(record["checks"]["aggregation_ok"])
+                    refused += 1
+        self.assertGreaterEqual(checked, 5)
+        self.assertGreaterEqual(checked + refused, 11)
 
     def test_dropped_condition_and_wrong_target_are_wrong_arguments(self):
         record = observe(self.item("w09_jul_aug_private_month_sum_then_avg_days"),
@@ -413,9 +439,13 @@ class CommandLineTest(unittest.TestCase):
                 self.assertEqual(len(rows), 4)
                 self.assertTrue(all(row["measurement"] == A.VALID for row in rows))
                 summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
-                self.assertEqual(summary["all"]["refusal_strict"], {"count": 3, "of": 3, "rate": 1.0})
-                self.assertEqual(summary["all"]["categories"],
-                                 {"correct": 3, "refused_supported": 1})
+                # w01은 라벨 개정 r1에서 unsupported 기대로 바뀌었다(로컬 재계산 근거 없음).
+                self.assertIn("evaluation/v2/label_revisions.yaml", meta["inputs"])
+                self.assertEqual(summary["all"]["refusal_strict"], {"count": 4, "of": 4, "rate": 1.0})
+                self.assertEqual(summary["all"]["categories"], {"correct": 4})
+                w01 = next(row for row in rows if row["id"] == "w01_p0")
+                self.assertEqual((w01["expected_outcome_prereg"], w01["label_revision"]),
+                                 ("answered", "r1"))
         finally:
             server.shutdown()
 

@@ -258,15 +258,24 @@ class RepresentativeQuestionsTest(unittest.TestCase):
         self.assertEqual(result.verification["verified"], ["date", "taxi_type"])
         self.assertIn("reference provider 계약으로 확인: 기간, 택시 유형", result.final_answer)
         self.assertNotIn("TIMS 문서 계약", result.final_answer)
-        # 같은 질문을 TIMS legacy로 돌리면 가정한 하루 분할이라 기간은 미검증이다.
+        # 같은 질문을 TIMS legacy로 돌리면 위임할 수 없는 구간 선택이고, 로컬 재계산의 근거
+        # (기록이 하루에만 속함)가 TIMS 계약에 없어 계산하지 않는다.
         from tests.test_geoflow_aggregation_graph import FakeTims
         legacy = GeoFlowPipeline.create(
             client=_Client([grounding(SUM_SELECT_MAX, where="대구")]), tool_executor=FakeTims(),
             aggregation_grounding="structured", clock=lambda: REF_DATE,
             condition_check=True).run("지난달 대구 개인택시 매출 합계가 가장 큰 주는?")
-        self.assertEqual(legacy.outcome, "answered", legacy.runtime_error)
-        self.assertEqual(legacy.verification["contract"], "tims")
-        self.assertNotIn("date", legacy.verification["verified"])
+        self.assertEqual(legacy.outcome, "unsupported")
+        self.assertEqual(legacy.error["code"], "UNVERIFIED_TIMS_CONTRACT")
+        # 위임할 수 있는 질문은 TIMS에 맡긴다. 기간 경계는 제공자 정의이므로 미검증으로 남는다.
+        delegated = GeoFlowPipeline.create(
+            client=_Client([grounding(SUM_THEN_AVG, where="대구")]), tool_executor=FakeTims(),
+            aggregation_grounding="structured", clock=lambda: REF_DATE,
+            condition_check=True).run("지난달 대구 개인택시 주별 매출 합계의 평균은?")
+        self.assertEqual(delegated.outcome, "answered", delegated.runtime_error)
+        self.assertEqual(delegated.verification["contract"], "tims")
+        self.assertNotIn("date", delegated.verification["verified"])
+        self.assertIn("date", delegated.verification["unverified"])
 
     def test_trace_maps_semantic_steps_to_calls_and_local_operations(self):
         result = run(SUM_SELECT_MAX)
@@ -383,15 +392,20 @@ class DecompositionEquivalenceTest(unittest.TestCase):
         collect = next(s for s in daily.steps if s.operator == "COLLECT_GROUPS")
         self.assertEqual(collect.arguments["empty_parts"], "skip")
         # 계약을 바꿔 빈 날 처리를 몰래 skip으로 두면 검증에서 막힌다.
-        # TIMS legacy 경로(하루 분할을 가정으로 실행)에서도 빈 날은 멈춘다.
+        # TIMS에서 하루 분할(기록 계약을 테스트 가정으로 넣음)을 해도 null 계약이 없으니
+        # 빈 날은 멈춘다.
+        tims = tims_contract.DEFAULT_CONTRACT.assuming(
+            **{"day_records:get_billing_metrics": "택시·일"})
         plan = MacroComposer().compose(parse_grounding(
             grounding(SUM_THEN_AVG, where="대구"), "질문", structured_aggregation=True))
-        execution = compile_plan(plan, reference_date=REF_DATE)
+        execution = compile_plan(plan, reference_date=REF_DATE, contract=tims,
+                                 delegation=False)
         collect = next(s for s in execution.steps if s.operator == "COLLECT_GROUPS")
         self.assertEqual(collect.arguments["empty_parts"], "fail")
         collect.arguments["empty_parts"] = "skip"
         with self.assertRaises(CompilerError):
-            verify_lowering(plan, execution, reference_date=REF_DATE)
+            verify_lowering(plan, execution, reference_date=REF_DATE, contract=tims,
+                            delegation=False)
 
     def test_single_range_sum_equals_sum_of_weekly_sums(self):
         _, total = self.execute(TOTAL_SUM, REFERENCE_CONTRACT)

@@ -28,7 +28,7 @@ Grounding 결과(개념 + factor)를 입력으로 받아, macro 조각을 input/
 import json
 from dataclasses import dataclass, field
 
-from geoflow import analysis_ops, measures, operator_mapping
+from geoflow import analysis_ops, calendar_terms, measures, operator_mapping
 from geoflow.aggregation import FLAT_KEYS, REDUCERS
 from geoflow.errors import CompositionError
 from geoflow.factors import STRUCTURAL_FACTORS, validate_factors
@@ -232,6 +232,7 @@ class MacroComposer:
                 code="NO_MEASURE",
             )
         _check_measure_aggregation(goal, aggregation)
+        _check_calendar_requirements(grounding, aggregation)
 
         build = _Build()
         # grounding이 준 개념을 pool에 올린다. 목표는 macro가 만들 값이므로
@@ -693,6 +694,7 @@ class MacroComposer:
                 if name not in build.used_factors
                 and name not in STRUCTURAL_FACTORS
             },
+            calendar=dict(grounding.calendar.stated),
         )
 
 
@@ -868,6 +870,62 @@ def _check_measure_aggregation(goal, aggregation):
             )
 
 
+#: last_week·this_week는 주 시작 요일에 따라 기간이 달라지는 상대 기간이다.
+_WEEK_PERIODS = frozenset({"last_week", "this_week"})
+
+
+def _grouping_requirements(grounding):
+    """구간별 node에 붙일, 질문이 명시한 구간 정의.
+
+    주 시작 요일은 주 구간이거나, 기간이 last_week·this_week(주 정의로 기간이 정해짐)일 때 붙는다.
+    """
+    stated = dict(grounding.calendar.stated)
+    if (grounding.aggregation.bucket != "week"
+            and grounding.factors.get("date") not in _WEEK_PERIODS):
+        stated.pop(calendar_terms.WEEK_START, None)
+    return stated
+
+
+def _check_calendar_requirements(grounding, aggregation):
+    """질문이 명시한 구간 정의를 받을 곳이 있는지 합성 전에 확인한다.
+
+    읽지 못한 정의 표현은 추측하지 않고 확인을 요청한다. 받을 곳이 없는 정의(구간이 없는
+    질문의 "부분 주 제외" 등)는 조용히 버리지 않고 반영할 수 없는 조건으로 멈춘다.
+    """
+    calendar = grounding.calendar
+    if calendar.unreadable:
+        raise CompositionError(
+            "구간 정의 표현을 해석하지 못했습니다: " + ", ".join(calendar.unreadable),
+            user_message=(
+                "질문의 주·월 구간 정의(" + ", ".join(calendar.unreadable) + ")를 해석하지 "
+                "못했습니다. 예: '일요일부터 시작하는 주', '온전한 주만', '자료가 없는 주는 0으로'."
+            ),
+            code="AMBIGUOUS_CALENDAR_REQUIREMENT",
+            context={"calendar": calendar.to_dict(), "needs_clarification": True,
+                     "clarify": "calendar_requirement"},
+        )
+    unconsumed = []
+    for key, value in calendar.stated.items():
+        if key == calendar_terms.WEEK_START:
+            consumed = (aggregation.bucket == "week"
+                        or grounding.factors.get("date") in _WEEK_PERIODS)
+        else:
+            consumed = aggregation.grouped
+        if not consumed:
+            unconsumed.append(key)
+    if unconsumed:
+        labels = ", ".join(calendar_terms.describe(key, calendar.stated[key])
+                           for key in unconsumed)
+        raise CompositionError(
+            "질문의 구간 정의를 받는 계산이 없습니다: " + ", ".join(unconsumed),
+            user_message=f"질문의 조건 중 현재 분석이 반영할 수 없는 것이 있습니다: {labels}",
+            code="UNCONSUMED_CONDITION",
+            context={"unconsumed": [f"calendar.{key}" for key in unconsumed],
+                     "calendar": calendar.to_dict(),
+                     "aggregation": aggregation.to_dict()},
+        )
+
+
 def _tool_factors(grounding):
     """TIMS operator에 넘길 조건. 집계는 flat factor가 아니라 spec에서 온다.
 
@@ -953,6 +1011,11 @@ def _internal_node(node_spec, key, root, grounding, build):
         attributes[analysis_ops.GROUP_BY] = {
             "bucket": grounding.aggregation.bucket,
         }
+        # 질문이 명시한 구간 정의만 graph에 적는다. 적지 않은 정의는 질문이 정하지 않은
+        # 것이며 계산 경로가 정한다(제공자 정의 또는 애플리케이션 정책).
+        stated = _grouping_requirements(grounding)
+        if stated:
+            attributes[analysis_ops.GROUP_BY][analysis_ops.CALENDAR] = stated
     return ConceptNode(
         id=build.unique_id(f"{root.id}_{key}"),
         concept=concept,

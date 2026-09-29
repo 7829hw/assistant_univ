@@ -7,10 +7,14 @@
 
 프로필
 - ``mock`` + ``legacy``(기본): TIMS 계약(``tims_contract.DEFAULT_CONTRACT``, 미확인 항목은
-  미확인 그대로)으로 판정하되, 기존 동작을 재현하려고 미확인 항목 일부를 **가정**하고 실행한다
-  (상대 토큰·범위를 그대로 넘김, 구간별 하루 분할). 가정한 항목은 ``legacy_assumptions``와
-  실행 계획의 ``date_semantics``·step ``assumptions``에 남는다.
+  미확인 그대로)으로 판정한다. 질문 표현을 그대로 옮긴 요청 인자(상대 토큰, 사용자가 적은
+  범위, bucket/rollup 호출)의 세부 달력 의미는 **제공자에게 위임**한다(``delegation``). 위임한
+  항목은 ``delegated_semantics``와 실행 계획의 ``date_semantics``·``lowering``에 남는다.
+  GeoFlow가 기간을 나눠 다시 계산하는 경로(구간별 하루 분할 등)는 위임이 아니므로 어떤
+  항목도 가정하지 않는다. 그 근거가 계약에 없으면 그 경로를 쓰지 않는다.
 - ``mock`` + ``strict``: 같은 TIMS 계약에서 확인된 것만 실행한다(단일 날짜, 기간 없음).
+  위임을 허용하지 않는다. 호출 하나로 합치려면 제공자 정의가 애플리케이션 정의와 같다는
+  계약이 필요하다.
 - ``reference``: 합성 데이터 위의 reference provider(``reference_provider.py``)와 그 계약
   ``REFERENCE_CONTRACT``. 계약에 적힌 것만 실행한다. 이 계약은 TIMS 계약과 별개이며 TIMS
   경로에 쓰이지 않는다.
@@ -77,11 +81,15 @@ REFERENCE_ITEMS = {
 }
 REFERENCE_CONTRACT = tims_contract.TimsContract(dict(REFERENCE_ITEMS), provider=REFERENCE)
 
-#: legacy 모드가 TIMS 계약에서 확인 없이 가정하는 항목. 실행 기록에 그대로 남긴다.
+#: legacy 모드가 제공자에게 위임하는 의미. 질문 표현을 그대로 옮긴 요청 인자의 세부 달력
+#: 의미이며 확인된 계약이 아니다. 실행 기록에 그대로 남긴다. 로컬 재계산의 근거
+#: (``day_records:<tool>`` 등)는 여기에 없다. 2026-09-29 전까지는 구간별 하루 분할의
+#: ``day_records``도 가정했으나, 로컬 재계산은 근거 없이 쓰지 않도록 바꿨다.
 LEGACY_TIMS_ASSUMPTIONS = (
     "relative_date_reference", "range_inclusive", "calendar_token_period",
-    "day_records:<tool>(구간별 하루 분할)",
 )
+#: bucket/rollup 위임 호출이 제공자에게 맡기는 구간 정의(질문이 정하지 않았을 때).
+DELEGATED_GROUP_SEMANTICS = tims_contract.FUSED_BUCKET_ROLLUP.delegates
 
 
 @dataclass(frozen=True)
@@ -94,12 +102,17 @@ class ExecutionProfile:
     legacy_assumptions: tuple = ()
     description: str = ""
     notes: tuple = field(default_factory=tuple)
+    #: 질문이 정하지 않은 달력 의미를 제공자 정의에 맡기는 위임 호출을 허용하는가.
+    delegation: bool = False
+    delegated_semantics: tuple = ()
 
     def to_dict(self):
         return {"provider": self.provider, "contract": self.contract.provider,
                 "mode": self.mode, "date_policy": self.date_policy,
                 "synthetic": self.synthetic,
                 "legacy_assumptions": list(self.legacy_assumptions),
+                "delegation": self.delegation,
+                "delegated_semantics": list(self.delegated_semantics),
                 "description": self.description}
 
 
@@ -113,7 +126,12 @@ def profile_for(provider=MOCK, tims_execution=LEGACY):
                 provider=MOCK, contract=tims_contract.DEFAULT_CONTRACT,
                 date_policy=DATE_POLICY_LEGACY, mode=LEGACY,
                 legacy_assumptions=LEGACY_TIMS_ASSUMPTIONS,
-                description="mock(TIMS schema). 미확인 TIMS 항목을 가정하는 기존 동작(legacy)",
+                delegation=True,
+                delegated_semantics=(*LEGACY_TIMS_ASSUMPTIONS, *(
+                    key for key in DELEGATED_GROUP_SEMANTICS
+                    if key not in LEGACY_TIMS_ASSUMPTIONS)),
+                description=("mock(TIMS schema). 질문 표현을 옮긴 인자의 세부 달력 의미는 "
+                             "제공자에게 위임(legacy)"),
             )
         return ExecutionProfile(
             provider=MOCK, contract=tims_contract.DEFAULT_CONTRACT,

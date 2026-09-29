@@ -10,6 +10,7 @@ from geoflow import analysis_ops
 from geoflow.aggregation import BUCKET_LABELS, REDUCER_LABELS, SELECT_LABELS
 from geoflow.errors import GeoFlowError
 from geoflow.operator_registry import TOOL_DEFAULT_REDUCER, get_operator
+from geoflow import calendar_terms
 from geoflow.periods import BOUNDARY_RULES
 from geoflow.types import CoreConcept, GeoFlowPlan, Subtype
 
@@ -463,8 +464,16 @@ def _route_text(stages, execution_plan, detail):
             else f"구간별 값의 "
                  f"{_josa(REDUCER_LABELS.get(stages['reducer']), '을', '를')} 계산했습니다"
         )
+        rule = detail.get("boundary") or BOUNDARY_RULES[stages["bucket"]]
+        # 구간 정의의 출처. 질문이 정한 부분만 질문의 기준이고 나머지는 이 계산이 정한 기준이다.
+        stated = detail.get("calendar") or {}
+        origin = ("질문에서 정한 " + ", ".join(
+            calendar_terms.describe(key, value) for key, value in stated.items())
+            + " 외에는 이 계산의 기준") if stated else "이 계산의 기준"
         split = (f"기간 {detail['resolved']}을 {unit} 구간 {len(detail['groups'])}개"
-                 f"({BOUNDARY_RULES[stages['bucket']]})로 나눠")
+                 f"({rule}, {origin})로 나눠")
+        if detail.get("dropped_groups"):
+            split += f"(잘린 구간 {len(detail['dropped_groups'])}개 제외)"
         if detail.get("strategy") == "daily_partition":
             fetch = (f" 하루마다 {_josa(inner, '을', '를')} 조회하고 구간마다 하루 값들의 "
                      f"{_josa(inner, '을', '를')} 구한 뒤")
@@ -472,10 +481,37 @@ def _route_text(stages, execution_plan, detail):
             fetch = f" 구간마다 {_josa(inner, '을', '를')} 조회한 뒤"
         return f"{split}{fetch} 로컬에서 {last}."
     if execution_plan is not None and stages["groups_node"] in execution_plan.unobserved:
-        return (
+        text = (
             f"TIMS가 {unit} 구간마다 {_josa(inner, '을', '를')} 구한 뒤 그 값들의 "
-            f"{_josa(REDUCER_LABELS.get(stages['reducer']), '을', '를')} 한 번에 계산했습니다 "
-            f"(bucket={stages['bucket']}, aggregation={stages['inner']}, "
-            f"rollup={stages['reducer']})."
+            f"{_josa(REDUCER_LABELS.get(stages['reducer']), '을', '를')} 계산했습니다."
         )
+        return text + _delegation_note(stages, execution_plan)
     return describe_stages(stages)
+
+
+#: 위임한 구간 정의의 사용자용 이름.
+_DELEGATED_LABELS = {
+    "week_start": "주 시작 요일", "partial": "기간 경계에서 잘린 {unit}",
+    "empty": "자료가 없는 {unit}",
+}
+
+
+def _delegation_note(stages, execution_plan):
+    """위임 호출에서 TIMS 정의를 따른 구간 기준. 답을 읽는 데 필요한 한계만 적는다."""
+    record = (execution_plan.lowering or {}).get(stages["produce"]) or {}
+    unit = BUCKET_LABELS.get(stages["bucket"], stages["bucket"])
+    keys = record.get("delegated") or []
+    delegated = [_DELEGATED_LABELS[key].format(unit=unit) for key in keys
+                 if key in _DELEGATED_LABELS]
+    stated = [key for key, item in (record.get("semantics") or {}).items()
+              if item.get("source") == "question"]
+    parts = [", ".join(delegated) + "의 처리"] if delegated else []
+    if "relative_date" in keys:
+        parts.append("상대 기간의 날짜 범위")
+    sentences = []
+    if parts:
+        sentences.append(("와 ".join(parts) if len(parts) == 2 else parts[0])
+                         + "는 TIMS 기준을 따릅니다.")
+    if stated:
+        sentences.append("질문에서 정한 구간 기준은 TIMS 계약으로 확인된 정의와 같습니다.")
+    return "".join(" " + sentence for sentence in sentences)

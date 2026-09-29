@@ -469,17 +469,33 @@ compiler가 이것을 실행 단계로 내림. 어떤 호출로 내릴지는 TIM
 (`geoflow/tims_contract.py`)가 정함. schema와 vendor parameter 정의에 문장으로 있는 항목만
 확인된 것으로 보고, mock 동작은 근거로 쓰지 않음.
 
-| 전략 | 필요한 계약 | 현재 |
-|---|---|---|
-| bucket/aggregation/rollup 호출 하나 | 주 시작일·부분 구간·빈 구간·상대 날짜 기준이 확인되고 의미 graph의 정의와 같을 것 | 쓰지 않음(미확인) |
-| 구간마다 날짜 범위 호출 | 범위 양 끝 포함 | 쓰지 않음(예시만 있음) |
-| 하루마다 호출 후 로컬에서 구간 값 계산 | 단일 날짜 = 그 하루(확인됨), 구간 안 집계가 sum·max·min | 사용(최대 62회) |
+구간별 집계는 **계산 책임이 다른 두 경로**로 내려감(2026-09-29, `evaluation/design/provider_delegation.md`).
 
-* 명시 기간이 없거나, 연속 기간이 아니거나, 구간 안 집계가 avg·med이면 구조화된 지원 불가로
-  멈춤(`UNRESOLVED_PERIOD`, `UNSUPPORTED_PERIOD_FOR_GROUPING`, `UNVERIFIED_TIMS_CONTRACT`).
-* 상대 기간은 pipeline 기준일(Asia/Seoul)로 풂. 하루 값이 null이면 0으로 채우지 않고 멈춤.
-* `verify_lowering`은 실행 단계가 의미 graph의 조건·구간 분할·집계를 빠짐없이 옮겼는지 확인함.
-  TIMS가 계약대로 동작하는지는 확인할 수 없으며, step마다 `assumptions`로 남김.
+| 경로 | 쓰는 조건 | 검증하는 것 | 맡기는 것 / 정하는 것 |
+|---|---|---|---|
+| 업체 Tool에 위임(`provider_delegated`): bucket/aggregation/rollup 호출 하나 | Tool이 그 구간·집계 조합을 인자로 받음, `inner_is_aggregation`·`rollup_unweighted`(확인됨). 질문이 구간 정의를 명시했으면 계약이 그 정의를 보장 | Tool 선택, 집계 단계 ↔ 인자 매핑(구간 안 집계 명시), 인자 조합(목록 인자 없음), 조건 보존, scope 출처, 반환값 ↔ 답변 | 질문이 정하지 않은 주 시작일·부분 구간·빈 구간·상대 날짜 기준은 **제공자 정의**(`provider_defined`). 제공자 내부 계산은 검증했다고 주장하지 않음 |
+| GeoFlow 로컬 재계산(`local_recomputation`): 구간마다 범위 호출 / 하루마다 호출 후 합성 | 범위: `range_inclusive`. 하루: `single_date` + `day_records:<tool>`, 구간 안 집계가 sum·max·min, 측정값이 하루 값으로 합성 가능(`geoflow/measures.py`), 호출 62회 이하 | 분할이 기간을 빈틈·겹침 없이 덮음, 구성·집계가 구간 안 집계와 같음, 빈 날 처리가 계약과 같음, 조건 보존 | 구간 정의는 질문이 정한 것, 없으면 **애플리케이션 정책**(월요일 시작, 기간 경계에서 자름, 값 없으면 멈춤, Asia/Seoul 기준일) |
+
+* 두 경로는 서로의 근거를 대신하지 않음. 로컬로 다시 만들 수 없다는 이유로 위임 호출을 막지 않고(업체
+  100문항 43·98·100), 위임 호출이 가능하다고 로컬 재계산이 같은 값이라고 보지 않음.
+* TIMS 기본 계약에서 `range_inclusive`(관찰만)와 `day_records:<tool>`(관찰 또는 미확인)이 확인되지 않았으므로
+  **로컬 재계산은 TIMS에서 쓰이지 않음**. 구간 선택("합계가 가장 큰 주"), bucket을 받지 않는 Tool(요금·속도·공차율)의
+  구간별 집계는 `UNVERIFIED_TIMS_CONTRACT`(unsupported). 2026-09-29 전 legacy 프로필은 `day_records`를 가정하고
+  하루 분할을 실행했음. 이 가정을 없앴음.
+* 질문이 구간 정의를 **명시**하면(`geoflow/calendar_terms.py`: "일요일부터 시작하는 주", "온전한 주만", "자료가 없는
+  주는 0으로") 의미 graph의 `group_by.calendar`와 `plan.calendar`에 남음. 위임 경로는 계약이 그 정의를 보장할 때만 쓰고,
+  아니면 로컬 경로(근거가 있을 때, 그 정의로 분할)로, 둘 다 안 되면 `CALENDAR_REQUIREMENT_UNSUPPORTED`로 멈춤. 제공자 기본값으로
+  바꾸지 않음. last_week·this_week에 주 시작 요일을 명시한 한 단계 질문도 같음. 읽지 못한 정의 표현은
+  `AMBIGUOUS_CALENDAR_REQUIREMENT`(needs_clarification), 받을 구간이 없는 정의는 `UNCONSUMED_CONDITION`.
+* `execution_plan.lowering[<변환>]`에 `path`, `requires`(의존한 계약), `semantics`(구간 정의마다 값과 출처:
+  question / provider / application / contract), `delegated`, `checks`, `not_verified`, `rejected`(쓰지 않은 경로와
+  이유)가 남음. 위임 호출의 기간 인자는 `date_semantics`에 `responsibility: provider`로 남음.
+* 답변은 계산 경로와 답을 읽는 데 필요한 한계만 적음. 위임: "TIMS가 주 구간마다 평균을 구한 뒤 그 값들의 최솟값을
+  계산했습니다. 주 시작 요일, 기간 경계에서 잘린 주, 자료가 없는 주의 처리와 상대 기간의 날짜 범위는 TIMS 기준을
+  따릅니다." 로컬: 나눈 구간, 구간 기준과 그 출처(질문 / 이 계산의 기준), 구간별 값.
+* 명시 기간이 없는 두 단계 질문은 위임 호출에서 기간 인자 없이 부름(vendor: date 생략 시 도구가 통상 기간을 자동 산출).
+  로컬 재계산은 기간이 없거나 연속 기간이 아니면 멈춤(`UNRESOLVED_PERIOD`, `UNSUPPORTED_PERIOD_FOR_GROUPING`).
+* `--tims-execution strict`는 위임을 허용하지 않음(애플리케이션 구간 정의와 같다는 계약이 있어야 호출 하나로 합침).
 
 구간 안 집계가 질문에 없으면(`bucket=week, rollup=avg`) Tool 기본값(avg)으로 채우지 않고
 `AMBIGUOUS_INNER_AGGREGATION`(`outcome=needs_clarification`)으로 되물음. 재질의로 채우지도 않음.
@@ -530,9 +546,10 @@ python assistant_cli.py --agent-mode geoflow --condition-check \
 **실행 프로필(provider별 계약).** 실행 가능한 연산과 lowering 전략은 provider의 계약이 정함
 (`geoflow/providers.py`). condition_check·구조화 grounding은 질문 해석 옵션이라 실행 계약을 바꾸지 않음.
 
-* 기본: mock + `--tims-execution legacy`. 기존 동작 그대로. 미확인 TIMS 항목(상대 토큰, 범위 양 끝,
-  구간별 하루 분할의 기록 계약)을 가정하고, 가정은 `execution_profile`·`date_semantics`·step
-  `assumptions`에 남김.
+* 기본: mock + `--tims-execution legacy`. 질문 표현을 그대로 옮긴 요청 인자(상대 토큰, 사용자가 적은 범위,
+  bucket/rollup 위임 호출)의 세부 달력 의미를 **제공자에게 위임**함(`execution_profile.delegation`,
+  `delegated_semantics`). 로컬 재계산의 근거(구간별 하루 분할의 기록 계약 `day_records`)는 2026-09-29부터
+  가정하지 않음.
 * `--tims-execution strict`: 확인된 TIMS 계약만 실행. `0f2daaa`까지의 `--condition-check`가 이 동작이었음
   (그 결과를 재현하려면 `--condition-check --tims-execution strict`).
 * `ASSISTANT_TOOL_PROVIDER=reference`: 작은 **합성 데이터**를 실제로 필터링·집계하는 reference provider
@@ -888,6 +905,7 @@ holdout 7개의 검사 능력(두 단계 집계, stage-swap, 구간 안 집계 �
 | `evaluation/v2/stub_v2_gold.yaml` | 업체 v2 stub 5문항의 기대 결과·인자 |
 | `evaluation/v2/preregistration_v2.md` | 설계 기준, 구성, 중복 점검, 실행 절차, 채점 규칙, 사용 규칙(모델 실행 전 고정) |
 | `evaluate_v2.py` | production 기본 설정으로 전체 파이프라인을 격리 실행하고 채점 |
+| `evaluation/v2/label_revisions.yaml` | 기대 결과의 정책 개정 r1(2026-09-29 위임/로컬 책임 분리). 9 intent: 로컬 재계산 근거 없음 answered→unsupported 7, 업체 bucket 위임 unsupported→answered 2. 사전 등록 파일은 그대로이며 기록에 `expected_outcome_prereg`가 남음 |
 
 문항·라벨은 Claude가 작성했고 **사람이 검토하지 않았음**(registry `review.status: unreviewed`).
 이 평가셋의 결과는 잠정치로 봐야 함.
@@ -904,6 +922,8 @@ python evaluate_v2.py analyze evaluation/v2/runs/<run_id>
 ```
 
 ### v2 실측 결과 (잠정치)
+
+아래 수치는 개정 r1 이전의 기대 결과와 코드(`962432d`)로 채점한 것임. r1 이후 같은 관측을 다시 채점하지 않았음.
 
 2026-09-29, `qwen3:8b`(digest `500a1f067a9f`, 8.2B Q4_K_M), Ollama 0.34.4, production 기본 설정(flat,
 condition_check 끔, mock + legacy, 예시 검색 끔), temperature 0, think=auto, 기준일 2026-09-25(Asia/Seoul).
@@ -934,6 +954,27 @@ development로 바뀌었음. 이 결과로 prompt·검색·조건 보정을 바�
 아래 v1 결과와 직접 비교할 수 없음: 계약(측정값 어휘, Tool 이름, scope·dimension 규칙), 질의 목록(v1 stub
 14건 + boundary 24건 vs v2 stub 5건 + holdout_v2 126문장), 채점 범위(v1은 planner·합성 단계, v2는 실행과
 답변까지), 격리 절차가 다름.
+
+### 업체 100문항 평가 (2026-09-29)
+
+업체 100문항(`assistant_univ_questions_100_v3.yaml`)과 업체 정답(`evaluation/vendor100/질문 결과 및 정답 설명_100문항.xlsx`)으로
+`evaluate_vendor100.py`가 세 층을 따로 잰다. 설계·해석: `evaluation/design/provider_delegation.md`.
+
+| 층 | 변경 전 `962432d` | 변경 후 |
+|---|---|---|
+| Mock·단위 테스트(LLM 없음) | 934 통과 | 969 통과 |
+| 정답 grounding 기반(LLM 없음, 업체 정답 호출과 Tool·인자·scope 출처·답변 값 일치) | 97/100 (43·98·100 거부) | 100/100 |
+| 명시 구간 정의 변형 7문항(정책 기대) | 0/7. 3문항은 명시 정의를 무시하고 답함(v014·v057·v063), 4문항은 다른 이유(`UNVERIFIED_TIMS_CONTRACT`)로 거부 | 7/7 |
+| 실제 LLM 전체 실행(qwen3:8b, 격리) | 65/100 | 65/100 (100이 거부 → 위임, 단 LLM 인자 오류로 불일치) |
+
+* 정답 인자는 기본값(taxi_type=all 등, aggregation=avg)과 생략을 같게 채점함(업체가 14·15·17·43에서 생략을 정상 판정).
+* xlsx와 yaml의 질문 100/100 일치, 정답 호출 schema 위반 0건. `query_loader`는 id `010`을 `"8"`로 읽음(YAML 8진수, 미수정).
+
+```bash
+python evaluate_vendor100.py extract
+python evaluate_vendor100.py gold --out evaluation/vendor100/results/gold_after.json
+python evaluate_vendor100.py llm --model qwen3:8b --out evaluation/vendor100/results/llm_after_qwen3_8b.json
+```
 
 ### 모델별 정확도
 

@@ -231,6 +231,10 @@ class GeoFlowPlan:
     #: grounding에는 있었지만 어떤 operator도 받지 못한 factor. 조용히
     #: 사라지는 조건을 실행 기록에서 확인할 수 있게 남긴다.
     unused_factors: dict[str, Any] = field(default_factory=dict)
+    #: 질문이 명시한 구간 정의(``geoflow/calendar_terms.py`` 어휘, 예: {"week_start": "sunday"}).
+    #: 비어 있으면 질문이 정하지 않은 것이다. 이때 구간 정의는 의미 graph에 고정하지 않고
+    #: 계산 경로가 정한다(제공자 정의 또는 애플리케이션 정책, ``ExecutionPlan.lowering``).
+    calendar: dict[str, Any] = field(default_factory=dict)
 
     def node(self, node_id):
         for node in self.concepts:
@@ -256,6 +260,7 @@ class GeoFlowPlan:
                 for transformation in self.transformations
             ],
             "final_node": self.final_node,
+            **({"calendar": dict(self.calendar)} if self.calendar else {}),
         }
 
 

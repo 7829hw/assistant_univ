@@ -70,6 +70,8 @@ STAGE_CODES = {
         "AMBIGUOUS_INNER_AGGREGATION", "UNSUPPORTED_AGGREGATION",
         "UNSUPPORTED_GROUPED_MEASURE", "UNSUPPORTED_AGGREGATION_COMBINATION",
         "MISSING_OUTER_AGGREGATION", "UNDEFINED_MEASURE_AGGREGATION",
+        # 질문이 명시한 구간 정의를 읽지 못함.
+        "AMBIGUOUS_CALENDAR_REQUIREMENT",
     ),
     # 의미 graph를 실행 단계로 내리지 못함(기간 해석, lowering 대조).
     "LOWERING": (
@@ -77,6 +79,8 @@ STAGE_CODES = {
         "UNSUPPORTED_BUCKET", "UNCONSUMED_GROUPS", "LOWERING_MISMATCH",
         "UNVERIFIED_TIMS_CONTRACT", "UNSUPPORTED_PARTITION_SIZE", "CONDITION_LOST",
         "DATE_EXECUTION_UNVERIFIED",
+        # 질문이 명시한 구간 정의를 보장하는 경로가 없음 / 온전한 구간이 없음.
+        "CALENDAR_REQUIREMENT_UNSUPPORTED", "NO_COMPLETE_GROUP",
     ),
     # 조건 보존 기능(geoflow/conditions.py)이 질문 원문으로 조건을 정하지 못함.
     "CONDITION_GROUNDING": (

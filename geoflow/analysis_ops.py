@@ -29,6 +29,9 @@ COMBINE_DAYS = "COMBINE_DAYS"
 
 #: 구간별 값을 담은 node의 속성 key. 값은 {"bucket": "week"} 형태다.
 GROUP_BY = "group_by"
+#: group_by 안의 key. 질문이 **명시한** 구간 정의만 담는다(예: {"week_start": "sunday"}).
+#: 없으면 질문이 정하지 않은 것이다(``geoflow/calendar_terms.py``).
+CALENDAR = "calendar"
 #: SELECT_GROUP이 만든 node의 속성. 답이 값이 아니라 구간이라는 뜻이다.
 RETURNS = "returns"
 RETURNS_GROUP = "group"

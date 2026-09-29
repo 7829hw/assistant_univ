@@ -73,6 +73,8 @@ UNSUPPORTED_CODES = frozenset({
     "DATE_EXPRESSION_UNSUPPORTED", "DATE_MULTIPLE_UNSUPPORTED",
     "TAXI_TYPE_EXPRESSION_UNSUPPORTED", "DATE_EXECUTION_UNVERIFIED",
     "UNSUPPORTED_BY_PROVIDER", "UNDEFINED_MEASURE_AGGREGATION",
+    # 질문이 명시한 구간 정의를 어느 경로도 보장하지 못함 / 온전한 구간이 없음.
+    "CALENDAR_REQUIREMENT_UNSUPPORTED", "NO_COMPLETE_GROUP",
     # Tool schema가 받지 않는 param 값·input 조합(v2 get_billing_metrics의 scope·dimension).
     "PARAM_VALUE_REQUIRES_INPUT", "PARAM_VALUE_FORBIDS_INPUT",
 })
@@ -438,7 +440,7 @@ class GeoFlowPipeline:
         run.execution_profile = profile.to_dict()
         execution_plan = compile_plan(
             plan, reference_date=self.clock(), contract=profile.contract,
-            date_policy=profile.date_policy,
+            date_policy=profile.date_policy, delegation=profile.delegation,
         )
         run.execution_plan = execution_plan.to_dict()
         run.condition_trace = conditions.trace(

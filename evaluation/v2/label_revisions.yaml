@@ -1,0 +1,70 @@
+# evaluation/v2/label_revisions.yaml
+#
+# holdout_v2 기대 결과(expected_outcome)의 정책 개정. 사전 등록 파일
+# (paraphrases_holdout_v2.yaml, preregistration_v2.md)은 바꾸지 않는다. 채점기
+# (evaluate_v2.load_items)가 이 개정을 적용하고, 관측 기록에 사전 등록 값을
+# expected_outcome_prereg로 함께 남긴다.
+#
+# 개정은 질문의 뜻(aggregation, expected_tool_args, 라벨)을 바꾸지 않는다. 바뀐 것은
+# "현재 계약으로 실행해야 하는가"라는 정책 판단뿐이다.
+#
+# r1 (2026-09-29, 업체 위임/로컬 재계산 책임 분리)
+# - 업체 Tool이 bucket/aggregation/rollup으로 질문의 두 단계 집계를 온전히 표현하면,
+#   질문이 정하지 않은 구간 정의(주 시작일·부분 구간·빈 구간·상대 날짜 기준)는 제공자에게
+#   맡기고 호출한다. 로컬로 다시 만들 수 없다는 이유로 막지 않는다(→ answered).
+# - GeoFlow가 기간을 나눠 다시 계산하는 경로는 분해 전후 동등성의 근거가 계약에 있어야
+#   한다. bucket을 받지 않는 Tool(trip·drive·passage)의 하루 단위 분할은 "기록이 하루
+#   하나에만 속한다"(tims_contract day_records:<tool>)가 UNKNOWN이므로 쓰지 않는다
+#   (→ unsupported). 사전 등록 당시 legacy 프로필은 이 항목을 가정했다.
+# 근거: geoflow/tims_contract.py FUSED_BUCKET_ROLLUP, DAILY_PARTITION, strategy_requires;
+#       evaluation/design/provider_delegation.md
+
+revision: r1
+date: "2026-09-29"
+base: evaluation/v2/paraphrases_holdout_v2.yaml
+intents:
+  w01_last_month_week_sum_then_avg_fare:
+    prereg: answered
+    expected_outcome: unsupported
+    cause: local_recomputation_without_evidence
+    contract: "day_records:get_trip_metrics (UNKNOWN), get_trip_metrics는 bucket 없음"
+  w02_last_month_week_min_then_avg_fare:
+    prereg: answered
+    expected_outcome: unsupported
+    cause: local_recomputation_without_evidence
+    contract: "day_records:get_trip_metrics (UNKNOWN), get_trip_metrics는 bucket 없음"
+  w11_jul_aug_month_sum_then_max_fare:
+    prereg: answered
+    expected_outcome: unsupported
+    cause: local_recomputation_without_evidence
+    contract: "day_records:get_trip_metrics (UNKNOWN), get_trip_metrics는 bucket 없음"
+  w15_jul_aug_month_sum_then_avg_fare_final_first:
+    prereg: answered
+    expected_outcome: unsupported
+    cause: local_recomputation_without_evidence
+    contract: "day_records:get_trip_metrics (UNKNOWN), get_trip_metrics는 bucket 없음"
+  w41_this_month_week_sum_then_max_fare:
+    prereg: answered
+    expected_outcome: unsupported
+    cause: local_recomputation_without_evidence
+    contract: "day_records:get_trip_metrics (UNKNOWN), get_trip_metrics는 bucket 없음"
+  w13_last_month_week_min_then_avg_vacant:
+    prereg: answered
+    expected_outcome: unsupported
+    cause: local_recomputation_without_evidence
+    contract: "day_records:get_drive_metrics (UNKNOWN), get_drive_metrics는 bucket 없음"
+  w42_last_month_dongdaegu_week_max_then_avg_speed:
+    prereg: answered
+    expected_outcome: unsupported
+    cause: local_recomputation_without_evidence
+    contract: "day_records:get_passage_metrics (UNKNOWN), get_passage_metrics는 bucket 없음"
+  w06_jul_aug_month_avg_then_min_days:
+    prereg: unsupported
+    expected_outcome: answered
+    cause: provider_delegation
+    contract: "get_billing_metrics bucket=month, aggregation=avg, rollup=min (inner_is_aggregation, rollup_unweighted CONFIRMED)"
+  w32_last_month_week_max_then_avg_ratio:
+    prereg: unsupported
+    expected_outcome: answered
+    cause: provider_delegation
+    contract: "get_billing_metrics bucket=week, aggregation=max, rollup=avg (inner_is_aggregation, rollup_unweighted CONFIRMED)"
