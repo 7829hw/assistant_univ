@@ -49,3 +49,10 @@ gold 라벨의 오류는 LLM 실행 전에만 고친다: 정답 grounding 실행
 - `holdout_questions.yaml` sha256 `fac171e6c97ef20aee9a824a1c20217825266970e81b7abdb66b090ee91456d7` (이 문서와 함께 커밋, LLM 실행 전).
 - LLM 실행 전 라벨 점검(정답 grounding, 기준 코드): match 41, 기대한 거부 2(g17 UNCONSUMED_CONDITION,
   g44 AMBIGUOUS_INNER_AGGREGATION), 정답 grounding 없음 1(g32, flat 표현 불가). 고친 라벨 없음.
+
+## 실행 기록 (2026-09-29)
+
+- B0 독립셋 실행 1회(`runs/b0_holdout_qwen3_8b.json`, 코드 `a0d7b18`).
+- 첫 최종 후보(C3c)는 개발셋에서 규칙 2를 어겨(B0 성공 5개 회귀) 독립셋 실행 전에 멈췄다. 독립셋은 이 후보로 실행하지 않았다.
+- 최종 후보(C3d, `d090e3c`) 독립셋 실행 1회(`runs/final_holdout_qwen3_8b.json`). 규칙 1~5 충족(analysis.md 5.4).
+- 독립셋은 결과를 열람했으므로 **이제 development**다. 이 결과를 근거로 한 이후 변경의 평가에는 새 독립셋이 필요하다.

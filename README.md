@@ -976,6 +976,32 @@ python evaluate_vendor100.py gold --out evaluation/vendor100/results/gold_after.
 python evaluate_vendor100.py llm --model qwen3:8b --out evaluation/vendor100/results/llm_after_qwen3_8b.json
 ```
 
+### 질문 해석 개선 grounding_v1 (2026-09-29)
+
+실제 LLM 실행의 실패 35문항을 원 출력으로 분석하고(의미 오해 28, 형식 위반 4, 둘 다 2, 형식+채점 1) 일반 규칙으로 고쳤다.
+설계·분석·결과: `evaluation/grounding_v1/analysis.md`, 사전 등록: `evaluation/grounding_v1/preregistration.md`.
+
+* 조건 계층(`geoflow/conditions.py`)을 CLI 기본으로 켬: 날짜·택시 유형에 더해 운행 상태(실차·공차·대기영업), 단일 최상급의 limit=1,
+  실차 구간의 승하차 기준을 질문 원문에서 읽는다(빈 값만 채움, 근거 없는 값만 제거, 감사 기록). 측정값 말이 LLM 측정값과 어긋나면
+  확인 요청. `--no-condition-check`로 끔, 답변의 감사 문구는 `--condition-check`일 때만.
+* grounding 자리 바로잡기(`normalize_place_concepts`, `hoist_condition_concepts`): 빈 name의 region 이동, 단위 말·"전국" 제외,
+  OBJECT/private 등 조건 개념을 factor로. 값을 만들지 않고 `normalizations`에 기록.
+* prompt: 두 단계 집계를 집계어 자리로 정하는 규칙, 통행량과 운행 상태 구분(sha256 앞 8자리 db113124 → 238ac8d6). prompt A/B 고정 변형은
+  `evaluation/prompt_ab/pinned/v2_db113124`에서 만든다.
+* `query_loader`가 YAML id를 원문 문자열로 읽는다(`010`이 `"8"`이 되던 문제).
+
+| qwen3:8b 격리 실측 | B0 `a0d7b18` | 최종 `d090e3c` |
+|---|---|---|
+| 업체 100문항(개발셋) match / 잘못된 답 / 거부 / 실패 | 65 / 14 / 3 / 18 | 93 / 2 / 2 / 3 |
+| 업체 100문항 LLM grounding 정확 | 63 | 90 |
+| 독립셋 44 match+기대한 거부 / 잘못된 답 / 실패 | 22 / 7 / 10 | 36 / 4 / 1 |
+| 독립셋 LLM grounding 정확 | 22/43 | 35/43 |
+| LLM 호출(개발셋, 계획+재질의) / 지연 중앙값 | 122 / 12.3초 | 113 / 12.4초 |
+
+업체 100문항은 개선에 쓴 셋이므로 그 수치는 일반화 성능이 아니다. 독립셋은 Claude가 만든 44문항(미검토)이며 이번 열람으로
+development가 되었다. 정답 grounding 기반 실행은 양쪽 모두 100/100, 41+2/43로 같다(차이는 모두 grounding에서 옴).
+`evaluate_v2.py`는 사전 등록한 설정(condition_check 끔)을 그대로 쓴다.
+
 ### 모델별 정확도
 
 아래부터 이 절 끝까지의 측정 결과는 업체 v2 반영 전(v1 계약, v1 stub 14건,

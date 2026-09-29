@@ -1,7 +1,7 @@
 # 실제 LLM 질문 해석 개선 (grounding_v1)
 
 상태: 구현·검증 완료(2026-09-29). 기준 B0 = `a0d7b18`(위임·로컬 책임 분리 `e828ba9` + query_loader id 수정
-`cfd1bd0` + 평가기 기록 보강). 최종 = `9650d29`(`b841406` + 평가기 인자 호환).
+`cfd1bd0` + 평가기 기록 보강). 최종 = `d090e3c`(측정 코드, 실측 commit `1cb307d`는 CLAUDE.md만 추가).
 사전 등록: `preregistration.md`. 개발·회귀셋 = 업체 100문항, 독립셋 = `holdout_questions.yaml`(44).
 
 ## 0. 평가의 신뢰성 (선행 작업)
@@ -128,3 +128,117 @@ LLM은 개념·조건만 적고, macro 합성·Tool 선택·컴파일·실행은
 부수 변경: prompt A/B 고정 변형(D_PRE·T0 등)은 production prompt에서 파생되던 것을 v2 원천(`evaluation/prompt_ab/pinned/
 v2_db113124`)에서 만들도록 바꿔 같은 이름이 같은 계약(db113124)을 가리킨다. 측정용 planner는 이전 grounding 계약
 (normalize 끔)을 쓴다. production prompt sha256 앞 8자리: db113124 → 238ac8d6.
+
+### C3c 전체 실측과 추가 보강(C3d)
+
+C3c 구성의 개발셋 격리 실측(`runs/final_dev_qwen3_8b.json`)은 90 match였지만 B0 성공 5개가 회귀해 사전 등록 규칙 2(≤2)를
+어겼다. 그래서 독립셋 실행을 멈추고(예정된 실행을 시작 전에 중단) 원 출력을 봤다. 모두 prompt 변경 뒤 새로 나온 형태였다.
+
+| 문항 | 원 출력 | 처리 |
+|---|---|---|
+| 063 | subtype 없는 OBJECT(value private), 같은 taxi_type factor가 이미 있음 | 되풀이된 개념 제거(값이 같을 때만) |
+| 066 | dimension 없이 dimension_target만, 질문에 그룹 표현 없음 | 근거 없는 값 제거(조건 계층) |
+| 089 | `{"holiday": true}`(날짜 토큰을 factor 이름으로), date 없음 | date로 옮김(다른 date가 있으면 거부 유지) |
+| 064 | "RPM 중간값"을 speed로 | 고치지 않음. 질문의 측정값 말 한 계열과 어긋나면 확인 요청(`MEASURE_EXPRESSION_CONFLICT`). 개발셋 98/100 판정 가능, 잘못된 충돌 0 |
+| 006 | `dimension: "both"` + `dimension_target: pickup` | 되돌릴 방법이 하나로 정해지지 않아 거부 유지 |
+
+C3d(= C3c + 위 4개, `d090e3c`)를 C3c 원 출력으로 재생했을 때 regressions는 006·064와 재질의 변동 1건(044: 같은 계획, 비격리 재질의가
+다른 개념 id를 고름)이었다. 그 뒤 C3d를 격리 실측했다.
+
+## 5. 최종 결과 (같은 기준: qwen3:8b, temperature 0, think=auto, 질문마다 unload, 기준일 2026-09-25, mock + legacy, 같은 채점기)
+
+### 5.1 정답 grounding 기반 실행 정확도 (LLM 없음)
+
+| | B0 | 최종 |
+|---|---|---|
+| 개발셋 100 | 100/100 | 100/100 |
+| 독립셋 44 | match 41 + 기대한 거부 2 (g32 제외) | 같음 |
+
+grounding 이후(합성·컴파일·실행·답변) 경로는 두 코드에서 같은 정답을 낸다. 아래 차이는 모두 grounding에서 온다.
+
+### 5.2 실제 LLM 실행 (개발셋 = 업체 100문항, 개선에 사용한 셋)
+
+| | B0 `a0d7b18` | 최종 `d090e3c` |
+|---|---|---|
+| LLM grounding 정확(최종 grounding = 정답 grounding) | 63/100 | 90/100 |
+| Tool·인자·scope 출처·답변 값 모두 일치(match) | 65 | **93** |
+| 잘못된 답변(answered_mismatch) | 14 | 2 (041, 067: 하차 기준인데 출발 장소로) |
+| 거부 | 3 (unsupported) | 2 (확인 요청: 064 측정값 충돌, 095 장소 'Daegu') |
+| 실행 실패 | 18 | 3 (006, 078, 093) |
+| LLM 호출(계획 + 재질의) | 100 + 22 | 100 + 13 |
+| 관측 지연 중앙값 / p90 | 12.3초 / 25.0초 | 12.4초 / 20.9초 |
+
+- B0 성공 65개 중 회귀 2개: 006(prompt 변경 뒤 dimension에 both를 적음, 실패), 064(측정값 충돌로 확인 요청. 이 가드가 없으면 잘못된 답).
+  사전 등록 규칙 1~3 충족.
+- 합계 지연은 비교하지 않는다. 양쪽에 chat timeout(300초) 근처의 외부 지연이 2~3건 섞였다(044·030 / 044·041·100).
+- 43·98·100은 모두 업체 정답 호출과 같다. 원 출력부터의 변화는 다음과 같다.
+  - 43: 모델이 두 단계를 `bucket=week, aggregation=avg, rollup=min`으로 바로 적음(prompt 두 단계 규칙). "이번 달"은 빠졌고 조건 계층이
+    this_month로 채움. 택시 유형은 `OBJECT/taxi_type=corporate`로 적혀 factor로 옮김.
+  - 98: 장소 `{"name": "대구"}`, `aggregation=avg, rollup=med`를 바로 적음. "개인택시"는 빠졌고 조건 계층이 채움.
+  - 100: `aggregation=sum, rollup=max, taxi_type=corporate`를 바로 적음.
+
+**개발셋 결과는 이 셋으로 원인을 찾고 후보를 고른 결과이므로 일반화 성능이 아니다.**
+
+### 5.3 독립셋 (44문항, 후보 선택에 쓰지 않음, B0와 최종에서 각 1회)
+
+| | B0 `a0d7b18` | 최종 `d090e3c` |
+|---|---|---|
+| LLM grounding 정확 | 22/43 | 35/43 |
+| match + 기대한 거부 | 22 (21 + 1) | **36** (35 + 1) |
+| 잘못된 답변 | 7 | 4 |
+| 답하지 말아야 할 문항에 답함 | 2 (g32, g44) | 2 (g32, g44) |
+| 다른 종류로 거부 | 3 | 1 (g04 NO_OPERATOR) |
+| 실행 실패 | 10 | 1 (g14) |
+| LLM 호출(계획 + 재질의) | 44 + 6 | 44 + 6 |
+| 관측 지연 중앙값 / p90 | 12.1초 / 22.7초 | 12.0초 / 18.3초 |
+
+- B0에서 맞던 문항의 회귀 0. 새로 맞은 14와 B0에서의 원인(기록 대조):
+  - 겨냥한 원인이 고쳐진 것(8): 운행 상태 누락·오류(g01 + 택시 유형 누락, g03, g34), "실차 통행량"을 trip_count로(g02: prompt 통행량
+    규칙 + 조건 계층의 운행 상태), 그룹 단위를 장소로(g15: 단위 말 제거 기록), 두 단계에서 구간 안 집계 누락(g27·g30·g42, B0는
+    AMBIGUOUS_INNER_AGGREGATION으로 멈춤, prompt 두 단계 규칙).
+  - 겨냥하지 않았고 prompt 변경 뒤 모델 출력이 달라져 맞은 것(6): g24(time 자리에 this_year), g28(dimension에 month), g29("개인택시"를
+    장소로), g31(TIME 개념), g35(od_role을 factor 이름으로), g38(지어낸 region "부산"). 최종 원 출력에서 해당 형태가 사라졌고 어떤 규칙도
+    작동하지 않았다. 이 여섯은 개선 효과로 세지 않는다(같은 종류의 변동이 개발셋 006에서는 반대 방향으로 나타났다). 43·98·100 유형의 표현 변경(g41·g42·g43)과 새 조건 조합(g01 수영구+공차+개인, g03 달서구+휴일+
+  대기영업+법인, g28 서울+월별+평균→최솟값, g30 주별 최대 활성택시 대수→중간값)에서 맞았다.
+- 남은 실패(최종): g11(도착 장소를 출발로), g16·g40("하위"를 top으로), g33(시도별 "총 수입"에서 sum 누락), g14("대구 안에서" 관계),
+  g04(그룹 질문 구성 실패), g32(구간을 묻는 질문에 값으로 답함 — flat grounding이 구간 선택을 표현하지 못함), g44(구간 안 집계를 지어냄).
+- 이 셋은 이 결과를 열람했으므로 이제 development다. 이 결과로 규칙을 고치면 새 독립셋이 필요하다.
+
+### 5.4 판정 (사전 등록 규칙)
+
+1 개발셋 match 65 → 93 ✔ · 2 회귀 2개(006·064, 원인 설명) ✔ · 3 잘못된 답변 14 → 2 ✔ · 4 독립셋 22 → 36 ✔ ·
+5 추가 모델 호출 없음(재질의는 22 → 13으로 줄었다). **채택.**
+
+## 6. 남은 문제
+
+- 출발·도착 역할(041·067·g11): "부산에서 하차가 많은 읍면동"처럼 장소 조사(에서)와 기준(하차)이 어긋나는 표현. 규칙으로 정하면 "수성구에서
+  출발한 … 도착 읍면동"(q16)과 구분할 수 없어 두었다.
+- 순위 방향(g16·g40 "하위"→top): 조건 계층은 빈 값만 채우고 LLM 값을 바꾸지 않는다. 방향 대조를 넣을지는 새 개발 근거가 필요하다.
+- 구간 선택 질문(g32)과 구간 안 집계 미지정(g44)은 여전히 답한다. flat grounding의 표현 한계와 모델의 집계 지어내기다(이전 평가에서도
+  같은 결과, structured grounding 기록 참고).
+- 한 지역 안의 OD("대구 안에서", 093·g14), 값 없는 장소(078).
+- prompt 변경은 관련 없는 문항에도 출력 변동을 만든다(006·064). 실측 전체 run 없이 prompt를 바꾸지 않는다.
+- 답변에 사용자 scope 문자열("scope:district:…")과 HHMMSS가 그대로 나온다(기존 답변 형식, 이번 범위 밖).
+
+## 7. 재현
+
+```bash
+PY=python   # requirements.txt + openpyxl
+$PY -m unittest discover -s tests -t .
+# 기준(B0)
+git worktree add --detach /tmp/b0 a0d7b18
+$PY evaluate_vendor100.py --code-root /tmp/b0 llm --model qwen3:8b --out runs/b0_dev.json
+$PY evaluate_vendor100.py --code-root /tmp/b0 --gold evaluation/grounding_v1/holdout_questions.yaml llm --model qwen3:8b --out runs/b0_holdout.json
+# 최종(production CLI 기본과 같은 조건 계층 켬, 감사 문구 없음)
+$PY evaluate_vendor100.py llm --model qwen3:8b --condition-check --out runs/final_dev.json
+$PY evaluate_vendor100.py --gold evaluation/grounding_v1/holdout_questions.yaml llm --model qwen3:8b --condition-check --out runs/final_holdout.json
+# 정답 grounding 층(LLM 없음)
+$PY evaluate_vendor100.py gold --out runs/dev_gold.json
+$PY evaluate_vendor100.py --gold evaluation/grounding_v1/holdout_questions.yaml gold --out runs/holdout_gold.json
+# 코드 후보를 기록된 계획 응답으로 재생(prompt hash가 같을 때만, 재질의는 실제 호출·비격리)
+$PY evaluate_vendor100.py llm --model qwen3:8b --condition-check --replay-from evaluation/grounding_v1/runs/b0_qwen3_8b.json --out runs/replay.json
+```
+
+기록: `evaluation/grounding_v1/runs/`(B0 `b0_*`, 재생 `replay_*`, prompt 후보 `c3*_subset_live*`, 최종 `final2_dev_qwen3_8b.*`,
+`final_holdout_qwen3_8b.*`. `final_dev_qwen3_8b.*`는 규칙 2를 어긴 C3c 실측). B0 개발셋 meta의 `code_dirty`는 run이 끝날 때 기록되어 실행
+중에 고친 작업 트리를 가리킨다. 실행 코드는 시작 시 읽은 `a0d7b18`이며, grounding 100개가 이전 두 run과 같았다.
