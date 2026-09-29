@@ -13,6 +13,8 @@
 - ``llm``(실제 LLM 포함 전체 실행): production 기본 설정(flat, condition_check 끔, mock + legacy,
   예시 검색 끔)으로 Ollama planner부터 끝까지 돌린다. 관측마다 모델을 내린다.
 - ``compare``: 두 결과(변경 전·후)를 문항별로 비교한다.
+- ``report``: 두 결과를 같은 최종 채점기로 다시 채점해 결과 분류(정상 답변·오답·정당한 거부·부당한 거부·
+  실행 실패·미실행)와 분모·합계, grounding 정확도의 포함·제외, 호출·지연·timeout·재시도를 표로 낸다.
 
 ``--code-root DIR``을 주면 그 디렉터리(예: 변경 전 커밋의 git worktree)의 geoflow 코드로 실행한다.
 평가 규칙과 gold는 이 파일의 것을 쓴다.
@@ -38,6 +40,13 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 HERE = Path(__file__).resolve().parent
+
+#: 채점 규칙의 판. 바꾸면 이전 결과를 ``rescore``/``report``로 다시 채점하고 변경 이력에 적는다.
+#: - v1(2026-09-29 grounding_v1 사전 등록): Tool·인자·장소 조회 집합·단일 분석 호출·답변 값.
+#: - v2(2026-09-29 grounding_v2): v1 + 장소 조회 **횟수**가 정답과 같아야 한다. 같은 장소를 두 번
+#:   조회하면 v1은 집합 비교라 맞음으로 셌다(업체 정답 093·095는 한 번 조회한 scope를 출발·도착에
+#:   함께 쓴다). 조건을 완화한 것이 아니라 더한 것이다.
+SCORER_VERSION = "v2"
 
 
 def _code_root(argv):
@@ -287,7 +296,15 @@ class _RecordingClient:
     def chat(self, messages, tools=None, **kwargs):
         import time
         started = time.perf_counter()
-        response = self.client.chat(messages, tools=tools, **kwargs)
+        try:
+            response = self.client.chat(messages, tools=tools, **kwargs)
+        except Exception as error:
+            # timeout 등으로 실패한 호출도 센다. planner가 다시 부르면 다음 호출로 따로 남는다.
+            self.calls.append({
+                "kind": "plan" if len(messages) <= 2 else "repair", "failed": True,
+                "error": f"{type(error).__name__}: {error}"[:300],
+                "duration_ms": round((time.perf_counter() - started) * 1000, 1)})
+            raise
         message = (response or {}).get("message") or {}
         self.calls.append({
             "kind": "plan" if len(messages) <= 2 else "repair",
@@ -383,6 +400,8 @@ def run_item(pipeline, question):
                   for hop in run.hop_log if hop.get("phase") == "tool"],
         "final_answer": run.final_answer,
         "grounding": record.get("grounding"),
+        # 조건 계층이 모델 출력에서 바꾼 것(근거 표현·전후 값·이유). 보정 전후 grounding 차이의 기록이다.
+        "condition_corrections": (record.get("condition_audit") or {}).get("corrections"),
         "lowering": (record.get("execution_plan") or {}).get("lowering") or {},
         "date_semantics": (record.get("execution_plan") or {}).get("date_semantics") or {},
         "plan_calendar": (record.get("plan") or {}).get("calendar"),
@@ -442,6 +461,7 @@ def score(item, observed):
     checks["place_lookups_ok"] = ({_place_key(c["args"]) for c in places}
                                   == {_place_key(c["args"]) for c in gold_places})
     checks["duplicate_place_lookups"] = len(places) - len({_place_key(c["args"]) for c in places})
+    checks["place_lookup_count_ok"] = len(places) == len(gold_places)
     checks["single_analysis_call"] = len(analysis) == 1
     final = analysis[-1] if analysis else {"tool": None, "args": {}}
     checks["tool_ok"] = final["tool"] == gold_final["tool"]
@@ -467,9 +487,32 @@ def score(item, observed):
                                 if want.get(key) != got.get(key)]
     checks["args_ok"] = not checks["arg_mismatches"]
     checks["answer_value_ok"] = _answer_has_value(observed["final_answer"], final.get("result"))
-    ok = all(checks[key] for key in ("place_lookups_ok", "tool_ok", "args_ok",
-                                     "single_analysis_call", "answer_value_ok"))
+    ok = all(checks[key] for key in ("place_lookups_ok", "place_lookup_count_ok", "tool_ok",
+                                     "args_ok", "single_analysis_call", "answer_value_ok"))
     return ("match" if ok else "answered_mismatch"), checks
+
+
+#: 채점 범주 → 보고용 결과 분류. 모든 범주가 정확히 하나로 간다(합계가 분모와 같다).
+RESULT_CLASSES = ("정상 답변", "오답", "정당한 거부", "부당한 거부", "실행 실패", "미실행")
+_CLASS_OF = {
+    "match": "정상 답변",
+    "answered_mismatch": "오답",                 # 답했지만 Tool·인자·답변 값이 정답과 다름
+    "answered_instead_of_refusal": "오답",       # 답하지 말아야 할 문항에 답함
+    "expected_refusal": "정당한 거부",            # 기대한 결과 종류로 멈춤
+    "refused_unsupported": "부당한 거부",         # 답해야 할 문항을 지원 안 함으로 멈춤
+    "refused_clarification": "부당한 거부",       # 답해야 할 문항을 확인 요청으로 멈춤
+    "wrong_refusal_kind": "부당한 거부",          # 멈춰야 할 문항이지만 다른 종류로 멈춤
+    "failed": "실행 실패",                        # 오류로 끝남(계획·합성·조회 실패 등)
+    "no_gold_grounding": "미실행",                # 정답 grounding 층에서 표현할 수 없어 실행하지 않음
+}
+
+
+def result_class(row):
+    """행 하나의 보고용 결과 분류. 기대가 거부인 문항이 실행 실패로 끝나면 실행 실패로 센다."""
+    if row["category"] == "wrong_refusal_kind" and row.get("outcome") not in (
+            "unsupported", "needs_clarification"):
+        return "실행 실패"
+    return _CLASS_OF[row["category"]]
 
 
 def _number_texts(value):
@@ -571,6 +614,7 @@ def _summary(rows):
         extra["llm_calls"] = {"total": sum(len(c) for c in calls),
                               "plan": sum(1 for c in calls for x in c if x["kind"] == "plan"),
                               "repair": sum(1 for c in calls for x in c if x["kind"] == "repair"),
+                              "failed": sum(1 for c in calls for x in c if x.get("failed")),
                               "llm_ms_total": round(sum(x["duration_ms"] for c in calls for x in c))}
     if latency:
         extra["total_ms"] = {"median": latency[len(latency) // 2], "sum": round(sum(latency))}
@@ -706,6 +750,7 @@ def cmd_llm(args):
             if item["id"] in done:
                 continue
             replay = _ReplayClient(client, cache) if cache is not None else None
+            item_started = datetime.now(ZoneInfo("Asia/Seoul"))
             if replay is None or (prompt_sha, item["question"]) not in cache:
                 state = reset.reset()
             else:
@@ -732,7 +777,12 @@ def cmd_llm(args):
                    "vendor_verdict": item["vendor_verdict"], "category": category,
                    "checks": checks, "reset_ok": state.succeeded,
                    "grounding_ok": grounding_ok, "grounding_diffs": grounding_diffs,
-                   "llm_calls": recorder.calls, **observed}
+                   "llm_calls": recorder.calls,
+                   # 모델 unload(격리)와 실행을 포함한 문항 경과 시간. 전체 경과 시간은 첫 started_at부터
+                   # 마지막 finished_at까지다(이어 실행하면 사이의 빈 시간이 포함되므로 따로 적는다).
+                   "started_at": item_started.isoformat(),
+                   "finished_at": datetime.now(ZoneInfo("Asia/Seoul")).isoformat(),
+                   **observed}
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
             handle.flush()
             done[item["id"]] = row
@@ -749,7 +799,10 @@ def cmd_llm(args):
                                                  "normalize_grounding": not args.no_normalize,
                                                  "provider": "mock", "tims_execution": "legacy",
                                                  "temperature": 0, "think": "auto",
-                                                 "isolation": "unload_per_question"}}),
+                                                 "isolation": "unload_per_question"},
+                                    "chat_timeout_s": args.chat_timeout,
+                                    "finished_at": datetime.now(ZoneInfo("Asia/Seoul")).isoformat(),
+                                    "scorer_version": SCORER_VERSION}),
               "summary": _summary(rows), "rows": rows}
     _write(args.out, result)
     _print_summary(result)
@@ -826,6 +879,153 @@ def cmd_compare(args):
     return 0
 
 
+def _rescored(path):
+    """저장된 결과를 현재(최종) 채점기로 메모리에서 다시 채점한다. 파일은 바꾸지 않는다."""
+    result = json.loads(Path(path).read_text(encoding="utf-8"))
+    gold = {item["id"]: item for item in load_gold(
+        HERE / result["meta"]["gold_file"] if result["meta"].get("gold_file") else None)["items"]}
+    for row in result["rows"]:
+        item = gold[row["id"]]
+        row["expected_outcome"] = item.get("expected_outcome", "answered")
+        if row["category"] != "no_gold_grounding":
+            row["category"], row["checks"] = score(item, row)
+        if result["meta"].get("kind") in ("llm", "llm_replay"):
+            row["grounding_ok"], row["grounding_diffs"] = grounding_check(item, row.get("grounding"))
+        row["result_class"] = result_class(row)
+    return result
+
+
+def _percentile(values, fraction):
+    """최근접 순위 백분위수(보간 없음). 값이 없으면 None."""
+    if not values:
+        return None
+    ordered = sorted(values)
+    import math
+    return ordered[max(0, math.ceil(fraction * len(ordered)) - 1)]
+
+
+def run_statistics(result):
+    """호출·지연·timeout·재시도. 긴 지연을 빼지 않는다. 기록이 없는 항목은 None."""
+    rows = result["rows"]
+    timeout_ms = float(result["meta"].get("chat_timeout_s") or 300.0) * 1000
+    totals = [(row.get("planner_trace") or {}).get("durations", {}).get("total_ms")
+              for row in rows]
+    totals = [value for value in totals if value is not None]
+    calls = [call for row in rows for call in row.get("llm_calls") or []]
+    hidden = []
+    for row in rows:
+        total = (row.get("planner_trace") or {}).get("durations", {}).get("total_ms") or 0
+        recorded = sum(call["duration_ms"] for call in row.get("llm_calls") or [])
+        if not any(call.get("failed") for call in row.get("llm_calls") or []) \
+                and total - recorded >= 0.9 * timeout_ms:
+            # 실패한 호출을 기록하지 않던 평가기(v1)의 run. 기록된 호출 시간과 전체 시간의 차이가
+            # timeout에 가까우면 timeout 뒤 재시도가 있었다고 본다(추정, 개수 = 차이 / timeout).
+            hidden.append({"id": row["id"], "gap_s": round((total - recorded) / 1000, 1),
+                           "estimated_timeouts": int((total - recorded) // (0.9 * timeout_ms))})
+    started = [row["started_at"] for row in rows if row.get("started_at")]
+    finished = [row["finished_at"] for row in rows if row.get("finished_at")]
+    wall = None
+    if started and finished and len(started) == len(rows):
+        wall = round((datetime.fromisoformat(max(finished))
+                      - datetime.fromisoformat(min(started))).total_seconds(), 1)
+    return {
+        "items": len(rows),
+        "plan_calls": sum(1 for call in calls if call["kind"] == "plan" and not call.get("failed")),
+        "repair_calls": sum(1 for call in calls
+                            if call["kind"] == "repair" and not call.get("failed")),
+        "failed_calls_recorded": sum(1 for call in calls if call.get("failed")),
+        "timeouts_inferred": sum(item["estimated_timeouts"] for item in hidden),
+        "timeout_rows_inferred": hidden,
+        "rows_with_repair": sum(1 for row in rows if any(
+            call["kind"] == "repair" for call in row.get("llm_calls") or [])),
+        "latency_s": {
+            "median": round(_percentile(totals, 0.5) / 1000, 1) if totals else None,
+            "p90": round(_percentile(totals, 0.9) / 1000, 1) if totals else None,
+            "max": round(max(totals) / 1000, 1) if totals else None,
+            "sum": round(sum(totals) / 1000, 1) if totals else None,
+        },
+        "wall_clock_s": wall,
+    }
+
+
+def cmd_report(args):
+    """변경 전후 결과를 같은 최종 채점기로 다시 채점해 분모·합계가 맞는 보고서를 쓴다."""
+    lines = [f"# 결과 보고 (채점기 {SCORER_VERSION}, `evaluate_vendor100.py report`)", ""]
+    correct = {"정상 답변", "정당한 거부"}
+    for name, before_path, after_path in args.pair:
+        before, after = _rescored(before_path), _rescored(after_path)
+        old = {row["id"]: row for row in before["rows"]}
+        new = {row["id"]: row for row in after["rows"]}
+        if set(old) != set(new):
+            raise SystemExit(f"{name}: 두 결과의 문항 id가 다릅니다")
+        lines += [f"## {name}", "",
+                  f"- 전: `{before_path}` (코드 `{before['meta'].get('code_commit', '')[:10]}`)",
+                  f"- 후: `{after_path}` (코드 `{after['meta'].get('code_commit', '')[:10]}`)", "",
+                  "| 결과 분류 | 전 | 후 |", "|---|---|---|"]
+        for label in RESULT_CLASSES:
+            lines.append(f"| {label} | {sum(1 for r in old.values() if r['result_class'] == label)}"
+                         f" | {sum(1 for r in new.values() if r['result_class'] == label)} |")
+        for rows in (old, new):
+            assert sum(1 for r in rows.values() if r["result_class"] in RESULT_CLASSES) == len(rows)
+        lines.append(f"| **합계(분모)** | {len(old)} | {len(new)} |")
+        lines.append("")
+        for label, result in (("전", before), ("후", after)):
+            judged = [r for r in result["rows"] if r.get("grounding_ok") is not None]
+            excluded = [r["id"] for r in result["rows"] if r.get("grounding_ok") is None]
+            if result["meta"].get("kind") in ("llm", "llm_replay"):
+                lines.append(f"- LLM grounding 정확({label}): {sum(1 for r in judged if r['grounding_ok'])}"
+                             f"/{len(judged)}" + (f" — 제외 {', '.join(excluded)}(정답 grounding 없음)"
+                                                  if excluded else ""))
+        lines.append("")
+        for label, result in (("전", before), ("후", after)):
+            if result["meta"].get("kind") != "llm":
+                continue
+            stats = run_statistics(result)
+            latency = stats["latency_s"]
+            lines.append(
+                f"- 호출·지연({label}): 계획 {stats['plan_calls']}, 재질의 {stats['repair_calls']}"
+                f"(재질의한 문항 {stats['rows_with_repair']}), 실패 호출 기록 {stats['failed_calls_recorded']}, "
+                f"timeout 추정 {stats['timeouts_inferred']}"
+                + (f"({', '.join(i['id'] for i in stats['timeout_rows_inferred'])})"
+                   if stats["timeout_rows_inferred"] else "")
+                + f"; 문항 지연 중앙값 {latency['median']}초, p90 {latency['p90']}초, 최대 {latency['max']}초, "
+                f"합계 {latency['sum']}초; 전체 경과 "
+                + (f"{stats['wall_clock_s']}초" if stats["wall_clock_s"] is not None
+                   else "기록 없음(평가기 v1)"))
+        lines += ["", "| 전→후 | 문항 |", "|---|---|"]
+        moves = {}
+        for key in old:
+            moves.setdefault((old[key]["result_class"], new[key]["result_class"]), []).append(key)
+        fixed = sorted(k for k in old if old[k]["result_class"] not in correct
+                       and new[k]["result_class"] in correct)
+        regressed = sorted(k for k in old if old[k]["result_class"] in correct
+                           and new[k]["result_class"] not in correct)
+        for (a, b), keys in sorted(moves.items()):
+            if a != b:
+                lines.append(f"| {a} → {b} | {', '.join(sorted(keys))} |")
+        lines += ["", f"- 새로 맞음 {len(fixed)}: {', '.join(fixed) or '-'}",
+                  f"- 회귀(맞던 문항이 틀림) {len(regressed)}: {', '.join(regressed) or '-'}", ""]
+        if args.items:
+            lines += ["| 문항 | 기대 | 전 | 후 | 후 오류 코드 / 인자 차이 | grounding 전→후 |",
+                      "|---|---|---|---|---|---|"]
+            for key in old:
+                a, b = old[key], new[key]
+                detail = b.get("error_code") or ""
+                if (b.get("checks") or {}).get("arg_mismatches"):
+                    detail += " " + json.dumps(b["checks"]["arg_mismatches"], ensure_ascii=False)
+                if (b.get("checks") or {}).get("place_lookup_count_ok") is False:
+                    detail += " 장소 조회 횟수 불일치"
+                lines.append(f"| {key} | {b['expected_outcome']} | {a['result_class']} | "
+                             f"{b['result_class']} | {detail.strip()} | "
+                             f"{a.get('grounding_ok')}→{b.get('grounding_ok')} |")
+            lines.append("")
+    text = "\n".join(lines) + "\n"
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+    print(text)
+    return 0
+
+
 def _write(path, result):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -876,11 +1076,17 @@ def main(argv=None):
     compare.add_argument("after")
     compare.add_argument("--out", default="")
     compare.add_argument("--all", action="store_true")
+    report = sub.add_parser("report")
+    report.add_argument("--pair", nargs=3, action="append", required=True,
+                        metavar=("NAME", "BEFORE", "AFTER"))
+    report.add_argument("--items", action="store_true", help="문항별 표를 덧붙인다")
+    report.add_argument("--out", default="")
     args = parser.parse_args(argv)
     global GOLD_PATH
     GOLD_PATH = Path(args.gold).resolve() if args.gold else None
     return {"extract": cmd_extract, "gold": cmd_gold, "llm": cmd_llm, "replay": cmd_replay,
-            "rescore": cmd_rescore, "compare": cmd_compare}[args.command](args)
+            "rescore": cmd_rescore, "compare": cmd_compare,
+            "report": cmd_report}[args.command](args)
 
 
 if __name__ == "__main__":

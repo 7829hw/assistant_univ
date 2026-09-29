@@ -6,6 +6,7 @@
 ``agent_graph``의 scope provenance 정책도 여기서 한 번 더 확인한다.
 """
 
+import json
 import time
 
 from agent_graph import extract_scopes, scope_arguments
@@ -13,13 +14,18 @@ from tool_executor import invalid_argument_result
 
 from geoflow import analysis_ops
 from geoflow.errors import ExecutionError
-from geoflow.operator_registry import extract_output
+from geoflow.operator_registry import Operator, extract_output
 from geoflow.types import ExecutionPlan, ExecutionResult, ValueRef
 
 STATUS_OK = "OK"
 STATUS_TOOL_ERROR = "TOOL_ERROR"
 STATUS_EXECUTOR_ERROR = "EXECUTOR_ERROR"
 STATUS_CANCELLED = "CANCELLED"
+
+#: 같은 인자면 같은 결과를 돌려주는 조회. 한 실행 안에서 다시 부르지 않고 앞선 결과를 쓴다.
+#: "부산 안에서의 OD"처럼 한 장소가 출발·도착 두 역할을 맡으면 장소 개념은 둘이지만 조회는
+#: 한 번이고, 그 scope를 두 인자에 함께 쓴다(업체 정답 093·095의 ``$area.scope``).
+REUSABLE_LOOKUPS = frozenset({Operator.RESOLVE_PLACE_SCOPE})
 
 
 def _duration_ms(started_at):
@@ -73,6 +79,7 @@ def execute_plan(
     state = dict(execution_plan.seed_state)
     verified_scopes = set(known_scopes)
     trace: list[dict] = []
+    lookups = {}
 
     def emit(event, **payload):
         if event_handler is not None:
@@ -105,6 +112,27 @@ def execute_plan(
                 execution_plan, state, trace, step, index, error.to_dict(),
                 emit, detail=error.detail,
             )
+
+        lookup_key = None
+        if step.operator in REUSABLE_LOOKUPS:
+            lookup_key = (step.tool_name, json.dumps(arguments, sort_keys=True,
+                                                     ensure_ascii=False, default=str))
+        if lookup_key in lookups:
+            source_id, result = lookups[lookup_key]
+            entry = _trace_entry(index, step, arguments, result, 0.0)
+            entry["phase"] = "reuse"
+            entry["reused_from"] = source_id
+            trace.append(entry)
+            emit("tool_reuse", hop=index, tool_name=step.tool_name,
+                 reused_from=source_id, **position)
+            try:
+                _bind_outputs(step, result, state)
+            except ExecutionError as error:
+                return _failure(
+                    execution_plan, state, trace, step, index, error.to_dict(),
+                    emit, detail=error.detail, already_traced=True,
+                )
+            continue
 
         unverified = sorted(scope_arguments(arguments) - verified_scopes)
         emit("tool_call", hop=index, tool_name=step.tool_name,
@@ -176,6 +204,8 @@ def execute_plan(
             )
 
         verified_scopes.update(extract_scopes(result))
+        if lookup_key is not None:
+            lookups[lookup_key] = (step.id, result)
         try:
             _bind_outputs(step, result, state)
         except ExecutionError as error:
