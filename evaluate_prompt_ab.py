@@ -39,6 +39,7 @@ reset은 Ollama 0.33.2에서 실측으로 확인한 방법을 쓴다.
 """
 
 import argparse
+import contextlib
 import dataclasses
 import functools
 import hashlib
@@ -285,21 +286,56 @@ def _production_prompt():
 PINNED_BASE_DIR = RESULT_DIR / "pinned" / "v2_db113124"
 
 
-def _pinned_base_prompt():
-    """고정 변형이 쓰는 바탕 prompt. 보관한 YAML과 두 단계 설명으로 만든다."""
-    import geoflow.planner as planner_module
-    from geoflow.planner import load_planner_prompt
+#: 이 모듈을 읽을 때의 production factor 설명. 고정 변형을 만들 때 바꿔 끼운 설명과 구분하려고 둔다.
+_PRODUCTION_MEANINGS = {name: spec.meaning for name, spec in F.FACTOR_SPECS.items()}
 
+
+@contextlib.contextmanager
+def pinned_factor_definitions():
+    """factor 정의(설명·짝 규칙)를 고정 시점(``factors.json``)으로 잠시 되돌린다. 제품 상태는 반드시 되돌린다.
+
+    grounding_v3에서 factor(select)와 짝 규칙(order→limit)이 더해졌다. 고정 변형의 system prompt와
+    factor 재질의 문구는 그 전 정의로 만든다. 변형이 일부러 바꿔 끼운 설명(_prompt_with_meaning)은 둔다.
+    """
+    import json as _json
+
+    import geoflow.planner as planner_module
+
+    pinned = _json.loads((PINNED_BASE_DIR / "factors.json").read_text(encoding="utf-8"))
     stage_note = (PINNED_BASE_DIR / "stage_note.txt").read_text(encoding="utf-8")
-    original = planner_module.FACTOR_STAGE_NOTE
+    original_note = planner_module.FACTOR_STAGE_NOTE
+    original_specs = dict(F.FACTOR_SPECS)
+    original_constraints = dict(F.FACTOR_CONSTRAINTS)
     planner_module.FACTOR_STAGE_NOTE = stage_note
     try:
+        for name in list(F.FACTOR_SPECS):
+            if name not in pinned["specs"]:
+                del F.FACTOR_SPECS[name]
+            elif F.FACTOR_SPECS[name].meaning == _PRODUCTION_MEANINGS.get(name):
+                F.FACTOR_SPECS[name] = dataclasses.replace(
+                    F.FACTOR_SPECS[name], meaning=pinned["specs"][name]["meaning"])
+        F.FACTOR_CONSTRAINTS.clear()
+        for name, item in pinned["constraints"].items():
+            F.FACTOR_CONSTRAINTS[name] = F.FactorConstraint(name, tuple(item["requires"]),
+                                                            item["reason"])
+        yield
+    finally:
+        planner_module.FACTOR_STAGE_NOTE = original_note
+        F.FACTOR_SPECS.clear()
+        F.FACTOR_SPECS.update(original_specs)
+        F.FACTOR_CONSTRAINTS.clear()
+        F.FACTOR_CONSTRAINTS.update(original_constraints)
+
+
+def _pinned_base_prompt():
+    """고정 변형이 쓰는 바탕 prompt. 보관한 YAML, 두 단계 설명, factor 정의로 만든다."""
+    from geoflow.planner import load_planner_prompt
+
+    with pinned_factor_definitions():
         return GeoFlowPlanner(
             client=_StubClient(),
             prompt=load_planner_prompt(PINNED_BASE_DIR / "geoflow_planner.yaml"),
         ).system_prompt()
-    finally:
-        planner_module.FACTOR_STAGE_NOTE = original
 
 
 def _prompt_with_meaning(factor, meaning):
@@ -600,8 +636,8 @@ class FixedPromptPlanner(GeoFlowPlanner):
         )
 
 
-@functools.lru_cache(maxsize=1)
-def _canonical_factor_repair():
+@functools.lru_cache(maxsize=2)
+def _canonical_factor_repair(pinned=False):
     """hash용 대표 재질의 상황: bucket만 있고 rollup이 빠졌다."""
     grounding = parse_grounding({"concepts": [
         {"id": "op", "concept": "EVENT", "subtype": "operation", "role": "SUPPORT",
@@ -618,13 +654,16 @@ def _canonical_factor_repair():
 
 def render_factor_repair(variant):
     """Planner가 실제로 보낼 factor 재질의 문구. _ask_patch와 같은 경로다."""
-    decision, message = _canonical_factor_repair()
-    planner = FixedPromptPlanner(client=_StubClient(), variant=variant)
-    return planner_module._fill_instruction(
-        planner.repair_instructions[decision.kind],
-        {**planner_module._instruction_values(decision, message),
-         **planner.variant_repair_values(decision)},
-    )
+    pinned = variant.name != "PRODUCTION"
+    guard = pinned_factor_definitions() if pinned else contextlib.nullcontext()
+    with guard:
+        decision, message = _canonical_factor_repair(pinned)
+        planner = FixedPromptPlanner(client=_StubClient(), variant=variant)
+        return planner_module._fill_instruction(
+            planner.repair_instructions[decision.kind],
+            {**planner_module._instruction_values(decision, message),
+             **planner.variant_repair_values(decision)},
+        )
 
 
 def _set_phase(client, phase):

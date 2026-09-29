@@ -175,3 +175,69 @@ class GoldThroughConditionLayerTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FlatSelectionTest(unittest.TestCase):
+    """"가장 큰 값"(rollup)과 "그 값을 가진 주"(select)를 flat grounding에서 구분한다(grounding_v3).
+
+    표현은 grounding이, 실행 가능 여부는 provider 계약이 정한다. 원문 패턴으로 미리 거부하지 않는다.
+    """
+
+    def payload(self, **aggregation):
+        return {"concepts": [
+            {"id": "place", "concept": "LOCATION", "subtype": "place", "role": "SUBCOND",
+             "source": "user", "value": {"name": "가람구"}},
+            {"id": "operation", "concept": "EVENT", "subtype": "operation", "role": "SUPPORT",
+             "source": "implicit"},
+            {"id": "revenue", "concept": "AMOUNT", "subtype": "revenue", "role": "MEASURE",
+             "source": "implicit"}],
+            "factors": {"date": "last_month", "taxi_type": "private", "bucket": "week",
+                        "aggregation": "sum", **aggregation}}
+
+    def run_with(self, payload, profile, executor):
+        return GeoFlowPipeline.create(
+            client=ScriptedClient([planner_response(payload)]), tool_executor=executor,
+            clock=lambda: REF, execution_profile=profile).run("지난달 가람구 개인택시 매출 합계가 가장 큰 주는?")
+
+    def test_flat_select_matches_the_structured_selection_on_the_reference_provider(self):
+        from geoflow.providers import REFERENCE, profile_for
+        from tests.test_reference_provider import Q4_MAX_WEEKLY_SUM, WEEKS, reference_executor
+
+        result = self.run_with(self.payload(select="max"), profile_for(REFERENCE),
+                               reference_executor())
+        self.assertEqual(result.outcome, "answered", result.runtime_error)
+        value = result.hop_log[-1]["result"]
+        self.assertEqual(value["value"], Q4_MAX_WEEKLY_SUM)
+        self.assertEqual([group["label"] for group in value["groups"]], WEEKS[1:3])
+        # 같은 질문의 값(rollup=max)은 구간이 아니라 스칼라다.
+        rolled = self.run_with(self.payload(rollup="max"), profile_for(REFERENCE),
+                               reference_executor())
+        self.assertEqual(rolled.outcome, "answered", rolled.runtime_error)
+        self.assertNotIsInstance(rolled.hop_log[-1]["result"], dict)
+
+    def test_tims_contract_decides_that_selection_is_not_executable(self):
+        """TIMS bucket/rollup 호출은 대표값만 돌려주고, 로컬 재계산의 근거(day_records)는 계약에 없다."""
+        run = self.run_with(self.payload(select="max"), None, new_tool_executor())
+        self.assertEqual(run.outcome, "unsupported")
+        self.assertEqual(run.error["code"], "UNVERIFIED_TIMS_CONTRACT")
+
+    def test_rollup_and_select_are_exclusive(self):
+        from geoflow.factors import validate_factors
+
+        with self.assertRaises(PlannerError) as caught:
+            validate_factors({"bucket": "week", "rollup": "max", "select": "max"})
+        self.assertEqual(caught.exception.code, "INVALID_FACTOR_COMBINATION_EXCLUSIVE")
+
+
+class RankingCountContractTest(unittest.TestCase):
+    def test_order_without_limit_goes_to_factor_completion(self):
+        """업체 규칙: 순위에는 개수를 적는다(하나만이면 1). 비면 모델에게 그 값만 되묻는다."""
+        from geoflow.factors import validate_factors
+        from geoflow.repair import RepairKind, decide
+
+        with self.assertRaises(PlannerError) as caught:
+            validate_factors({"dimension": "emd", "order": "top"})
+        decision = decide(caught.exception)
+        self.assertTrue(decision.repairable)
+        self.assertEqual((decision.kind, decision.allowed_additions),
+                         (RepairKind.FACTOR_COMPLETION, ("limit",)))

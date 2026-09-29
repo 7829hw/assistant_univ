@@ -1,0 +1,73 @@
+{
+ "source_commit": "73b2206 (값은 grounding_v1 고정 시점 db113124와 같다: factor 정의는 그 뒤 바뀌지 않았다)",
+ "specs": {
+  "date": {
+   "meaning": "분석 대상 날짜 또는 기간."
+  },
+  "time": {
+   "meaning": "분석 대상 시간대."
+  },
+  "aggregation": {
+   "meaning": "원시 값을 하나로 모으는 1차 집계 방식. bucket이 있으면 각 구간 안에서 적용되고, 없으면 전체에 적용된다. 질문에 집계 표현이 없으면 넣지 않는다."
+  },
+  "rollup": {
+   "meaning": "bucket별로 나온 값들을 하나로 합치는 2차 집계 방식. 집계 **방식**이지 시간 단위가 아니다. bucket과 짝으로만 쓴다."
+  },
+  "bucket": {
+   "meaning": "분석 기간을 나누는 시간 구간. 지정하면 구간마다 값을 먼저 구한 뒤 rollup으로 합친다. 자료가 일 단위이므로 day는 없다."
+  },
+  "taxi_type": {
+   "meaning": "택시 유형 조건."
+  },
+  "taxi_status": {
+   "meaning": "운행 상태 조건."
+  },
+  "dimension": {
+   "meaning": "결과를 나눌 그룹 기준. 지정하면 단일 값이 아니라 그룹별 분포를 얻는다. bucket과 함께 쓸 수 없다."
+  },
+  "dimension_target": {
+   "meaning": "실차 구간(trip)을 그룹으로 나눌 때 dimension을 적용할 위치. pickup=승차 지역별, dropoff=하차 지역별, both=승차지-하차지 조합별. 질문에 승차나 하차 한쪽 기준이 없으면 넣지 않는다."
+  },
+  "order": {
+   "meaning": "그룹별 결과의 정렬 방향."
+  },
+  "limit": {
+   "meaning": "그룹별 결과에서 보여 줄 개수."
+  },
+  "vicinity": {
+   "meaning": "장소의 주변 영역을 포함할지 여부."
+  }
+ },
+ "constraints": {
+  "bucket": {
+   "requires": [
+    "rollup"
+   ],
+   "reason": "주·월 단위로 1차 집계하려면 그 결과를 합치는 방법도 필요합니다."
+  },
+  "rollup": {
+   "requires": [
+    "bucket"
+   ],
+   "reason": "1차 집계 결과를 합치려면 어떤 단위로 나눌지도 필요합니다."
+  },
+  "dimension_target": {
+   "requires": [
+    "dimension"
+   ],
+   "reason": "승차·하차 기준을 정하려면 무엇을 기준으로 나눌지도 필요합니다."
+  },
+  "order": {
+   "requires": [
+    "dimension"
+   ],
+   "reason": "순위를 매기려면 무엇을 기준으로 나눌지도 필요합니다."
+  },
+  "limit": {
+   "requires": [
+    "dimension"
+   ],
+   "reason": "개수를 제한하려면 무엇을 기준으로 나눌지도 필요합니다."
+  }
+ }
+}

@@ -23,6 +23,9 @@ spec은 두 경로로 만들어진다.
 
 1. production grounding(H0)의 flat factor에서 결정적으로 올린다(``from_flat``).
    flat 표현은 select를 표현할 수 없다.
+   grounding_v3부터 flat에도 ``select``가 있다(bucket + select). 구조화 표기 전체로 바꾸지 않고
+   구간 선택 하나만 더한 것이다. 이전 structured 비교(qwen3:8b)에서 조용한 오답이 늘어난 원인은
+   집계 표현보다 prompt 전체 교체에 따른 조건 누락이었다(evaluation/grounding_v3/analysis.md).
 2. 구조화 표기 ``factors.aggregation_plan``을 읽는다(``parse_plan``). H2 실험의
    형태에 ``result.select``를 더한 것이다. production prompt는 이 표기를 안내하지
    않는다. prompt를 바꾸려면 격리 측정이 먼저다(evaluation/design/
@@ -45,7 +48,7 @@ UNSPECIFIED = "unspecified"
 #: 구조화 표기의 factor key.
 PLAN_KEY = "aggregation_plan"
 #: flat 표기의 집계 factor. 구조화 표기와 함께 쓰면 거부한다.
-FLAT_KEYS = ("bucket", "aggregation", "rollup")
+FLAT_KEYS = ("bucket", "aggregation", "rollup", "select")
 
 SOURCE_FLAT = "flat"
 SOURCE_STRUCTURED = "structured"
@@ -106,6 +109,7 @@ def from_flat(factors):
         bucket=bucket,
         inner=factors.get("aggregation") or UNSPECIFIED,
         outer=factors.get("rollup"),
+        select=factors.get("select"),
     )
 
 
@@ -215,8 +219,6 @@ def split_plan(raw_factors, *, raw_text=""):
 
 
 def _same_meaning(structured, flat):
-    """두 표현이 같은 계산을 뜻하는가. flat은 구간 선택(select)을 표현할 수 없다."""
-    if structured.select is not None:
-        return False
-    return (structured.bucket, structured.inner, structured.outer) == (
-        flat.bucket, flat.inner, flat.outer)
+    """두 표현이 같은 계산을 뜻하는가."""
+    return (structured.bucket, structured.inner, structured.outer, structured.select) == (
+        flat.bucket, flat.inner, flat.outer, flat.select)

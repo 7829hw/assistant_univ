@@ -1376,13 +1376,14 @@ class FactorConstraintTest(ComposerCase):
         self.assertEqual(caught.exception.context["missing"], ["bucket"])
 
     def test_order_with_dimension_is_valid(self):
-        grounding = self._ground({"order": "top", "dimension": "sido"})
+        grounding = self._ground({"order": "top", "dimension": "sido", "limit": 3})
         self.assertEqual(grounding.factors["order"], "top")
 
     def test_order_alone_is_invalid(self):
         with self.assertRaises(PlannerError) as caught:
             self._ground({"order": "top"})
-        self.assertEqual(caught.exception.context["missing"], ["dimension"])
+        # grounding_v3: 순위에는 개수도 필요하다(업체 규칙, 정답 96문항 모두 limit을 적는다).
+        self.assertEqual(caught.exception.context["missing"], ["dimension", "limit"])
 
     def test_limit_with_dimension_is_valid(self):
         grounding = self._ground({"limit": 3, "dimension": "sido"})
@@ -1534,7 +1535,7 @@ class FactorSemanticsTest(ComposerCase):
 
         self.assertEqual(companions_for("bucket"), ("rollup",))
         self.assertEqual(companions_for("rollup"), ("bucket",))
-        self.assertEqual(companions_for("order"), ("dimension",))
+        self.assertEqual(companions_for("order"), ("dimension", "limit"))
         self.assertEqual(companions_for("limit"), ("dimension",))
 
     def test_rollup_rejects_a_time_unit(self):

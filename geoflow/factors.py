@@ -122,7 +122,14 @@ FACTOR_SPECS: dict[str, FactorSpec] = {
             "bucket", values=frozenset({"week", "month"}),
             meaning=(
                 "분석 기간을 나누는 시간 구간. 지정하면 구간마다 값을 먼저 "
-                "구한 뒤 rollup으로 합친다. 자료가 일 단위이므로 day는 없다."
+                "구한 뒤 rollup으로 합치거나 select로 한 구간을 고른다. 자료가 일 단위이므로 day는 없다."
+            ),
+        ),
+        FactorSpec(
+            "select", values=frozenset({"max", "min"}),
+            meaning=(
+                "구간별 값 가운데 가장 큰(max)·작은(min) **구간 자체**를 답으로 고른다. 값이 아니라 그 값을 "
+                "가진 주·월을 물을 때 rollup 대신 쓴다. bucket과 짝으로만 쓴다."
             ),
         ),
         FactorSpec(
@@ -161,7 +168,7 @@ FACTOR_SPECS: dict[str, FactorSpec] = {
         ),
         FactorSpec(
             "limit", kind="integer",
-            meaning="그룹별 결과에서 보여 줄 개수.",
+            meaning="그룹별 결과에서 보여 줄 개수. 순위에는 늘 적는다. 하나만 묻는 순위(\"가장 많은 곳\")는 1.",
         ),
         FactorSpec(
             "vicinity", kind="boolean",
@@ -194,6 +201,9 @@ FACTOR_STAGE_NOTE = """구간을 나누는 질문에서는 집계가 두 단계�
 - "총", "합계", "모두 더한"은 sum이다. "가장 큰 값", "최댓값"은 값을 묻는 집계(max)이다.
 - 구간 표현이 없으면 집계어는 aggregation이다.
   - "평균 수입은?" → aggregation=avg (bucket과 rollup은 넣지 않는다)
+- 값이 아니라 그 값을 가진 구간(어느 주, 어느 달)을 물으면 rollup 대신 select를 쓴다.
+  - "주별 운행 일수 평균이 가장 작은 주는?" → bucket=week, aggregation=avg, select=min
+  - "주별 운행 일수 평균 중 가장 작은 값은?" → bucket=week, aggregation=avg, rollup=min
 - rollup에 week나 month 같은 시간 단위를 넣지 않는다. rollup은 합치는
   방식이다."""
 
@@ -220,7 +230,12 @@ FACTOR_CONSTRAINTS: dict[str, FactorConstraint] = {
     item.factor: item for item in (
         FactorConstraint(
             "bucket", ("rollup",),
-            "주·월 단위로 1차 집계하려면 그 결과를 합치는 방법도 필요합니다.",
+            "주·월 단위로 1차 집계하려면 그 결과를 합치는 방법(rollup)이나 한 구간을 고르는 방법(select)도 "
+            "필요합니다.",
+        ),
+        FactorConstraint(
+            "select", ("bucket",),
+            "구간을 고르려면 어떤 단위로 나눌지도 필요합니다.",
         ),
         FactorConstraint(
             "rollup", ("bucket",),
@@ -231,8 +246,8 @@ FACTOR_CONSTRAINTS: dict[str, FactorConstraint] = {
             "승차·하차 기준을 정하려면 무엇을 기준으로 나눌지도 필요합니다.",
         ),
         FactorConstraint(
-            "order", ("dimension",),
-            "순위를 매기려면 무엇을 기준으로 나눌지도 필요합니다.",
+            "order", ("dimension", "limit"),
+            "순위를 매기려면 무엇을 기준으로 나눌지와 몇 개를 보일지도 필요합니다.",
         ),
         FactorConstraint(
             "limit", ("dimension",),
@@ -302,8 +317,11 @@ def companions_for(factor):
 
 
 def missing_companions(factors, factor):
-    """``factors`` 안에서 ``factor``에 빠진 동반 factor."""
-    return tuple(name for name in companions_for(factor) if name not in factors)
+    """``factors`` 안에서 ``factor``에 빠진 동반 factor. bucket의 짝은 rollup 또는 select다."""
+    missing = tuple(name for name in companions_for(factor) if name not in factors)
+    if factor == "bucket" and "select" in factors:
+        missing = tuple(name for name in missing if name != "rollup")
+    return missing
 
 
 def validate_factors(factors, *, raw_text=""):
@@ -314,6 +332,13 @@ def validate_factors(factors, *, raw_text=""):
     Validator G4가 같은 종류의 검사를 operator 기준으로 한 번 더 수행하며,
     그쪽은 계획이 어떤 경로로 만들어졌든 적용되는 마지막 방어선이다.
     """
+    if "rollup" in factors and "select" in factors:
+        raise PlannerError(
+            "rollup(구간별 값을 합침)과 select(한 구간을 고름)는 함께 쓸 수 없습니다.",
+            user_message="구간별 값을 합칠지 한 구간을 고를지 하나만 정할 수 있습니다.",
+            code="INVALID_FACTOR_COMBINATION_EXCLUSIVE",
+            context={"raw_text": raw_text, "present": sorted(factors)},
+        )
     for name in sorted(factors):
         missing = missing_companions(factors, name)
         if not missing:
