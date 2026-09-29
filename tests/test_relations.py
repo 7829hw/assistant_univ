@@ -309,14 +309,80 @@ class MeasureTest(unittest.TestCase):
         self.assertEqual(audit["event"]["action"], "corrected")
 
 
+class SafeguardTest(unittest.TestCase):
+    """새 독립셋(grounding_v2, 결과 열람 뒤 개발용)에서 보정이 맞는 값·관계를 지운 형태."""
+
+    PASSAGE = [{"id": "e", "concept": "EVENT", "subtype": "passage", "role": "SUPPORT",
+                "source": "implicit"},
+               {"id": "m", "concept": "AMOUNT", "subtype": "speed", "role": "MEASURE",
+                "source": "implicit"}]
+
+    def test_unread_aggregation_on_a_metric_is_held_not_removed(self):
+        """"가장 느린 속도"는 min인데 어휘에 없다. 결과가 집계에 좌우되는 자리에서는 지우지 않는다."""
+        fixed, audit = reconcile(list(self.PASSAGE), {"aggregation": "min"},
+                                 "주말 대구 동성로 주변에서 측정된 가장 느린 속도는 얼마였어?")
+        self.assertEqual(fixed["factors"]["aggregation"], "min")
+        self.assertEqual(audit["aggregation"]["action"], "held")
+
+    def test_unread_status_on_passage_counts_is_held(self):
+        count = [dict(self.PASSAGE[0]), {**self.PASSAGE[1], "subtype": "passage_count"}]
+        fixed, audit = reconcile(count, {"taxi_status": "occupied"},
+                                 "부산 어린이대공원은 이번 달 손님을 태운 택시가 몇 번이나 지나갔어?")
+        self.assertEqual(fixed["factors"]["taxi_status"], "occupied")
+        self.assertEqual(audit["taxi_status"]["action"], "held")
+
+    def test_a_model_split_of_one_mention_is_kept(self):
+        question = "주중 부산 내부에서 출발과 도착이 모두 이뤄진 실차 건수는?"
+        fixed, _ = reconcile([place("부산", role="pickup", pid="a"),
+                              place("부산", role="dropoff", pid="b"), *TRIP], {}, question)
+        self.assertEqual(roles(fixed), [("부산", "dropoff"), ("부산", "pickup")])
+
+    def test_unit_word_with_an_existing_place_as_region_is_not_a_new_place(self):
+        from geoflow.grounding import normalize_place_concepts
+
+        concepts = [place("부산", role="pickup"),
+                    {**place("시군구", "부산", role="dropoff"), "id": "d", "source": "implicit"}]
+        cleaned, notes = normalize_place_concepts(concepts, {"dimension": "sigungu"})
+        self.assertEqual([c["value"]["name"] for c in cleaned], ["부산"])
+        self.assertEqual(notes[0]["rule"], "unit_word_place_duplicate_dropped")
+
+    def test_native_numerals_are_counts(self):
+        record = conditions.reconcile_ranking({"dimension": "sido", "order": "bottom", "limit": 2},
+                                              "승차 건수를 시도 단위로 비교하면 제일 적은 두 곳은?")
+        self.assertEqual((record["value"], record["action"]), (2, "confirmed"))
+
+    def test_repeated_stage_words_count_once(self):
+        billing = [{"id": "e", "concept": "EVENT", "subtype": "operation", "role": "SUPPORT",
+                    "source": "implicit"},
+                   {"id": "m", "concept": "AMOUNT", "subtype": "operating_days", "role": "MEASURE",
+                    "source": "implicit"}]
+        fixed, _ = reconcile(billing, {"bucket": "month", "rollup": "min"},
+                             "지난해 개인택시 운행 일수를 월 단위로 합산했을 때, 그 월별 합계 중 가장 작은 값은?")
+        self.assertEqual((fixed["factors"].get("aggregation"), fixed["factors"]["rollup"]),
+                         ("sum", "min"))
+
+    def test_bucket_without_expression_beside_a_dimension_is_removed(self):
+        billing = [{"id": "e", "concept": "EVENT", "subtype": "operation", "role": "SUPPORT",
+                    "source": "implicit"},
+                   {"id": "m", "concept": "AMOUNT", "subtype": "active_taxi_count",
+                    "role": "MEASURE", "source": "implicit"}]
+        fixed, audit = reconcile(billing, {"bucket": "week", "dimension": "dayofweek",
+                                           "aggregation": "max", "order": "top", "limit": 3},
+                                 "지난 주 요일마다 활성택시 대수의 최댓값을 구해서 큰 순으로 3개 요일만 보여줘.")
+        self.assertNotIn("bucket", fixed["factors"])
+        self.assertEqual(audit["bucket"]["action"], "removed_no_evidence")
+
+
 class GoldSilenceTest(unittest.TestCase):
     """정답 grounding을 넣으면 조건 계층은 아무것도 바꾸지 않는다(잘못된 보정 0).
 
-    업체 100문항, 기존 44문항, 대조 사례 전부. 새 독립셋은 최종 후보 실행 전까지 보지 않으므로 넣지 않는다.
+    업체 100문항, 기존 44문항, 대조 사례, grounding_v2 독립셋(결과 열람 뒤 개발용). grounding_v3 독립셋은
+    최종 후보 실행 전까지 보지 않으므로 넣지 않는다.
     """
 
     FILES = ("evaluation/vendor100/gold.yaml", "evaluation/grounding_v1/holdout_questions.yaml",
-             "evaluation/grounding_v2/contrast_questions.yaml")
+             "evaluation/grounding_v2/contrast_questions.yaml",
+             "evaluation/grounding_v2/independent_questions.yaml")
 
     def test_gold_groundings_are_left_unchanged(self):
         import evaluate_vendor100 as E

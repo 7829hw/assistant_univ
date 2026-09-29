@@ -45,6 +45,8 @@ from geoflow.errors import PlannerError
 CLEAR = "clear"
 CONFLICTING = "conflicting"
 NONE = "none"
+#: 닫힌 어휘로는 없다고 읽었지만, 결과를 바꾸는 자리라 어휘 밖 표현일 수 있어 판정을 미룬다.
+HELD_ABSENT = "held_absent"
 
 #: scope 문자열. 안의 글자(h3 등)는 단위 말이 아니다.
 _SCOPE_LITERAL = re.compile(r"scope:[A-Za-z0-9_:.-]+")
@@ -108,7 +110,7 @@ _ROLE_RULES = (
     ("pickup", "genitive_boarding", rf"^\s*의\s*{_W}(?:승차|탑승|출발)"),
 )
 #: "X 안에서", "X 내", "X 내부" + 이동·노선 문맥 → 같은 장소가 출발·도착 둘 다.
-_WITHIN = re.compile(r"^\s*(?:안에서|내에서|내부에서|안|내부|내)(?:의|에서)?(?=\s|$)")
+_WITHIN = re.compile(r"^\s*(?:안에서|내에서|내부에서|안|내부|내)(?:의|에서)?(?:만|도)?(?=\s|$)")
 _ROUTE_CONTEXT = re.compile(r"노선|\bOD\b|간\s|간의|이동|오간|오고\s*간")
 #: "X에서 Y로/까지"의 X. 서술어 없이 출발 조사만 있고 다음 장소가 도착으로 읽힐 때.
 #: 조사 뒤에 다음 장소의 지역명 같은 낱말 하나("신천동에서 부산 초량동까지")까지는 괜찮다.
@@ -182,6 +184,17 @@ def _mentions(concepts, question):
             for concept in group:
                 spans[id(concept)] = list(spots)
     return spans
+
+
+def _shared_mentions(concepts, question):
+    """같은 이름의 개념이 여럿인데 질문에 그 이름이 개념 수보다 적게 나오는 묶음(id 목록)."""
+    by_name = {}
+    for concept in location_concepts(concepts):
+        names = _place_names(concept)
+        if names:
+            by_name.setdefault(names[0], []).append(concept)
+    return [group for name, group in by_name.items()
+            if len(group) > 1 and len(_occurrences(question, name)) < len(group)]
 
 
 def _read_window(window, question):
@@ -262,6 +275,17 @@ def reconcile_place_roles(concepts, question):
         if isinstance(concept, dict) and id(concept) in readings:
             by_value.setdefault(_value_key(concept), []).append(concept)
     handled = set()
+    for group in _shared_mentions(concepts, question):
+        # 한 번 나온 장소를 모델이 이미 출발·도착 두 개념으로 나눴다. 한 mention의 읽기는 두 개념을
+        # 구분할 수 없으므로 덮어쓰지 않는다(새 독립셋 n10: "부산 내부에서 출발과 도착").
+        llm_roles = sorted(filter(None, (_od_role(item) for item in group)))
+        if llm_roles == ["dropoff", "pickup"] and len(group) == 2:
+            records.append({"slot": "od_role", "concept": group[0].get("id"),
+                            "place": _place_names(group[0])[:1], "llm_value": llm_roles,
+                            "value": llm_roles, "evidence": [], "strength": NONE,
+                            "action": "none", "basis": "model_split_one_mention"})
+            handled.update(id(item) for item in group)
+            fixed += group
     for concept in concepts:
         if not (isinstance(concept, dict) and id(concept) in readings):
             fixed.append(concept)
@@ -376,7 +400,7 @@ _UNITS = (
 )
 _PAIR_TARGET = re.compile(r"(?:읍면동|시군구|시도|H3|h3|셀|지역)\s*간|노선|\bOD\b|승하차")
 _PICKUP_SIDE = re.compile(r"승차|탑승|출발")
-_DROPOFF_SIDE = re.compile(r"(?<!승)하차|도착|들어온|내린")
+_DROPOFF_SIDE = re.compile(r"(?<!승)하차|도착|들어온|내린|내렸")
 #: 장소 역할에 쓰인 말 가운데 그룹 기준으로도 이어 읽는 말(사건 명사). 이동 동사(출발·도착)는 뺀다.
 _EVENT_SIDE = {"pickup": re.compile(r"승차|탑승"), "dropoff": re.compile(r"(?<!승)하차|내린")}
 
@@ -444,13 +468,17 @@ _AGGREGATION_WORDS = (
             r"(?<![가-힣])합(?=[은이을의]|\s|$)"),
     ("avg", r"평균"),
     ("med", r"중간값|중앙값|중위수|중위값"),
-    ("max", r"최댓값|최대값|최대(?!한)|최고치|최고|가장\s*(?:큰|높은|많은)\s*값"),
-    ("min", r"최솟값|최소값|최소(?!한)|최저치|최저|가장\s*(?:작은|적은|낮은)\s*값"),
+    ("max", r"최댓값|최대값|최대(?!한)|최고치|최고|(?:가장|제일)\s*(?:큰|컸던|높은|높았던|많은|많았던)\s*값"),
+    ("min", r"최솟값|최소값|최소(?!한)|최저치|최저|"
+            r"(?:가장|제일)\s*(?:작은|작았던|적은|적었던|낮은|낮았던)\s*값"),
 )
 _AGGREGATION_CUES = re.compile(r"평균|합|총|중간|중앙|최대|최소|최고|최저|최댓|최솟|누적|더한|더해")
-_TOP = re.compile(r"상위|많은|많이|높은|큰(?=\s)|최다")
-_BOTTOM = re.compile(r"하위|적은|적게|낮은|작은")
-_COUNT = re.compile(r"(?:상위|하위)\s*(\d+)|(\d+)\s*(?:곳|개|위|군데)")
+_TOP = re.compile(r"상위|많은|많이|많았던|높은|높았던|큰(?=\s)|컸던|최다")
+_BOTTOM = re.compile(r"하위|적은|적게|적었던|낮은|낮았던|작은|작았던")
+_COUNT = re.compile(r"(?:상위|하위)\s*(\d+)|(\d+)\s*(?:곳|개|위|군데)"
+                    r"|(?<![가-힣])(한|두|세|네|다섯|여섯|일곱|여덟|아홉|열)\s*(?:곳|개|군데)")
+_NATIVE = {"한": 1, "두": 2, "세": 3, "네": 4, "다섯": 5, "여섯": 6, "일곱": 7, "여덟": 8, "아홉": 9,
+           "열": 10}
 
 
 def _aggregation_spans(text):
@@ -478,7 +506,8 @@ def read_order(question):
 
 
 def read_limit(question):
-    counts = [(int(m.group(1) or m.group(2)), m) for m in _COUNT.finditer(question)]
+    counts = [(int(m.group(1) or m.group(2)) if (m.group(1) or m.group(2)) else _NATIVE[m.group(3)], m)
+              for m in _COUNT.finditer(question)]
     values = {value for value, _ in counts}
     if len(values) == 1:
         return CLEAR, next(iter(values)), [_evidence(m) for _, m in counts]
@@ -495,8 +524,9 @@ def read_limit(question):
 _BUCKET = re.compile(r"주별|월별|달별|주\s*단위|월\s*단위|달\s*단위|매주|매월|매달|주마다|달마다|월마다|"
                      r"각\s*주|각\s*달|각\s*월")
 _BUCKET_ANSWER = re.compile(
-    r"(?:가장|제일)\s*(?:[^\s?]+\s+)?(?:큰|많은|높은|작은|적은|낮은)\s*(?:주|달|월)(?=\s*(?:[은는이가]|\?|$))"
-    r"|어느\s*(?:주|달|월)")
+    r"(?:가장|제일)\s*(?:[^\s?]+\s+)?(?:큰|컸던|많은|많았던|높은|높았던|작은|작았던|적은|적었던|낮은|낮았던)"
+    r"\s*(?:주|달|월)(?=\s*(?:[은는이가]|\?|$))"
+    r"|어느\s*(?:주|달|월)|몇\s*(?:째|번째)\s*주")
 
 
 def read_answer_target(question):
@@ -509,7 +539,12 @@ def read_answer_target(question):
 def read_stages(question, measure_position):
     """구간 질문의 (aggregation 읽기, rollup 읽기). 각각 (strength, value, evidence)."""
     bucket = _BUCKET.search(question)
-    words = _aggregation_spans(question)
+    words = []
+    for name, match in _aggregation_spans(question):
+        # 같은 종류가 이어 나오면 한 번이다("월 단위로 합산했을 때, 그 월별 합계 중 가장 작은 값").
+        if words and words[-1][0] == name:
+            continue
+        words.append((name, match))
     none = (NONE, None, [])
     if not bucket:
         return none, none

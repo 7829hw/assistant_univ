@@ -351,7 +351,8 @@ def load_replay_cache(path):
         raise ValueError(f"{path}: meta.planner_prompt_sha256이 없어 재생할 수 없습니다")
     cache = {}
     for row in result["rows"]:
-        plans = [call for call in row.get("llm_calls") or [] if call["kind"] == "plan"]
+        plans = [call for call in row.get("llm_calls") or []
+                 if call["kind"] == "plan" and not call.get("failed")]
         if plans:
             cache[(sha, row["question"])] = plans[0]["content"]
     return cache

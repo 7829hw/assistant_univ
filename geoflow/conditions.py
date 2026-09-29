@@ -421,10 +421,15 @@ def scan_taxi_status(question):
     return sorted(mentions, key=lambda item: item.start)
 
 
-def reconcile_taxi_status(factors, question, raw_text=""):
+def reconcile_taxi_status(factors, question, raw_text="", concepts=None):
     """운행 상태를 질문 표현으로 정한다. 규칙은 택시 유형과 같다(근거 없는 값만 지우고, 단서가
     남으면 보류). 상태 조건을 받는 Tool은 통행량(get_passage_count)뿐이므로, 다른 측정값에 붙으면
-    합성 단계가 반영할 수 없는 조건으로 멈춘다(조용히 버리지 않는다)."""
+    합성 단계가 반영할 수 없는 조건으로 멈춘다(조용히 버리지 않는다).
+
+    grounding_v2 개정: 측정값이 통행량이면 어휘 밖 표현("손님을 태운")일 수 있으므로 근거 어휘가
+    없어도 지우지 않고 보류한다. 지우는 것은 받을 수 없는 측정값에 붙은 값뿐이다(지우지 않으면
+    거부로 끝난다). 새 독립셋 n33에서 맞는 값을 지운 것을 보고 고쳤다.
+    """
     llm_value = factors.get("taxi_status")
     mentions = scan_taxi_status(question)
     record = {"mentions": [m.to_dict() for m in mentions], "llm_value": llm_value}
@@ -450,6 +455,9 @@ def reconcile_taxi_status(factors, question, raw_text=""):
                       basis="question_expression" if llm_value in (None, value)
                       else "question_expression_over_llm_value")
         factors["taxi_status"] = value
+    elif llm_value not in (None, "all") and not cue and _measure_of(concepts) == "passage_count":
+        record.update(value=llm_value, status=STATUS_UNVERIFIABLE, action="held",
+                      basis="unlisted_expression_possible_on_consuming_measure")
     elif llm_value not in (None, "all") and not cue:
         record.update(value=None, status=STATUS_ABSENT, action="removed_no_evidence",
                       basis="llm_value_has_no_status_cue")
@@ -749,10 +757,20 @@ NOT_CHECKED = (
 
 #: 조건 계층이 값을 정할 수 있는 factor. 그 밖의 factor와 개념 구조는 바꾸지 않는다(끝에서 확인).
 OWNED_FACTORS = ("date", "taxi_type", "taxi_status", "dimension", "dimension_target", "order",
-                 "limit", "aggregation", "rollup")
+                 "limit", "bucket", "aggregation", "rollup")
 #: 감사 기록 가운데 corrections/held로 모으는 항목.
 _RECORDED = ("date", "taxi_type", "taxi_status", "measure", "event", "dimension",
-             "dimension_target", "order", "limit", "aggregation", "rollup")
+             "dimension_target", "order", "limit", "bucket", "aggregation", "rollup")
+
+
+#: 결과가 집계 방식에 좌우되지 않는 측정값(개수 Tool의 고유 집계). 여기 붙은 근거 없는 집계는 지워도
+#: 계산이 바뀌지 않는다(답변 문장의 "합계"만 사라진다).
+COUNT_MEASURES = frozenset({"trip_count", "passage_count"})
+
+
+def _measure_of(concepts):
+    return next((item.get("subtype") for item in concepts or []
+                 if isinstance(item, dict) and item.get("role") == "MEASURE"), None)
 
 
 def _measure_position(concepts, question):
@@ -772,6 +790,12 @@ def _settle_removal(record, factors, key, reading, default=None):
 
     strength, value, evidence = reading
     llm_value = factors.get(key)
+    if strength == relations.HELD_ABSENT:
+        # 집계어를 읽지 못했지만 계산을 바꾸는 자리다. 어휘 밖 표현일 수 있으므로 LLM 값을 둔다.
+        record.update(llm_value=llm_value, value=llm_value, evidence=evidence, strength=strength,
+                      action="held" if llm_value is not None else "none",
+                      basis="unlisted_expression_possible")
+        return record
     if strength == relations.CLEAR and value is None:
         record.update(llm_value=llm_value, value=None, evidence=evidence, strength=strength)
         if llm_value is None:
@@ -856,6 +880,17 @@ def reconcile_relations(fixed, question, raw_text="", *, structured=False):
     audit["order"] = record
     audit["limit"] = reconcile_ranking(factors, plain)
 
+    record = {"slot": "bucket", "llm_value": factors.get("bucket"), "value": factors.get("bucket"),
+              "action": "none", "basis": "not_applicable", "evidence": []}
+    if (not structured and factors.get("bucket") is not None and factors.get("dimension")
+            and not relations.has_bucket_expression(plain)):
+        # 구간과 그룹 기준은 함께 계산할 수 없다. 질문에 구간 표현이 없으면 구간 쪽이 근거가 없다
+        # ("요일마다 … 최댓값"에 bucket=week).
+        factors.pop("bucket")
+        record.update(value=None, action="removed_no_evidence",
+                      basis="bucket_without_expression_beside_dimension")
+    audit["bucket"] = record
+
     if structured:
         audit["aggregation"] = {"slot": "aggregation", "llm_value": factors.get("aggregation"),
                                 "value": factors.get("aggregation"), "action": "none",
@@ -876,6 +911,11 @@ def reconcile_relations(fixed, question, raw_text="", *, structured=False):
             plain, grouped_by_dimension=bool(factors.get("dimension")))
         if reading[0] == relations.CONFLICTING:
             reading = (relations.NONE, None, reading[2])
+        if reading[0] == relations.CLEAR and reading[1] is None \
+                and _measure_of(fixed.get("concepts")) not in COUNT_MEASURES:
+            # "집계어 없음"은 닫힌 어휘로 본 것이다. 결과가 집계에 좌우되는 측정값에서는 지우지 않는다
+            # ("가장 느린 속도"는 min인데 어휘에 없다. 새 독립셋 n17·n30에서 맞는 값을 지웠다).
+            reading = (relations.HELD_ABSENT, None, reading[2])
         # 구간 없는 한 단계 집계에서 생략은 Tool 기본값(avg)과 같다.
         audit["aggregation"] = _settle_removal({"slot": "aggregation"}, factors, "aggregation",
                                                reading, default="avg")
@@ -932,7 +972,7 @@ def reconcile_payload(payload, question, *, reference_date, raw_text="", structu
         "timezone": str(SERVICE_TIMEZONE),
         "date": reconcile_date(factors, question, reference_date, raw_text),
         "taxi_type": reconcile_taxi_type(factors, question, raw_text),
-        "taxi_status": reconcile_taxi_status(factors, question, raw_text),
+        "taxi_status": reconcile_taxi_status(factors, question, raw_text, fixed.get("concepts")),
         "places": check_places(fixed.get("concepts"), question, raw_text),
         "measure": check_measure(fixed.get("concepts"), question, raw_text),
     }

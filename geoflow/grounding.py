@@ -282,7 +282,7 @@ NON_PLACE_WORDS = frozenset({"읍면동", "시군구", "시도", "h3", "H3", "H3
 #: 그 가운데 "장소 조건 없음"을 뜻하는 말. 그룹 단위 말과 달리 dimension 없이도 뺄 수 있다.
 SCOPELESS_WORDS = frozenset({"전국", "전 지역", "전체 지역"})
 #: 값 없는 장소의 text가 단위 말에 이 말만 붙은 것이면("도착 읍면동") 그룹 기준을 적은 것이다.
-_UNIT_TEXT_PREFIX = re.compile(r"^(?:출발|도착|승차|하차|각)?\s*")
+_UNIT_TEXT_PREFIX = re.compile(r"^(?:출발|도착|승차|하차|각|소속)?\s*")
 
 
 def _unit_text(raw):
@@ -308,6 +308,10 @@ def normalize_place_concepts(raw_concepts, factors=None):
     if not isinstance(raw_concepts, list):
         return raw_concepts, []
     grouped = bool((factors or {}).get("dimension"))
+    named = {(raw["value"].get("name") or "").strip() for raw in raw_concepts
+             if isinstance(raw, dict) and raw.get("concept") == "LOCATION"
+             and isinstance(raw.get("value"), dict)
+             and (raw["value"].get("name") or "").strip() not in NON_PLACE_WORDS}
     notes, cleaned = [], []
     for raw in raw_concepts:
         if (isinstance(raw, dict) and raw.get("concept") == "LOCATION"
@@ -331,6 +335,12 @@ def normalize_place_concepts(raw_concepts, factors=None):
             notes.append({"concept": raw.get("id"), "rule": "unit_word_place_kept_no_dimension",
                           "before": before})
             cleaned.append(raw)
+            continue
+        if name in NON_PLACE_WORDS and region and region.split()[-1] in named and grouped:
+            # "부산의 시군구"를 {"name": "시군구", "region": "부산"}으로 적었고 부산은 이미 장소다. region을
+            # 장소로 올리면 같은 장소가 다른 역할로 하나 더 생긴다(새 독립셋 n12, 없는 하차 조건).
+            notes.append({"concept": raw.get("id"), "rule": "unit_word_place_duplicate_dropped",
+                          "before": before})
             continue
         if name in NON_PLACE_WORDS:
             if not region:
