@@ -76,27 +76,45 @@ class ConditionReaderGapTest(unittest.TestCase):
 class RankingAndTargetTest(unittest.TestCase):
     TRIP = [{"id": "m", "concept": "AMOUNT", "subtype": "trip_count", "role": "MEASURE"}]
 
-    def test_single_superlative_fills_limit_one_only_when_missing(self):
-        factors = {"dimension": "emd", "order": "top"}
-        conditions.reconcile_ranking(factors, "휴일 부산의 승차 읍면동 중 가장 많은 곳은?")
-        self.assertEqual(factors["limit"], 1)
-        for question, factors in (("가장 많이 이용된 3개", {"dimension": "emd", "order": "top"}),
-                                  ("상위 2곳", {"dimension": "emd", "order": "top"}),
-                                  ("가장 많은 곳", {"dimension": "emd", "order": "top", "limit": 2})):
-            before = dict(factors)
-            conditions.reconcile_ranking(factors, question)
-            self.assertEqual(factors, before)
+    def test_limit_follows_the_count_expression(self):
+        """개수 표현이 한 값이면 그 값, 없고 "가장"이면 1. 빈 값은 채우고 다른 값은 바로잡는다.
+
+        2026-09-29 개정(grounding_v2): 이전에는 빈 limit만 채웠다. LLM이 개수 표현과 다른 값을 적으면
+        그대로 통과했다(조용한 오답). 이제 근거 표현과 이전 값을 남기고 바로잡는다.
+        """
+        cases = (("휴일 부산의 승차 읍면동 중 가장 많은 곳은?", None, 1, "filled"),
+                 ("가장 많이 이용된 노선 상위 3개", None, 3, "filled"),
+                 ("상위 2곳", 2, 2, "confirmed"),
+                 ("가장 많은 곳", 2, 1, "corrected"),
+                 ("하위 3곳", 5, 3, "corrected"),
+                 ("많은 순서로 알려줘", 4, 4, "none"))
+        for question, llm, value, action in cases:
+            with self.subTest(question=question):
+                factors = {"dimension": "emd", "order": "top",
+                           **({"limit": llm} if llm is not None else {})}
+                record = conditions.reconcile_ranking(factors, question)
+                self.assertEqual((factors.get("limit"), record["action"]), (value, action))
+                if action in ("filled", "corrected"):
+                    self.assertTrue(record["evidence"])
 
     def test_dimension_target_is_filled_only_for_trip_counts(self):
+        """장소 역할에 쓰인 말(consumed)은 떼고 그룹 단위에 붙은 말로 정한다(grounding_v2).
+
+        "both"는 schema 기본값이라 빈 자리를 바꾸지 않고 confirmed_equivalent로 적는다.
+        """
         cases = (("대구에서 승차가 많은 H3 셀 상위 3개는?", "pickup"),
                  ("부산에서 하차 건수가 적은 읍면동 하위 2곳은?", "dropoff"),
-                 ("택시 이용이 많은 읍면동 간 승하차 노선 상위 3개", "both"),
-                 ("수성구에서 출발한 실차 구간의 도착 읍면동 상위 3곳은?", None))
+                 ("택시 이용이 많은 읍면동 간 승하차 노선 상위 3개", None))
         for question, value in cases:
             with self.subTest(question=question):
                 factors = {"dimension": "emd"}
                 conditions.reconcile_dimension_target(factors, question, self.TRIP)
                 self.assertEqual(factors.get("dimension_target"), value)
+        question = "수성구에서 출발한 실차 구간의 도착 읍면동 상위 3곳은?"
+        factors = {"dimension": "emd"}
+        consumed = [(question.index("에서"), question.index("에서") + len("에서 출발"))]
+        conditions.reconcile_dimension_target(factors, question, self.TRIP, consumed)
+        self.assertEqual(factors["dimension_target"], "dropoff")
         factors = {"dimension": "emd"}
         conditions.reconcile_dimension_target(factors, "승차가 많은 읍면동", concepts=[])
         self.assertNotIn("dimension_target", factors)
@@ -163,10 +181,23 @@ class PlaceNormalizationTest(unittest.TestCase):
         self.assertEqual(concept["value"], {"name": "대구", "region": ""})
 
     def test_grouping_unit_words_are_not_places(self):
+        grouped = {"dimension": "emd"}
         concepts, notes = normalize_place_concepts(
-            [place("읍면동", attributes={"od_role": "pickup"}), place("전국")])
+            [place("읍면동", attributes={"od_role": "pickup"}), place("전국")], grouped)
         self.assertEqual(concepts, [])
         self.assertEqual([n["rule"] for n in notes], ["non_place_word_dropped"] * 2)
+        # 그룹 기준(dimension)이 어디에도 없으면 단위 말 장소를 빼지 않는다. 빼면 "읍면동별
+        # 통행량"이 전체 값 하나로 조용히 바뀐다. "전국"은 장소 조건 없음이라 뺀다(grounding_v2).
+        concepts, notes = normalize_place_concepts(
+            [place("읍면동", attributes={"od_role": "pickup"}), place("전국")])
+        self.assertEqual([c["value"]["name"] for c in concepts], ["읍면동"])
+        self.assertEqual([n["rule"] for n in notes],
+                         ["unit_word_place_kept_no_dimension", "non_place_word_dropped"])
+        # 값 없는 장소의 text가 단위 말이면 그룹 기준을 되풀이한 것이다(개발셋 078).
+        valueless = {"id": "o", "concept": "LOCATION", "subtype": "place", "role": "SUBCOND",
+                     "source": "implicit", "text": "시군구"}
+        self.assertEqual(normalize_place_concepts([valueless], {"dimension": "sigungu"})[0], [])
+        self.assertEqual(normalize_place_concepts([valueless])[0], [valueless])
         (concept,), notes = normalize_place_concepts(
             [place("읍면동", "부산", attributes={"od_role": "dropoff"})])
         self.assertEqual(concept["value"], {"name": "부산", "region": ""})

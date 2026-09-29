@@ -28,6 +28,7 @@ factor의 어휘와 공기(co-occurrence) 불변식은 ``geoflow/factors.py``가
 때문이다.
 """
 
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -180,7 +181,8 @@ def parse_grounding(payload, question, *, raw_text="",
     notes = []
     if normalize:
         payload = {**payload, "factors": _hoist_date_token_keys(payload.get("factors"), notes)}
-        raw_concepts, notes_places = normalize_place_concepts(raw_concepts)
+        raw_concepts, notes_places = normalize_place_concepts(
+            raw_concepts, payload.get("factors") or {})
         notes += notes_places
         raw_concepts, moved, condition_notes = hoist_condition_concepts(
             raw_concepts, payload.get("factors") or {})
@@ -277,23 +279,43 @@ def _hoist_date_token_keys(factors, notes):
 #: 기준은 dimension factor, "전국"은 장소 조건 없음이다.
 NON_PLACE_WORDS = frozenset({"읍면동", "시군구", "시도", "h3", "H3", "H3 셀", "h3 셀", "셀",
                              "전국", "전 지역", "전체 지역"})
+#: 그 가운데 "장소 조건 없음"을 뜻하는 말. 그룹 단위 말과 달리 dimension 없이도 뺄 수 있다.
+SCOPELESS_WORDS = frozenset({"전국", "전 지역", "전체 지역"})
+#: 값 없는 장소의 text가 단위 말에 이 말만 붙은 것이면("도착 읍면동") 그룹 기준을 적은 것이다.
+_UNIT_TEXT_PREFIX = re.compile(r"^(?:출발|도착|승차|하차|각)?\s*")
 
 
-def normalize_place_concepts(raw_concepts):
+def _unit_text(raw):
+    text = _UNIT_TEXT_PREFIX.sub("", (raw.get("text") or "").strip()).strip()
+    return text.replace("별", "").replace(" 간", "").strip()
+
+
+def normalize_place_concepts(raw_concepts, factors=None):
     """장소 값의 자리만 바로잡는다. (개념 목록, 기록). 값을 새로 만들지 않는다.
 
     1. name이 비었고 region만 있으면 region이 장소다. 마지막 낱말이 name, 앞은 region
        ("대구 소속"을 {"name": "", "region": "대구"}로 적은 경우).
     2. region이 name과 같으면 region을 비운다(장소는 자기 자신의 상위 지역이 아니다).
-    3. name이 행정 단위·범위 말(``NON_PLACE_WORDS``)이면 장소가 아니다. region이 있으면 1과
-       같이 region이 장소이고, 없으면 그 개념을 뺀다.
+    3. name이 행정 단위 말(``NON_PLACE_WORDS``)이면 장소가 아니다. region이 있으면 1과 같이
+       region이 장소다. region이 없으면 그 개념을 빼되, 그룹 단위 말은 **dimension이 있을 때만**
+       뺀다. 그룹 기준이 다른 자리에 없는데 빼면 "읍면동별 통행량"이 전체 값 하나로 조용히 바뀐다.
+       "전국"처럼 장소 조건이 없다는 말은 dimension 없이도 뺀다.
+    4. 값이 없는 장소의 text가 그룹 단위 말("시군구", "도착 읍면동")이고 dimension이 있으면 그
+       개념을 뺀다(그룹 기준을 장소 자리에 되풀이한 것, 개발셋 078).
 
     어느 규칙에도 해석의 선택이 없다. 이름이 질문에 있는지는 condition_check와 조회가 따로 본다.
     """
     if not isinstance(raw_concepts, list):
         return raw_concepts, []
+    grouped = bool((factors or {}).get("dimension"))
     notes, cleaned = [], []
     for raw in raw_concepts:
+        if (isinstance(raw, dict) and raw.get("concept") == "LOCATION"
+                and raw.get("subtype") == "place" and raw.get("value") in (None, "", {})
+                and grouped and _unit_text(raw) in NON_PLACE_WORDS - SCOPELESS_WORDS):
+            notes.append({"concept": raw.get("id"), "rule": "unit_word_place_dropped",
+                          "before": {"text": raw.get("text")}})
+            continue
         if not (isinstance(raw, dict) and raw.get("concept") == "LOCATION"
                 and raw.get("subtype") == "place" and isinstance(raw.get("value"), dict)):
             cleaned.append(raw)
@@ -303,6 +325,13 @@ def normalize_place_concepts(raw_concepts):
         region = (value.get("region") or "").strip()
         before = {"name": value.get("name"), "region": value.get("region")}
         rule = None
+        if name in NON_PLACE_WORDS and not region and not grouped \
+                and name not in SCOPELESS_WORDS:
+            # 그룹 기준이 grounding 어디에도 없다. 빼지 않고 두어 조회가 실패하게 한다.
+            notes.append({"concept": raw.get("id"), "rule": "unit_word_place_kept_no_dimension",
+                          "before": before})
+            cleaned.append(raw)
+            continue
         if name in NON_PLACE_WORDS:
             if not region:
                 notes.append({"concept": raw.get("id"), "rule": "non_place_word_dropped",

@@ -16,7 +16,10 @@ LLM이 적은 grounding(payload)을 검증하기 전에, 질문 원문을 **닫�
   계약으로 확인된 기간만 실행, ``geoflow/compiler.py`` DATE_POLICY_GUARANTEED).
 - 택시 유형: "개인(용)택시", "법인(용)택시", "회사택시", "전체/모든 택시"를 찾는다.
   부정·여러 유형은 지원하지 않는다. all은 생략과 실행 의미가 같고, 명시 여부는 stated에 남긴다.
-- 장소: LLM이 적은 장소명이 질문에 문자열 근거가 있는지만 본다.
+- 장소: LLM이 적은 장소명이 질문에 문자열 근거가 있는지 본다.
+- 관계(``geoflow/relations.py``, grounding_v2): 장소의 출발·도착 역할, 그룹 기준과 적용 위치, 순위 방향과
+  개수, 집계 단계, 답의 대상(값인가 구간인가), 측정값과 암묵 사건. 근거가 분명한 누락은 채우고 충돌은
+  바로잡으며, 반대 표현이 함께 있으면 확인을 요청하고, 읽지 못하면 LLM 값을 둔다. 근거 없는 집계·역할은 지운다.
 
 조건 상태(``STATUS_*``): interpreted / conflict / ambiguous / unverifiable / absent /
 unsupported. 규칙이 읽지 못했다는 것만으로 부재를 확정하지 않는다. LLM 값은 그 근거 표현이
@@ -26,7 +29,7 @@ unsupported. 규칙이 읽지 못했다는 것만으로 부재를 확정하지 �
 
 - 문자열이 질문에 있다는 것은 해석이 맞다는 보장이 아니다. 단서 어휘는 닫혀 있어, 목록 밖
   표현이 단서도 남기지 않으면 부재로 판정된다.
-- 장소 누락, 장소의 지역 의미, 출발/도착 관계의 의미는 검증하지 않는다(``NOT_CHECKED``).
+- 장소 누락, 장소의 지역 의미, 닫힌 문형 밖의 출발/도착 관계는 검증하지 않는다(``NOT_CHECKED``).
 - 평가 라벨을 쓰지 않는다. 이 모듈은 질문 원문과 기준일만 본다.
 
 지원 날짜 표현(이 밖은 "해석 불가"로 두고 LLM 값을 바꾸지 않는다)
@@ -511,64 +514,68 @@ def reconcile_taxi_type(factors, question, raw_text=""):
     return record
 
 
-#: 개수 표현("3곳", "2개", "5위", "상위 3")이 있으면 limit은 LLM 값을 따른다.
-_COUNT = r"\d+\s*(?:곳|개|위|군데)|(?:상위|하위)\s*\d+"
-
-
 def reconcile_ranking(factors, question):
-    """"가장 많은 곳"처럼 하나를 고르는 순위에서 빠진 limit=1을 채운다. 채우기만 한다.
+    """순위의 개수(limit)를 질문의 개수 표현으로 정한다.
 
-    업체 규칙(prompts/system.yaml tool_calling): top이나 bottom 값만 필요하면 limit을 1로 제한한다.
-    order가 있고, "가장"이 있고, 개수 표현이 없고, limit이 비었을 때만이다. 값이 있으면 바꾸지 않는다.
+    개수 표현("상위 3", "2곳", "3개")이 한 값이면 그 값, 없고 "가장/제일"이면 1(업체 규칙:
+    top이나 bottom 하나만 필요하면 limit=1). 빈 값은 채우고, 다른 값은 바로잡는다(근거와 이전 값을
+    남긴다). 개수 표현이 여럿이면 LLM 값을 둔다. order와 dimension이 있을 때만 본다.
     """
-    record = {"llm_value": factors.get("limit")}
-    if (factors.get("order") and factors.get("dimension") and factors.get("limit") is None
-            and re.search(r"가장", question) and not re.search(_COUNT, question)):
-        factors["limit"] = 1
-        record.update(value=1, action="filled", basis="single_superlative_without_count")
-    else:
-        record.update(value=factors.get("limit"), action="none", basis="not_applicable")
+    from geoflow import relations
+
+    record = {"slot": "limit"}
+    if not (factors.get("order") and factors.get("dimension")):
+        record.update(llm_value=factors.get("limit"), value=factors.get("limit"),
+                      action="none", basis="not_applicable", evidence=[])
+        return record
+    strength, value, evidence = relations.read_limit(question)
+    if strength != relations.CLEAR:
+        strength = relations.NONE
+    value = relations.settle(record, factors.get("limit"), (strength, value, evidence))
+    if value is not None:
+        factors["limit"] = value
     return record
-
-
-#: 승차·하차 한쪽 기준을 가리키는 말. 둘 다 있거나 "승하차", "노선", "간"이면 조합(both)이다.
-_PICKUP_WORDS = r"승차|탑승"
-_DROPOFF_WORDS = r"하차"
-_BOTH_WORDS = r"승하차|노선|OD|\s간\s|\s간의"
 
 
 #: 그룹·순위를 말하는 표현. 없으면 dimension 계열 factor의 근거가 없다.
 _GROUPING_CUES = r"별|마다|상위|하위|가장|순서|순으로|곳|노선|읍면동|시군구|시도|셀|요일|\d+\s*개"
 
 
-def reconcile_dimension_target(factors, question, concepts=None):
-    """실차 구간을 나누는 기준(dimension_target)이 빠졌고 질문이 한쪽을 분명히 말하면 채운다.
+def reconcile_dimension_target(factors, question, concepts=None, consumed=()):
+    """실차 구간을 나누는 기준(dimension_target)을 질문 표현으로 정한다.
 
-    dimension이 있을 때만, 값이 비었을 때만 채운다. "출발한 … 도착 읍면동"처럼 승차·하차 말이
-    없는 표현은 읽지 않는다(LLM 값 유지). 이 조건을 받는 것은 실차 구간 건수(trip_count)뿐이므로
-    측정값이 trip_count일 때만 채운다.
+    - dimension도 그룹 표현도 없는데 값만 있으면 근거가 없으므로 지운다.
+    - 측정값이 실차 구간 건수(trip_count)이고 dimension이 있을 때만 읽는다. 장소의 역할을 정한 말
+      (``consumed``, 예: "수성구에서 **출발**한")은 떼고, 그룹 단위에 붙은 말("**도착** 읍면동")로
+      정한다. "간", "노선", "OD", "승하차"는 조합(both)이다. 서로 어긋나면 확인을 요청한다.
     """
-    record = {"llm_value": factors.get("dimension_target")}
+    from geoflow import relations
+
+    record = {"slot": "dimension_target", "llm_value": factors.get("dimension_target")}
     if (factors.get("dimension_target") is not None and not factors.get("dimension")
             and not re.search(_GROUPING_CUES, question)):
         # 나눌 기준(dimension)도, 그룹을 말하는 표현도 없다. 적용 위치만 있는 값은 근거가 없다.
         factors.pop("dimension_target")
-        record.update(value=None, action="removed_no_evidence",
+        record.update(value=None, action="removed_no_evidence", evidence=[],
                       basis="target_without_dimension_or_grouping_cue")
         return record
     trip_count = any(isinstance(item, dict) and item.get("role") == "MEASURE"
                      and item.get("subtype") == "trip_count" for item in concepts or [])
-    if trip_count and factors.get("dimension") and factors.get("dimension_target") is None:
-        both = re.search(_BOTH_WORDS, question)
-        pickup = re.search(_PICKUP_WORDS, question.replace("승하차", ""))
-        dropoff = re.search(_DROPOFF_WORDS, question.replace("승하차", ""))
-        value = ("both" if both or (pickup and dropoff) else
-                 "pickup" if pickup else "dropoff" if dropoff else None)
-        if value is not None:
-            factors["dimension_target"] = value
-            record.update(value=value, action="filled", basis="question_expression")
-            return record
-    record.update(value=factors.get("dimension_target"), action="none", basis="not_applicable")
+    if not (trip_count and factors.get("dimension")):
+        record.update(value=factors.get("dimension_target"), action="none",
+                      basis="not_applicable", evidence=[])
+        return record
+    reading = relations.read_dimension_target(concepts, question, list(consumed))
+    if reading[0] == relations.CONFLICTING:
+        record.update(value=None, action="clarify", basis="conflicting_expressions",
+                      evidence=reading[2], strength=reading[0])
+        raise _error("RELATION_EXPRESSION_AMBIGUOUS",
+                     "질문에서 그룹을 출발지 기준으로 나눌지 도착지 기준으로 나눌지 정할 수 없습니다.",
+                     clarify="dimension_target", context={"dimension_target": record})
+    # 생략은 schema 기본값 both(출발·도착 조합)와 같다.
+    value = relations.settle(record, factors.get("dimension_target"), reading, default="both")
+    if value is not None:
+        factors["dimension_target"] = value
     return record
 
 
@@ -587,21 +594,106 @@ _MEASURE_WORDS = (
 )
 
 
-def check_measure(concepts, question, raw_text=""):
-    """질문의 측정값 말과 LLM 측정값이 어긋나면 멈춘다. 고치지 않는다(어느 쪽이 맞는지 고르지 않는다).
+def _same_family(concept, llm_subtype, word_subtype):
+    """두 측정값이 같은 core concept이고 같은 사건(EVENT)에서 나오는가. 그러면 subtype만 바뀐다."""
+    from geoflow import operator_mapping
+    from geoflow.types import CONCEPT_SUBTYPES, CoreConcept
 
-    질문에서 한 계열만 찾았을 때만 판정한다. 둘 이상이거나 없으면 판정하지 않는다.
+    try:
+        core = CoreConcept(concept)
+    except ValueError:
+        return False
+    subtypes = CONCEPT_SUBTYPES.get(core, frozenset())
+    if llm_subtype not in subtypes or word_subtype not in subtypes:
+        return False
+    event = operator_mapping.event_subtype_for(core, llm_subtype)
+    return event is not None and event == operator_mapping.event_subtype_for(core, word_subtype)
+
+
+def _core_of(subtype):
+    from geoflow.types import CONCEPT_SUBTYPES
+
+    cores = [core for core, subtypes in CONCEPT_SUBTYPES.items() if subtype in subtypes]
+    return cores[0] if len(cores) == 1 else None
+
+
+def _required_event(concept, subtype):
+    from geoflow import operator_mapping
+    from geoflow.types import CoreConcept
+
+    try:
+        return operator_mapping.event_subtype_for(CoreConcept(concept), subtype)
+    except ValueError:
+        return None
+
+
+def align_event(concepts, measure_record):
+    """측정값이 질문의 말과 맞을 때, 암묵 사건(EVENT, implicit)을 그 측정값이 요구하는 사건으로 맞춘다.
+
+    "실차 택시 통행량"(passage_count)에 EVENT/trip을 붙이면 합성할 operator가 없다(NO_OPERATOR).
+    사건은 질문의 말이 아니라 측정값에서 정해지는 개념이고(``operator_mapping.event_subtype_for``가
+    하나로 정함), 측정값은 질문의 말로 확인했으므로 선택의 여지가 없다. 사건 개념이 하나일 때만.
     """
-    measure = next((item.get("subtype") for item in concepts or []
-                    if isinstance(item, dict) and item.get("role") == "MEASURE"), None)
+    record = {"slot": "event", "action": "none", "basis": "not_applicable", "evidence": []}
+    if measure_record.get("basis") not in ("agrees", "measure_word_same_family",
+                                           "measure_word_filled"):
+        return record
+    target = next((item for item in concepts if isinstance(item, dict)
+                   and item.get("role") == "MEASURE"), None)
+    events = [item for item in concepts if isinstance(item, dict)
+              and item.get("concept") == "EVENT" and item.get("source", "implicit") == "implicit"]
+    required = _required_event(target.get("concept"), target.get("subtype")) if target else None
+    if required is None or len(events) != 1 or events[0].get("subtype") == required:
+        return record
+    record.update(concept=events[0].get("id"), llm_value=events[0].get("subtype"), value=required,
+                  action="corrected", basis="event_required_by_confirmed_measure",
+                  evidence=measure_record.get("evidence") or [])
+    events[0]["subtype"] = required
+    return record
+
+
+def check_measure(concepts, question, raw_text=""):
+    """질문의 측정값 말과 LLM 측정값을 대조한다.
+
+    질문에서 한 계열만 찾았을 때만 판정한다. 둘 이상이거나 없으면 판정하지 않는다. 어긋나면:
+    - 같은 core concept·같은 사건의 측정값끼리("RPM 중간값"을 speed로)는 질문의 말로 subtype을
+      바로잡는다. Tool 계열과 개념 구조가 그대로이고 질문의 말이 한 값만 가리키기 때문이다.
+    - 그 밖(사건이 달라 개념 구조가 바뀌는 경우)은 확인을 요청한다. 어느 쪽이 맞는지 고르지 않는다.
+    """
+    target = next((item for item in concepts or []
+                   if isinstance(item, dict) and item.get("role") == "MEASURE"), None)
+    measure = target.get("subtype") if target else None
     found = [name for name, pattern in _MEASURE_WORDS if re.search(pattern, question)]
-    record = {"llm_value": measure, "mentions": found}
+    evidence = [{"text": m.group(0), "start": m.start()} for name, pattern in _MEASURE_WORDS
+                if name in found for m in [re.search(pattern, question)]]
+    record = {"slot": "measure", "llm_value": measure, "mentions": found, "evidence": evidence}
+    if target is None and len(found) == 1 and isinstance(concepts, list):
+        # 측정값 개념이 빠졌다. 질문의 측정값 말이 한 계열이고, 모델이 적은 사건이 그 측정값의
+        # 사건과 같을 때만 채운다(개념을 지어내지 않는다: 말과 사건 두 근거가 모두 있어야 한다).
+        core = _core_of(found[0])
+        events = {item.get("subtype") for item in concepts
+                  if isinstance(item, dict) and item.get("concept") == "EVENT"}
+        if core is not None and _required_event(core.value, found[0]) in events:
+            taken = {item.get("id") for item in concepts if isinstance(item, dict)}
+            new_id = next(name for name in (found[0], "measure", "measure_1", "measure_2")
+                          if name not in taken)
+            concepts.append({"id": new_id, "concept": core.value, "subtype": found[0],
+                             "role": "MEASURE", "source": "implicit"})
+            record.update(value=found[0], status=STATUS_INTERPRETED, action="filled",
+                          basis="measure_word_filled", added=new_id)
+            return record
+    if len(found) == 1 and measure and measure != found[0] and measure != "place" \
+            and _same_family(target.get("concept"), measure, found[0]):
+        target["subtype"] = found[0]
+        record.update(value=found[0], status=STATUS_CONFLICT, action="corrected",
+                      basis="measure_word_same_family")
+        return record
     if len(found) == 1 and measure and measure != found[0] and measure != "place":
         record.update(status=STATUS_CONFLICT, action="clarify", basis="measure_word_conflict")
         raise _error("MEASURE_EXPRESSION_CONFLICT",
                      f"질문의 측정값 표현({found[0]})과 해석한 측정값({measure})이 다릅니다.",
                      clarify="measure", context={"measure": record}, raw_text=raw_text)
-    record.update(status=STATUS_INTERPRETED if found == [measure] else STATUS_ABSENT,
+    record.update(value=measure, status=STATUS_INTERPRETED if found == [measure] else STATUS_ABSENT,
                   action="none", basis="agrees" if found == [measure] else "not_judged")
     return record
 
@@ -650,16 +742,181 @@ def check_places(concepts, question, raw_text=""):
 NOT_CHECKED = (
     "place_completeness: 질문의 장소가 모두 출력되었는지(누락 탐지 없음)",
     "place_semantics: 장소명이 뜻하는 지역(동명 지역 구분)",
-    "od_semantics: 출발/도착 관계의 의미(보존만 함)",
+    "od_semantics: 닫힌 문형(조사 + 서술어) 밖의 출발/도착 관계(읽지 못하면 LLM 값을 둠)",
     "unsupported_grammar: 지원 문법 밖의 날짜·유형 표현(보류로 둠)",
 )
 
 
-def reconcile_payload(payload, question, *, reference_date, raw_text=""):
-    """LLM payload의 조건을 질문 원문 기준으로 다시 정한다. (새 payload, 감사 기록).
+#: 조건 계층이 값을 정할 수 있는 factor. 그 밖의 factor와 개념 구조는 바꾸지 않는다(끝에서 확인).
+OWNED_FACTORS = ("date", "taxi_type", "taxi_status", "dimension", "dimension_target", "order",
+                 "limit", "aggregation", "rollup")
+#: 감사 기록 가운데 corrections/held로 모으는 항목.
+_RECORDED = ("date", "taxi_type", "taxi_status", "measure", "event", "dimension",
+             "dimension_target", "order", "limit", "aggregation", "rollup")
 
-    바꾸는 것은 factors의 date와 taxi_type뿐이다. 개념 구조, 집계 표현, scope는 건드리지
-    않는다(끝에서 확인한다).
+
+def _measure_position(concepts, question):
+    measure = next((item.get("subtype") for item in concepts or []
+                    if isinstance(item, dict) and item.get("role") == "MEASURE"), None)
+    positions = [m.start() for name, pattern in _MEASURE_WORDS if name == measure
+                 for m in [re.search(pattern, question)] if m]
+    if not positions:
+        positions = [m.start() for _, pattern in _MEASURE_WORDS
+                     for m in [re.search(pattern, question)] if m]
+    return min(positions) if positions else None
+
+
+def _settle_removal(record, factors, key, reading, default=None):
+    """집계 읽기 하나를 적용한다. 'clear + 값 없음'은 질문에 그 집계가 없다는 뜻이다."""
+    from geoflow import relations
+
+    strength, value, evidence = reading
+    llm_value = factors.get(key)
+    if strength == relations.CLEAR and value is None:
+        record.update(llm_value=llm_value, value=None, evidence=evidence, strength=strength)
+        if llm_value is None:
+            record.update(action="none", basis="not_stated")
+        else:
+            factors.pop(key)
+            record.update(action="removed_no_evidence", basis="aggregation_not_in_question")
+        return record
+    settled = relations.settle(record, llm_value, reading, default=default)
+    if settled is not None:
+        factors[key] = settled
+    return record
+
+
+def reconcile_relations(fixed, question, raw_text="", *, structured=False):
+    """관계(답의 대상, 그룹 기준, 장소 역할, 적용 위치, 순위, 집계 단계)를 질문 문형으로 정한다.
+
+    ``geoflow/relations.py``의 규칙과 처리 표를 따른다. fixed(payload 사본)를 고친다. 기록을 돌려준다.
+    구조화 집계 표기(``aggregation_plan``)를 쓰는 grounding은 구간 선택(select)까지 표현하고 그 의미를
+    ``structured_grounding``이 검증하므로, 답의 대상과 집계 단계는 여기서 다루지 않는다.
+    """
+    from geoflow import relations
+
+    factors = fixed["factors"]
+    structured = structured or "aggregation_plan" in factors
+    audit = {}
+    target = relations.read_answer_target(question)
+    audit["answer_target"] = {"slot": "answer_target", "value": target[1], "evidence": target[2],
+                              "strength": target[0], "action": "none",
+                              "basis": "structured_grounding_expresses_selection" if structured
+                              else "not_applicable"}
+    if target[1] == "bucket" and not structured:
+        # flat grounding은 구간 선택을 적을 자리가 없다. 답하면 "가장 큰 값"을 "그 값을 가진 주"로
+        # 내놓게 된다(조용한 오답).
+        audit["answer_target"].update(action="unsupported", basis="asks_for_bucket_label")
+        raise _error("BUCKET_SELECTION_UNSUPPORTED",
+                     "값이 아니라 그 값을 가진 구간(주·달)을 묻는 질문은 지원하지 않습니다. 구간별 대표값"
+                     "(예: 가장 큰 값)은 계산할 수 있지만 어느 구간인지는 Tool이 돌려주지 않습니다.",
+                     context={"answer_target": audit["answer_target"]}, raw_text=raw_text)
+
+    concepts = fixed.get("concepts") or []
+    plain = relations.mask_places(concepts, question)
+    record = {"slot": "dimension"}
+    reading = relations.read_dimension(concepts, question)
+    if reading[0] != relations.CLEAR or factors.get("bucket") is not None:
+        # 단위 말이 여럿이면 한쪽을 고르지 않는다. 구간(bucket)과 dimension은 함께 쓰지 않는다.
+        reading = (relations.NONE, None, reading[2])
+    value = relations.settle(record, factors.get("dimension"), reading)
+    if value is not None:
+        factors["dimension"] = value
+    audit["dimension"] = record
+
+    trip_count = any(isinstance(item, dict) and item.get("role") == "MEASURE"
+                     and item.get("subtype") == "trip_count" for item in concepts)
+    consumed = []
+    audit["od_roles"] = []
+    if trip_count:
+        fixed["concepts"], audit["od_roles"], consumed = relations.reconcile_place_roles(
+            concepts, question)
+    else:
+        # 출발·도착 역할을 받는 Tool은 실차 구간 건수뿐이다. 다른 측정값의 장소에 붙은 역할은 질문에
+        # 출발·도착 서술어가 없을 때만 지운다(있으면 두어 합성 단계가 지원 여부를 정한다).
+        fixed["concepts"], audit["od_roles"] = relations.drop_unstated_roles(concepts, question)
+    audit["dimension_target"] = reconcile_dimension_target(
+        factors, question, fixed.get("concepts"), consumed)
+
+    record = {"slot": "order"}
+    if factors.get("dimension"):
+        reading = relations.read_order(plain)
+        if reading[0] == relations.CONFLICTING:
+            record.update(llm_value=factors.get("order"), value=None, action="clarify",
+                          basis="conflicting_expressions", evidence=reading[2])
+            raise _error("RELATION_EXPRESSION_AMBIGUOUS",
+                         "질문에 많은 쪽과 적은 쪽을 가리키는 말이 함께 있어 순위 방향을 정할 수 없습니다.",
+                         clarify="order", context={"order": record}, raw_text=raw_text)
+        value = relations.settle(record, factors.get("order"), reading)
+        if value is not None:
+            factors["order"] = value
+    else:
+        record.update(llm_value=factors.get("order"), value=factors.get("order"), action="none",
+                      basis="not_applicable", evidence=[])
+    audit["order"] = record
+    audit["limit"] = reconcile_ranking(factors, plain)
+
+    if structured:
+        audit["aggregation"] = {"slot": "aggregation", "llm_value": factors.get("aggregation"),
+                                "value": factors.get("aggregation"), "action": "none",
+                                "basis": "structured_grounding", "evidence": []}
+        audit["rollup"] = dict(audit["aggregation"], slot="rollup",
+                               llm_value=factors.get("rollup"), value=factors.get("rollup"))
+    elif factors.get("bucket") is not None:
+        inner, outer = relations.read_stages(
+            plain, _measure_position(fixed.get("concepts"), plain))
+        audit["aggregation"] = _settle_removal({"slot": "aggregation"}, factors, "aggregation",
+                                               inner)
+        # 구간 사이 집계는 채우거나 바로잡기만 한다. 없다고 지우지 않는다.
+        if outer[0] == relations.CLEAR and outer[1] is None:
+            outer = (relations.NONE, None, [])
+        audit["rollup"] = _settle_removal({"slot": "rollup"}, factors, "rollup", outer)
+    else:
+        reading = relations.read_flat_aggregation(
+            plain, grouped_by_dimension=bool(factors.get("dimension")))
+        if reading[0] == relations.CONFLICTING:
+            reading = (relations.NONE, None, reading[2])
+        # 구간 없는 한 단계 집계에서 생략은 Tool 기본값(avg)과 같다.
+        audit["aggregation"] = _settle_removal({"slot": "aggregation"}, factors, "aggregation",
+                                               reading, default="avg")
+        audit["rollup"] = {"slot": "rollup", "llm_value": factors.get("rollup"),
+                           "value": factors.get("rollup"), "action": "none",
+                           "basis": "not_applicable", "evidence": []}
+        if factors.get("rollup") is not None and not relations.has_bucket_expression(plain):
+            # 구간 사이 집계는 구간(bucket)과 짝으로만 뜻이 있다. 구간도 구간 표현도 없으면 근거가 없다.
+            factors.pop("rollup")
+            audit["rollup"].update(value=None, action="removed_no_evidence",
+                                   basis="rollup_without_bucket")
+    return audit
+
+
+def _structure(concepts, added, aligned=()):
+    """소유 범위 밖의 개념 구조. od_role, 측정값 subtype, 같은 장소를 나눠 더한 개념, 채운 측정값
+    개념, 측정값에 맞춘 암묵 사건의 subtype은 뺀다."""
+    out = []
+    for item in concepts or []:
+        if not isinstance(item, dict):
+            out.append(item)
+            continue
+        if item.get("id") in added:
+            continue
+        item = copy.deepcopy(item)
+        item.pop("od_role", None)
+        attributes = dict(item.get("attributes") or {})
+        attributes.pop("od_role", None)
+        item["attributes"] = attributes
+        if item.get("role") == "MEASURE" or item.get("id") in aligned:
+            item.pop("subtype", None)
+        out.append(item)
+    return out
+
+
+def reconcile_payload(payload, question, *, reference_date, raw_text="", structured=False):
+    """LLM payload의 조건과 관계를 질문 원문 기준으로 다시 정한다. (새 payload, 감사 기록).
+
+    바꿀 수 있는 것은 ``OWNED_FACTORS``, 장소 개념의 od_role, 같은 사건 계열 안의 측정값 subtype,
+    "X 안에서"의 같은 장소를 출발·도착 두 개념으로 나누는 것뿐이다. 그 밖의 개념 구조와 scope는
+    건드리지 않는다(끝에서 확인한다). 모든 변경은 근거 표현·전후 값·이유와 함께 기록된다.
     """
     if reference_date is None:
         raise ValueError("조건 해석에는 기준일이 필요합니다.")
@@ -668,6 +925,8 @@ def reconcile_payload(payload, question, *, reference_date, raw_text=""):
     if not isinstance(factors, dict):
         factors = {}
         fixed["factors"] = factors
+    if not isinstance(fixed.get("concepts"), list):
+        fixed["concepts"] = []
     audit = {
         "reference_date": reference_date.isoformat(),
         "timezone": str(SERVICE_TIMEZONE),
@@ -676,23 +935,34 @@ def reconcile_payload(payload, question, *, reference_date, raw_text=""):
         "taxi_status": reconcile_taxi_status(factors, question, raw_text),
         "places": check_places(fixed.get("concepts"), question, raw_text),
         "measure": check_measure(fixed.get("concepts"), question, raw_text),
-        "limit": reconcile_ranking(factors, question),
-        "dimension_target": reconcile_dimension_target(factors, question,
-                                                       fixed.get("concepts")),
-        "place_completeness": "unchecked",
-        "not_checked": list(NOT_CHECKED),
     }
-    owned = ("date", "taxi_type", "taxi_status", "limit", "dimension_target")
+    audit["event"] = align_event(fixed.get("concepts"), audit["measure"])
+    audit.update(reconcile_relations(fixed, question, raw_text, structured=structured))
+    audit["place_completeness"] = "unchecked"
+    audit["not_checked"] = list(NOT_CHECKED)
     before = {key: value for key, value in (payload.get("factors") or {}).items()
-              if key not in owned}
-    after = {key: value for key, value in factors.items() if key not in owned}
-    if before != after or fixed.get("concepts") != payload.get("concepts"):
-        raise AssertionError("조건 보정이 소유한 factor 밖을 바꿨습니다.")
+              if key not in OWNED_FACTORS}
+    after = {key: value for key, value in factors.items() if key not in OWNED_FACTORS}
+    added = {record.get("added") for record in audit["od_roles"] + [audit["measure"]]
+             if record.get("added")}
+    aligned = {audit["event"]["concept"]} if audit["event"]["action"] == "corrected" else set()
+    if before != after or _structure(fixed.get("concepts"), added, aligned) != _structure(
+            payload.get("concepts") if isinstance(payload.get("concepts"), list) else [], (),
+            aligned):
+        raise AssertionError("조건 보정이 소유한 범위 밖을 바꿨습니다.")
+    changed = ("corrected", "filled", "removed_no_evidence")
     audit["corrections"] = [
         {"condition": key, "from": audit[key]["llm_value"], "to": audit[key].get("value"),
-         "action": audit[key]["action"], "basis": audit[key]["basis"]}
-        for key in ("date", "taxi_type", "taxi_status", "limit", "dimension_target")
-        if audit[key]["action"] in ("corrected", "filled", "removed_no_evidence")
+         "action": audit[key]["action"], "basis": audit[key]["basis"],
+         "evidence": audit[key].get("evidence") or [
+             {"text": m.get("text")} for m in audit[key].get("mentions") or []
+             if isinstance(m, dict)]}
+        for key in _RECORDED if audit[key].get("action") in changed
+    ] + [
+        {"condition": "od_role", "concept": record["concept"], "from": record["llm_value"],
+         "to": record["value"], "action": record["action"], "basis": record["basis"],
+         "evidence": record["evidence"]}
+        for record in audit["od_roles"] if record["action"] in changed
     ]
     audit["held"] = [
         {"condition": key, "value": audit[key].get("value"), "action": audit[key]["action"],

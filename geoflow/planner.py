@@ -498,6 +498,7 @@ class GeoFlowPlanner:
             reference = (self.clock or conditions.reference_now)()
             payload, audit = conditions.reconcile_payload(
                 payload, question, reference_date=reference, raw_text=text,
+                structured=self.structured,
             )
         grounding = parse_grounding(
             payload, question, raw_text=text,
