@@ -711,13 +711,20 @@ def cmd_llm(args):
             else:
                 state = type("Skipped", (), {"succeeded": True})()
             recorder = _RecordingClient(replay or client)
+            # 기준 코드(--code-root)에는 없는 인자다. 기본값이 아닐 때만 넘긴다.
+            options = {}
+            if args.condition_notes:
+                options["condition_notes"] = True
+            elif args.condition_check:
+                options["condition_notes"] = False   # production CLI 기본(감사 문구 없음)
+            if args.no_normalize:
+                options["normalize_grounding"] = False
             pipeline = GeoFlowPipeline.create(
                 client=recorder, tool_executor=_executor(),
                 aggregation_grounding=structured_grounding.FLAT,
                 clock=lambda: REFERENCE_DATE, condition_check=args.condition_check,
-                condition_notes=args.condition_notes,
-                normalize_grounding=not args.no_normalize,
-                execution_profile=providers.profile_for(providers.MOCK, providers.LEGACY))
+                execution_profile=providers.profile_for(providers.MOCK, providers.LEGACY),
+                **options)
             observed = run_item(pipeline, item["question"])
             category, checks = score(item, observed)
             grounding_ok, grounding_diffs = grounding_check(item, observed["grounding"])
