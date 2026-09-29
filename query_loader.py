@@ -21,7 +21,12 @@ def load_queries(path=DEFAULT_QUERY_FILE):
     """YAML에서 고유 id와 normalized eval_id/question을 읽어 반환한다."""
     query_path = Path(path).expanduser().resolve()
     try:
-        document = yaml.safe_load(query_path.read_text(encoding="utf-8"))
+        text = query_path.read_text(encoding="utf-8")
+        document = yaml.safe_load(text)
+        # id는 YAML 원문 그대로 쓴다. safe_load(YAML 1.1)는 "010"을 8진수 8로, "001"을 1로
+        # 읽어 id가 원문과 달라진다(업체 100문항에서 63개). 같은 문서를 BaseLoader로 다시 읽어
+        # 원문 문자열을 얻는다.
+        raw_document = yaml.load(text, Loader=yaml.BaseLoader)
     except (OSError, yaml.YAMLError) as error:
         raise QueryValidationError(
             f"Query YAML을 읽을 수 없습니다: {query_path}\n{error}"
@@ -36,7 +41,9 @@ def load_queries(path=DEFAULT_QUERY_FILE):
     for index, item in enumerate(document, start=1):
         if not isinstance(item, dict):
             raise QueryValidationError(f"Query {index}는 object여야 합니다.")
-        query_id = str(item.get("id", "")).strip()
+        raw_item = raw_document[index - 1] if isinstance(raw_document, list) else {}
+        raw_id = raw_item.get("id") if isinstance(raw_item, dict) else None
+        query_id = str(raw_id if isinstance(raw_id, str) else item.get("id", "")).strip()
         question = item.get("question")
         question = question.strip() if isinstance(question, str) else ""
         if not query_id or not question:
