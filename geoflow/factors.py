@@ -128,8 +128,9 @@ FACTOR_SPECS: dict[str, FactorSpec] = {
         FactorSpec(
             "select", values=frozenset({"max", "min"}),
             meaning=(
-                "구간별 값 가운데 가장 큰(max)·작은(min) **구간 자체**를 답으로 고른다. 값이 아니라 그 값을 "
-                "가진 주·월을 물을 때 rollup 대신 쓴다. bucket과 짝으로만 쓴다."
+                "주·월 구간(bucket)별 값 가운데 가장 큰(max)·작은(min) **구간 자체**를 답으로 고른다. 값이 아니라 "
+                "그 값을 가진 주·월을 물을 때 rollup 대신 쓴다. bucket과 짝으로만 쓴다. 지역·요일 가운데 "
+                "고르는 순위는 select가 아니라 dimension·order·limit이다."
             ),
         ),
         FactorSpec(
@@ -201,7 +202,8 @@ FACTOR_STAGE_NOTE = """구간을 나누는 질문에서는 집계가 두 단계�
 - "총", "합계", "모두 더한"은 sum이다. "가장 큰 값", "최댓값"은 값을 묻는 집계(max)이다.
 - 구간 표현이 없으면 집계어는 aggregation이다.
   - "평균 수입은?" → aggregation=avg (bucket과 rollup은 넣지 않는다)
-- 값이 아니라 그 값을 가진 구간(어느 주, 어느 달)을 물으면 rollup 대신 select를 쓴다.
+- 값이 아니라 그 값을 가진 구간(어느 주, 어느 달)을 물으면 rollup 대신 select를 쓴다. select는 주·월
+  구간을 고를 때만 쓴다. 지역·요일을 고르는 순위("가장 많은 곳")는 dimension·order·limit이다.
   - "주별 운행 일수 평균이 가장 작은 주는?" → bucket=week, aggregation=avg, select=min
   - "주별 운행 일수 평균 중 가장 작은 값은?" → bucket=week, aggregation=avg, rollup=min
 - rollup에 week나 month 같은 시간 단위를 넣지 않는다. rollup은 합치는
