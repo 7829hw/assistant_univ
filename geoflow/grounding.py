@@ -179,7 +179,9 @@ def parse_grounding(payload, question, *, raw_text="",
     raw_concepts, hoisted = _hoist_structural_factors(payload.get("concepts"))
     notes = []
     if normalize:
-        raw_concepts, notes = normalize_place_concepts(raw_concepts)
+        payload = {**payload, "factors": _hoist_date_token_keys(payload.get("factors"), notes)}
+        raw_concepts, notes_places = normalize_place_concepts(raw_concepts)
+        notes += notes_places
         raw_concepts, moved, condition_notes = hoist_condition_concepts(
             raw_concepts, payload.get("factors") or {})
         hoisted.update(moved)
@@ -248,6 +250,27 @@ def _hoist_structural_factors(raw_concepts):
             raw["attributes"] = attributes
         cleaned.append(raw)
     return cleaned, hoisted
+
+
+#: pt_date 토큰. factor 이름 자리에 적히는 경우가 있다({"holiday": true}).
+_DATE_TOKENS = frozenset({"weekday", "weekend", "holiday", "last_week", "last_month",
+                          "last_year", "this_week", "this_month", "this_year"})
+
+
+def _hoist_date_token_keys(factors, notes):
+    """날짜 토큰을 factor 이름으로 적은 것({"holiday": true})을 date로 옮긴다.
+
+    date가 비었거나 같은 토큰일 때만. 다른 date가 있으면 옮기지 않는다(모르는 factor로 거부된다).
+    """
+    if not isinstance(factors, dict):
+        return factors
+    fixed = dict(factors)
+    for key in sorted(set(fixed) & _DATE_TOKENS):
+        if fixed[key] is True and fixed.get("date") in (None, key):
+            del fixed[key]
+            fixed["date"] = key
+            notes.append({"rule": "date_token_key_to_date", "factor": "date", "value": key})
+    return fixed
 
 
 #: 행정 단위·집계 범위를 가리키는 말. 장소명이 아니다("읍면동별", "시도 간", "전국"). 그룹
@@ -329,6 +352,13 @@ def hoist_condition_concepts(raw_concepts, factors):
             continue
         subtype = raw.get("subtype")
         name, value = None, None
+        if (raw.get("concept") == "OBJECT" and not subtype
+                and raw.get("value") in _CONDITION_SUBTYPES
+                and factors.get(_CONDITION_SUBTYPES[raw["value"]]) == raw["value"]):
+            # subtype 없이 조건 값만 적은 개념이 같은 factor를 그대로 되풀이한다. 정보가 없다.
+            notes.append({"concept": raw.get("id"), "rule": "redundant_condition_concept_dropped",
+                          "factor": _CONDITION_SUBTYPES[raw["value"]], "kept": raw["value"]})
+            continue
         if raw.get("concept") == "OBJECT" and subtype in _CONDITION_SUBTYPES:
             name, value = _CONDITION_SUBTYPES[subtype], subtype
         elif subtype in _CONDITION_NAMES:

@@ -102,6 +102,54 @@ class RankingAndTargetTest(unittest.TestCase):
         self.assertNotIn("dimension_target", factors)
 
 
+class DriftGuardTest(unittest.TestCase):
+    """prompt 변경 뒤 새로 관측된 형태(개발셋 063·064·066·089)."""
+
+    MEASURE = {"id": "m", "concept": "AMOUNT", "subtype": "operating_days", "role": "MEASURE",
+               "source": "implicit"}
+    EVENT = {"id": "e", "concept": "EVENT", "subtype": "operation", "role": "SUPPORT",
+             "source": "implicit"}
+
+    def test_redundant_condition_concept_without_subtype_is_dropped(self):
+        extra = {"id": "o", "concept": "OBJECT", "subtype": "", "role": "COND", "source": "user",
+                 "value": "private"}
+        grounding = parse_grounding({"concepts": [extra, self.EVENT, self.MEASURE],
+                                     "factors": {"taxi_type": "private"}}, "개인택시 운행 일수")
+        self.assertEqual(grounding.factors["taxi_type"], "private")
+        with self.assertRaises(PlannerError):   # factor가 없으면 되풀이가 아니므로 거부
+            parse_grounding({"concepts": [extra, self.EVENT, self.MEASURE], "factors": {}},
+                            "개인택시 운행 일수")
+
+    def test_date_token_written_as_a_factor_name(self):
+        grounding = parse_grounding({"concepts": [self.EVENT, self.MEASURE],
+                                     "factors": {"holiday": True}}, "휴일 운행 일수")
+        self.assertEqual(grounding.factors["date"], "holiday")
+        with self.assertRaises(PlannerError) as caught:
+            parse_grounding({"concepts": [self.EVENT, self.MEASURE],
+                             "factors": {"holiday": True, "date": "weekend"}}, "질문")
+        self.assertEqual(caught.exception.code, "UNKNOWN_FACTOR")
+
+    def test_target_without_dimension_or_grouping_words_is_removed(self):
+        factors = {"dimension_target": "dropoff"}
+        record = conditions.reconcile_dimension_target(
+            factors, "scope:district:2617010100에 도착한 실차 구간 건수는?", [])
+        self.assertEqual((factors, record["action"]), ({}, "removed_no_evidence"))
+        factors = {"dimension_target": "dropoff"}
+        conditions.reconcile_dimension_target(factors, "도착 읍면동 상위 3곳", [])
+        self.assertEqual(factors, {"dimension_target": "dropoff"})   # 그룹 표현이 있으면 둔다
+
+    def test_measure_word_conflict_stops_instead_of_answering(self):
+        speed = [{"role": "MEASURE", "subtype": "speed"}]
+        with self.assertRaises(PlannerError) as caught:
+            conditions.check_measure(speed, "어린이대공원 주변의 RPM 중간값은?")
+        self.assertEqual(caught.exception.code, "MEASURE_EXPRESSION_CONFLICT")
+        self.assertTrue(caught.exception.context["needs_clarification"])
+        self.assertEqual(conditions.check_measure(speed, "동대구역의 평균 속도")["action"], "none")
+        # 두 계열이 함께 있거나 없으면 판정하지 않는다
+        conditions.check_measure(speed, "속도와 통행량")
+        conditions.check_measure(speed, "동대구역 어때?")
+
+
 class PlaceNormalizationTest(unittest.TestCase):
     def test_empty_name_takes_the_region(self):
         (concept,), notes = normalize_place_concepts([place("", "대구")])

@@ -537,6 +537,10 @@ _DROPOFF_WORDS = r"하차"
 _BOTH_WORDS = r"승하차|노선|OD|\s간\s|\s간의"
 
 
+#: 그룹·순위를 말하는 표현. 없으면 dimension 계열 factor의 근거가 없다.
+_GROUPING_CUES = r"별|마다|상위|하위|가장|순서|순으로|곳|노선|읍면동|시군구|시도|셀|요일|\d+\s*개"
+
+
 def reconcile_dimension_target(factors, question, concepts=None):
     """실차 구간을 나누는 기준(dimension_target)이 빠졌고 질문이 한쪽을 분명히 말하면 채운다.
 
@@ -545,6 +549,13 @@ def reconcile_dimension_target(factors, question, concepts=None):
     측정값이 trip_count일 때만 채운다.
     """
     record = {"llm_value": factors.get("dimension_target")}
+    if (factors.get("dimension_target") is not None and not factors.get("dimension")
+            and not re.search(_GROUPING_CUES, question)):
+        # 나눌 기준(dimension)도, 그룹을 말하는 표현도 없다. 적용 위치만 있는 값은 근거가 없다.
+        factors.pop("dimension_target")
+        record.update(value=None, action="removed_no_evidence",
+                      basis="target_without_dimension_or_grouping_cue")
+        return record
     trip_count = any(isinstance(item, dict) and item.get("role") == "MEASURE"
                      and item.get("subtype") == "trip_count" for item in concepts or [])
     if trip_count and factors.get("dimension") and factors.get("dimension_target") is None:
@@ -558,6 +569,40 @@ def reconcile_dimension_target(factors, question, concepts=None):
             record.update(value=value, action="filled", basis="question_expression")
             return record
     record.update(value=factors.get("dimension_target"), action="none", basis="not_applicable")
+    return record
+
+
+#: 측정값을 가리키는 말(닫힌 어휘). 질문에 한 계열만 있을 때 LLM 측정값과 대조한다.
+_MEASURE_WORDS = (
+    ("rpm", r"RPM|rpm|알피엠|분당\s*회전"),
+    ("speed", r"속도"),
+    ("fare", r"요금"),
+    ("revenue", r"수입|수익"),
+    ("vacant_ratio", r"공차율|공차\s*비율"),
+    ("active_taxi_ratio", r"가동률|운행률"),
+    ("operating_days", r"운행\s*일수"),
+    ("active_taxi_count", r"활성\s*택시\s*대수|활성택시\s*수"),
+    ("passage_count", r"통행량"),
+    ("trip_count", r"구간\s*건수|노선|\bOD\b|승차가|하차가|승차\s*건수|하차\s*건수|승차\s*읍면동|하차\s*읍면동"),
+)
+
+
+def check_measure(concepts, question, raw_text=""):
+    """질문의 측정값 말과 LLM 측정값이 어긋나면 멈춘다. 고치지 않는다(어느 쪽이 맞는지 고르지 않는다).
+
+    질문에서 한 계열만 찾았을 때만 판정한다. 둘 이상이거나 없으면 판정하지 않는다.
+    """
+    measure = next((item.get("subtype") for item in concepts or []
+                    if isinstance(item, dict) and item.get("role") == "MEASURE"), None)
+    found = [name for name, pattern in _MEASURE_WORDS if re.search(pattern, question)]
+    record = {"llm_value": measure, "mentions": found}
+    if len(found) == 1 and measure and measure != found[0] and measure != "place":
+        record.update(status=STATUS_CONFLICT, action="clarify", basis="measure_word_conflict")
+        raise _error("MEASURE_EXPRESSION_CONFLICT",
+                     f"질문의 측정값 표현({found[0]})과 해석한 측정값({measure})이 다릅니다.",
+                     clarify="measure", context={"measure": record}, raw_text=raw_text)
+    record.update(status=STATUS_INTERPRETED if found == [measure] else STATUS_ABSENT,
+                  action="none", basis="agrees" if found == [measure] else "not_judged")
     return record
 
 
@@ -630,6 +675,7 @@ def reconcile_payload(payload, question, *, reference_date, raw_text=""):
         "taxi_type": reconcile_taxi_type(factors, question, raw_text),
         "taxi_status": reconcile_taxi_status(factors, question, raw_text),
         "places": check_places(fixed.get("concepts"), question, raw_text),
+        "measure": check_measure(fixed.get("concepts"), question, raw_text),
         "limit": reconcile_ranking(factors, question),
         "dimension_target": reconcile_dimension_target(factors, question,
                                                        fixed.get("concepts")),
