@@ -1,9 +1,9 @@
 {
  "meta": {
   "protocol": "vendor100_v1",
-  "kind": "gold_grounding",
-  "started_at": "2026-09-30T00:44:39.300403+09:00",
-  "command": "evaluate_vendor100.py --gold evaluation/grounding_v2/contrast_questions.yaml gold --out evaluation/grounding_v2/runs/gold_cand_contrast.json",
+  "kind": "llm",
+  "started_at": "2026-09-29T23:47:11.741566+09:00",
+  "command": "evaluate_vendor100.py --gold evaluation/grounding_v2/contrast_questions.yaml llm --model qwen3:8b --condition-check --out evaluation/grounding_v2/runs/final_contrast_qwen3_8b.json",
   "code_root": "/home/hwkim/assistant_univ",
   "code_commit": "4f0c5624177596fad949759e09d3ef88d178d287",
   "code_dirty": [],
@@ -11,80 +11,75 @@
   "code_untracked": {},
   "gold_file": "evaluation/grounding_v2/contrast_questions.yaml",
   "gold_sha256": "7880d96a8e3bd83ba6d058aea93624a4c06111c924886a9c543fafb0be91b756",
-  "reference_date": "2026-09-25"
+  "reference_date": "2026-09-25",
+  "model": "qwen3:8b",
+  "model_digest": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
+  "ollama_version": "0.34.4",
+  "model_details": {
+   "family": "qwen3",
+   "parameter_size": "8.2B",
+   "quantization_level": "Q4_K_M",
+   "format": "gguf"
+  },
+  "planner_prompt_sha256": "238ac8d627319e8a45e9a7d5668babe305216f654b4c5c27c1d7943c3adcd7f7",
+  "replay_from": null,
+  "pipeline": {
+   "aggregation_grounding": "flat",
+   "condition_check": true,
+   "condition_notes": false,
+   "normalize_grounding": true,
+   "provider": "mock",
+   "tims_execution": "legacy",
+   "temperature": 0,
+   "think": "auto",
+   "isolation": "unload_per_question"
+  },
+  "chat_timeout_s": 300.0,
+  "finished_at": "2026-09-29T23:47:11.741375+09:00",
+  "scorer_version": "v2"
  },
  "summary": {
   "items": 31,
   "categories": {
    "match": 29,
-   "expected_refusal": 1,
-   "no_gold_grounding": 1
+   "expected_refusal": 2
+  },
+  "llm_calls": {
+   "total": 31,
+   "plan": 31,
+   "repair": 0,
+   "failed": 0,
+   "llm_ms_total": 446917
   },
   "total_ms": {
-   "median": 0.832,
-   "sum": 26
+   "median": 12268.829,
+   "sum": 447005
+  },
+  "grounding_ok": {
+   "count": 30,
+   "of": 30
   },
   "by_vendor_verdict": {
    "-": {
     "match": 29,
-    "expected_refusal": 1,
-    "no_gold_grounding": 1
+    "expected_refusal": 2
    }
   },
   "outcomes": {
    "answered": 29,
    "needs_clarification": 1,
-   "null": 1
+   "unsupported": 1
   },
   "error_codes": {
-   "AMBIGUOUS_INNER_AGGREGATION": 1
+   "AMBIGUOUS_INNER_AGGREGATION": 1,
+   "BUCKET_SELECTION_UNSUPPORTED": 1
   }
  },
- "variants": [],
  "rows": [
   {
    "id": "c01a",
    "question": "지난주 부산에서 승차가 많은 읍면동 상위 3곳은?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "place_scope_pickup",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "부산",
-       "region": ""
-      },
-      "attributes": {
-       "od_role": "pickup"
-      }
-     },
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "trip",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "trip_count",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "date": "last_week",
-     "dimension": "emd",
-     "dimension_target": "pickup",
-     "order": "top",
-     "limit": 3
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -96,8 +91,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 10118.2,
+     "load_duration_ms": 3618.2,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"location\",\n      \"text\": \"부산\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"부산\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"승차\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"dimension_target\": \"pickup\",\n    \"dimension\": \"emd\",\n    \"order\": \"top\",\n    \"limit\": 3,\n    \"date\": \"last_week\"\n  }\n}",
+     "thinking_chars": 1764
+    }
+   ],
+   "started_at": "2026-09-29T23:39:35.819544+09:00",
+   "finished_at": "2026-09-29T23:39:46.060695+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"place_scope_pickup\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"부산\", \"region\": \"\"}, \"attributes\": {\"od_role\": \"pickup\"}}, {\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"trip\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"trip_count\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"date\": \"last_week\", \"dimension\": \"emd\", \"dimension_target\": \"pickup\", \"order\": \"top\", \"limit\": 3}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"location\",\n      \"text\": \"부산\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"부산\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"승차\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"dimension_target\": \"pickup\",\n    \"dimension\": \"emd\",\n    \"order\": \"top\",\n    \"limit\": 3,\n    \"date\": \"last_week\"\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -117,9 +127,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.15,
-     "total_ms": 1.007
+     "planner_ms": 10131.817,
+     "execution_ms": 0.277,
+     "total_ms": 10133.371
     }
    },
    "outcome": "answered",
@@ -165,8 +175,8 @@
    "grounding": {
     "concepts": [
      {
-      "id": "place_scope_pickup",
-      "text": "",
+      "id": "location",
+      "text": "부산",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -180,7 +190,7 @@
       }
      },
      {
-      "id": "event",
+      "id": "trip",
       "text": "",
       "concept": "EVENT",
       "subtype": "trip",
@@ -190,8 +200,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "trip_count",
+      "text": "승차",
       "concept": "AMOUNT",
       "subtype": "trip_count",
       "role": "MEASURE",
@@ -201,11 +211,11 @@
      }
     ],
     "factors": {
-     "date": "last_week",
-     "dimension": "emd",
      "dimension_target": "pickup",
+     "dimension": "emd",
      "order": "top",
-     "limit": 3
+     "limit": 3,
+     "date": "last_week"
     },
     "aggregation": {
      "bucket": null,
@@ -215,7 +225,27 @@
      "source": "flat"
     }
    },
-   "condition_corrections": null,
+   "condition_corrections": [
+    {
+     "condition": "od_role",
+     "concept": "location",
+     "from": null,
+     "to": "pickup",
+     "action": "filled",
+     "basis": "question_expression",
+     "evidence": [
+      {
+       "text": "부산에서 승차",
+       "start": 4,
+       "rule": "from_boarding",
+       "consumed": [
+        6,
+        11
+       ]
+      }
+     ]
+    }
+   ],
    "lowering": {},
    "date_semantics": {
     "measure_od_event": {
@@ -270,45 +300,6 @@
    "id": "c01b",
    "question": "지난주 부산에서 하차가 많은 읍면동 상위 3곳은?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "place_scope_dropoff",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "부산",
-       "region": ""
-      },
-      "attributes": {
-       "od_role": "dropoff"
-      }
-     },
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "trip",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "trip_count",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "date": "last_week",
-     "dimension": "emd",
-     "dimension_target": "dropoff",
-     "order": "top",
-     "limit": 3
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -320,8 +311,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 10039.7,
+     "load_duration_ms": 3201.2,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"place\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"읍면동\", \"region\": \"부산\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_week\",\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"dropoff\",\n    \"order\": \"top\",\n    \"limit\": 3,\n    \"aggregation\": \"sum\"\n  }\n}",
+     "thinking_chars": 2019
+    }
+   ],
+   "started_at": "2026-09-29T23:39:46.060876+09:00",
+   "finished_at": "2026-09-29T23:39:56.341797+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"place_scope_dropoff\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"부산\", \"region\": \"\"}, \"attributes\": {\"od_role\": \"dropoff\"}}, {\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"trip\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"trip_count\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"date\": \"last_week\", \"dimension\": \"emd\", \"dimension_target\": \"dropoff\", \"order\": \"top\", \"limit\": 3}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"place\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"읍면동\", \"region\": \"부산\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_week\",\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"dropoff\",\n    \"order\": \"top\",\n    \"limit\": 3,\n    \"aggregation\": \"sum\"\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -341,9 +347,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.14,
-     "total_ms": 0.826
+     "planner_ms": 10040.676,
+     "execution_ms": 0.247,
+     "total_ms": 10041.92
     }
    },
    "outcome": "answered",
@@ -389,7 +395,27 @@
    "grounding": {
     "concepts": [
      {
-      "id": "place_scope_dropoff",
+      "id": "trip",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "trip",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "trip_count",
+      "text": "",
+      "concept": "AMOUNT",
+      "subtype": "trip_count",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "place",
       "text": "",
       "concept": "LOCATION",
       "subtype": "place",
@@ -402,26 +428,6 @@
       "attributes": {
        "od_role": "dropoff"
       }
-     },
-     {
-      "id": "event",
-      "text": "",
-      "concept": "EVENT",
-      "subtype": "trip",
-      "role": "SUPPORT",
-      "source": "implicit",
-      "value": null,
-      "attributes": {}
-     },
-     {
-      "id": "measure",
-      "text": "",
-      "concept": "AMOUNT",
-      "subtype": "trip_count",
-      "role": "MEASURE",
-      "source": "implicit",
-      "value": null,
-      "attributes": {}
      }
     ],
     "factors": {
@@ -437,9 +443,38 @@
      "outer": null,
      "select": null,
      "source": "flat"
-    }
+    },
+    "normalizations": [
+     {
+      "concept": "place",
+      "rule": "non_place_word_region_is_place",
+      "before": {
+       "name": "읍면동",
+       "region": "부산"
+      },
+      "after": {
+       "name": "부산",
+       "region": ""
+      }
+     }
+    ]
    },
-   "condition_corrections": null,
+   "condition_corrections": [
+    {
+     "condition": "aggregation",
+     "from": "sum",
+     "to": null,
+     "action": "removed_no_evidence",
+     "basis": "aggregation_not_in_question",
+     "evidence": [
+      {
+       "text": "",
+       "start": null,
+       "note": "no_aggregation_word"
+      }
+     ]
+    }
+   ],
    "lowering": {},
    "date_semantics": {
     "measure_od_event": {
@@ -494,44 +529,6 @@
    "id": "c02a",
    "question": "대구 수성구에서 출발한 실차의 도착 읍면동 상위 2곳은?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "place_scope_pickup",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "수성구",
-       "region": "대구"
-      },
-      "attributes": {
-       "od_role": "pickup"
-      }
-     },
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "trip",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "trip_count",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "dimension": "emd",
-     "dimension_target": "dropoff",
-     "order": "top",
-     "limit": 2
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -543,8 +540,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 11422.5,
+     "load_duration_ms": 3957.6,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"origin\", \"text\": \"대구 수성구\",\n      \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"수성구\", \"region\": \"대구\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\", \"subtype\": \"trip\", \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"destination\",\n      \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\",\n      \"source\": \"implicit\",\n      \"value\": {\"name\": \"읍면동\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    },\n    {\n      \"id\": \"trip_count\", \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\", \"subtype\": \"trip_count\", \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"dropoff\",\n    \"order\": \"top\",\n    \"limit\": 2\n  }\n}",
+     "thinking_chars": 2055
+    }
+   ],
+   "started_at": "2026-09-29T23:39:56.341947+09:00",
+   "finished_at": "2026-09-29T23:40:08.033551+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"place_scope_pickup\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"수성구\", \"region\": \"대구\"}, \"attributes\": {\"od_role\": \"pickup\"}}, {\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"trip\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"trip_count\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"dimension\": \"emd\", \"dimension_target\": \"dropoff\", \"order\": \"top\", \"limit\": 2}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"origin\", \"text\": \"대구 수성구\",\n      \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"수성구\", \"region\": \"대구\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\", \"subtype\": \"trip\", \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"destination\",\n      \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\",\n      \"source\": \"implicit\",\n      \"value\": {\"name\": \"읍면동\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    },\n    {\n      \"id\": \"trip_count\", \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\", \"subtype\": \"trip_count\", \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"dropoff\",\n    \"order\": \"top\",\n    \"limit\": 2\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -564,9 +576,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.137,
-     "total_ms": 0.712
+     "planner_ms": 11423.952,
+     "execution_ms": 0.338,
+     "total_ms": 11425.415
     }
    },
    "outcome": "answered",
@@ -608,8 +620,8 @@
    "grounding": {
     "concepts": [
      {
-      "id": "place_scope_pickup",
-      "text": "",
+      "id": "origin",
+      "text": "대구 수성구",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -623,7 +635,7 @@
       }
      },
      {
-      "id": "event",
+      "id": "trip",
       "text": "",
       "concept": "EVENT",
       "subtype": "trip",
@@ -633,8 +645,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "trip_count",
+      "text": "실차 구간 건수",
       "concept": "AMOUNT",
       "subtype": "trip_count",
       "role": "MEASURE",
@@ -655,9 +667,19 @@
      "outer": null,
      "select": null,
      "source": "flat"
-    }
+    },
+    "normalizations": [
+     {
+      "concept": "destination",
+      "rule": "non_place_word_dropped",
+      "before": {
+       "name": "읍면동",
+       "region": ""
+      }
+     }
+    ]
    },
-   "condition_corrections": null,
+   "condition_corrections": [],
    "lowering": {},
    "date_semantics": {
     "measure_od_event": {
@@ -702,44 +724,6 @@
    "id": "c02b",
    "question": "대구 수성구에 도착한 실차의 출발 읍면동 상위 2곳은?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "place_scope_dropoff",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "수성구",
-       "region": "대구"
-      },
-      "attributes": {
-       "od_role": "dropoff"
-      }
-     },
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "trip",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "trip_count",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "dimension": "emd",
-     "dimension_target": "pickup",
-     "order": "top",
-     "limit": 2
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -751,8 +735,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 11910.5,
+     "load_duration_ms": 3474.8,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"dropoff\",\n      \"text\": \"대구 수성구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"수성구\", \"region\": \"대구\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"pickup\",\n    \"order\": \"top\",\n    \"limit\": 2\n  }\n}",
+     "thinking_chars": 2523
+    }
+   ],
+   "started_at": "2026-09-29T23:40:08.033753+09:00",
+   "finished_at": "2026-09-29T23:40:20.289151+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"place_scope_dropoff\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"수성구\", \"region\": \"대구\"}, \"attributes\": {\"od_role\": \"dropoff\"}}, {\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"trip\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"trip_count\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"dimension\": \"emd\", \"dimension_target\": \"pickup\", \"order\": \"top\", \"limit\": 2}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"dropoff\",\n      \"text\": \"대구 수성구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"수성구\", \"region\": \"대구\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"pickup\",\n    \"order\": \"top\",\n    \"limit\": 2\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -772,9 +771,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.139,
-     "total_ms": 0.71
+     "planner_ms": 11911.891,
+     "execution_ms": 0.326,
+     "total_ms": 11913.292
     }
    },
    "outcome": "answered",
@@ -816,8 +815,8 @@
    "grounding": {
     "concepts": [
      {
-      "id": "place_scope_dropoff",
-      "text": "",
+      "id": "dropoff",
+      "text": "대구 수성구",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -831,7 +830,7 @@
       }
      },
      {
-      "id": "event",
+      "id": "trip",
       "text": "",
       "concept": "EVENT",
       "subtype": "trip",
@@ -841,8 +840,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "trip_count",
+      "text": "실차",
       "concept": "AMOUNT",
       "subtype": "trip_count",
       "role": "MEASURE",
@@ -865,7 +864,7 @@
      "source": "flat"
     }
    },
-   "condition_corrections": null,
+   "condition_corrections": [],
    "lowering": {},
    "date_semantics": {
     "measure_od_event": {
@@ -910,44 +909,6 @@
    "id": "c02c",
    "question": "대구 수성구에서 하차한 실차의 승차 읍면동 상위 2곳은?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "place_scope_dropoff",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "수성구",
-       "region": "대구"
-      },
-      "attributes": {
-       "od_role": "dropoff"
-      }
-     },
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "trip",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "trip_count",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "dimension": "emd",
-     "dimension_target": "pickup",
-     "order": "top",
-     "limit": 2
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -959,8 +920,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 11200.8,
+     "load_duration_ms": 4488.3,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"region\",\n      \"text\": \"대구 수성구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"수성구\", \"region\": \"대구\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"pickup\",\n    \"order\": \"top\",\n    \"limit\": 2\n  }\n}",
+     "thinking_chars": 1758
+    }
+   ],
+   "started_at": "2026-09-29T23:40:20.289356+09:00",
+   "finished_at": "2026-09-29T23:40:31.765478+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"place_scope_dropoff\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"수성구\", \"region\": \"대구\"}, \"attributes\": {\"od_role\": \"dropoff\"}}, {\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"trip\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"trip_count\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"dimension\": \"emd\", \"dimension_target\": \"pickup\", \"order\": \"top\", \"limit\": 2}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"region\",\n      \"text\": \"대구 수성구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"수성구\", \"region\": \"대구\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"pickup\",\n    \"order\": \"top\",\n    \"limit\": 2\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -980,9 +956,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.131,
-     "total_ms": 0.674
+     "planner_ms": 11202.469,
+     "execution_ms": 0.306,
+     "total_ms": 11203.837
     }
    },
    "outcome": "answered",
@@ -1024,8 +1000,8 @@
    "grounding": {
     "concepts": [
      {
-      "id": "place_scope_dropoff",
-      "text": "",
+      "id": "region",
+      "text": "대구 수성구",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -1039,7 +1015,7 @@
       }
      },
      {
-      "id": "event",
+      "id": "trip",
       "text": "",
       "concept": "EVENT",
       "subtype": "trip",
@@ -1049,8 +1025,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "trip_count",
+      "text": "실차 구간 건수",
       "concept": "AMOUNT",
       "subtype": "trip_count",
       "role": "MEASURE",
@@ -1073,7 +1049,27 @@
      "source": "flat"
     }
    },
-   "condition_corrections": null,
+   "condition_corrections": [
+    {
+     "condition": "od_role",
+     "concept": "region",
+     "from": null,
+     "to": "dropoff",
+     "action": "filled",
+     "basis": "question_expression",
+     "evidence": [
+      {
+       "text": "대구 수성구에서 하차",
+       "start": 0,
+       "rule": "from_alighting",
+       "consumed": [
+        6,
+        11
+       ]
+      }
+     ]
+    }
+   ],
    "lowering": {},
    "date_semantics": {
     "measure_od_event": {
@@ -1118,55 +1114,6 @@
    "id": "c03a",
    "question": "이번 주 대구 동인동에서 부산 초량동으로 간 실차 구간 건수는?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "place_scope_pickup",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "동인동",
-       "region": "대구"
-      },
-      "attributes": {
-       "od_role": "pickup"
-      }
-     },
-     {
-      "id": "place_scope_dropoff",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "초량동",
-       "region": "부산"
-      },
-      "attributes": {
-       "od_role": "dropoff"
-      }
-     },
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "trip",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "trip_count",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "date": "this_week"
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -1178,8 +1125,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 10747.8,
+     "load_duration_ms": 4359.1,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"origin\", \"text\": \"대구 동인동\",\n      \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"동인동\", \"region\": \"대구\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"destination\", \"text\": \"부산 초량동\",\n      \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"초량동\", \"region\": \"부산\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\", \"subtype\": \"trip\", \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\", \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\", \"subtype\": \"trip_count\", \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"this_week\"\n  }\n}",
+     "thinking_chars": 1526
+    }
+   ],
+   "started_at": "2026-09-29T23:40:31.765671+09:00",
+   "finished_at": "2026-09-29T23:40:42.830545+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"place_scope_pickup\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"동인동\", \"region\": \"대구\"}, \"attributes\": {\"od_role\": \"pickup\"}}, {\"id\": \"place_scope_dropoff\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"초량동\", \"region\": \"부산\"}, \"attributes\": {\"od_role\": \"dropoff\"}}, {\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"trip\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"trip_count\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"date\": \"this_week\"}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"origin\", \"text\": \"대구 동인동\",\n      \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"동인동\", \"region\": \"대구\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"destination\", \"text\": \"부산 초량동\",\n      \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"초량동\", \"region\": \"부산\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\", \"subtype\": \"trip\", \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\", \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\", \"subtype\": \"trip_count\", \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"this_week\"\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -1199,9 +1161,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.139,
-     "total_ms": 0.717
+     "planner_ms": 10749.224,
+     "execution_ms": 0.337,
+     "total_ms": 10750.739
     }
    },
    "outcome": "answered",
@@ -1243,8 +1205,8 @@
    "grounding": {
     "concepts": [
      {
-      "id": "place_scope_pickup",
-      "text": "",
+      "id": "origin",
+      "text": "대구 동인동",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -1258,8 +1220,8 @@
       }
      },
      {
-      "id": "place_scope_dropoff",
-      "text": "",
+      "id": "destination",
+      "text": "부산 초량동",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -1273,7 +1235,7 @@
       }
      },
      {
-      "id": "event",
+      "id": "trip",
       "text": "",
       "concept": "EVENT",
       "subtype": "trip",
@@ -1283,8 +1245,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "trip_count",
+      "text": "실차 구간 건수",
       "concept": "AMOUNT",
       "subtype": "trip_count",
       "role": "MEASURE",
@@ -1304,7 +1266,7 @@
      "source": "flat"
     }
    },
-   "condition_corrections": null,
+   "condition_corrections": [],
    "lowering": {},
    "date_semantics": {
     "measure_od_event": {
@@ -1359,55 +1321,6 @@
    "id": "c03b",
    "question": "이번 주 부산 초량동에서 대구 동인동으로 간 실차 구간 건수는?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "place_scope_pickup",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "초량동",
-       "region": "부산"
-      },
-      "attributes": {
-       "od_role": "pickup"
-      }
-     },
-     {
-      "id": "place_scope_dropoff",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "동인동",
-       "region": "대구"
-      },
-      "attributes": {
-       "od_role": "dropoff"
-      }
-     },
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "trip",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "trip_count",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "date": "this_week"
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -1419,8 +1332,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 14646.9,
+     "load_duration_ms": 4653.9,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"origin\", \"text\": \"부산 초량동\",\n      \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"초량동\", \"region\": \"부산\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"destination\", \"text\": \"대구 동인동\",\n      \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"동인동\", \"region\": \"대구\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\", \"subtype\": \"trip\", \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\", \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\", \"subtype\": \"trip_count\", \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"this_week\"\n  }\n}",
+     "thinking_chars": 3323
+    }
+   ],
+   "started_at": "2026-09-29T23:40:42.830781+09:00",
+   "finished_at": "2026-09-29T23:40:57.751184+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"place_scope_pickup\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"초량동\", \"region\": \"부산\"}, \"attributes\": {\"od_role\": \"pickup\"}}, {\"id\": \"place_scope_dropoff\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"동인동\", \"region\": \"대구\"}, \"attributes\": {\"od_role\": \"dropoff\"}}, {\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"trip\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"trip_count\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"date\": \"this_week\"}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"origin\", \"text\": \"부산 초량동\",\n      \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"초량동\", \"region\": \"부산\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"destination\", \"text\": \"대구 동인동\",\n      \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"동인동\", \"region\": \"대구\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\", \"subtype\": \"trip\", \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\", \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\", \"subtype\": \"trip_count\", \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"this_week\"\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -1440,9 +1368,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.14,
-     "total_ms": 0.726
+     "planner_ms": 14648.08,
+     "execution_ms": 0.354,
+     "total_ms": 14649.705
     }
    },
    "outcome": "answered",
@@ -1484,8 +1412,8 @@
    "grounding": {
     "concepts": [
      {
-      "id": "place_scope_pickup",
-      "text": "",
+      "id": "origin",
+      "text": "부산 초량동",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -1499,8 +1427,8 @@
       }
      },
      {
-      "id": "place_scope_dropoff",
-      "text": "",
+      "id": "destination",
+      "text": "대구 동인동",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -1514,7 +1442,7 @@
       }
      },
      {
-      "id": "event",
+      "id": "trip",
       "text": "",
       "concept": "EVENT",
       "subtype": "trip",
@@ -1524,8 +1452,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "trip_count",
+      "text": "실차 구간 건수",
       "concept": "AMOUNT",
       "subtype": "trip_count",
       "role": "MEASURE",
@@ -1545,7 +1473,7 @@
      "source": "flat"
     }
    },
-   "condition_corrections": null,
+   "condition_corrections": [],
    "lowering": {},
    "date_semantics": {
     "measure_od_event": {
@@ -1600,41 +1528,6 @@
    "id": "c03c",
    "question": "이번 주 대구 동인동으로 들어온 실차 구간 건수는?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "place_scope_dropoff",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "동인동",
-       "region": "대구"
-      },
-      "attributes": {
-       "od_role": "dropoff"
-      }
-     },
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "trip",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "trip_count",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "date": "this_week"
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -1646,8 +1539,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 11698.5,
+     "load_duration_ms": 4324.6,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"destination\",\n      \"text\": \"대구 동인동\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"동인동\", \"region\": \"대구\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"this_week\"\n  }\n}",
+     "thinking_chars": 2155
+    }
+   ],
+   "started_at": "2026-09-29T23:40:57.751417+09:00",
+   "finished_at": "2026-09-29T23:41:09.769228+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"place_scope_dropoff\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"동인동\", \"region\": \"대구\"}, \"attributes\": {\"od_role\": \"dropoff\"}}, {\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"trip\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"trip_count\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"date\": \"this_week\"}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"destination\",\n      \"text\": \"대구 동인동\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"동인동\", \"region\": \"대구\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"this_week\"\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -1667,9 +1575,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.161,
-     "total_ms": 1.038
+     "planner_ms": 11699.526,
+     "execution_ms": 0.276,
+     "total_ms": 11701.003
     }
    },
    "outcome": "answered",
@@ -1701,8 +1609,8 @@
    "grounding": {
     "concepts": [
      {
-      "id": "place_scope_dropoff",
-      "text": "",
+      "id": "destination",
+      "text": "대구 동인동",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -1716,7 +1624,7 @@
       }
      },
      {
-      "id": "event",
+      "id": "trip",
       "text": "",
       "concept": "EVENT",
       "subtype": "trip",
@@ -1726,8 +1634,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "trip_count",
+      "text": "실차 구간 건수",
       "concept": "AMOUNT",
       "subtype": "trip_count",
       "role": "MEASURE",
@@ -1747,7 +1655,7 @@
      "source": "flat"
     }
    },
-   "condition_corrections": null,
+   "condition_corrections": [],
    "lowering": {},
    "date_semantics": {
     "measure_od_event": {
@@ -1802,41 +1710,6 @@
    "id": "c03d",
    "question": "이번 주 대구 동인동에서 나간 실차 구간 건수는?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "place_scope_pickup",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "동인동",
-       "region": "대구"
-      },
-      "attributes": {
-       "od_role": "pickup"
-      }
-     },
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "trip",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "trip_count",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "date": "this_week"
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -1848,8 +1721,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 11475.0,
+     "load_duration_ms": 4593.8,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"origin\",\n      \"text\": \"대구 동인동\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"동인동\", \"region\": \"대구\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"this_week\"\n  }\n}",
+     "thinking_chars": 1959
+    }
+   ],
+   "started_at": "2026-09-29T23:41:09.769440+09:00",
+   "finished_at": "2026-09-29T23:41:21.526801+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"place_scope_pickup\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"동인동\", \"region\": \"대구\"}, \"attributes\": {\"od_role\": \"pickup\"}}, {\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"trip\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"trip_count\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"date\": \"this_week\"}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"origin\",\n      \"text\": \"대구 동인동\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"동인동\", \"region\": \"대구\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"this_week\"\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -1869,9 +1757,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.131,
-     "total_ms": 1.049
+     "planner_ms": 11476.538,
+     "execution_ms": 0.451,
+     "total_ms": 11478.875
     }
    },
    "outcome": "answered",
@@ -1903,8 +1791,8 @@
    "grounding": {
     "concepts": [
      {
-      "id": "place_scope_pickup",
-      "text": "",
+      "id": "origin",
+      "text": "대구 동인동",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -1918,7 +1806,7 @@
       }
      },
      {
-      "id": "event",
+      "id": "trip",
       "text": "",
       "concept": "EVENT",
       "subtype": "trip",
@@ -1928,8 +1816,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "trip_count",
+      "text": "실차 구간 건수",
       "concept": "AMOUNT",
       "subtype": "trip_count",
       "role": "MEASURE",
@@ -1949,7 +1837,7 @@
      "source": "flat"
     }
    },
-   "condition_corrections": null,
+   "condition_corrections": [],
    "lowering": {},
    "date_semantics": {
     "measure_od_event": {
@@ -2004,59 +1892,6 @@
    "id": "c04a",
    "question": "지난달 대구 안에서 이동한 읍면동 간 노선 상위 3개는?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "place_scope_pickup",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "대구",
-       "region": ""
-      },
-      "attributes": {
-       "od_role": "pickup"
-      }
-     },
-     {
-      "id": "place_scope_dropoff",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "대구",
-       "region": ""
-      },
-      "attributes": {
-       "od_role": "dropoff"
-      }
-     },
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "trip",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "trip_count",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "date": "last_month",
-     "dimension": "emd",
-     "dimension_target": "both",
-     "order": "top",
-     "limit": 3
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -2068,8 +1903,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 13477.2,
+     "load_duration_ms": 4339.5,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"pickup\",\n      \"text\": \"읍면동\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"읍면동\", \"region\": \"대구\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"dropoff\",\n      \"text\": \"읍면동\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"읍면동\", \"region\": \"대구\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_month\",\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"both\",\n    \"order\": \"top\",\n    \"limit\": 3\n  }\n}",
+     "thinking_chars": 2637
+    }
+   ],
+   "started_at": "2026-09-29T23:41:21.527098+09:00",
+   "finished_at": "2026-09-29T23:41:35.367649+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"place_scope_pickup\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"대구\", \"region\": \"\"}, \"attributes\": {\"od_role\": \"pickup\"}}, {\"id\": \"place_scope_dropoff\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"대구\", \"region\": \"\"}, \"attributes\": {\"od_role\": \"dropoff\"}}, {\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"trip\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"trip_count\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"date\": \"last_month\", \"dimension\": \"emd\", \"dimension_target\": \"both\", \"order\": \"top\", \"limit\": 3}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"pickup\",\n      \"text\": \"읍면동\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"읍면동\", \"region\": \"대구\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"dropoff\",\n      \"text\": \"읍면동\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"읍면동\", \"region\": \"대구\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_month\",\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"both\",\n    \"order\": \"top\",\n    \"limit\": 3\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -2089,9 +1939,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.211,
-     "total_ms": 1.053
+     "planner_ms": 13478.561,
+     "execution_ms": 0.419,
+     "total_ms": 13480.383
     }
    },
    "outcome": "answered",
@@ -2141,8 +1991,8 @@
    "grounding": {
     "concepts": [
      {
-      "id": "place_scope_pickup",
-      "text": "",
+      "id": "pickup",
+      "text": "읍면동",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -2156,8 +2006,8 @@
       }
      },
      {
-      "id": "place_scope_dropoff",
-      "text": "",
+      "id": "dropoff",
+      "text": "읍면동",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -2171,7 +2021,7 @@
       }
      },
      {
-      "id": "event",
+      "id": "trip",
       "text": "",
       "concept": "EVENT",
       "subtype": "trip",
@@ -2181,8 +2031,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "trip_count",
+      "text": "실차 구간 건수",
       "concept": "AMOUNT",
       "subtype": "trip_count",
       "role": "MEASURE",
@@ -2204,9 +2054,35 @@
      "outer": null,
      "select": null,
      "source": "flat"
-    }
+    },
+    "normalizations": [
+     {
+      "concept": "pickup",
+      "rule": "non_place_word_region_is_place",
+      "before": {
+       "name": "읍면동",
+       "region": "대구"
+      },
+      "after": {
+       "name": "대구",
+       "region": ""
+      }
+     },
+     {
+      "concept": "dropoff",
+      "rule": "non_place_word_region_is_place",
+      "before": {
+       "name": "읍면동",
+       "region": "대구"
+      },
+      "after": {
+       "name": "대구",
+       "region": ""
+      }
+     }
+    ]
    },
-   "condition_corrections": null,
+   "condition_corrections": [],
    "lowering": {},
    "date_semantics": {
     "measure_od_event": {
@@ -2261,59 +2137,6 @@
    "id": "c04b",
    "question": "지난달 대구에서 부산으로 이동한 읍면동 간 노선 상위 3개는?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "place_scope_pickup",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "대구",
-       "region": ""
-      },
-      "attributes": {
-       "od_role": "pickup"
-      }
-     },
-     {
-      "id": "place_scope_dropoff",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "부산",
-       "region": ""
-      },
-      "attributes": {
-       "od_role": "dropoff"
-      }
-     },
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "trip",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "trip_count",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "date": "last_month",
-     "dimension": "emd",
-     "dimension_target": "both",
-     "order": "top",
-     "limit": 3
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -2325,8 +2148,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 12091.8,
+     "load_duration_ms": 4709.9,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"origin\",\n      \"text\": \"대구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"대구\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"destination\",\n      \"text\": \"부산\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"부산\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_month\",\n    \"order\": \"top\",\n    \"limit\": 3,\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"both\"\n  }\n}",
+     "thinking_chars": 1786
+    }
+   ],
+   "started_at": "2026-09-29T23:41:35.367901+09:00",
+   "finished_at": "2026-09-29T23:41:47.764322+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"place_scope_pickup\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"대구\", \"region\": \"\"}, \"attributes\": {\"od_role\": \"pickup\"}}, {\"id\": \"place_scope_dropoff\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"부산\", \"region\": \"\"}, \"attributes\": {\"od_role\": \"dropoff\"}}, {\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"trip\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"trip_count\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"date\": \"last_month\", \"dimension\": \"emd\", \"dimension_target\": \"both\", \"order\": \"top\", \"limit\": 3}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"origin\",\n      \"text\": \"대구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"대구\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"destination\",\n      \"text\": \"부산\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"부산\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_month\",\n    \"order\": \"top\",\n    \"limit\": 3,\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"both\"\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -2346,9 +2184,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.243,
-     "total_ms": 1.204
+     "planner_ms": 12092.949,
+     "execution_ms": 0.385,
+     "total_ms": 12094.582
     }
    },
    "outcome": "answered",
@@ -2406,8 +2244,8 @@
    "grounding": {
     "concepts": [
      {
-      "id": "place_scope_pickup",
-      "text": "",
+      "id": "origin",
+      "text": "대구",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -2421,8 +2259,8 @@
       }
      },
      {
-      "id": "place_scope_dropoff",
-      "text": "",
+      "id": "destination",
+      "text": "부산",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -2436,7 +2274,7 @@
       }
      },
      {
-      "id": "event",
+      "id": "trip",
       "text": "",
       "concept": "EVENT",
       "subtype": "trip",
@@ -2446,8 +2284,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "trip_count",
+      "text": "실차 구간 건수",
       "concept": "AMOUNT",
       "subtype": "trip_count",
       "role": "MEASURE",
@@ -2458,10 +2296,10 @@
     ],
     "factors": {
      "date": "last_month",
-     "dimension": "emd",
-     "dimension_target": "both",
      "order": "top",
-     "limit": 3
+     "limit": 3,
+     "dimension": "emd",
+     "dimension_target": "both"
     },
     "aggregation": {
      "bucket": null,
@@ -2471,7 +2309,7 @@
      "source": "flat"
     }
    },
-   "condition_corrections": null,
+   "condition_corrections": [],
    "lowering": {},
    "date_semantics": {
     "measure_od_event": {
@@ -2526,55 +2364,6 @@
    "id": "c04c",
    "question": "지난달 부산 안에서 이동한 실차 구간 건수는?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "place_scope_pickup",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "부산",
-       "region": ""
-      },
-      "attributes": {
-       "od_role": "pickup"
-      }
-     },
-     {
-      "id": "place_scope_dropoff",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "부산",
-       "region": ""
-      },
-      "attributes": {
-       "od_role": "dropoff"
-      }
-     },
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "trip",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "trip_count",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "date": "last_month"
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -2586,8 +2375,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 17821.3,
+     "load_duration_ms": 4473.3,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"location\",\n      \"text\": \"부산\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"부산\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_month\"\n  }\n}",
+     "thinking_chars": 4208
+    }
+   ],
+   "started_at": "2026-09-29T23:41:47.764552+09:00",
+   "finished_at": "2026-09-29T23:42:05.869368+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"place_scope_pickup\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"부산\", \"region\": \"\"}, \"attributes\": {\"od_role\": \"pickup\"}}, {\"id\": \"place_scope_dropoff\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"부산\", \"region\": \"\"}, \"attributes\": {\"od_role\": \"dropoff\"}}, {\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"trip\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"trip_count\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"date\": \"last_month\"}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"location\",\n      \"text\": \"부산\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"부산\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_month\"\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -2607,9 +2411,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.159,
-     "total_ms": 1.057
+     "planner_ms": 17822.426,
+     "execution_ms": 0.283,
+     "total_ms": 17824.052
     }
    },
    "outcome": "answered",
@@ -2641,8 +2445,8 @@
    "grounding": {
     "concepts": [
      {
-      "id": "place_scope_pickup",
-      "text": "",
+      "id": "location",
+      "text": "부산",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -2656,8 +2460,8 @@
       }
      },
      {
-      "id": "place_scope_dropoff",
-      "text": "",
+      "id": "location_dropoff",
+      "text": "부산",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -2671,7 +2475,7 @@
       }
      },
      {
-      "id": "event",
+      "id": "trip",
       "text": "",
       "concept": "EVENT",
       "subtype": "trip",
@@ -2681,8 +2485,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "trip_count",
+      "text": "실차 구간 건수",
       "concept": "AMOUNT",
       "subtype": "trip_count",
       "role": "MEASURE",
@@ -2702,7 +2506,30 @@
      "source": "flat"
     }
    },
-   "condition_corrections": null,
+   "condition_corrections": [
+    {
+     "condition": "od_role",
+     "concept": "location",
+     "from": null,
+     "to": [
+      "dropoff",
+      "pickup"
+     ],
+     "action": "filled",
+     "basis": "same_place_both_ends",
+     "evidence": [
+      {
+       "text": "부산 안에서",
+       "start": 4,
+       "rule": "within_route",
+       "consumed": [
+        6,
+        10
+       ]
+      }
+     ]
+    }
+   ],
    "lowering": {},
    "date_semantics": {
     "measure_od_event": {
@@ -2757,41 +2584,6 @@
    "id": "c05a",
    "question": "주말 대구의 시군구별 택시 통행량 상위 2곳은?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "place_scope",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "대구",
-       "region": ""
-      }
-     },
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "passage",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "passage_count",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "date": "weekend",
-     "dimension": "sigungu",
-     "order": "top",
-     "limit": 2
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -2803,8 +2595,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 12746.1,
+     "load_duration_ms": 4480.5,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"district\",\n      \"text\": \"대구의 시군구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"시군구\", \"region\": \"대구\"}\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"passage_count\",\n      \"text\": \"통행량\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"passage_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"dimension\": \"sigungu\",\n    \"order\": \"top\",\n    \"limit\": 2,\n    \"date\": \"weekend\"\n  }\n}",
+     "thinking_chars": 2575
+    }
+   ],
+   "started_at": "2026-09-29T23:42:05.869578+09:00",
+   "finished_at": "2026-09-29T23:42:18.892336+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"place_scope\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"대구\", \"region\": \"\"}}, {\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"passage\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"passage_count\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"date\": \"weekend\", \"dimension\": \"sigungu\", \"order\": \"top\", \"limit\": 2}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"district\",\n      \"text\": \"대구의 시군구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"시군구\", \"region\": \"대구\"}\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"passage_count\",\n      \"text\": \"통행량\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"passage_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"dimension\": \"sigungu\",\n    \"order\": \"top\",\n    \"limit\": 2,\n    \"date\": \"weekend\"\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -2824,9 +2631,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.185,
-     "total_ms": 0.889
+     "planner_ms": 12747.107,
+     "execution_ms": 0.333,
+     "total_ms": 12748.42
     }
    },
    "outcome": "answered",
@@ -2867,8 +2674,8 @@
    "grounding": {
     "concepts": [
      {
-      "id": "place_scope",
-      "text": "",
+      "id": "district",
+      "text": "대구의 시군구",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -2880,7 +2687,7 @@
       "attributes": {}
      },
      {
-      "id": "event",
+      "id": "passage",
       "text": "",
       "concept": "EVENT",
       "subtype": "passage",
@@ -2890,8 +2697,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "passage_count",
+      "text": "통행량",
       "concept": "AMOUNT",
       "subtype": "passage_count",
       "role": "MEASURE",
@@ -2901,10 +2708,10 @@
      }
     ],
     "factors": {
-     "date": "weekend",
      "dimension": "sigungu",
      "order": "top",
-     "limit": 2
+     "limit": 2,
+     "date": "weekend"
     },
     "aggregation": {
      "bucket": null,
@@ -2912,9 +2719,23 @@
      "outer": null,
      "select": null,
      "source": "flat"
-    }
+    },
+    "normalizations": [
+     {
+      "concept": "district",
+      "rule": "non_place_word_region_is_place",
+      "before": {
+       "name": "시군구",
+       "region": "대구"
+      },
+      "after": {
+       "name": "대구",
+       "region": ""
+      }
+     }
+    ]
    },
-   "condition_corrections": null,
+   "condition_corrections": [],
    "lowering": {},
    "date_semantics": {
     "measure_event": {
@@ -2965,41 +2786,6 @@
    "id": "c05b",
    "question": "주말 대구의 시군구별 택시 통행량 하위 2곳은?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "place_scope",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "대구",
-       "region": ""
-      }
-     },
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "passage",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "passage_count",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "date": "weekend",
-     "dimension": "sigungu",
-     "order": "bottom",
-     "limit": 2
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -3011,8 +2797,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 13883.9,
+     "load_duration_ms": 4331.6,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"location\",\n      \"text\": \"대구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"대구\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"passage_count\",\n      \"text\": \"택시 통행량\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"passage_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"weekend\",\n    \"dimension\": \"sigungu\",\n    \"order\": \"bottom\",\n    \"limit\": 2\n  }\n}",
+     "thinking_chars": 3019
+    }
+   ],
+   "started_at": "2026-09-29T23:42:18.892532+09:00",
+   "finished_at": "2026-09-29T23:42:33.087974+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"place_scope\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"대구\", \"region\": \"\"}}, {\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"passage\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"passage_count\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"date\": \"weekend\", \"dimension\": \"sigungu\", \"order\": \"bottom\", \"limit\": 2}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"location\",\n      \"text\": \"대구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"대구\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"passage_count\",\n      \"text\": \"택시 통행량\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"passage_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"weekend\",\n    \"dimension\": \"sigungu\",\n    \"order\": \"bottom\",\n    \"limit\": 2\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -3032,9 +2833,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.181,
-     "total_ms": 0.857
+     "planner_ms": 13884.819,
+     "execution_ms": 0.288,
+     "total_ms": 13886.068
     }
    },
    "outcome": "answered",
@@ -3075,8 +2876,8 @@
    "grounding": {
     "concepts": [
      {
-      "id": "place_scope",
-      "text": "",
+      "id": "location",
+      "text": "대구",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -3088,7 +2889,7 @@
       "attributes": {}
      },
      {
-      "id": "event",
+      "id": "passage",
       "text": "",
       "concept": "EVENT",
       "subtype": "passage",
@@ -3098,8 +2899,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "passage_count",
+      "text": "택시 통행량",
       "concept": "AMOUNT",
       "subtype": "passage_count",
       "role": "MEASURE",
@@ -3122,7 +2923,7 @@
      "source": "flat"
     }
    },
-   "condition_corrections": null,
+   "condition_corrections": [],
    "lowering": {},
    "date_semantics": {
     "measure_event": {
@@ -3173,41 +2974,6 @@
    "id": "c05c",
    "question": "주말 대구에서 택시 통행량이 가장 적은 시군구는?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "place_scope",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "대구",
-       "region": ""
-      }
-     },
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "passage",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "passage_count",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "date": "weekend",
-     "dimension": "sigungu",
-     "order": "bottom",
-     "limit": 1
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -3219,8 +2985,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 13673.3,
+     "load_duration_ms": 4341.1,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"location\",\n      \"text\": \"대구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"대구\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"passage_count\",\n      \"text\": \"통행량\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"passage_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"weekend\",\n    \"dimension\": \"sigungu\",\n    \"order\": \"bottom\",\n    \"limit\": 1\n  }\n}",
+     "thinking_chars": 2920
+    }
+   ],
+   "started_at": "2026-09-29T23:42:33.088172+09:00",
+   "finished_at": "2026-09-29T23:42:47.090535+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"place_scope\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"대구\", \"region\": \"\"}}, {\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"passage\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"passage_count\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"date\": \"weekend\", \"dimension\": \"sigungu\", \"order\": \"bottom\", \"limit\": 1}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"location\",\n      \"text\": \"대구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"대구\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"passage_count\",\n      \"text\": \"통행량\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"passage_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"weekend\",\n    \"dimension\": \"sigungu\",\n    \"order\": \"bottom\",\n    \"limit\": 1\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -3240,9 +3021,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.183,
-     "total_ms": 0.84
+     "planner_ms": 13674.428,
+     "execution_ms": 0.321,
+     "total_ms": 13675.672
     }
    },
    "outcome": "answered",
@@ -3279,8 +3060,8 @@
    "grounding": {
     "concepts": [
      {
-      "id": "place_scope",
-      "text": "",
+      "id": "location",
+      "text": "대구",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -3292,7 +3073,7 @@
       "attributes": {}
      },
      {
-      "id": "event",
+      "id": "passage",
       "text": "",
       "concept": "EVENT",
       "subtype": "passage",
@@ -3302,8 +3083,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "passage_count",
+      "text": "통행량",
       "concept": "AMOUNT",
       "subtype": "passage_count",
       "role": "MEASURE",
@@ -3326,7 +3107,7 @@
      "source": "flat"
     }
    },
-   "condition_corrections": null,
+   "condition_corrections": [],
    "lowering": {},
    "date_semantics": {
     "measure_event": {
@@ -3377,31 +3158,6 @@
    "id": "c06a",
    "question": "지난달 시도별 평균 수입이 가장 낮은 곳은?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "operation",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "revenue",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "date": "last_month",
-     "dimension": "sido",
-     "order": "bottom",
-     "limit": 1,
-     "aggregation": "avg"
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -3413,8 +3169,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 22798.2,
+     "load_duration_ms": 4434.7,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"operation\",\n      \"text\": \"operation\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"text\": \"수입\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"location\",\n      \"text\": \"시도\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\"\n    }\n  ],\n  \"factors\": {\n    \"dimension\": \"sido\",\n    \"aggregation\": \"avg\",\n    \"order\": \"bottom\"\n  }\n}",
+     "thinking_chars": 7542
+    }
+   ],
+   "started_at": "2026-09-29T23:42:47.090732+09:00",
+   "finished_at": "2026-09-29T23:43:10.184240+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"operation\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"revenue\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"date\": \"last_month\", \"dimension\": \"sido\", \"order\": \"bottom\", \"limit\": 1, \"aggregation\": \"avg\"}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"operation\",\n      \"text\": \"operation\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"text\": \"수입\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"location\",\n      \"text\": \"시도\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\"\n    }\n  ],\n  \"factors\": {\n    \"dimension\": \"sido\",\n    \"aggregation\": \"avg\",\n    \"order\": \"bottom\"\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -3434,9 +3205,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.131,
-     "total_ms": 0.731
+     "planner_ms": 22799.166,
+     "execution_ms": 0.22,
+     "total_ms": 22800.637
     }
    },
    "outcome": "answered",
@@ -3466,8 +3237,8 @@
    "grounding": {
     "concepts": [
      {
-      "id": "event",
-      "text": "",
+      "id": "operation",
+      "text": "operation",
       "concept": "EVENT",
       "subtype": "operation",
       "role": "SUPPORT",
@@ -3476,8 +3247,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "revenue",
+      "text": "수입",
       "concept": "AMOUNT",
       "subtype": "revenue",
       "role": "MEASURE",
@@ -3487,11 +3258,11 @@
      }
     ],
     "factors": {
-     "date": "last_month",
      "dimension": "sido",
+     "aggregation": "avg",
      "order": "bottom",
-     "limit": 1,
-     "aggregation": "avg"
+     "date": "last_month",
+     "limit": 1
     },
     "aggregation": {
      "bucket": null,
@@ -3499,9 +3270,44 @@
      "outer": null,
      "select": null,
      "source": "flat"
-    }
+    },
+    "normalizations": [
+     {
+      "concept": "location",
+      "rule": "unit_word_place_dropped",
+      "before": {
+       "text": "시도"
+      }
+     }
+    ]
    },
-   "condition_corrections": null,
+   "condition_corrections": [
+    {
+     "condition": "date",
+     "from": null,
+     "to": "last_month",
+     "action": "filled",
+     "basis": "question_expression",
+     "evidence": [
+      {
+       "text": "지난달"
+      }
+     ]
+    },
+    {
+     "condition": "limit",
+     "from": null,
+     "to": 1,
+     "action": "filled",
+     "basis": "question_expression",
+     "evidence": [
+      {
+       "text": "가장",
+       "start": 15
+      }
+     ]
+    }
+   ],
    "lowering": {},
    "date_semantics": {
     "measure_event": {
@@ -3556,31 +3362,6 @@
    "id": "c06b",
    "question": "지난달 시도별 최대 수입이 가장 낮은 곳은?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "operation",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "revenue",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "date": "last_month",
-     "dimension": "sido",
-     "order": "bottom",
-     "limit": 1,
-     "aggregation": "max"
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -3592,8 +3373,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 12928.7,
+     "load_duration_ms": 4496.9,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"operation\",\n      \"text\": \"수입\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"text\": \"수입\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"location\",\n      \"text\": \"시도별\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"COND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"시도\", \"region\": \"\"},\n      \"attributes\": {\"dimension\": \"sido\"}\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_month\",\n    \"aggregation\": \"max\",\n    \"rollup\": \"min\"\n  }\n}",
+     "thinking_chars": 2697
+    }
+   ],
+   "started_at": "2026-09-29T23:43:10.184449+09:00",
+   "finished_at": "2026-09-29T23:43:23.394580+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"operation\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"revenue\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"date\": \"last_month\", \"dimension\": \"sido\", \"order\": \"bottom\", \"limit\": 1, \"aggregation\": \"max\"}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"operation\",\n      \"text\": \"수입\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"text\": \"수입\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"location\",\n      \"text\": \"시도별\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"COND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"시도\", \"region\": \"\"},\n      \"attributes\": {\"dimension\": \"sido\"}\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_month\",\n    \"aggregation\": \"max\",\n    \"rollup\": \"min\"\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -3613,9 +3409,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.134,
-     "total_ms": 0.739
+     "planner_ms": 12929.714,
+     "execution_ms": 0.361,
+     "total_ms": 12930.946
     }
    },
    "outcome": "answered",
@@ -3645,8 +3441,8 @@
    "grounding": {
     "concepts": [
      {
-      "id": "event",
-      "text": "",
+      "id": "operation",
+      "text": "수입",
       "concept": "EVENT",
       "subtype": "operation",
       "role": "SUPPORT",
@@ -3655,8 +3451,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "revenue",
+      "text": "수입",
       "concept": "AMOUNT",
       "subtype": "revenue",
       "role": "MEASURE",
@@ -3667,10 +3463,10 @@
     ],
     "factors": {
      "date": "last_month",
+     "aggregation": "max",
      "dimension": "sido",
      "order": "bottom",
-     "limit": 1,
-     "aggregation": "max"
+     "limit": 1
     },
     "aggregation": {
      "bucket": null,
@@ -3678,9 +3474,67 @@
      "outer": null,
      "select": null,
      "source": "flat"
-    }
+    },
+    "normalizations": [
+     {
+      "concept": "location",
+      "rule": "non_place_word_dropped",
+      "before": {
+       "name": "시도",
+       "region": ""
+      }
+     }
+    ]
    },
-   "condition_corrections": null,
+   "condition_corrections": [
+    {
+     "condition": "dimension",
+     "from": null,
+     "to": "sido",
+     "action": "filled",
+     "basis": "question_expression",
+     "evidence": [
+      {
+       "text": "시도",
+       "start": 4
+      }
+     ]
+    },
+    {
+     "condition": "order",
+     "from": null,
+     "to": "bottom",
+     "action": "filled",
+     "basis": "question_expression",
+     "evidence": [
+      {
+       "text": "낮은",
+       "start": 18
+      }
+     ]
+    },
+    {
+     "condition": "limit",
+     "from": null,
+     "to": 1,
+     "action": "filled",
+     "basis": "question_expression",
+     "evidence": [
+      {
+       "text": "가장",
+       "start": 15
+      }
+     ]
+    },
+    {
+     "condition": "rollup",
+     "from": "min",
+     "to": null,
+     "action": "removed_no_evidence",
+     "basis": "rollup_without_bucket",
+     "evidence": []
+    }
+   ],
    "lowering": {},
    "date_semantics": {
     "measure_event": {
@@ -3735,39 +3589,6 @@
    "id": "c06c",
    "question": "지난달 부산 소속 택시의 수입 최솟값은?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "place_scope",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "부산",
-       "region": ""
-      }
-     },
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "operation",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "revenue",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "date": "last_month",
-     "aggregation": "min"
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -3779,8 +3600,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 15598.0,
+     "load_duration_ms": 4454.1,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"location\",\n      \"text\": \"부산\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"부산\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"operation\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"text\": \"수입\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_month\",\n    \"aggregation\": \"min\"\n  }\n}",
+     "thinking_chars": 4135
+    }
+   ],
+   "started_at": "2026-09-29T23:43:23.394820+09:00",
+   "finished_at": "2026-09-29T23:43:39.285805+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"place_scope\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"부산\", \"region\": \"\"}}, {\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"operation\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"revenue\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"date\": \"last_month\", \"aggregation\": \"min\"}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"location\",\n      \"text\": \"부산\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"부산\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"operation\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"text\": \"수입\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_month\",\n    \"aggregation\": \"min\"\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -3800,9 +3636,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.148,
-     "total_ms": 0.773
+     "planner_ms": 15599.951,
+     "execution_ms": 0.267,
+     "total_ms": 15601.391
     }
    },
    "outcome": "answered",
@@ -3833,8 +3669,8 @@
    "grounding": {
     "concepts": [
      {
-      "id": "place_scope",
-      "text": "",
+      "id": "location",
+      "text": "부산",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -3846,7 +3682,7 @@
       "attributes": {}
      },
      {
-      "id": "event",
+      "id": "operation",
       "text": "",
       "concept": "EVENT",
       "subtype": "operation",
@@ -3856,8 +3692,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "revenue",
+      "text": "수입",
       "concept": "AMOUNT",
       "subtype": "revenue",
       "role": "MEASURE",
@@ -3878,7 +3714,7 @@
      "source": "flat"
     }
    },
-   "condition_corrections": null,
+   "condition_corrections": [],
    "lowering": {},
    "date_semantics": {
     "measure_event": {
@@ -3933,31 +3769,6 @@
    "id": "c07a",
    "question": "이번 달 시도별 법인택시 수입이 가장 큰 곳은?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "operation",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "revenue",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "date": "this_month",
-     "taxi_type": "corporate",
-     "dimension": "sido",
-     "order": "top",
-     "limit": 1
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -3969,8 +3780,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 27403.1,
+     "load_duration_ms": 4398.3,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"sido\",\n      \"text\": \"시도별\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"operation\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"text\": \"수입\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"this_month\",\n    \"dimension\": \"sido\",\n    \"order\": \"top\",\n    \"limit\": 1\n  }\n}",
+     "thinking_chars": 9765
+    }
+   ],
+   "started_at": "2026-09-29T23:43:39.286020+09:00",
+   "finished_at": "2026-09-29T23:44:06.975346+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"operation\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"revenue\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"date\": \"this_month\", \"taxi_type\": \"corporate\", \"dimension\": \"sido\", \"order\": \"top\", \"limit\": 1}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"sido\",\n      \"text\": \"시도별\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"operation\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"text\": \"수입\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"this_month\",\n    \"dimension\": \"sido\",\n    \"order\": \"top\",\n    \"limit\": 1\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -3990,9 +3816,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.123,
-     "total_ms": 0.671
+     "planner_ms": 27404.543,
+     "execution_ms": 0.248,
+     "total_ms": 27405.689
     }
    },
    "outcome": "answered",
@@ -4022,7 +3848,7 @@
    "grounding": {
     "concepts": [
      {
-      "id": "event",
+      "id": "operation",
       "text": "",
       "concept": "EVENT",
       "subtype": "operation",
@@ -4032,8 +3858,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "revenue",
+      "text": "수입",
       "concept": "AMOUNT",
       "subtype": "revenue",
       "role": "MEASURE",
@@ -4044,10 +3870,10 @@
     ],
     "factors": {
      "date": "this_month",
-     "taxi_type": "corporate",
      "dimension": "sido",
      "order": "top",
-     "limit": 1
+     "limit": 1,
+     "taxi_type": "corporate"
     },
     "aggregation": {
      "bucket": null,
@@ -4055,9 +3881,31 @@
      "outer": null,
      "select": null,
      "source": "flat"
-    }
+    },
+    "normalizations": [
+     {
+      "concept": "sido",
+      "rule": "unit_word_place_dropped",
+      "before": {
+       "text": "시도별"
+      }
+     }
+    ]
    },
-   "condition_corrections": null,
+   "condition_corrections": [
+    {
+     "condition": "taxi_type",
+     "from": null,
+     "to": "corporate",
+     "action": "filled",
+     "basis": "question_expression",
+     "evidence": [
+      {
+       "text": "법인택시"
+      }
+     ]
+    }
+   ],
    "lowering": {},
    "date_semantics": {
     "measure_event": {
@@ -4112,32 +3960,6 @@
    "id": "c07b",
    "question": "이번 달 시도별 법인택시 수입 합계가 가장 큰 곳은?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "operation",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "revenue",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "date": "this_month",
-     "taxi_type": "corporate",
-     "dimension": "sido",
-     "order": "top",
-     "limit": 1,
-     "aggregation": "sum"
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -4149,8 +3971,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 30766.2,
+     "load_duration_ms": 4588.3,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"operation\",\n      \"text\": \"법인택시 수입\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"text\": \"수입 합계\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"province\",\n      \"text\": \"시도\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"EXTENT\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"20231001-20231031\",\n    \"dimension\": \"sido\",\n    \"aggregation\": \"sum\",\n    \"order\": \"top\",\n    \"limit\": 1\n  }\n}",
+     "thinking_chars": 11204
+    }
+   ],
+   "started_at": "2026-09-29T23:44:06.975560+09:00",
+   "finished_at": "2026-09-29T23:44:38.021008+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"operation\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"revenue\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"date\": \"this_month\", \"taxi_type\": \"corporate\", \"dimension\": \"sido\", \"order\": \"top\", \"limit\": 1, \"aggregation\": \"sum\"}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"operation\",\n      \"text\": \"법인택시 수입\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"text\": \"수입 합계\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"province\",\n      \"text\": \"시도\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"EXTENT\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"20231001-20231031\",\n    \"dimension\": \"sido\",\n    \"aggregation\": \"sum\",\n    \"order\": \"top\",\n    \"limit\": 1\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -4170,9 +4007,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.141,
-     "total_ms": 0.762
+     "planner_ms": 30767.098,
+     "execution_ms": 0.222,
+     "total_ms": 30768.247
     }
    },
    "outcome": "answered",
@@ -4203,8 +4040,8 @@
    "grounding": {
     "concepts": [
      {
-      "id": "event",
-      "text": "",
+      "id": "operation",
+      "text": "법인택시 수입",
       "concept": "EVENT",
       "subtype": "operation",
       "role": "SUPPORT",
@@ -4213,8 +4050,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "revenue",
+      "text": "수입 합계",
       "concept": "AMOUNT",
       "subtype": "revenue",
       "role": "MEASURE",
@@ -4225,11 +4062,11 @@
     ],
     "factors": {
      "date": "this_month",
-     "taxi_type": "corporate",
      "dimension": "sido",
+     "aggregation": "sum",
      "order": "top",
      "limit": 1,
-     "aggregation": "sum"
+     "taxi_type": "corporate"
     },
     "aggregation": {
      "bucket": null,
@@ -4237,9 +4074,43 @@
      "outer": null,
      "select": null,
      "source": "flat"
-    }
+    },
+    "normalizations": [
+     {
+      "concept": "province",
+      "rule": "unit_word_place_dropped",
+      "before": {
+       "text": "시도"
+      }
+     }
+    ]
    },
-   "condition_corrections": null,
+   "condition_corrections": [
+    {
+     "condition": "date",
+     "from": "20231001-20231031",
+     "to": "this_month",
+     "action": "corrected",
+     "basis": "question_expression_over_llm_value",
+     "evidence": [
+      {
+       "text": "이번 달"
+      }
+     ]
+    },
+    {
+     "condition": "taxi_type",
+     "from": null,
+     "to": "corporate",
+     "action": "filled",
+     "basis": "question_expression",
+     "evidence": [
+      {
+       "text": "법인택시"
+      }
+     ]
+    }
+   ],
    "lowering": {},
    "date_semantics": {
     "measure_event": {
@@ -4294,39 +4165,6 @@
    "id": "c07c",
    "question": "지난주 부산 초읍동 어린이대공원 근처의 택시 속도는?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "place_scope",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "어린이대공원",
-       "region": "부산 초읍동"
-      }
-     },
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "passage",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "speed",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "vicinity": true,
-     "date": "last_week"
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -4338,8 +4176,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 10091.1,
+     "load_duration_ms": 4764.5,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"place_1\",\n      \"text\": \"어린이대공원\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"어린이대공원\", \"region\": \"부산 초읍동\"}\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"speed\",\n      \"text\": \"속도\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"speed\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_week\",\n    \"vicinity\": true\n  }\n}",
+     "thinking_chars": 1178
+    }
+   ],
+   "started_at": "2026-09-29T23:44:38.021228+09:00",
+   "finished_at": "2026-09-29T23:44:48.386055+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"place_scope\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"어린이대공원\", \"region\": \"부산 초읍동\"}}, {\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"passage\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"speed\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"vicinity\": true, \"date\": \"last_week\"}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"place_1\",\n      \"text\": \"어린이대공원\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"어린이대공원\", \"region\": \"부산 초읍동\"}\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"speed\",\n      \"text\": \"속도\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"speed\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_week\",\n    \"vicinity\": true\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -4359,9 +4212,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.16,
-     "total_ms": 0.862
+     "planner_ms": 10092.191,
+     "execution_ms": 0.289,
+     "total_ms": 10093.403
     }
    },
    "outcome": "answered",
@@ -4392,8 +4245,8 @@
    "grounding": {
     "concepts": [
      {
-      "id": "place_scope",
-      "text": "",
+      "id": "place_1",
+      "text": "어린이대공원",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -4405,7 +4258,7 @@
       "attributes": {}
      },
      {
-      "id": "event",
+      "id": "passage",
       "text": "",
       "concept": "EVENT",
       "subtype": "passage",
@@ -4415,8 +4268,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "speed",
+      "text": "속도",
       "concept": "AMOUNT",
       "subtype": "speed",
       "role": "MEASURE",
@@ -4426,8 +4279,8 @@
      }
     ],
     "factors": {
-     "vicinity": true,
-     "date": "last_week"
+     "date": "last_week",
+     "vicinity": true
     },
     "aggregation": {
      "bucket": null,
@@ -4437,7 +4290,7 @@
      "source": "flat"
     }
    },
-   "condition_corrections": null,
+   "condition_corrections": [],
    "lowering": {},
    "date_semantics": {
     "measure_event": {
@@ -4492,40 +4345,6 @@
    "id": "c07d",
    "question": "지난주 부산 초읍동 어린이대공원 근처의 택시 속도 중간값은?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "place_scope",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "어린이대공원",
-       "region": "부산 초읍동"
-      }
-     },
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "passage",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "speed",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "vicinity": true,
-     "date": "last_week",
-     "aggregation": "med"
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -4537,8 +4356,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 10876.7,
+     "load_duration_ms": 4463.6,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"place_1\",\n      \"text\": \"어린이대공원\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"어린이대공원\", \"region\": \"부산 초읍동\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"speed\",\n      \"text\": \"속도 중간값\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"speed\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_week\",\n    \"aggregation\": \"med\",\n    \"vicinity\": true\n  }\n}",
+     "thinking_chars": 1656
+    }
+   ],
+   "started_at": "2026-09-29T23:44:48.386283+09:00",
+   "finished_at": "2026-09-29T23:44:59.536380+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"place_scope\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"어린이대공원\", \"region\": \"부산 초읍동\"}}, {\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"passage\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"speed\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"vicinity\": true, \"date\": \"last_week\", \"aggregation\": \"med\"}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"place_1\",\n      \"text\": \"어린이대공원\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"어린이대공원\", \"region\": \"부산 초읍동\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"speed\",\n      \"text\": \"속도 중간값\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"speed\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_week\",\n    \"aggregation\": \"med\",\n    \"vicinity\": true\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -4558,9 +4392,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.165,
-     "total_ms": 0.832
+     "planner_ms": 10877.635,
+     "execution_ms": 0.263,
+     "total_ms": 10878.746
     }
    },
    "outcome": "answered",
@@ -4592,8 +4426,8 @@
    "grounding": {
     "concepts": [
      {
-      "id": "place_scope",
-      "text": "",
+      "id": "place_1",
+      "text": "어린이대공원",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -4605,7 +4439,7 @@
       "attributes": {}
      },
      {
-      "id": "event",
+      "id": "passage",
       "text": "",
       "concept": "EVENT",
       "subtype": "passage",
@@ -4615,8 +4449,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "speed",
+      "text": "속도 중간값",
       "concept": "AMOUNT",
       "subtype": "speed",
       "role": "MEASURE",
@@ -4626,9 +4460,9 @@
      }
     ],
     "factors": {
-     "vicinity": true,
      "date": "last_week",
-     "aggregation": "med"
+     "aggregation": "med",
+     "vicinity": true
     },
     "aggregation": {
      "bucket": null,
@@ -4638,7 +4472,17 @@
      "source": "flat"
     }
    },
-   "condition_corrections": null,
+   "condition_corrections": [
+    {
+     "condition": "od_role",
+     "concept": "place_1",
+     "from": "pickup",
+     "to": null,
+     "action": "removed_no_evidence",
+     "basis": "role_without_od_expression",
+     "evidence": []
+    }
+   ],
    "lowering": {},
    "date_semantics": {
     "measure_event": {
@@ -4693,31 +4537,6 @@
    "id": "c08a",
    "question": "지난해 월별 법인택시 수입 합계의 평균은?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "operation",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "revenue",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "date": "last_year",
-     "taxi_type": "corporate",
-     "aggregation": "sum",
-     "bucket": "month",
-     "rollup": "avg"
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -4729,8 +4548,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 11516.4,
+     "load_duration_ms": 4457.1,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"operation\",\n      \"text\": \"수입\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"text\": \"수입 합계\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_year\",\n    \"bucket\": \"month\",\n    \"aggregation\": \"sum\",\n    \"rollup\": \"avg\",\n    \"taxi_type\": \"corporate\"\n  }\n}",
+     "thinking_chars": 2325
+    }
+   ],
+   "started_at": "2026-09-29T23:44:59.536575+09:00",
+   "finished_at": "2026-09-29T23:45:11.324219+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"operation\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"revenue\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"date\": \"last_year\", \"taxi_type\": \"corporate\", \"aggregation\": \"sum\", \"bucket\": \"month\", \"rollup\": \"avg\"}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"operation\",\n      \"text\": \"수입\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"text\": \"수입 합계\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_year\",\n    \"bucket\": \"month\",\n    \"aggregation\": \"sum\",\n    \"rollup\": \"avg\",\n    \"taxi_type\": \"corporate\"\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -4750,9 +4584,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.114,
-     "total_ms": 0.881
+     "planner_ms": 11517.215,
+     "execution_ms": 0.181,
+     "total_ms": 11518.396
     }
    },
    "outcome": "answered",
@@ -4777,8 +4611,8 @@
    "grounding": {
     "concepts": [
      {
-      "id": "event",
-      "text": "",
+      "id": "operation",
+      "text": "수입",
       "concept": "EVENT",
       "subtype": "operation",
       "role": "SUPPORT",
@@ -4787,8 +4621,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "revenue",
+      "text": "수입 합계",
       "concept": "AMOUNT",
       "subtype": "revenue",
       "role": "MEASURE",
@@ -4799,10 +4633,10 @@
     ],
     "factors": {
      "date": "last_year",
-     "taxi_type": "corporate",
-     "aggregation": "sum",
      "bucket": "month",
-     "rollup": "avg"
+     "aggregation": "sum",
+     "rollup": "avg",
+     "taxi_type": "corporate"
     },
     "aggregation": {
      "bucket": "month",
@@ -4812,7 +4646,7 @@
      "source": "flat"
     }
    },
-   "condition_corrections": null,
+   "condition_corrections": [],
    "lowering": {
     "measure_groups": {
      "strategy": "fused_bucket_rollup",
@@ -4913,36 +4747,27 @@
    "id": "c08b",
    "question": "지난해 월별 법인택시 수입의 평균은?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "operation",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "revenue",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "date": "last_year",
-     "taxi_type": "corporate",
-     "bucket": "month",
-     "rollup": "avg"
-    }
-   },
    "category": "expected_refusal",
    "checks": {
     "expected_outcome": "needs_clarification"
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 20673.9,
+     "load_duration_ms": 4138.7,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"operation\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"taxi_type\",\n      \"concept\": \"OBJECT\",\n      \"subtype\": \"taxi_type\",\n      \"role\": \"COND\",\n      \"source\": \"user\",\n      \"value\": \"corporate\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_year\",\n    \"bucket\": \"month\",\n    \"aggregation\": \"sum\",\n    \"rollup\": \"avg\"\n  }\n}",
+     "thinking_chars": 6813
+    }
+   ],
+   "started_at": "2026-09-29T23:45:11.324436+09:00",
+   "finished_at": "2026-09-29T23:45:32.281311+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"operation\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"revenue\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"date\": \"last_year\", \"taxi_type\": \"corporate\", \"bucket\": \"month\", \"rollup\": \"avg\"}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"operation\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"taxi_type\",\n      \"concept\": \"OBJECT\",\n      \"subtype\": \"taxi_type\",\n      \"role\": \"COND\",\n      \"source\": \"user\",\n      \"value\": \"corporate\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_year\",\n    \"bucket\": \"month\",\n    \"aggregation\": \"sum\",\n    \"rollup\": \"avg\"\n  }\n}",
     "error_stage": "composition",
     "error_detail": "EVENT_TO_GROUPED_MEASURE.measure_groups: 구간 안 집계 방식이 질문에 없습니다.",
     "error_context": {
@@ -5005,9 +4830,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
+     "planner_ms": 20674.832,
      "execution_ms": 0.0,
-     "total_ms": 0.453
+     "total_ms": 20675.445
     }
    },
    "outcome": "needs_clarification",
@@ -5019,7 +4844,7 @@
    "grounding": {
     "concepts": [
      {
-      "id": "event",
+      "id": "operation",
       "text": "",
       "concept": "EVENT",
       "subtype": "operation",
@@ -5029,7 +4854,7 @@
       "attributes": {}
      },
      {
-      "id": "measure",
+      "id": "revenue",
       "text": "",
       "concept": "AMOUNT",
       "subtype": "revenue",
@@ -5040,8 +4865,8 @@
      }
     ],
     "factors": {
-     "date": "last_year",
      "taxi_type": "corporate",
+     "date": "last_year",
      "bucket": "month",
      "rollup": "avg"
     },
@@ -5051,9 +4876,44 @@
      "outer": "avg",
      "select": null,
      "source": "flat"
-    }
+    },
+    "normalizations": [
+     {
+      "concept": "taxi_type",
+      "rule": "condition_concept_to_factor",
+      "factor": "taxi_type",
+      "value": "corporate"
+     }
+    ]
    },
-   "condition_corrections": null,
+   "condition_corrections": [
+    {
+     "condition": "taxi_type",
+     "from": null,
+     "to": "corporate",
+     "action": "filled",
+     "basis": "question_expression",
+     "evidence": [
+      {
+       "text": "법인택시"
+      }
+     ]
+    },
+    {
+     "condition": "aggregation",
+     "from": "sum",
+     "to": null,
+     "action": "removed_no_evidence",
+     "basis": "aggregation_not_in_question",
+     "evidence": [
+      {
+       "text": "",
+       "start": null,
+       "note": "inner_not_stated"
+      }
+     ]
+    }
+   ],
    "lowering": {},
    "date_semantics": {},
    "plan_calendar": null,
@@ -5063,42 +4923,68 @@
    "id": "c08c",
    "question": "지난해 법인택시 수입 합계가 가장 큰 달은?",
    "vendor_verdict": "-",
-   "category": "no_gold_grounding",
-   "checks": {},
-   "outcome": null,
-   "error_code": null,
+   "category": "expected_refusal",
+   "checks": {
+    "expected_outcome": "unsupported"
+   },
+   "reset_ok": true,
+   "grounding_ok": null,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 13547.1,
+     "load_duration_ms": 4608.6,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"operation\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_year\",\n    \"bucket\": \"month\",\n    \"aggregation\": \"sum\",\n    \"rollup\": \"max\",\n    \"order\": \"top\",\n    \"limit\": 1,\n    \"taxi_type\": \"corporate\"\n  }\n}",
+     "thinking_chars": 3209
+    }
+   ],
+   "started_at": "2026-09-29T23:45:32.281495+09:00",
+   "finished_at": "2026-09-29T23:45:46.127893+09:00",
+   "planner_trace": {
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"operation\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_year\",\n    \"bucket\": \"month\",\n    \"aggregation\": \"sum\",\n    \"rollup\": \"max\",\n    \"order\": \"top\",\n    \"limit\": 1,\n    \"taxi_type\": \"corporate\"\n  }\n}",
+    "error_stage": "planner",
+    "error_detail": "값이 아니라 그 값을 가진 구간(주·달)을 묻는 질문은 지원하지 않습니다. 구간별 대표값(예: 가장 큰 값)은 계산할 수 있지만 어느 구간인지는 Tool이 돌려주지 않습니다.",
+    "error_context": {
+     "condition_error": true,
+     "answer_target": {
+      "slot": "answer_target",
+      "value": "bucket",
+      "evidence": [
+       {
+        "text": "가장 큰 달",
+        "start": 16
+       }
+      ],
+      "strength": "clear",
+      "action": "unsupported",
+      "basis": "asks_for_bucket_label"
+     }
+    },
+    "attempts": [],
+    "repairs": {},
+    "durations": {
+     "total_ms": 13547.754
+    }
+   },
+   "outcome": "unsupported",
+   "error_code": "BUCKET_SELECTION_UNSUPPORTED",
+   "error_user_message": "값이 아니라 그 값을 가진 구간(주·달)을 묻는 질문은 지원하지 않습니다. 구간별 대표값(예: 가장 큰 값)은 계산할 수 있지만 어느 구간인지는 Tool이 돌려주지 않습니다.",
+   "error_context": {},
    "calls": [],
-   "final_answer": null
+   "final_answer": null,
+   "grounding": null,
+   "condition_corrections": null,
+   "lowering": {},
+   "date_semantics": {},
+   "plan_calendar": null,
+   "execution_profile": null
   },
   {
    "id": "c08d",
    "question": "지난해 월별 법인택시 수입 합계 중 가장 큰 값은?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "operation",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "revenue",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "date": "last_year",
-     "taxi_type": "corporate",
-     "aggregation": "sum",
-     "bucket": "month",
-     "rollup": "max"
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -5110,8 +4996,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 11123.7,
+     "load_duration_ms": 4648.7,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"operation\",\n      \"text\": \"법인택시 수입\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"text\": \"수입\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_year\",\n    \"bucket\": \"month\",\n    \"aggregation\": \"sum\",\n    \"rollup\": \"max\",\n    \"taxi_type\": \"corporate\"\n  }\n}",
+     "thinking_chars": 1991
+    }
+   ],
+   "started_at": "2026-09-29T23:45:46.128062+09:00",
+   "finished_at": "2026-09-29T23:45:57.544032+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"operation\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"revenue\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"date\": \"last_year\", \"taxi_type\": \"corporate\", \"aggregation\": \"sum\", \"bucket\": \"month\", \"rollup\": \"max\"}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"operation\",\n      \"text\": \"법인택시 수입\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"text\": \"수입\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_year\",\n    \"bucket\": \"month\",\n    \"aggregation\": \"sum\",\n    \"rollup\": \"max\",\n    \"taxi_type\": \"corporate\"\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -5131,9 +5032,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.117,
-     "total_ms": 0.892
+     "planner_ms": 11124.415,
+     "execution_ms": 0.173,
+     "total_ms": 11125.608
     }
    },
    "outcome": "answered",
@@ -5158,8 +5059,8 @@
    "grounding": {
     "concepts": [
      {
-      "id": "event",
-      "text": "",
+      "id": "operation",
+      "text": "법인택시 수입",
       "concept": "EVENT",
       "subtype": "operation",
       "role": "SUPPORT",
@@ -5168,8 +5069,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "revenue",
+      "text": "수입",
       "concept": "AMOUNT",
       "subtype": "revenue",
       "role": "MEASURE",
@@ -5180,10 +5081,10 @@
     ],
     "factors": {
      "date": "last_year",
-     "taxi_type": "corporate",
-     "aggregation": "sum",
      "bucket": "month",
-     "rollup": "max"
+     "aggregation": "sum",
+     "rollup": "max",
+     "taxi_type": "corporate"
     },
     "aggregation": {
      "bucket": "month",
@@ -5193,7 +5094,7 @@
      "source": "flat"
     }
    },
-   "condition_corrections": null,
+   "condition_corrections": [],
    "lowering": {
     "measure_groups": {
      "strategy": "fused_bucket_rollup",
@@ -5294,31 +5195,6 @@
    "id": "c08e",
    "question": "지난해 월별 평균 법인택시 수입 중 가장 작은 값은?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "operation",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "revenue",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "date": "last_year",
-     "taxi_type": "corporate",
-     "aggregation": "avg",
-     "bucket": "month",
-     "rollup": "min"
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -5330,8 +5206,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 10522.0,
+     "load_duration_ms": 4596.7,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"operation\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_year\",\n    \"bucket\": \"month\",\n    \"aggregation\": \"avg\",\n    \"rollup\": \"min\",\n    \"taxi_type\": \"corporate\"\n  }\n}",
+     "thinking_chars": 1937
+    }
+   ],
+   "started_at": "2026-09-29T23:45:57.544257+09:00",
+   "finished_at": "2026-09-29T23:46:08.381571+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"operation\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"revenue\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"date\": \"last_year\", \"taxi_type\": \"corporate\", \"aggregation\": \"avg\", \"bucket\": \"month\", \"rollup\": \"min\"}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"operation\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_year\",\n    \"bucket\": \"month\",\n    \"aggregation\": \"avg\",\n    \"rollup\": \"min\",\n    \"taxi_type\": \"corporate\"\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -5351,9 +5242,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.109,
-     "total_ms": 0.787
+     "planner_ms": 10522.834,
+     "execution_ms": 0.174,
+     "total_ms": 10523.885
     }
    },
    "outcome": "answered",
@@ -5378,7 +5269,7 @@
    "grounding": {
     "concepts": [
      {
-      "id": "event",
+      "id": "operation",
       "text": "",
       "concept": "EVENT",
       "subtype": "operation",
@@ -5388,7 +5279,7 @@
       "attributes": {}
      },
      {
-      "id": "measure",
+      "id": "revenue",
       "text": "",
       "concept": "AMOUNT",
       "subtype": "revenue",
@@ -5400,10 +5291,10 @@
     ],
     "factors": {
      "date": "last_year",
-     "taxi_type": "corporate",
-     "aggregation": "avg",
      "bucket": "month",
-     "rollup": "min"
+     "aggregation": "avg",
+     "rollup": "min",
+     "taxi_type": "corporate"
     },
     "aggregation": {
      "bucket": "month",
@@ -5413,7 +5304,7 @@
      "source": "flat"
     }
    },
-   "condition_corrections": null,
+   "condition_corrections": [],
    "lowering": {
     "measure_groups": {
      "strategy": "fused_bucket_rollup",
@@ -5514,41 +5405,6 @@
    "id": "c09a",
    "question": "지난달 대구 시군구 가운데 택시 통행량이 가장 많은 곳은?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "place_scope",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "대구",
-       "region": ""
-      }
-     },
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "passage",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "passage_count",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "date": "last_month",
-     "dimension": "sigungu",
-     "order": "top",
-     "limit": 1
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -5560,8 +5416,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 18156.8,
+     "load_duration_ms": 4647.9,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"region\",\n      \"text\": \"대구 시군구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"시군구\", \"region\": \"대구\"}\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"passage_count\",\n      \"text\": \"택시 통행량\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"passage_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_month\",\n    \"dimension\": \"sigungu\",\n    \"order\": \"top\",\n    \"limit\": 1\n  }\n}",
+     "thinking_chars": 4723
+    }
+   ],
+   "started_at": "2026-09-29T23:46:08.381767+09:00",
+   "finished_at": "2026-09-29T23:46:26.807198+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"place_scope\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"대구\", \"region\": \"\"}}, {\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"passage\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"passage_count\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"date\": \"last_month\", \"dimension\": \"sigungu\", \"order\": \"top\", \"limit\": 1}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"region\",\n      \"text\": \"대구 시군구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"시군구\", \"region\": \"대구\"}\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"passage_count\",\n      \"text\": \"택시 통행량\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"passage_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_month\",\n    \"dimension\": \"sigungu\",\n    \"order\": \"top\",\n    \"limit\": 1\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -5581,9 +5452,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.168,
-     "total_ms": 0.818
+     "planner_ms": 18158.233,
+     "execution_ms": 0.301,
+     "total_ms": 18159.451
     }
    },
    "outcome": "answered",
@@ -5620,8 +5491,8 @@
    "grounding": {
     "concepts": [
      {
-      "id": "place_scope",
-      "text": "",
+      "id": "region",
+      "text": "대구 시군구",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -5633,7 +5504,7 @@
       "attributes": {}
      },
      {
-      "id": "event",
+      "id": "passage",
       "text": "",
       "concept": "EVENT",
       "subtype": "passage",
@@ -5643,8 +5514,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "passage_count",
+      "text": "택시 통행량",
       "concept": "AMOUNT",
       "subtype": "passage_count",
       "role": "MEASURE",
@@ -5665,9 +5536,23 @@
      "outer": null,
      "select": null,
      "source": "flat"
-    }
+    },
+    "normalizations": [
+     {
+      "concept": "region",
+      "rule": "non_place_word_region_is_place",
+      "before": {
+       "name": "시군구",
+       "region": "대구"
+      },
+      "after": {
+       "name": "대구",
+       "region": ""
+      }
+     }
+    ]
    },
-   "condition_corrections": null,
+   "condition_corrections": [],
    "lowering": {},
    "date_semantics": {
     "measure_event": {
@@ -5722,38 +5607,6 @@
    "id": "c09b",
    "question": "지난달 대구의 택시 통행량은?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "place_scope",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "대구",
-       "region": ""
-      }
-     },
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "passage",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "passage_count",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "date": "last_month"
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -5765,8 +5618,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 20796.3,
+     "load_duration_ms": 4392.3,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"location\",\n      \"text\": \"대구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"대구\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"passage_count\",\n      \"text\": \"통행량\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"passage_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_month\",\n    \"aggregation\": \"sum\"\n  }\n}",
+     "thinking_chars": 6314
+    }
+   ],
+   "started_at": "2026-09-29T23:46:26.807428+09:00",
+   "finished_at": "2026-09-29T23:46:47.909266+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"place_scope\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"대구\", \"region\": \"\"}}, {\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"passage\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"passage_count\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"date\": \"last_month\"}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"location\",\n      \"text\": \"대구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"대구\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"passage_count\",\n      \"text\": \"통행량\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"passage_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_month\",\n    \"aggregation\": \"sum\"\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -5786,9 +5654,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.133,
-     "total_ms": 0.806
+     "planner_ms": 20797.548,
+     "execution_ms": 0.22,
+     "total_ms": 20798.63
     }
    },
    "outcome": "answered",
@@ -5819,8 +5687,8 @@
    "grounding": {
     "concepts": [
      {
-      "id": "place_scope",
-      "text": "",
+      "id": "location",
+      "text": "대구",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -5832,7 +5700,7 @@
       "attributes": {}
      },
      {
-      "id": "event",
+      "id": "passage",
       "text": "",
       "concept": "EVENT",
       "subtype": "passage",
@@ -5842,8 +5710,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "passage_count",
+      "text": "통행량",
       "concept": "AMOUNT",
       "subtype": "passage_count",
       "role": "MEASURE",
@@ -5863,7 +5731,22 @@
      "source": "flat"
     }
    },
-   "condition_corrections": null,
+   "condition_corrections": [
+    {
+     "condition": "aggregation",
+     "from": "sum",
+     "to": null,
+     "action": "removed_no_evidence",
+     "basis": "aggregation_not_in_question",
+     "evidence": [
+      {
+       "text": "",
+       "start": null,
+       "note": "no_aggregation_word"
+      }
+     ]
+    }
+   ],
    "lowering": {},
    "date_semantics": {
     "measure_event": {
@@ -5918,45 +5801,6 @@
    "id": "c10a",
    "question": "이번 달 부산 초량동에서 출발한 실차의 하차 읍면동 하위 2곳은?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "place_scope_pickup",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "초량동",
-       "region": "부산"
-      },
-      "attributes": {
-       "od_role": "pickup"
-      }
-     },
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "trip",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "trip_count",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "date": "this_month",
-     "dimension": "emd",
-     "dimension_target": "dropoff",
-     "order": "bottom",
-     "limit": 2
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -5968,8 +5812,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 12266.5,
+     "load_duration_ms": 4525.0,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"origin\",\n      \"text\": \"부산 초량동\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"초량동\", \"region\": \"부산\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"20231001-20231031\",\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"dropoff\",\n    \"order\": \"bottom\",\n    \"limit\": 2\n  }\n}",
+     "thinking_chars": 2110
+    }
+   ],
+   "started_at": "2026-09-29T23:46:47.909456+09:00",
+   "finished_at": "2026-09-29T23:47:00.449759+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"place_scope_pickup\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"초량동\", \"region\": \"부산\"}, \"attributes\": {\"od_role\": \"pickup\"}}, {\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"trip\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"trip_count\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"date\": \"this_month\", \"dimension\": \"emd\", \"dimension_target\": \"dropoff\", \"order\": \"bottom\", \"limit\": 2}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"origin\",\n      \"text\": \"부산 초량동\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"초량동\", \"region\": \"부산\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"20231001-20231031\",\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"dropoff\",\n    \"order\": \"bottom\",\n    \"limit\": 2\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -5989,9 +5848,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.193,
-     "total_ms": 1.05
+     "planner_ms": 12267.499,
+     "execution_ms": 0.291,
+     "total_ms": 12268.829
     }
    },
    "outcome": "answered",
@@ -6034,8 +5893,8 @@
    "grounding": {
     "concepts": [
      {
-      "id": "place_scope_pickup",
-      "text": "",
+      "id": "origin",
+      "text": "부산 초량동",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -6049,7 +5908,7 @@
       }
      },
      {
-      "id": "event",
+      "id": "trip",
       "text": "",
       "concept": "EVENT",
       "subtype": "trip",
@@ -6059,8 +5918,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "trip_count",
+      "text": "실차 구간 건수",
       "concept": "AMOUNT",
       "subtype": "trip_count",
       "role": "MEASURE",
@@ -6084,7 +5943,20 @@
      "source": "flat"
     }
    },
-   "condition_corrections": null,
+   "condition_corrections": [
+    {
+     "condition": "date",
+     "from": "20231001-20231031",
+     "to": "this_month",
+     "action": "corrected",
+     "basis": "question_expression_over_llm_value",
+     "evidence": [
+      {
+       "text": "이번 달"
+      }
+     ]
+    }
+   ],
    "lowering": {},
    "date_semantics": {
     "measure_od_event": {
@@ -6139,45 +6011,6 @@
    "id": "c10b",
    "question": "이번 달 부산 초량동에서 출발한 실차의 읍면동 간 노선 하위 2개는?",
    "vendor_verdict": "-",
-   "gold_grounding": {
-    "concepts": [
-     {
-      "id": "place_scope_pickup",
-      "concept": "LOCATION",
-      "subtype": "place",
-      "role": "SUBCOND",
-      "source": "user",
-      "value": {
-       "name": "초량동",
-       "region": "부산"
-      },
-      "attributes": {
-       "od_role": "pickup"
-      }
-     },
-     {
-      "id": "event",
-      "concept": "EVENT",
-      "subtype": "trip",
-      "role": "SUPPORT",
-      "source": "implicit"
-     },
-     {
-      "id": "measure",
-      "concept": "AMOUNT",
-      "subtype": "trip_count",
-      "role": "MEASURE",
-      "source": "implicit"
-     }
-    ],
-    "factors": {
-     "date": "this_month",
-     "dimension": "emd",
-     "dimension_target": "both",
-     "order": "bottom",
-     "limit": 2
-    }
-   },
    "category": "match",
    "checks": {
     "place_lookups_ok": true,
@@ -6189,8 +6022,23 @@
     "args_ok": true,
     "answer_value_ok": true
    },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "replayed": false,
+     "duration_ms": 10898.4,
+     "load_duration_ms": 3518.3,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"origin\",\n      \"text\": \"부산 초량동\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"초량동\", \"region\": \"부산\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"this_month\",\n    \"dimension\": \"emd\",\n    \"order\": \"bottom\",\n    \"limit\": 2\n  }\n}",
+     "thinking_chars": 2118
+    }
+   ],
+   "started_at": "2026-09-29T23:47:00.449965+09:00",
+   "finished_at": "2026-09-29T23:47:11.740985+09:00",
    "planner_trace": {
-    "raw_text": "{\"concepts\": [{\"id\": \"place_scope_pickup\", \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\", \"source\": \"user\", \"value\": {\"name\": \"초량동\", \"region\": \"부산\"}, \"attributes\": {\"od_role\": \"pickup\"}}, {\"id\": \"event\", \"concept\": \"EVENT\", \"subtype\": \"trip\", \"role\": \"SUPPORT\", \"source\": \"implicit\"}, {\"id\": \"measure\", \"concept\": \"AMOUNT\", \"subtype\": \"trip_count\", \"role\": \"MEASURE\", \"source\": \"implicit\"}], \"factors\": {\"date\": \"this_month\", \"dimension\": \"emd\", \"dimension_target\": \"both\", \"order\": \"bottom\", \"limit\": 2}}",
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"origin\",\n      \"text\": \"부산 초량동\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"초량동\", \"region\": \"부산\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"this_month\",\n    \"dimension\": \"emd\",\n    \"order\": \"bottom\",\n    \"limit\": 2\n  }\n}",
     "error_stage": null,
     "error_detail": null,
     "error_context": {},
@@ -6210,9 +6058,9 @@
     ],
     "repairs": {},
     "durations": {
-     "planner_ms": 0.0,
-     "execution_ms": 0.213,
-     "total_ms": 1.133
+     "planner_ms": 10899.44,
+     "execution_ms": 0.339,
+     "total_ms": 10900.924
     }
    },
    "outcome": "answered",
@@ -6235,7 +6083,6 @@
       "scope_pickup": "scope:district:2617010100",
       "date": "this_month",
       "dimension": "emd",
-      "dimension_target": "both",
       "limit": 2,
       "order": "bottom"
      },
@@ -6253,12 +6100,12 @@
      ]
     }
    ],
-   "final_answer": "부산 초량동 출발 이번 달 읍면동별 승하차 지역 조합 하위 2개 실차 구간 건수\n- 초량동 → 동인동: 20건\n- 초량동 → 중앙로동: 20건",
+   "final_answer": "부산 초량동 출발 이번 달 읍면동별 하위 2개 실차 구간 건수\n- 초량동 → 동인동: 20건\n- 초량동 → 중앙로동: 20건",
    "grounding": {
     "concepts": [
      {
-      "id": "place_scope_pickup",
-      "text": "",
+      "id": "origin",
+      "text": "부산 초량동",
       "concept": "LOCATION",
       "subtype": "place",
       "role": "SUBCOND",
@@ -6272,7 +6119,7 @@
       }
      },
      {
-      "id": "event",
+      "id": "trip",
       "text": "",
       "concept": "EVENT",
       "subtype": "trip",
@@ -6282,8 +6129,8 @@
       "attributes": {}
      },
      {
-      "id": "measure",
-      "text": "",
+      "id": "trip_count",
+      "text": "실차 구간 건수",
       "concept": "AMOUNT",
       "subtype": "trip_count",
       "role": "MEASURE",
@@ -6295,7 +6142,6 @@
     "factors": {
      "date": "this_month",
      "dimension": "emd",
-     "dimension_target": "both",
      "order": "bottom",
      "limit": 2
     },
@@ -6307,7 +6153,7 @@
      "source": "flat"
     }
    },
-   "condition_corrections": null,
+   "condition_corrections": [],
    "lowering": {},
    "date_semantics": {
     "measure_od_event": {

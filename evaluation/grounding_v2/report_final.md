@@ -3,7 +3,7 @@
 ## 업체 100문항(개발)
 
 - 전: `evaluation/grounding_v1/runs/final2_dev_qwen3_8b.json` (코드 `1cb307df8e`)
-- 후: `evaluation/grounding_v2/runs/cand_dev_qwen3_8b.json` (코드 `a798acd0cf`)
+- 후: `evaluation/grounding_v2/runs/final_dev_qwen3_8b.json` (코드 `4f0c562417`)
 
 | 결과 분류 | 전 | 후 |
 |---|---|---|
@@ -19,7 +19,7 @@
 - LLM grounding 정확(후): 99/100
 
 - 호출·지연(전): 계획 100, 재질의 13(재질의한 문항 13), 실패 호출 기록 0, timeout 추정 4(041, 044, 067, 100); 문항 지연 중앙값 12.4초, p90 20.7초, 최대 325.6초, 합계 2616.7초; 전체 경과 기록 없음(평가기 v1)
-- 호출·지연(후): 계획 100, 재질의 0(재질의한 문항 0), 실패 호출 기록 2, timeout 추정 0; 문항 지연 중앙값 12.1초, p90 17.4초, 최대 314.6초, 합계 1889.6초; 전체 경과 1917.3초
+- 호출·지연(후): 계획 100, 재질의 0(재질의한 문항 0), 실패 호출 기록 2, timeout 추정 0; 문항 지연 중앙값 12.0초, p90 18.0초, 최대 316.2초, 합계 1881.6초; 전체 경과 1909.1초
 
 | 전→후 | 문항 |
 |---|---|
@@ -136,7 +136,7 @@
 ## 기존 44문항(개발)
 
 - 전: `evaluation/grounding_v1/runs/final_holdout_qwen3_8b.json` (코드 `1cb307df8e`)
-- 후: `evaluation/grounding_v2/runs/cand_old44_qwen3_8b.json` (코드 `a798acd0cf`)
+- 후: `evaluation/grounding_v2/runs/final_old44_qwen3_8b.json` (코드 `4f0c562417`)
 
 | 결과 분류 | 전 | 후 |
 |---|---|---|
@@ -152,7 +152,7 @@
 - LLM grounding 정확(후): 43/43 — 제외 g32(정답 grounding 없음)
 
 - 호출·지연(전): 계획 44, 재질의 6(재질의한 문항 6), 실패 호출 기록 0, timeout 추정 0; 문항 지연 중앙값 11.9초, p90 18.3초, 최대 38.7초, 합계 605.3초; 전체 경과 기록 없음(평가기 v1)
-- 호출·지연(후): 계획 44, 재질의 0(재질의한 문항 0), 실패 호출 기록 0, timeout 추정 0; 문항 지연 중앙값 11.8초, p90 17.7초, 최대 39.3초, 합계 576.0초; 전체 경과 588.1초
+- 호출·지연(후): 계획 44, 재질의 0(재질의한 문항 0), 실패 호출 기록 0, timeout 추정 0; 문항 지연 중앙값 11.9초, p90 17.1초, 최대 39.3초, 합계 583.9초; 전체 경과 596.3초
 
 | 전→후 | 문항 |
 |---|---|
@@ -214,7 +214,7 @@
 ## 대조 사례(개발)
 
 - 전: `evaluation/grounding_v2/runs/contrast_base_qwen3_8b.json` (코드 `2011580708`)
-- 후: `evaluation/grounding_v2/runs/cand_contrast_qwen3_8b.json` (코드 `a798acd0cf`)
+- 후: `evaluation/grounding_v2/runs/final_contrast_qwen3_8b.json` (코드 `4f0c562417`)
 
 | 결과 분류 | 전 | 후 |
 |---|---|---|
@@ -230,7 +230,7 @@
 - LLM grounding 정확(후): 30/30 — 제외 c08c(정답 grounding 없음)
 
 - 호출·지연(전): 계획 31, 재질의 5(재질의한 문항 5), 실패 호출 기록 0, timeout 추정 0; 문항 지연 중앙값 12.8초, p90 21.2초, 최대 28.4초, 합계 468.4초; 전체 경과 476.7초
-- 호출·지연(후): 계획 31, 재질의 0(재질의한 문항 0), 실패 호출 기록 0, timeout 추정 0; 문항 지연 중앙값 11.8초, p90 21.4초, 최대 30.6초, 합계 438.2초; 전체 경과 446.3초
+- 호출·지연(후): 계획 31, 재질의 0(재질의한 문항 0), 실패 호출 기록 0, timeout 추정 0; 문항 지연 중앙값 12.3초, p90 20.8초, 최대 30.8초, 합계 447.0초; 전체 경과 455.9초
 
 | 전→후 | 문항 |
 |---|---|
@@ -277,36 +277,37 @@
 | c10a | answered | 정상 답변 | 정상 답변 |  | True→True |
 | c10b | answered | 정상 답변 | 정상 답변 |  | True→True |
 
-## 새 독립셋(사전 등록)
+## 1차 독립셋(열람 후 개발)
 
 - 전: `evaluation/grounding_v2/runs/base_indep_qwen3_8b.json` (코드 `2011580708`)
-- 후: `evaluation/grounding_v2/runs/cand_indep_qwen3_8b.json` (코드 `a798acd0cf`)
+- 후: `evaluation/grounding_v2/runs/final_indepv2_qwen3_8b.json` (코드 `4f0c562417`)
 
 | 결과 분류 | 전 | 후 |
 |---|---|---|
-| 정상 답변 | 19 | 19 |
-| 오답 | 9 | 9 |
-| 정당한 거부 | 3 | 3 |
-| 부당한 거부 | 4 | 3 |
-| 실행 실패 | 5 | 6 |
+| 정상 답변 | 19 | 28 |
+| 오답 | 9 | 2 |
+| 정당한 거부 | 3 | 5 |
+| 부당한 거부 | 4 | 1 |
+| 실행 실패 | 5 | 4 |
 | 미실행 | 0 | 0 |
 | **합계(분모)** | 40 | 40 |
 
 - LLM grounding 정확(전): 23/39 — 제외 n24(정답 grounding 없음)
-- LLM grounding 정확(후): 23/39 — 제외 n24(정답 grounding 없음)
+- LLM grounding 정확(후): 32/39 — 제외 n24(정답 grounding 없음)
 
 - 호출·지연(전): 계획 40, 재질의 11(재질의한 문항 11), 실패 호출 기록 0, timeout 추정 0; 문항 지연 중앙값 13.1초, p90 31.1초, 최대 113.2초, 합계 757.6초; 전체 경과 767.7초
-- 호출·지연(후): 계획 40, 재질의 6(재질의한 문항 6), 실패 호출 기록 0, timeout 추정 0; 문항 지연 중앙값 12.4초, p90 23.3초, 최대 39.6초, 합계 637.6초; 전체 경과 647.9초
+- 호출·지연(후): 계획 40, 재질의 4(재질의한 문항 4), 실패 호출 기록 0, timeout 추정 0; 문항 지연 중앙값 12.5초, p90 22.7초, 최대 265.8초, 합계 853.0초; 전체 경과 864.5초
 
 | 전→후 | 문항 |
 |---|---|
-| 부당한 거부 → 정상 답변 | n03 |
-| 오답 → 실행 실패 | n10 |
-| 오답 → 정상 답변 | n15 |
-| 정상 답변 → 오답 | n17, n30 |
+| 부당한 거부 → 정상 답변 | n03, n14, n21 |
+| 실행 실패 → 정상 답변 | n09, n16 |
+| 오답 → 실행 실패 | n05 |
+| 오답 → 정당한 거부 | n23, n24 |
+| 오답 → 정상 답변 | n10, n12, n15, n33 |
 
-- 새로 맞음 2: n03, n15
-- 회귀(맞던 문항이 틀림) 2: n17, n30
+- 새로 맞음 11: n03, n09, n10, n12, n14, n15, n16, n21, n23, n24, n33
+- 회귀(맞던 문항이 틀림) 0: -
 
 | 문항 | 기대 | 전 | 후 | 후 오류 코드 / 인자 차이 | grounding 전→후 |
 |---|---|---|---|---|---|
@@ -314,35 +315,35 @@
 | n02 | answered | 정상 답변 | 정상 답변 |  | True→True |
 | n03 | answered | 부당한 거부 | 정상 답변 |  | False→True |
 | n04 | answered | 정상 답변 | 정상 답변 |  | True→True |
-| n05 | answered | 오답 | 오답 | [["dimension_target", "dropoff", null]] | False→False |
+| n05 | answered | 오답 | 실행 실패 | MISSING_RELATION_QUALIFIER | False→False |
 | n06 | answered | 정상 답변 | 정상 답변 |  | False→True |
 | n07 | answered | 정상 답변 | 정상 답변 |  | True→True |
 | n08 | answered | 정상 답변 | 정상 답변 |  | True→True |
-| n09 | answered | 실행 실패 | 실행 실패 | MISSING_RELATION_QUALIFIER | False→False |
-| n10 | answered | 오답 | 실행 실패 | AMBIGUOUS_PORT | True→False |
+| n09 | answered | 실행 실패 | 정상 답변 |  | False→True |
+| n10 | answered | 오답 | 정상 답변 |  | True→True |
 | n11 | answered | 정상 답변 | 정상 답변 |  | True→True |
-| n12 | answered | 오답 | 오답 | [["scope_dropoff", null, "scope:district:2600000000"]] | False→False |
+| n12 | answered | 오답 | 정상 답변 |  | False→False |
 | n13 | answered | 정상 답변 | 정상 답변 |  | True→True |
-| n14 | answered | 부당한 거부 | 부당한 거부 | UNSUPPORTED_AGGREGATION_COMBINATION | False→False |
+| n14 | answered | 부당한 거부 | 정상 답변 |  | False→True |
 | n15 | answered | 오답 | 정상 답변 |  | False→True |
-| n16 | answered | 실행 실패 | 실행 실패 | VALUELESS_CONCEPT | False→False |
-| n17 | answered | 정상 답변 | 오답 | [["aggregation", "min", null]] | True→False |
+| n16 | answered | 실행 실패 | 정상 답변 |  | False→True |
+| n17 | answered | 정상 답변 | 정상 답변 |  | True→True |
 | n18 | answered | 정상 답변 | 정상 답변 |  | True→True |
 | n19 | answered | 정상 답변 | 정상 답변 |  | True→True |
 | n20 | answered | 실행 실패 | 실행 실패 | UNGROUNDED_SCOPE | False→False |
-| n21 | answered | 부당한 거부 | 부당한 거부 | AMBIGUOUS_INNER_AGGREGATION | False→False |
+| n21 | answered | 부당한 거부 | 정상 답변 |  | False→True |
 | n22 | answered | 정상 답변 | 정상 답변 |  | True→True |
-| n23 | needs_clarification | 오답 | 오답 |  | False→False |
-| n24 | unsupported | 오답 | 오답 |  | None→None |
+| n23 | needs_clarification | 오답 | 정당한 거부 | AMBIGUOUS_INNER_AGGREGATION | False→True |
+| n24 | unsupported | 오답 | 정당한 거부 | BUCKET_SELECTION_UNSUPPORTED | None→None |
 | n25 | unsupported | 정당한 거부 | 정당한 거부 | UNCONSUMED_CONDITION | True→True |
 | n26 | unsupported | 정당한 거부 | 정당한 거부 | UNCONSUMED_CONDITION | True→True |
 | n27 | unsupported | 정당한 거부 | 정당한 거부 | UNCONSUMED_CONDITION | True→True |
 | n28 | answered | 정상 답변 | 정상 답변 |  | True→True |
 | n29 | answered | 부당한 거부 | 부당한 거부 | UNCONSUMED_CONDITION | False→False |
-| n30 | answered | 정상 답변 | 오답 | [["aggregation", "max", null]] | True→False |
+| n30 | answered | 정상 답변 | 정상 답변 |  | True→True |
 | n31 | answered | 오답 | 오답 | 장소 조회 횟수 불일치 | True→True |
 | n32 | answered | 정상 답변 | 정상 답변 |  | True→True |
-| n33 | answered | 오답 | 오답 | [["taxi_status", "occupied", null]] | False→False |
+| n33 | answered | 오답 | 정상 답변 |  | False→True |
 | n34 | answered | 정상 답변 | 정상 답변 |  | True→True |
 | n35 | answered | 실행 실패 | 실행 실패 | MISSING_CONCEPT_VALUE | False→False |
 | n36 | answered | 오답 | 오답 | [["scope", "<조회 안 됨 대구>", null]] 장소 조회 횟수 불일치 | False→False |
@@ -351,10 +352,87 @@
 | n39 | answered | 정상 답변 | 정상 답변 |  | True→True |
 | n40 | answered | 정상 답변 | 정상 답변 |  | True→True |
 
+## 2차 독립셋(사전 등록)
+
+- 전: `evaluation/grounding_v2/runs/base_indepv3_qwen3_8b.json` (코드 `2011580708`)
+- 후: `evaluation/grounding_v2/runs/final_indepv3_qwen3_8b.json` (코드 `4f0c562417`)
+
+| 결과 분류 | 전 | 후 |
+|---|---|---|
+| 정상 답변 | 18 | 21 |
+| 오답 | 11 | 9 |
+| 정당한 거부 | 1 | 3 |
+| 부당한 거부 | 1 | 1 |
+| 실행 실패 | 9 | 6 |
+| 미실행 | 0 | 0 |
+| **합계(분모)** | 40 | 40 |
+
+- LLM grounding 정확(전): 18/38 — 제외 m25, m40(정답 grounding 없음)
+- LLM grounding 정확(후): 24/38 — 제외 m25, m40(정답 grounding 없음)
+
+- 호출·지연(전): 계획 40, 재질의 11(재질의한 문항 11), 실패 호출 기록 2, timeout 추정 0; 문항 지연 중앙값 12.4초, p90 23.3초, 최대 425.8초, 합계 1498.3초; 전체 경과 1509.7초
+- 호출·지연(후): 계획 40, 재질의 8(재질의한 문항 8), 실패 호출 기록 1, timeout 추정 0; 문항 지연 중앙값 12.2초, p90 18.8초, 최대 411.3초, 합계 935.6초; 전체 경과 947.3초
+
+| 전→후 | 문항 |
+|---|---|
+| 부당한 거부 → 정상 답변 | m20 |
+| 실행 실패 → 부당한 거부 | m17 |
+| 실행 실패 → 정당한 거부 | m25 |
+| 실행 실패 → 정상 답변 | m15 |
+| 오답 → 정당한 거부 | m24 |
+| 오답 → 정상 답변 | m03, m18 |
+| 정상 답변 → 오답 | m22 |
+
+- 새로 맞음 6: m03, m15, m18, m20, m24, m25
+- 회귀(맞던 문항이 틀림) 1: m22
+
+| 문항 | 기대 | 전 | 후 | 후 오류 코드 / 인자 차이 | grounding 전→후 |
+|---|---|---|---|---|---|
+| m01 | answered | 정상 답변 | 정상 답변 |  | True→True |
+| m02 | answered | 실행 실패 | 실행 실패 | MULTIPLE_MEASURES | False→False |
+| m03 | answered | 오답 | 정상 답변 |  | False→True |
+| m04 | answered | 오답 | 오답 | [["order", "bottom", "top"]] | False→False |
+| m05 | answered | 실행 실패 | 실행 실패 | NOT_FOUND | False→False |
+| m06 | answered | 정상 답변 | 정상 답변 |  | True→True |
+| m07 | answered | 정상 답변 | 정상 답변 |  | True→True |
+| m08 | answered | 정상 답변 | 정상 답변 |  | False→True |
+| m09 | answered | 정상 답변 | 정상 답변 |  | True→True |
+| m10 | answered | 오답 | 오답 | [["scope_dropoff", "<조회 안 됨 중구>", "scope:district:2723000000"]] 장소 조회 횟수 불일치 | False→False |
+| m11 | answered | 정상 답변 | 정상 답변 |  | True→True |
+| m12 | answered | 실행 실패 | 실행 실패 | MISSING_RELATION_QUALIFIER | False→False |
+| m13 | answered | 실행 실패 | 실행 실패 | NO_MEASURE | False→False |
+| m14 | answered | 오답 | 오답 | [["limit", 3, 1]] | False→False |
+| m15 | answered | 실행 실패 | 정상 답변 |  | False→True |
+| m16 | answered | 정상 답변 | 정상 답변 |  | True→True |
+| m17 | answered | 실행 실패 | 부당한 거부 | RELATION_EXPRESSION_AMBIGUOUS | False→False |
+| m18 | answered | 오답 | 정상 답변 |  | False→True |
+| m19 | answered | 정상 답변 | 정상 답변 |  | True→True |
+| m20 | answered | 부당한 거부 | 정상 답변 |  | False→True |
+| m21 | answered | 정상 답변 | 정상 답변 |  | True→True |
+| m22 | answered | 정상 답변 | 오답 | [["rollup", "max", "min"]] | True→False |
+| m23 | answered | 정상 답변 | 정상 답변 |  | True→True |
+| m24 | needs_clarification | 오답 | 정당한 거부 | AMBIGUOUS_INNER_AGGREGATION | False→True |
+| m25 | unsupported | 실행 실패 | 정당한 거부 | BUCKET_SELECTION_UNSUPPORTED | None→None |
+| m26 | answered | 오답 | 오답 | [["taxi_status", "occupied", null], ["time", "100000-120000", "100000-130000"]] | False→False |
+| m27 | answered | 오답 | 오답 | 장소 조회 횟수 불일치 | False→True |
+| m28 | answered | 정상 답변 | 정상 답변 |  | True→True |
+| m29 | answered | 오답 | 오답 | [["scope", "<조회 안 됨 광안리>", "scope:gz:33212"]] | False→False |
+| m30 | answered | 정상 답변 | 정상 답변 |  | True→True |
+| m31 | answered | 오답 | 오답 | [["scope", "<조회 안 됨 부산진구>", "scope:district:2623000000"]] | False→False |
+| m32 | answered | 실행 실패 | 실행 실패 | UNGROUNDED_SCOPE | False→False |
+| m33 | answered | 정상 답변 | 정상 답변 |  | True→True |
+| m34 | answered | 정상 답변 | 정상 답변 |  | True→True |
+| m35 | answered | 정상 답변 | 정상 답변 |  | True→True |
+| m36 | answered | 정상 답변 | 정상 답변 |  | True→True |
+| m37 | answered | 정상 답변 | 정상 답변 |  | True→True |
+| m38 | answered | 실행 실패 | 실행 실패 | VALUELESS_CONCEPT | False→False |
+| m39 | unsupported | 정당한 거부 | 정당한 거부 | UNCONSUMED_CONDITION | True→True |
+| m40 | unsupported | 오답 | 오답 |  | None→None |
+
 ## 정답 grounding 업체 100
 
 - 전: `evaluation/grounding_v2/runs/gold_base_dev.json` (코드 `2011580708`)
-- 후: `evaluation/grounding_v2/runs/gold_cand_dev.json` (코드 `a798acd0cf`)
+- 후: `evaluation/grounding_v2/runs/gold_cand_dev.json` (코드 `4f0c562417`)
 
 | 결과 분류 | 전 | 후 |
 |---|---|---|
@@ -481,7 +559,7 @@
 ## 정답 grounding 기존 44
 
 - 전: `evaluation/grounding_v2/runs/gold_base_old44.json` (코드 `2011580708`)
-- 후: `evaluation/grounding_v2/runs/gold_cand_old44.json` (코드 `a798acd0cf`)
+- 후: `evaluation/grounding_v2/runs/gold_cand_old44.json` (코드 `4f0c562417`)
 
 | 결과 분류 | 전 | 후 |
 |---|---|---|
@@ -552,7 +630,7 @@
 ## 정답 grounding 대조
 
 - 전: `evaluation/grounding_v2/runs/gold_base_contrast.json` (코드 `2011580708`)
-- 후: `evaluation/grounding_v2/runs/gold_cand_contrast.json` (코드 `a798acd0cf`)
+- 후: `evaluation/grounding_v2/runs/gold_cand_contrast.json` (코드 `4f0c562417`)
 
 | 결과 분류 | 전 | 후 |
 |---|---|---|
@@ -607,10 +685,10 @@
 | c10a | answered | 정상 답변 | 정상 답변 |  | None→None |
 | c10b | answered | 정상 답변 | 정상 답변 |  | None→None |
 
-## 정답 grounding 새 독립셋
+## 정답 grounding 1차 독립셋
 
 - 전: `evaluation/grounding_v2/runs/gold_base_indep.json` (코드 `2011580708`)
-- 후: `evaluation/grounding_v2/runs/gold_cand_indep.json` (코드 `a798acd0cf`)
+- 후: `evaluation/grounding_v2/runs/gold_cand_indep.json` (코드 `4f0c562417`)
 
 | 결과 분류 | 전 | 후 |
 |---|---|---|
@@ -673,4 +751,71 @@
 | n38 | answered | 정상 답변 | 정상 답변 |  | None→None |
 | n39 | answered | 정상 답변 | 정상 답변 |  | None→None |
 | n40 | answered | 정상 답변 | 정상 답변 |  | None→None |
+
+## 정답 grounding 2차 독립셋
+
+- 전: `evaluation/grounding_v2/runs/gold_base_indepv3.json` (코드 `2011580708`)
+- 후: `evaluation/grounding_v2/runs/gold_cand_indepv3.json` (코드 `4f0c562417`)
+
+| 결과 분류 | 전 | 후 |
+|---|---|---|
+| 정상 답변 | 33 | 36 |
+| 오답 | 3 | 0 |
+| 정당한 거부 | 2 | 2 |
+| 부당한 거부 | 0 | 0 |
+| 실행 실패 | 0 | 0 |
+| 미실행 | 2 | 2 |
+| **합계(분모)** | 40 | 40 |
+
+
+
+| 전→후 | 문항 |
+|---|---|
+| 오답 → 정상 답변 | m12, m13, m14 |
+
+- 새로 맞음 3: m12, m13, m14
+- 회귀(맞던 문항이 틀림) 0: -
+
+| 문항 | 기대 | 전 | 후 | 후 오류 코드 / 인자 차이 | grounding 전→후 |
+|---|---|---|---|---|---|
+| m01 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m02 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m03 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m04 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m05 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m06 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m07 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m08 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m09 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m10 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m11 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m12 | answered | 오답 | 정상 답변 |  | None→None |
+| m13 | answered | 오답 | 정상 답변 |  | None→None |
+| m14 | answered | 오답 | 정상 답변 |  | None→None |
+| m15 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m16 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m17 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m18 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m19 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m20 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m21 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m22 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m23 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m24 | needs_clarification | 정당한 거부 | 정당한 거부 | AMBIGUOUS_INNER_AGGREGATION | None→None |
+| m25 | unsupported | 미실행 | 미실행 |  | None→None |
+| m26 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m27 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m28 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m29 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m30 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m31 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m32 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m33 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m34 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m35 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m36 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m37 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m38 | answered | 정상 답변 | 정상 답변 |  | None→None |
+| m39 | unsupported | 정당한 거부 | 정당한 거부 | UNCONSUMED_CONDITION | None→None |
+| m40 | unsupported | 미실행 | 미실행 |  | None→None |
 
