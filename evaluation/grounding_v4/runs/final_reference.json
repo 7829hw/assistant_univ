@@ -1,0 +1,378 @@
+{
+ "summary": {
+  "mode": "flat",
+  "ok": 5,
+  "of": 6
+ },
+ "rows": [
+  {
+   "id": "r1",
+   "question": "지난달 가람구 개인택시 매출 합계가 가장 큰 주는?",
+   "expected": "bucket",
+   "observed": "bucket",
+   "ok": true,
+   "reset_ok": true,
+   "error_code": null,
+   "grounding": {
+    "concepts": [
+     {
+      "id": "location",
+      "text": "가람구",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "가람구",
+       "region": ""
+      },
+      "attributes": {}
+     },
+     {
+      "id": "operation",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "operation",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "revenue",
+      "text": "",
+      "concept": "AMOUNT",
+      "subtype": "revenue",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "last_month",
+     "bucket": "week",
+     "aggregation": "sum",
+     "rollup": "max",
+     "answer": "bucket",
+     "taxi_type": "private"
+    },
+    "aggregation": {
+     "bucket": "week",
+     "inner": "sum",
+     "outer": null,
+     "select": "max",
+     "source": "flat"
+    }
+   },
+   "final_answer": "가람구 지난달(20260801-20260831) 개인 택시 영업 수익 — 주별 합계가 가장 큰 주: 20260803-20260809, 20260810-20260816 (동률), 300,000\n- 계산: 기간 20260801-20260831을 주 구간 6개(월요일 시작 7일, 기간 경계에서 잘림, 이 계산의 기준)로 나눠 구간마다 합계를 조회한 뒤 로컬에서 가장 큰 주를 골랐습니다.\n- 구간별 합계:\n  - 20260801-20260802(부분 구간): 100,000\n  - 20260803-20260809: 300,000\n  - 20260810-20260816: 300,000\n  - 20260817-20260823: 280,000\n  - 20260824-20260830: 200,000\n  - 20260831-20260831(부분 구간): 60,000\n- 계산 환경: reference provider — 고정 합성 데이터로 계산한 값이며 실제 교통 데이터나 TIMS 결과가 아닙니다.\n- 적용 기간: 20260801-20260831(질문 기간 last_month, 기준일 20260925 Asia/Seoul) — 양 끝 포함, 영업일(service_date) 기준\n- 계산 의미: 레코드 = 택시 한 대의 영업일 하루 매출(원). 평균의 분모는 조건에 맞는 레코드 수(결측 제외), 주는 월요일 시작이며 기간 경계에서 잘립니다."
+  },
+  {
+   "id": "r2",
+   "question": "지난달 가람구 개인택시 주별 매출 합계 중 가장 큰 값은?",
+   "expected": "value",
+   "observed": "value",
+   "ok": true,
+   "reset_ok": true,
+   "error_code": null,
+   "grounding": {
+    "concepts": [
+     {
+      "id": "location",
+      "text": "가람구",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "가람구",
+       "region": ""
+      },
+      "attributes": {}
+     },
+     {
+      "id": "operation",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "operation",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "revenue",
+      "text": "매출 합계",
+      "concept": "AMOUNT",
+      "subtype": "revenue",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "last_month",
+     "bucket": "week",
+     "aggregation": "sum",
+     "rollup": "max",
+     "answer": "value",
+     "taxi_type": "private"
+    },
+    "aggregation": {
+     "bucket": "week",
+     "inner": "sum",
+     "outer": "max",
+     "select": null,
+     "source": "flat"
+    }
+   },
+   "final_answer": "가람구 지난달(20260801-20260831) 개인 택시 영업 수익 — 주별 합계의 최댓값: 300,000\n- 계산: 기간 20260801-20260831을 주 구간 6개(월요일 시작 7일, 기간 경계에서 잘림, 이 계산의 기준)로 나눠 구간마다 합계를 조회한 뒤 로컬에서 구간별 값의 최댓값을 계산했습니다.\n- 구간별 합계:\n  - 20260801-20260802(부분 구간): 100,000\n  - 20260803-20260809: 300,000\n  - 20260810-20260816: 300,000\n  - 20260817-20260823: 280,000\n  - 20260824-20260830: 200,000\n  - 20260831-20260831(부분 구간): 60,000\n- 계산 환경: reference provider — 고정 합성 데이터로 계산한 값이며 실제 교통 데이터나 TIMS 결과가 아닙니다.\n- 적용 기간: 20260801-20260831(질문 기간 last_month, 기준일 20260925 Asia/Seoul) — 양 끝 포함, 영업일(service_date) 기준\n- 계산 의미: 레코드 = 택시 한 대의 영업일 하루 매출(원). 평균의 분모는 조건에 맞는 레코드 수(결측 제외), 주는 월요일 시작이며 기간 경계에서 잘립니다."
+  },
+  {
+   "id": "r3",
+   "question": "지난달 가람구 개인택시 주별 매출 중 가장 큰 값은?",
+   "expected": "needs_clarification",
+   "observed": "value",
+   "ok": false,
+   "reset_ok": true,
+   "error_code": null,
+   "grounding": {
+    "concepts": [
+     {
+      "id": "location",
+      "text": "가람구",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "가람구",
+       "region": ""
+      },
+      "attributes": {}
+     },
+     {
+      "id": "operation",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "operation",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "revenue",
+      "text": "",
+      "concept": "AMOUNT",
+      "subtype": "revenue",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "last_month",
+     "bucket": "week",
+     "aggregation": "avg",
+     "rollup": "max",
+     "answer": "value",
+     "taxi_type": "private"
+    },
+    "aggregation": {
+     "bucket": "week",
+     "inner": "avg",
+     "outer": "max",
+     "select": null,
+     "source": "flat"
+    }
+   },
+   "final_answer": "가람구 지난달(20260801-20260831) 개인 택시 영업 수익 — 주별 평균의 최댓값: 200,000\n- 계산: 기간 20260801-20260831을 주 구간 6개(월요일 시작 7일, 기간 경계에서 잘림, 이 계산의 기준)로 나눠 구간마다 평균을 조회한 뒤 로컬에서 구간별 값의 최댓값을 계산했습니다.\n- 구간별 평균:\n  - 20260801-20260802(부분 구간): 100,000\n  - 20260803-20260809: 100,000\n  - 20260810-20260816: 150,000\n  - 20260817-20260823: 70,000\n  - 20260824-20260830: 200,000\n  - 20260831-20260831(부분 구간): 60,000\n- 계산 환경: reference provider — 고정 합성 데이터로 계산한 값이며 실제 교통 데이터나 TIMS 결과가 아닙니다.\n- 적용 기간: 20260801-20260831(질문 기간 last_month, 기준일 20260925 Asia/Seoul) — 양 끝 포함, 영업일(service_date) 기준\n- 계산 의미: 레코드 = 택시 한 대의 영업일 하루 매출(원). 평균의 분모는 조건에 맞는 레코드 수(결측 제외), 주는 월요일 시작이며 기간 경계에서 잘립니다."
+  },
+  {
+   "id": "r4",
+   "question": "지난달 나래구 개인택시 주별 평균 매출이 가장 작은 주는 언제야?",
+   "expected": "bucket",
+   "observed": "bucket",
+   "ok": true,
+   "reset_ok": true,
+   "error_code": null,
+   "grounding": {
+    "concepts": [
+     {
+      "id": "location",
+      "text": "나래구",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "나래구",
+       "region": ""
+      },
+      "attributes": {}
+     },
+     {
+      "id": "operation",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "operation",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "revenue",
+      "text": "매출",
+      "concept": "AMOUNT",
+      "subtype": "revenue",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "last_month",
+     "bucket": "week",
+     "aggregation": "avg",
+     "rollup": "min",
+     "answer": "bucket",
+     "taxi_type": "private"
+    },
+    "aggregation": {
+     "bucket": "week",
+     "inner": "avg",
+     "outer": null,
+     "select": "min",
+     "source": "flat"
+    }
+   },
+   "final_answer": "나래구 지난달(20260801-20260831) 개인 택시 영업 수익 — 주별 평균이 가장 작은 주: 20260831-20260831(부분 구간), 30,000\n- 계산: 기간 20260801-20260831을 주 구간 6개(월요일 시작 7일, 기간 경계에서 잘림, 이 계산의 기준)로 나눠 구간마다 평균을 조회한 뒤 로컬에서 가장 작은 주를 골랐습니다.\n- 구간별 평균:\n  - 20260801-20260802(부분 구간): 40,000\n  - 20260803-20260809: 60,000\n  - 20260810-20260816: 50,000\n  - 20260817-20260823: 70,000\n  - 20260824-20260830: 50,000\n  - 20260831-20260831(부분 구간): 30,000\n- 계산 환경: reference provider — 고정 합성 데이터로 계산한 값이며 실제 교통 데이터나 TIMS 결과가 아닙니다.\n- 적용 기간: 20260801-20260831(질문 기간 last_month, 기준일 20260925 Asia/Seoul) — 양 끝 포함, 영업일(service_date) 기준\n- 계산 의미: 레코드 = 택시 한 대의 영업일 하루 매출(원). 평균의 분모는 조건에 맞는 레코드 수(결측 제외), 주는 월요일 시작이며 기간 경계에서 잘립니다."
+  },
+  {
+   "id": "r5",
+   "question": "지난달 나래구 개인택시 주별 평균 매출 중 가장 작은 값은?",
+   "expected": "value",
+   "observed": "value",
+   "ok": true,
+   "reset_ok": true,
+   "error_code": null,
+   "grounding": {
+    "concepts": [
+     {
+      "id": "location",
+      "text": "나래구",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "나래구",
+       "region": ""
+      },
+      "attributes": {}
+     },
+     {
+      "id": "operation",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "operation",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "revenue",
+      "text": "",
+      "concept": "AMOUNT",
+      "subtype": "revenue",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "last_month",
+     "bucket": "week",
+     "aggregation": "avg",
+     "rollup": "min",
+     "answer": "value",
+     "taxi_type": "private"
+    },
+    "aggregation": {
+     "bucket": "week",
+     "inner": "avg",
+     "outer": "min",
+     "select": null,
+     "source": "flat"
+    }
+   },
+   "final_answer": "나래구 지난달(20260801-20260831) 개인 택시 영업 수익 — 주별 평균의 최솟값: 30,000\n- 계산: 기간 20260801-20260831을 주 구간 6개(월요일 시작 7일, 기간 경계에서 잘림, 이 계산의 기준)로 나눠 구간마다 평균을 조회한 뒤 로컬에서 구간별 값의 최솟값을 계산했습니다.\n- 구간별 평균:\n  - 20260801-20260802(부분 구간): 40,000\n  - 20260803-20260809: 60,000\n  - 20260810-20260816: 50,000\n  - 20260817-20260823: 70,000\n  - 20260824-20260830: 50,000\n  - 20260831-20260831(부분 구간): 30,000\n- 계산 환경: reference provider — 고정 합성 데이터로 계산한 값이며 실제 교통 데이터나 TIMS 결과가 아닙니다.\n- 적용 기간: 20260801-20260831(질문 기간 last_month, 기준일 20260925 Asia/Seoul) — 양 끝 포함, 영업일(service_date) 기준\n- 계산 의미: 레코드 = 택시 한 대의 영업일 하루 매출(원). 평균의 분모는 조건에 맞는 레코드 수(결측 제외), 주는 월요일 시작이며 기간 경계에서 잘립니다."
+  },
+  {
+   "id": "r6",
+   "question": "지난달 가람구 개인택시 매출 평균은?",
+   "expected": "value",
+   "observed": "value",
+   "ok": true,
+   "reset_ok": true,
+   "error_code": null,
+   "grounding": {
+    "concepts": [
+     {
+      "id": "location",
+      "text": "가람구",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "가람구",
+       "region": ""
+      },
+      "attributes": {}
+     },
+     {
+      "id": "operation",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "operation",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "revenue",
+      "text": "매출",
+      "concept": "AMOUNT",
+      "subtype": "revenue",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "last_month",
+     "aggregation": "avg",
+     "taxi_type": "private"
+    },
+    "aggregation": {
+     "bucket": null,
+     "inner": "avg",
+     "outer": null,
+     "select": null,
+     "source": "flat"
+    }
+   },
+   "final_answer": "가람구 지난달 개인 택시 평균 영업 수익: 103,333.333\n- 계산 환경: reference provider — 고정 합성 데이터로 계산한 값이며 실제 교통 데이터나 TIMS 결과가 아닙니다.\n- 적용 기간: 20260801-20260831(질문 기간 last_month, 기준일 20260925 Asia/Seoul) — 양 끝 포함, 영업일(service_date) 기준\n- 계산 의미: 레코드 = 택시 한 대의 영업일 하루 매출(원). 평균의 분모는 조건에 맞는 레코드 수(결측 제외), 주는 월요일 시작이며 기간 경계에서 잘립니다."
+  }
+ ]
+}

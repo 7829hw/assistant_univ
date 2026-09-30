@@ -643,10 +643,27 @@ def _summary(rows):
 def gold_grounding(item):
     """문항의 정답 grounding. 명시된 것이 있으면 그것, 없으면 정답 호출에서 역산. 없으면 None."""
     if item.get("gold_grounding"):
-        return json.loads(json.dumps(item["gold_grounding"], ensure_ascii=False))
+        payload = json.loads(json.dumps(item["gold_grounding"], ensure_ascii=False))
+        return _current_contract(payload)
     if item["gold"]:
         return derive_grounding(item["gold"])
     return None
+
+
+def _current_contract(payload):
+    """정답 라벨의 구간 선택(집계 IR select)을 현재 flat 계약의 표기로 적는다. 뜻은 바꾸지 않는다.
+
+    grounding_v4 라벨은 select=max|min으로 적었다. 현재 flat 계약은 같은 뜻을 answer=bucket + rollup=max|min으로 적는다.
+    """
+    from geoflow.factors import FACTOR_SPECS
+
+    factors = payload.get("factors") or {}
+    if "select" in factors and "select" not in FACTOR_SPECS and "answer" in FACTOR_SPECS:
+        factors = dict(factors)
+        factors["rollup"] = factors.pop("select")
+        factors["answer"] = "bucket"
+        payload = {**payload, "factors": factors}
+    return payload
 
 
 def _grounding_view(payload):
