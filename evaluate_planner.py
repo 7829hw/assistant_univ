@@ -600,12 +600,12 @@ def summarize(records):
         ),
         "factor_repair_attempted": sum(
             1 for item in records
-            if item["repair_kind"] == "factor_completion"
+            if item["repair_kind"] in ("factor_completion", "factor_correction")
             and item["repair_attempted"]
         ),
         "factor_repair_succeeded": sum(
             1 for item in records
-            if item["repair_kind"] == "factor_completion"
+            if item["repair_kind"] in ("factor_completion", "factor_correction")
             and item["repair_succeeded"]
         ),
         "unsupported_relations": sum(

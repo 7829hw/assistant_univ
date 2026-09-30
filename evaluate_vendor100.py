@@ -326,11 +326,13 @@ class _ReplayClient:
     planner가 결정적(temperature 0)이라는 전제는 B0가 이전 run과 grounding 100개가 같았던 것으로 확인했다.
     """
 
-    def __init__(self, client, cache):
+    def __init__(self, client, cache, before_live=None):
         self.client = client
         self.model = getattr(client, "model", None)
         self.cache = cache
         self.hits = 0
+        #: 문항 안에서 처음 실제 모델을 부르기 직전에 한 번 부른다(격리: 재질의도 모델을 내린 상태에서 시작한다).
+        self.before_live = before_live
 
     def __getattr__(self, name):
         return getattr(self.client, name)
@@ -343,6 +345,9 @@ class _ReplayClient:
                 self.hits += 1
                 return {"message": {"content": self.cache[key]}, "done_reason": "stop",
                         "load_duration": 0, "replayed": True}
+        if self.before_live is not None:
+            hook, self.before_live = self.before_live, None
+            hook()
         return self.client.chat(messages, tools=tools, **kwargs)
 
 
@@ -370,9 +375,12 @@ def _planner_trace(record):
         failure = attempt.get("error") or {}
         attempts.append({key: attempt.get(key) for key in (
             "index", "stage", "status", "error_code", "repair_kind", "repair_attempted",
-            "repair_result", "reason")} | {
+            "repair_result", "reason", "repair_raw_text", "repaired_factors")} | {
             "detail": failure.get("detail"),
-            "raw_text": (failure.get("context") or {}).get("raw_text")})
+            "raw_text": (failure.get("context") or {}).get("raw_text"),
+            # 재질의가 실패했으면 그 이유(범위 위반·형식 오류·질문에 없음)를 남긴다.
+            "repair_error": {key: (attempt.get("repair_error") or {}).get(key)
+                             for key in ("code", "detail")} if attempt.get("repair_error") else None})
     return {
         "raw_text": ((record.get("planner") or {}).get("raw_text")
                      or context.get("raw_text")),
@@ -820,12 +828,18 @@ def cmd_llm(args):
         for item in items:
             if item["id"] in done:
                 continue
-            replay = _ReplayClient(client, cache) if cache is not None else None
             item_started = datetime.now(ZoneInfo("Asia/Seoul"))
-            if replay is None or (prompt_sha, item["question"]) not in cache:
+            replayed = cache is not None and (prompt_sha, item["question"]) in cache
+            if not replayed:
                 state = reset.reset()
+                replay = _ReplayClient(client, cache) if cache is not None else None
             else:
-                state = type("Skipped", (), {"succeeded": True})()
+                # 첫 계획은 기록을 돌려준다. 재질의 같은 실제 호출이 생기면 그 직전에 모델을 내린다.
+                state = type("Deferred", (), {"succeeded": True})()
+
+                def _reset_before_live(state=state):
+                    state.succeeded = reset.reset().succeeded
+                replay = _ReplayClient(client, cache, before_live=_reset_before_live)
             recorder = _RecordingClient(replay or client)
             # 기준 코드(--code-root)에는 없는 인자다. 기본값이 아닐 때만 넘긴다.
             options = {}
@@ -906,6 +920,70 @@ def cmd_replay(args):
               "rows": rows}
     _write(args.out, result)
     _print_summary(result)
+    return 0
+
+
+class _SequenceClient:
+    """기록된 모델 응답(계획·재질의)을 순서대로 돌려준다. 모델을 부르지 않는다.
+
+    코드만 바꾼 후보(판정·수정 범위 guard)를 같은 모델 출력으로 다시 적용해 보려는 것이다. 기록보다 많은 호출이
+    필요해지면(코드가 새 재질의를 요구) ``needs_live``로 표시하고 실패로 둔다. 기록에서 실패한 호출은 같은 오류로
+    다시 실패시킨다.
+    """
+
+    def __init__(self, calls, model):
+        self.calls = list(calls)
+        self.model = model
+        self.needs_live = False
+
+    def chat(self, messages, tools=None, **kwargs):
+        if not self.calls:
+            self.needs_live = True
+            raise RuntimeError("기록에 없는 모델 호출")
+        call = self.calls.pop(0)
+        if call.get("failed"):
+            raise RuntimeError(call.get("error") or "기록된 호출 실패")
+        return {"message": {"content": call["content"]}, "done_reason": "stop", "replayed": True}
+
+
+def cmd_rerun(args):
+    """기록된 모델 응답을 순서대로 넣어 이 코드로 다시 실행한다(모델 호출 없음, 격리 불필요)."""
+    source = json.loads(Path(args.source).read_text(encoding="utf-8"))
+    gold = {item["id"]: item for item in load_gold(GOLD_PATH)["items"]}
+    from geoflow import providers
+    from geoflow.pipeline import GeoFlowPipeline
+
+    rows = []
+    for row in source["rows"]:
+        client = _SequenceClient(row.get("llm_calls") or [], source["meta"].get("model"))
+        recorder = _RecordingClient(client)
+        pipeline = GeoFlowPipeline.create(
+            client=recorder, tool_executor=_executor(), clock=lambda: REFERENCE_DATE,
+            condition_check=source["meta"].get("pipeline", {}).get("condition_check", True),
+            condition_notes=False,
+            execution_profile=providers.profile_for(providers.MOCK, providers.LEGACY))
+        observed = run_item(pipeline, row["question"])
+        category, checks = score(gold[row["id"]], observed)
+        grounding_ok, grounding_diffs = grounding_check(gold[row["id"]], observed["grounding"])
+        # 지연은 원 기록의 모델 호출 시간을 쓴다(다시 부르지 않았으므로). 쓰지 않은 기록 호출은 뺀다.
+        used = recorder.calls
+        for index, call in enumerate(used):
+            if index < len(row.get("llm_calls") or []):
+                call["duration_ms"] = row["llm_calls"][index].get("duration_ms", 0.0)
+        rows.append({"id": row["id"], "question": row["question"],
+                     "vendor_verdict": row.get("vendor_verdict", "-"), "category": category,
+                     "checks": checks, "reset_ok": row.get("reset_ok"),
+                     "grounding_ok": grounding_ok, "grounding_diffs": grounding_diffs,
+                     "llm_calls": used, "needs_live": client.needs_live, **observed})
+    meta = dict(source["meta"])
+    meta.update(_meta("llm", {}))
+    meta.update({key: source["meta"].get(key) for key in (
+        "model", "model_digest", "ollama_version", "planner_prompt_sha256", "pipeline", "chat_timeout_s")})
+    meta["rerun_from"] = args.source
+    result = {"meta": meta, "summary": _summary(rows), "rows": rows}
+    _write(args.out, result)
+    _print_summary(result)
+    print("needs_live", sum(row["needs_live"] for row in rows))
     return 0
 
 
@@ -1302,6 +1380,9 @@ def main(argv=None):
                           "장소 근거 확인은 그대로다")
     llm.add_argument("--replay-from", default=None,
                      help="이전 llm 결과의 계획 응답을 prompt hash가 같을 때 재생(나머지는 실제 호출)")
+    rerun = sub.add_parser("rerun")
+    rerun.add_argument("source")
+    rerun.add_argument("--out", required=True)
     replay = sub.add_parser("replay")
     replay.add_argument("source")
     replay.add_argument("--out", required=True)
@@ -1328,6 +1409,7 @@ def main(argv=None):
     global GOLD_PATH
     GOLD_PATH = Path(args.gold).resolve() if args.gold else None
     return {"extract": cmd_extract, "gold": cmd_gold, "llm": cmd_llm, "replay": cmd_replay,
+            "rerun": cmd_rerun,
             "rescore": cmd_rescore, "compare": cmd_compare,
             "report": cmd_report, "layers": cmd_layers,
             "gold-audit": cmd_gold_audit}[args.command](args)

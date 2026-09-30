@@ -447,7 +447,7 @@ def _repair_r0():
     template = (VARIANT_DIR / "87ca968_factor_repair_instruction.txt").read_text(
         encoding="utf-8",
     )
-    return {"repair_templates": {RepairKind.FACTOR_COMPLETION: template},
+    return {"repair_templates": {RepairKind.FACTOR_CORRECTION: template},
             "allowed_renderer": "values"}
 
 
@@ -473,7 +473,7 @@ def _c_variant():
     )
     return {
         "prompt": E._without_semantics(_pinned_base_prompt()),
-        "repair_templates": {RepairKind.FACTOR_COMPLETION: template},
+        "repair_templates": {RepairKind.FACTOR_CORRECTION: template},
         "allowed_renderer": "values",
     }
 
@@ -565,6 +565,14 @@ class FixedPromptPlanner(GeoFlowPlanner):
             variant = PromptVariant(name="ad-hoc", prompt=prompt, note="")
         self.variant = variant
         self._fixed_prompt = variant.prompt
+        if variant.name != "PRODUCTION" and RepairKind.FACTOR_CORRECTION not in variant.repair_templates:
+            # 고정 변형은 측정 당시의 factor 재질의 문구(빠진 짝 채우기)를 쓴다. 2026-09-30 factor 수정 재질의로
+            # 바뀐 production 문구는 PRODUCTION 변형만 쓴다.
+            self.repair_instructions = {**self.repair_instructions,
+                                        RepairKind.FACTOR_CORRECTION: _pinned_factor_repair()}
+        if variant.name != "PRODUCTION":
+            # 고정 변형의 옛 문구는 모두 "채울 조건만" 적게 했다. 수정안도 적은 것만 바꾸는 방식으로 읽는다.
+            self.factor_patch_full_set = False
         if variant.repair_templates:
             self.repair_instructions = {**self.repair_instructions,
                                         **variant.repair_templates}
@@ -586,17 +594,21 @@ class FixedPromptPlanner(GeoFlowPlanner):
 
     def variant_repair_values(self, decision):
         """재질의 문구의 자리 채움 중 변형이 다르게 정하는 것."""
-        if (self.variant.allowed_renderer == "values"
-                and decision.kind == RepairKind.FACTOR_COMPLETION):
+        if decision.kind != RepairKind.FACTOR_CORRECTION:
+            return {}
+        if self.variant.allowed_renderer == "values":
             return {"allowed": "\n  ".join(
                 F.describe_factor(name) for name in decision.allowed_additions
             )}
+        if self.variant.name != "PRODUCTION":
+            # 측정 당시에는 빠진 짝의 의미만 보여 줬다(수정 범위 전체가 아니다).
+            return {"allowed": F.describe_factor_semantics(decision.allowed_additions)}
         return {}
 
-    def _ask_patch(self, question, previous, decision, *, message, extra=None):
+    def _ask_patch(self, question, previous, decision, *, message, extra=None, draft=None):
         merged = {**self.variant_repair_values(decision), **(extra or {})}
         return super()._ask_patch(question, previous, decision, message=message,
-                                  extra=merged or None)
+                                  extra=merged or None, draft=draft)
 
     def plan(self, question):
         _set_phase(self.client, "initial")
@@ -638,6 +650,12 @@ class FixedPromptPlanner(GeoFlowPlanner):
         return super().repair_planning_error(
             question, previous, error=error, decision=decision,
         )
+
+
+@functools.lru_cache(maxsize=None)
+def _pinned_factor_repair():
+    """caa2146까지의 factor 재질의 문구(빠진 짝만 덧붙인다). 고정 변형의 재현용."""
+    return (VARIANT_DIR / "caa2146_factor_repair_instruction.txt").read_text(encoding="utf-8")
 
 
 @functools.lru_cache(maxsize=2)
@@ -1593,7 +1611,7 @@ def _expected_tool(record):
 
 
 def _factor_repair(row):
-    return row.get("repair_attempted") and row.get("repair_kind") == "factor_completion"
+    return row.get("repair_attempted") and row.get("repair_kind") in ("factor_completion", "factor_correction")
 
 
 def factorial_stats(rows, arm):

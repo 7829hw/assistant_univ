@@ -1514,7 +1514,7 @@ class FactorSemanticsTest(ComposerCase):
             model = "x"
 
         decision = RepairDecision(
-            repairable=True, kind=RepairKind.FACTOR_COMPLETION,
+            repairable=True, kind=RepairKind.FACTOR_CORRECTION,
             reason="테스트", targets=("bucket",), allowed_additions=("rollup",),
         )
         planner = GeoFlowPlanner(client=Client())

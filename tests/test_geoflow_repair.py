@@ -191,7 +191,7 @@ class RepairDecisionTest(unittest.TestCase):
         self.assertEqual(error.code, "INVALID_FACTOR_COMBINATION")
         decision = decide(error)
         self.assertTrue(decision.repairable)
-        self.assertEqual(decision.kind, RepairKind.FACTOR_COMPLETION)
+        self.assertEqual(decision.kind, RepairKind.FACTOR_CORRECTION)
         self.assertEqual(decision.allowed_additions, ("rollup",))
 
     def test_unknown_planning_error_is_not_repairable(self):
@@ -309,17 +309,17 @@ class RepairMutationGuardTest(unittest.TestCase):
         )
         validate_repair_delta(before, after, decision)
 
-    def test_changing_the_existing_factor_is_rejected(self):
+    def test_changing_a_result_shape_factor_is_valid(self):
+        """결과 형태 factor 안의 변경은 수정 범위다. 계약 준수는 다시 합성하며 확인한다."""
         before, decision = self._factor_case()
         after = ground(
             [event("e", "operation"), measure("m", "AMOUNT", "revenue")],
             {"bucket": "month", "rollup": "avg"},
         )
-        with self.assertRaises(RepairViolation) as caught:
-            validate_repair_delta(before, after, decision)
-        self.assertIn("값을 바꿨습니다", str(caught.exception))
+        validate_repair_delta(before, after, decision)
 
-    def test_adding_an_unrelated_factor_is_rejected(self):
+    def test_adding_a_record_filter_is_rejected(self):
+        """기록을 고르는 조건(택시 유형 등)은 factor 수정 범위 밖이다."""
         before, decision = self._factor_case()
         after = ground(
             [event("e", "operation"), measure("m", "AMOUNT", "revenue")],
@@ -327,9 +327,9 @@ class RepairMutationGuardTest(unittest.TestCase):
         )
         with self.assertRaises(RepairViolation) as caught:
             validate_repair_delta(before, after, decision)
-        self.assertIn("허용되지 않은 조건", str(caught.exception))
+        self.assertIn("수정 범위 밖", str(caught.exception))
 
-    def test_still_missing_factor_is_rejected(self):
+    def test_unchanged_factors_are_rejected(self):
         before, decision = self._factor_case()
         after = ground(
             [event("e", "operation"), measure("m", "AMOUNT", "revenue")],
@@ -337,7 +337,7 @@ class RepairMutationGuardTest(unittest.TestCase):
         )
         with self.assertRaises(RepairViolation) as caught:
             validate_repair_delta(before, after, decision)
-        self.assertIn("그대로입니다", str(caught.exception))
+        self.assertIn("바뀐 조건이 없습니다", str(caught.exception))
 
     def test_changing_a_concept_during_factor_repair_is_rejected(self):
         before, decision = self._factor_case()
@@ -437,17 +437,26 @@ class RepairPatchSchemaTest(unittest.TestCase):
 
     def test_factor_patch_is_accepted(self):
         patch = self._factor(factor_patch(rollup="avg"))
-        self.assertEqual(patch.factors, {"rollup": "avg"})
+        self.assertEqual(patch.values, {"rollup": "avg"})
 
-    def test_factor_outside_the_missing_set_is_rejected(self):
+    def test_record_filter_in_the_patch_is_rejected(self):
         with self.assertRaises(RepairViolation) as caught:
             self._factor(factor_patch(rollup="avg", taxi_type="private"))
-        self.assertIn("덧붙일 수 없는 조건", str(caught.exception))
+        self.assertIn("바꿀 수 없는 조건입니다: taxi_type", str(caught.exception))
 
-    def test_overwriting_an_existing_factor_is_rejected(self):
+    def test_echoed_values_are_not_changes(self):
+        """그대로인 조건을 되풀이해 적는 것은 수정이 아니다(실측에서 흔했다)."""
+        patch = self._factor({"factors": {"bucket": "week", "rollup": "avg"}})
+        self.assertEqual((patch.values, patch.removed), ({"rollup": "avg"}, ()))
+
+    def test_null_removes_a_result_shape_factor(self):
+        patch = self._factor({"factors": {"bucket": None}})
+        self.assertEqual((patch.values, patch.removed), ({}, ("bucket",)))
+
+    def test_patch_without_any_change_is_rejected(self):
         with self.assertRaises(RepairViolation) as caught:
-            self._factor({"factors": {"bucket": "month"}})
-        self.assertIn("덧붙일 수 없는 조건", str(caught.exception))
+            self._factor({"factors": {"bucket": "week"}})
+        self.assertIn("바뀐 조건이 없습니다", str(caught.exception))
 
     def test_incomplete_factor_patch_is_rejected(self):
         with self.assertRaises(RepairViolation) as caught:
@@ -519,7 +528,8 @@ class RepairPatchApplyTest(unittest.TestCase):
         ))
         self.assertEqual(first.to_dict(), second.to_dict())
 
-    def test_factor_patch_adds_only_the_factor(self):
+    def test_factor_patch_keeps_the_record_filters(self):
+        """수정안은 결과 형태 조건 전체다. 택시 유형처럼 범위 밖 조건은 적지 않아도 그대로 남는다."""
         before = ground(
             [event("e", "operation"), measure("m", "AMOUNT", "revenue")],
             {"bucket": "week", "taxi_type": "private"},
@@ -529,7 +539,7 @@ class RepairPatchApplyTest(unittest.TestCase):
             {"bucket": "week", "taxi_type": "private"},
         ))
         after = apply_patch(before, parse_patch(
-            factor_patch(rollup="avg"), before, decision,
+            factor_patch(bucket="week", rollup="avg"), before, decision,
         ))
         self.assertEqual(after.factors, {
             "bucket": "week", "taxi_type": "private", "rollup": "avg",
@@ -560,24 +570,28 @@ class RepairPatchApplyTest(unittest.TestCase):
 
 
 class FactorCompletionReproducerTest(unittest.TestCase):
-    """E. b24 형태를 LLM 없이 재현한다."""
+    """E. b24 형태(rollup 누락)를 LLM 없이 재현한다.
 
-    QUESTION = "2026년 7~8월, 월 단위로 집계한 개인택시 수입의 최대값은?"
+    질문에 구간 안 집계(합계)와 구간별 결과의 집계(최대)가 따로 있다. 한 집계어를 두 단계에 겹쳐 쓰는 수정은
+    여기서 다루지 않는다(tests/test_factor_correction.py의 AggregationStageTest).
+    """
+
+    QUESTION = "2026년 7~8월, 월별 개인택시 수입 합계의 최대값은?"
     CONCEPTS = [event("e", "operation"), measure("m", "AMOUNT", "revenue")]
     # 구간을 나누려면 기간이 필요하다. 기간이 없으면 계획 전에 거부된다.
-    FACTORS = {"bucket": "month", "aggregation": "max", "taxi_type": "private",
+    FACTORS = {"bucket": "month", "aggregation": "sum", "taxi_type": "private",
                "date": "20260701-20260831"}
 
     def test_bucket_only_is_repaired_by_a_factor_patch(self):
         pipeline, client = new_pipeline([
             payload(self.CONCEPTS, self.FACTORS),
-            factor_patch(rollup="max"),
+            factor_patch(bucket="month", aggregation="sum", rollup="max"),
         ])
         run = pipeline.run(self.QUESTION)
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
         self.assertEqual(len(client.calls), 2)
         self.assertEqual(
-            run.repairs["factor_completion"],
+            run.repairs["factor_correction"],
             {"attempted": 1, "succeeded": 1},
         )
         # 보완된 rollup은 구간별 값의 집계가 된다. 질문이 구간 정의를 정하지 않았으므로
@@ -589,7 +603,7 @@ class FactorCompletionReproducerTest(unittest.TestCase):
         self.assertIn("bucket", step["arguments"])
         # 기존 조건은 그대로 살아 있다.
         self.assertEqual(step["arguments"]["taxi_type"], "private")
-        self.assertEqual(step["arguments"]["aggregation"], "max")
+        self.assertEqual(step["arguments"]["aggregation"], "sum")
         (lowering,) = run.execution_plan["lowering"].values()
         self.assertEqual(lowering["path"], "provider_delegated")
 
@@ -601,7 +615,7 @@ class FactorCompletionReproducerTest(unittest.TestCase):
         """
         pipeline, _client = new_pipeline([
             payload(self.CONCEPTS, self.FACTORS),
-            factor_patch(rollup="month"),
+            factor_patch(bucket="month", aggregation="sum", rollup="month"),
         ])
         run = pipeline.run(self.QUESTION)
         self.assertIsNotNone(run.runtime_error)
@@ -652,12 +666,12 @@ class PlanningRepairPipelineTest(unittest.TestCase):
                      measure("m", "AMOUNT", "revenue")],
                     {"bucket": "week", "aggregation": "sum",
                      "date": "20260801-20260831"}),
-            factor_patch(rollup="avg"),
+            factor_patch(bucket="week", aggregation="sum", rollup="avg"),
         ])
         run = pipeline.run("2026년 8월 주 단위로 합산한 택시 수입의 평균은?")
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
         self.assertEqual(
-            run.repairs["factor_completion"],
+            run.repairs["factor_correction"],
             {"attempted": 1, "succeeded": 1},
         )
 

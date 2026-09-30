@@ -31,13 +31,13 @@ from geoflow.answer import format_answer
 from geoflow import providers
 from geoflow.compiler import compile_plan
 from geoflow.composer import MacroComposer
-from geoflow.errors import GeoFlowError
+from geoflow.errors import GeoFlowError, PlannerError
 from geoflow.executor import STATUS_CANCELLED, STATUS_OK, execute_plan
 from geoflow.labeling import resolve_scope_labels
 from geoflow.macros import MacroLibrary
 from geoflow.operator_registry import Operator
 from geoflow.planner import GeoFlowPlanner
-from geoflow.repair import decide as decide_repair
+from geoflow.repair import RepairKind, decide as decide_repair
 from geoflow.types import CoreConcept, Subtype
 
 AGENT_MODE = "geoflow"
@@ -265,22 +265,39 @@ class GeoFlowPipeline:
             run.durations["total_ms"] = _elapsed(started_at)
             return run
 
+        # 계획 단계와 실행 단계가 재계획 한 번을 나눠 쓴다. 두 단계가 각각
+        # 한 번씩 쓰면 전체적으로 두 번 다시 묻게 되어, "한 질문에 재계획은
+        # 최대 한 번"이라는 성질이 깨진다.
+        repairs_used = 0
+        attempt_index = 0
+
         run.stage = Stage.PLANNER
         try:
             planner_output = self.planner.plan(question)
         except GeoFlowError as error:
             run.retrieval = _retrieval_record(self.planner, question)
-            return _fail(run, error, started_at)
+            # grounding 계약에서 멈춘 오류도 합성 단계 오류와 같은 판정으로 재질의한다. 판정이 수정 가능하다고
+            # 해도 고칠 기준(첫 응답 초안)이 없으면 묻지 않는다.
+            decision = decide_repair(error)
+            attempted = bool(decision.repairable) and getattr(error, "draft", None) is not None
+            record = _planning_attempt(attempt_index, error, decision,
+                                       attempted=attempted, exhausted=False)
+            run.attempts.append(record)
+            if not attempted:
+                return _fail(run, error, started_at)
+            run.durations["planner_ms"] = float(error.context.get("duration_ms") or 0.0)
+            planner_output = self._repair_planning(
+                question, None, error, decision, record, run, emit, attempt_index,
+            )
+            if planner_output is None:
+                return _fail(run, _unresolved(error, decision, record), started_at)
+            repairs_used += 1
+            attempt_index += 1
+        else:
+            run.durations["planner_ms"] = planner_output.duration_ms
         run.retrieval = _retrieval_record(self.planner, question)
-
-        run.durations["planner_ms"] = planner_output.duration_ms
         run.durations["execution_ms"] = 0.0
-        # 계획 단계와 실행 단계가 재계획 한 번을 나눠 쓴다. 두 단계가 각각
-        # 한 번씩 쓰면 전체적으로 두 번 다시 묻게 되어, "한 질문에 재계획은
-        # 최대 한 번"이라는 성질이 깨진다.
-        repairs_used = 0
 
-        attempt_index = 0
         while True:
             try:
                 plan, execution_plan = self._prepare(
@@ -302,33 +319,14 @@ class GeoFlowPipeline:
                 if not attempted:
                     return _fail(run, error, started_at)
 
-                emit(
-                    "geoflow_repair",
-                    attempt=attempt_index + 1,
-                    failure={
-                        "stage": error.stage,
-                        "code": error.code,
-                        "kind": decision.kind,
-                        "message": error.user_message,
-                    },
+                repaired = self._repair_planning(
+                    question, planner_output, error, decision, record, run, emit,
+                    attempt_index,
                 )
-                # 시도 자체를 먼저 센다. 재질의가 실패해도 시도는 있었다.
-                _count_repair(run, decision.kind, ok=False)
-                try:
-                    planner_output = self.planner.repair_planning_error(
-                        question, planner_output,
-                        error=error, decision=decision,
-                    )
-                except GeoFlowError as repair_error:
-                    record["repair_result"] = STATUS_REPAIR_FAILED
-                    record["repair_error"] = repair_error.to_dict()
-                    return _fail(run, error, started_at)
-
-                record["repair_result"] = STATUS_OK
+                if repaired is None:
+                    return _fail(run, _unresolved(error, decision, record), started_at)
+                planner_output = repaired
                 repairs_used += 1
-                run.repair_count += 1
-                _count_repair(run, decision.kind, ok=True, attempted=False)
-                run.durations["planner_ms"] += planner_output.duration_ms
                 attempt_index += 1
                 continue
 
@@ -409,6 +407,38 @@ class GeoFlowPipeline:
         )
         run.durations["total_ms"] = _elapsed(started_at)
         return run
+
+    def _repair_planning(self, question, previous, error, decision, record, run, emit,
+                         attempt_index):
+        """계획 단계 재질의 한 번. 성공하면 새 planner 출력, 실패하면 None(기록은 ``record``에)."""
+        emit(
+            "geoflow_repair",
+            attempt=attempt_index + 1,
+            failure={
+                "stage": error.stage,
+                "code": error.code,
+                "kind": decision.kind,
+                "message": error.user_message,
+            },
+        )
+        # 시도 자체를 먼저 센다. 재질의가 실패해도 시도는 있었다.
+        _count_repair(run, decision.kind, ok=False)
+        try:
+            output = self.planner.repair_planning_error(
+                question, previous, error=error, decision=decision,
+            )
+        except GeoFlowError as repair_error:
+            record["repair_result"] = STATUS_REPAIR_FAILED
+            record["repair_error"] = repair_error.to_dict()
+            return None
+        record["repair_result"] = STATUS_OK
+        # 최초 오류와 수정 내용, 수정 뒤 grounding을 함께 남겨 추적할 수 있게 한다.
+        record["repair_raw_text"] = output.raw_text
+        record["repaired_factors"] = dict(output.grounding.factors)
+        run.repair_count += 1
+        _count_repair(run, decision.kind, ok=True, attempted=False)
+        run.durations["planner_ms"] = (run.durations.get("planner_ms") or 0.0) + output.duration_ms
+        return output
 
     def _prepare(self, question, planner_output, user_scopes, run, emit):
         """planner 출력을 검증된 실행 계획까지 끌고 간다."""
@@ -595,6 +625,36 @@ def _repairable_failure(plan, execution_plan, result):
         "message": error.get("user_message") or error.get("detail", ""),
         "step_id": step.id,
     }
+
+
+def _unresolved(error, decision, record):
+    """재질의로 고치지 못한 오류가 사용자에게 무엇인지 정한다.
+
+    factor 수정 재질의에서 모델이 "질문만으로는 정할 수 없다"고 답했다면 질문 자체에 그 정보가 없다는
+    뜻이다. 빠진 짝이나 답 대상이면 사용자에게 확인을 받고, 계약에 없는 값(예: 시간대별 구간)이면 지원 범위
+    밖이다. 그 밖의 재질의 실패(범위 위반, 형식 오류)는 최초 오류를 그대로 보고한다.
+    """
+    repair_error = record.get("repair_error") or {}
+    if (repair_error.get("code") != "REPAIR_UNSUPPORTED"
+            or decision.kind != RepairKind.FACTOR_CORRECTION):
+        return error
+    if error.code == "INVALID_FACTOR":
+        return PlannerError(
+            f"질문의 조건을 계약의 값으로 적을 수 없습니다: {error.detail}",
+            user_message="현재 지원하는 분석 유형으로는 이 질문을 처리할 수 없습니다.",
+            code="UNSUPPORTED_QUESTION",
+            context={"factor": error.context.get("factor"), "from": error.code},
+        )
+    clarified = PlannerError(
+        error.detail,
+        user_message=f"{error.user_message} 질문에 그 조건을 적어 주세요.",
+        code=error.code,
+        context={**{key: value for key, value in error.context.items() if key != "raw_text"},
+                 "needs_clarification": True,
+                 "clarify": list(decision.allowed_additions or decision.targets)},
+    )
+    clarified.stage = error.stage
+    return clarified
 
 
 def _fail(run, error, started_at):

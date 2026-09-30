@@ -2,7 +2,9 @@
 """계획 단계 실패의 복구 가능성 판정과 mutation guard.
 
 계획을 만들지 못한 모든 실패를 다시 물어보지 않는다. 다시 물어서 얻을 수
-있는 것은 **현재 계약 안에서 표현할 수 있는데 빠진 정보**뿐이다.
+있는 것은 **현재 계약 안에서 표현할 수 있는데 빠지거나 계약에 어긋나게 적힌
+정보**뿐이다. 질문 자체에 없는 정보는 다시 물어도 생기지 않는다(모델이
+``{"unsupported": true}``로 답하고, 사용자 확인으로 넘어간다).
 
     "초읍동에서 출발하여 초량동에 도착한 건수"
         장소 둘의 관계가 승차/하차다. od_role이라는 표현 수단이 이미 있고
@@ -25,7 +27,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from geoflow.aggregation import FLAT_KEYS as FLAT_AGGREGATION_KEYS
-from geoflow.factors import FACTOR_CONSTRAINTS, companions_for
+from geoflow.factors import FACTOR_SPECS, RESULT_SHAPE_FACTORS, companions_for
 from geoflow.operator_registry import OPERATORS
 
 
@@ -36,8 +38,9 @@ class RepairKind:
     PLACE_VALUE = "place_value"
     #: 장소가 분석에서 어떤 역할인지 나타내는 속성만 덧붙인다.
     RELATION_QUALIFIER = "relation_qualifier"
-    #: 짝이 빠진 조건 하나만 덧붙인다.
-    FACTOR_COMPLETION = "factor_completion"
+    #: factor 계약 오류(짝 누락, 답 대상, 허용되지 않은 값)를 고친다. 결과 형태 factor
+    #: (``RESULT_SHAPE_FACTORS``) 안에서 추가·변경·삭제를 받는다. 빠진 짝을 채우는 것은 그중 하나다.
+    FACTOR_CORRECTION = "factor_correction"
 
 
 #: registry의 port 계약에 실제로 쓰이는 속성 이름. 모델이 새 속성을 발명하는
@@ -60,9 +63,11 @@ class RepairDecision:
     kind: str | None = None
     #: 수정이 허용되는 대상. 종류에 따라 개념 id 또는 factor 이름이다.
     targets: tuple[str, ...] = ()
-    #: 덧붙이는 것이 허용된 이름. 속성 키 또는 factor 이름.
+    #: 덧붙이는 것이 허용된 이름. 속성 키 또는 factor 이름. factor 수정에서는 계약상 빠진 짝이다.
     allowed_additions: tuple[str, ...] = ()
     context: dict[str, Any] = field(default_factory=dict)
+    #: factor 수정에서 바꾸거나 뺄 수 있는 factor. 이 밖의 factor와 개념은 그대로여야 한다.
+    editable: tuple[str, ...] = ()
 
     def to_dict(self):
         return {
@@ -71,6 +76,7 @@ class RepairDecision:
             "reason": self.reason,
             "targets": list(self.targets),
             "allowed_additions": list(self.allowed_additions),
+            "editable": list(self.editable),
         }
 
 
@@ -92,6 +98,13 @@ def decide(error):
         return _decide_relation(context, ambiguous=True)
     if code == "INVALID_FACTOR_COMBINATION":
         return _decide_factor(context)
+    if code == "INVALID_ANSWER_TARGET":
+        return _factor_correction(
+            ("answer", "rollup"), (), context,
+            reason="답 대상(구간)과 구간별 결과의 집계가 맞지 않습니다. 결과 형태 조건 안에서 고칩니다.",
+        )
+    if code == "INVALID_FACTOR":
+        return _decide_factor_value(context)
     return NOT_REPAIRABLE
 
 
@@ -146,10 +159,11 @@ def _decide_relation(context, *, ambiguous):
 
 
 def _decide_factor(context):
-    """짝이 빠진 조건을 판정한다.
+    """짝이 맞지 않는 조건을 판정한다.
 
-    빠진 조건이 factor 어휘에 있고, 그 조건 하나만 덧붙이면 되는 경우만
-    다시 묻는다. 값을 임의로 정해 채우지 않는다.
+    빠진 짝을 채우는 것만이 답이 아니다. 요일 순위에 answer=bucket을 붙이면 계약상 빠진 것은 bucket이지만
+    질문에 맞는 수정은 answer를 빼는 것이다. 어느 쪽인지는 질문을 읽는 모델이 정하고, 코드는 수정이 결과 형태
+    factor 안에 머무는지와 수정 결과가 계약을 지키는지만 본다. 값을 임의로 정해 채우지 않는다.
     """
     factor = context.get("factor")
     missing = tuple(context.get("missing") or ())
@@ -168,14 +182,53 @@ def _decide_factor(context):
             ),
             context=context,
         )
+    return _factor_correction(
+        (factor,) if factor else (), missing, context,
+        reason="짝이 맞지 않는 조건이 결과 형태 factor 안에 있어, 그 안에서 채우거나 고치면 성립합니다.",
+    )
+
+
+def _decide_factor_value(context):
+    """허용되지 않은 factor 값. 결과 형태 factor와 시간대 형식만 고치게 한다.
+
+    날짜·택시 유형·운행 상태는 조건 계층이 질문의 명시 근거로 보존한다. 재질의가 그 값을 다시 정하면 조건
+    계층의 기록과 어긋나므로 여기서 다루지 않는다.
+    """
+    factor = context.get("factor")
+    if factor in RESULT_SHAPE_FACTORS:
+        return _factor_correction(
+            (factor,), (), context,
+            reason="허용되지 않은 값이 결과 형태 factor에 있어, 그 안에서 고치면 됩니다.",
+        )
+    if factor == "time":
+        return _factor_correction(
+            (factor,), (), context, editable=(factor,),
+            reason="시간대 형식이 계약과 다릅니다. 그 조건의 형식만 고칩니다.",
+        )
+    return RepairDecision(
+        repairable=False,
+        reason=f"재질의로 고치지 않는 조건입니다: {factor or '(알 수 없음)'}",
+        context=context,
+    )
+
+
+def _factor_correction(targets, missing, context, *, reason,
+                       editable=RESULT_SHAPE_FACTORS):
+    involved = set(targets) | set(missing)
+    if not involved <= set(editable):
+        return RepairDecision(
+            repairable=False,
+            reason="고칠 조건이 수정 범위 밖에 있습니다: "
+                   + ", ".join(sorted(involved - set(editable))),
+            context=context,
+        )
     return RepairDecision(
         repairable=True,
-        kind=RepairKind.FACTOR_COMPLETION,
-        reason=(
-            "빠진 조건이 factor 어휘에 있고, 그 조건만 덧붙이면 성립합니다."
-        ),
-        targets=(factor,) if factor else (),
-        allowed_additions=missing,
+        kind=RepairKind.FACTOR_CORRECTION,
+        reason=reason,
+        targets=tuple(targets),
+        allowed_additions=tuple(missing),
+        editable=tuple(editable),
         context=context,
     )
 
@@ -215,7 +268,7 @@ def validate_repair_delta(before, after, decision):
     """
     if decision.kind == RepairKind.RELATION_QUALIFIER:
         _validate_relation_delta(before, after, decision)
-    elif decision.kind == RepairKind.FACTOR_COMPLETION:
+    elif decision.kind == RepairKind.FACTOR_CORRECTION:
         _validate_factor_delta(before, after, decision)
     elif decision.kind == RepairKind.PLACE_VALUE:
         _validate_place_delta(before, after, decision)
@@ -302,26 +355,32 @@ def _validate_factor_delta(before, after, decision):
             old.attributes != node.attributes
         ):
             raise RepairViolation(f"{node_id}: 개념을 바꿀 수 없습니다.")
+    validate_factor_change(before.factors, after.factors, decision)
 
-    allowed = set(decision.allowed_additions)
-    added = set(after.factors) - set(before.factors)
-    outside = sorted(added - allowed)
-    if outside:
+
+def validate_factor_change(before, after, decision):
+    """수정 범위 밖 factor는 그대로이고, 범위 안에서 무엇인가 바뀌었는지 확인한다.
+
+    계획 단계 오류(grounding을 만들기 전)에서는 비교할 grounding이 없어 factor 사전끼리 비교한다.
+    """
+    editable = set(decision.editable)
+    for name in sorted(set(before) | set(after)):
+        if name in editable:
+            continue
+        if before.get(name) != after.get(name):
+            raise RepairViolation(
+                f"수정 범위 밖의 조건 {name!r}이 바뀌었습니다. "
+                f"(고칠 수 있는 조건: {', '.join(decision.editable)})"
+            )
+    if before == after:
+        raise RepairViolation("바뀐 조건이 없습니다.")
+    grouping = ("bucket", "dimension")
+    if any(name in before for name in grouping) and not any(name in after for name in grouping):
+        # 수정은 그룹을 계약에 맞게 적는 방법을 고치는 것이지, 질문이 그룹을 나누는지를 다시 정하는 것이 아니다.
+        # R2 재생에서 계약에 없는 bucket=hour("시간대별")를 빼고 전체 합계로 답한 수정이 있었다.
         raise RepairViolation(
-            "허용되지 않은 조건을 덧붙였습니다: " + ", ".join(outside)
-        )
-    removed = sorted(set(before.factors) - set(after.factors))
-    if removed:
-        raise RepairViolation(
-            "있던 조건을 뺄 수 없습니다: " + ", ".join(removed)
-        )
-    for name, value in before.factors.items():
-        if after.factors.get(name) != value:
-            raise RepairViolation(f"이미 있던 조건 {name!r}의 값을 바꿨습니다.")
-    still_missing = sorted(allowed - set(after.factors))
-    if still_missing:
-        raise RepairViolation(
-            "빠진 조건이 그대로입니다: " + ", ".join(still_missing)
+            "구간·그룹 기준(bucket, dimension)을 모두 없애는 수정은 할 수 없습니다. "
+            "그룹을 계약의 값으로 적을 수 없다면 {\"unsupported\": true}로 답합니다."
         )
 
 
@@ -361,16 +420,25 @@ class RelationQualifierPatch:
 
 
 @dataclass(frozen=True)
-class FactorCompletionPatch:
-    """짝이 빠진 조건만 덧붙인다."""
+class FactorCorrectionPatch:
+    """결과 형태 factor의 추가·변경(``values``)과 삭제(``removed``)."""
 
-    factors: dict[str, Any]
+    values: dict[str, Any]
+    removed: tuple[str, ...] = ()
 
     def to_dict(self):
         return {
-            "kind": RepairKind.FACTOR_COMPLETION,
-            "factors": dict(self.factors),
+            "kind": RepairKind.FACTOR_CORRECTION,
+            "factors": dict(self.values),
+            "removed": list(self.removed),
         }
+
+    def apply_to(self, factors):
+        """factor 사전에 적용한 새 사전. 입력은 바꾸지 않는다."""
+        result = {name: value for name, value in (factors or {}).items()
+                  if name not in self.removed}
+        result.update(self.values)
+        return result
 
 
 @dataclass(frozen=True)
@@ -392,17 +460,18 @@ class PlaceValuePatch:
 
 PATCH_KEYS = {
     RepairKind.RELATION_QUALIFIER: ("updates",),
-    RepairKind.FACTOR_COMPLETION: ("factors",),
+    RepairKind.FACTOR_CORRECTION: ("factors",),
     RepairKind.PLACE_VALUE: ("concept_id", "name", "region"),
 }
 
 
-def parse_patch(payload, grounding, decision):
-    """모델이 제안한 수정안을 검증된 patch로 바꾼다.
+def parse_factor_patch(payload, factors, decision, *, full_set=True):
+    """grounding을 만들기 전(계획 단계) 오류의 factor 수정안. 비교 기준은 초안의 factor 사전이다."""
+    _check_patch_keys(payload, decision)
+    return _parse_factor_patch(payload, factors, decision, full_set=full_set)
 
-    patch schema 자체가 첫 번째 방어선이다. 여기서 통과한 것만 코드가
-    적용하고, 적용 결과는 ``validate_repair_delta``가 다시 확인한다.
-    """
+
+def _check_patch_keys(payload, decision):
     if not isinstance(payload, dict):
         raise RepairViolation(
             f"수정안은 object여야 합니다. (받은 형식: {type(payload).__name__})"
@@ -414,10 +483,19 @@ def parse_patch(payload, grounding, decision):
             f"허용되지 않은 key가 있습니다: {', '.join(unknown)}. "
             f"허용: {', '.join(sorted(allowed_keys))}"
         )
+
+
+def parse_patch(payload, grounding, decision, *, full_set=True):
+    """모델이 제안한 수정안을 검증된 patch로 바꾼다.
+
+    patch schema 자체가 첫 번째 방어선이다. 여기서 통과한 것만 코드가
+    적용하고, 적용 결과는 ``validate_repair_delta``가 다시 확인한다.
+    """
+    _check_patch_keys(payload, decision)
     if decision.kind == RepairKind.RELATION_QUALIFIER:
         return _parse_relation_patch(payload, grounding, decision)
-    if decision.kind == RepairKind.FACTOR_COMPLETION:
-        return _parse_factor_patch(payload, grounding, decision)
+    if decision.kind == RepairKind.FACTOR_CORRECTION:
+        return _parse_factor_patch(payload, grounding.factors, decision, full_set=full_set)
     if decision.kind == RepairKind.PLACE_VALUE:
         return _parse_place_patch(payload, grounding, decision)
     raise RepairViolation(f"알 수 없는 재질의 종류입니다: {decision.kind}")
@@ -481,28 +559,85 @@ def _parse_relation_patch(payload, grounding, decision):
     return RelationQualifierPatch(tuple(updates))
 
 
-def _parse_factor_patch(payload, grounding, decision):
+def _parse_factor_patch(payload, factors, decision, *, full_set=True):
+    """``{"factors": {...}}``를 고친 뒤의 수정 범위 factor **전체**로 읽는다.
+
+    수정 범위(``decision.editable``) 안에서 적지 않은(또는 null인) factor는 빠진다. 처음에는 바뀐 것만 적게 했는데,
+    모델은 고친 뒤의 조건 전체를 적으면서 잘못된 조건을 빠뜨리는 식으로 답했다(R 재생에서 범위 위반 7건 중 5건:
+    answer를 빼고 나머지를 되풀이). 요청 형식을 모델이 실제로 쓰는 형식에 맞춘다.
+    수정 범위 밖 factor는 적지 않아도 그대로 남고, 적었다면 지금 값과 같아야 한다.
+
+    ``full_set``이 거짓이면 적은 factor만 바꾼다(null은 삭제). 측정 당시 문구를 쓰는 고정 변형의 재현용이다.
+    """
     raw = payload.get("factors")
     if not isinstance(raw, dict) or not raw:
         raise RepairViolation("factors는 비어 있지 않은 object여야 합니다.")
-    allowed = set(decision.allowed_additions)
-    unknown = sorted(set(raw) - allowed)
-    if unknown:
-        raise RepairViolation(
-            f"덧붙일 수 없는 조건입니다: {', '.join(unknown)}. "
-            f"허용: {', '.join(sorted(allowed))}"
-        )
-    existing = sorted(set(raw) & set(grounding.factors))
-    if existing:
-        raise RepairViolation(
-            f"이미 있는 조건을 덮어쓸 수 없습니다: {', '.join(existing)}"
-        )
-    missing = sorted(allowed - set(raw))
-    if missing:
-        raise RepairViolation(
-            f"빠진 조건을 모두 채워야 합니다: {', '.join(missing)}"
-        )
-    return FactorCompletionPatch(dict(raw))
+    editable = set(decision.editable)
+    for name, value in raw.items():
+        if name in editable:
+            continue
+        present = name in factors
+        if value is None or value == "":
+            if present:
+                raise RepairViolation(
+                    f"이 재질의에서 뺄 수 없는 조건입니다: {name}. "
+                    f"(고칠 수 있는 조건: {', '.join(decision.editable)})"
+                )
+            continue
+        if name not in FACTOR_SPECS and not present:
+            raise RepairViolation(f"알 수 없는 조건입니다: {name}")
+        if not (present and _same_factor_value(name, value, factors[name])):
+            raise RepairViolation(
+                f"이 재질의에서 바꿀 수 없는 조건입니다: {name}. "
+                f"(고칠 수 있는 조건: {', '.join(decision.editable)})"
+            )
+    values, removed = {}, []
+    for name in decision.editable:
+        if not full_set and name not in raw:
+            continue
+        value = raw.get(name)
+        present = name in factors
+        if value is None or value == "":
+            if present:
+                removed.append(name)
+            continue
+        if present and _same_factor_value(name, value, factors[name]):
+            continue
+        values[name] = value
+    if not values and not removed:
+        raise RepairViolation("바뀐 조건이 없습니다.")
+    return FactorCorrectionPatch(values, tuple(sorted(removed)))
+
+
+def describe_resolution(decision):
+    """오류를 푸는 계약상 방법. 오류의 구조화 context와 factor 계약에서만 만든다(질문은 보지 않는다).
+
+    어느 방법이 맞는지는 질문을 읽는 모델이 정한다. 코드는 방법의 목록과 수정 결과의 계약 준수만 맡는다.
+    """
+    context = decision.context or {}
+    lines = []
+    factor = context.get("factor")
+    missing = list(context.get("missing") or ())
+    if missing and factor:
+        needed = ", ".join(missing)
+        lines.append(f"- {factor}는 {needed}이(가) 있을 때만 쓸 수 있습니다. 질문에 {needed}에 해당하는 표현이 "
+                     f"있으면 채우고, 없으면 {factor}를 뺍니다.")
+    elif factor and "value" in context:
+        lines.append(f"- {factor}={context.get('value')!r}는 허용값이 아닙니다. 질문의 뜻에 맞는 허용값으로 바꿉니다. "
+                     f"그 뜻을 다른 조건으로 적어야 한다면 {factor}를 빼고 그 조건을 적습니다.")
+    elif "answer" in decision.targets:
+        lines.append("- answer=bucket(그 값을 가진 주·월)은 rollup이 max나 min일 때만 씁니다. 질문이 주·월 구간을 "
+                     "고르는 것이면 rollup을 max나 min으로, 아니면 answer를 뺍니다.")
+    return "\n".join(lines)
+
+
+def _same_factor_value(name, value, current):
+    if value == current:
+        return True
+    try:
+        return FACTOR_SPECS[name].coerce(value) == current
+    except Exception:  # noqa: BLE001 - 형식이 틀린 값은 다른 값이다
+        return False
 
 
 def _parse_place_patch(payload, grounding, decision):
@@ -545,8 +680,8 @@ def apply_patch(grounding, patch):
             attributes = dict(concept.get("attributes") or {})
             attributes[update.attribute] = update.value
             concept["attributes"] = attributes
-    elif isinstance(patch, FactorCompletionPatch):
-        payload["factors"] = {**payload["factors"], **patch.factors}
+    elif isinstance(patch, FactorCorrectionPatch):
+        payload["factors"] = patch.apply_to(payload["factors"])
     elif isinstance(patch, PlaceValuePatch):
         by_id[patch.concept_id]["value"] = {
             "name": patch.name, "region": patch.region,
@@ -555,8 +690,8 @@ def apply_patch(grounding, patch):
         raise RepairViolation(f"알 수 없는 patch입니다: {type(patch).__name__}")
 
     structured = grounding.aggregation_plan
-    if (structured is not None and isinstance(patch, FactorCompletionPatch)
-            and set(patch.factors) & set(FLAT_AGGREGATION_KEYS)):
+    if (structured is not None and isinstance(patch, FactorCorrectionPatch)
+            and (set(patch.values) | set(patch.removed)) & set(FLAT_AGGREGATION_KEYS)):
         # 구조화 집계가 있는데 flat 집계 factor를 덧붙이면 두 표현이 섞인다. 집계가 아닌 짝(limit 등)은 채운다.
         raise RepairViolation("구조화 집계가 있는 grounding에 집계 factor를 덧붙일 수 없습니다.")
     repaired = parse_grounding(payload, grounding.question)

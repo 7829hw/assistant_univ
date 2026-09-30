@@ -235,7 +235,7 @@ class FlatSelectionTest(unittest.TestCase):
 
 
 class RankingCountContractTest(unittest.TestCase):
-    def test_order_without_limit_goes_to_factor_completion(self):
+    def test_order_without_limit_goes_to_factor_correction(self):
         """업체 규칙: 순위에는 개수를 적는다(하나만이면 1). 비면 모델에게 그 값만 되묻는다."""
         from geoflow.factors import validate_factors
         from geoflow.repair import RepairKind, decide
@@ -245,4 +245,4 @@ class RankingCountContractTest(unittest.TestCase):
         decision = decide(caught.exception)
         self.assertTrue(decision.repairable)
         self.assertEqual((decision.kind, decision.allowed_additions),
-                         (RepairKind.FACTOR_COMPLETION, ("limit",)))
+                         (RepairKind.FACTOR_CORRECTION, ("limit",)))

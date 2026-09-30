@@ -61,6 +61,7 @@ class FactorSpec:
                     f"factor {self.name}은 true/false여야 합니다. "
                     f"(받은 값: {value!r})",
                     code="INVALID_FACTOR",
+                    context={"factor": self.name, "value": value},
                 )
             return value
         if self.kind == "integer":
@@ -68,6 +69,7 @@ class FactorSpec:
                 raise PlannerError(
                     f"factor {self.name}은 정수여야 합니다. (받은 값: {value!r})",
                     code="INVALID_FACTOR",
+                    context={"factor": self.name, "value": value},
                 )
             return value
         if not isinstance(value, str) or not value.strip():
@@ -75,6 +77,7 @@ class FactorSpec:
                 f"factor {self.name}은 비어 있지 않은 문자열이어야 합니다. "
                 f"(받은 값: {value!r})",
                 code="INVALID_FACTOR",
+                context={"factor": self.name, "value": value},
             )
         text = value.strip()
         if self.values and text not in self.values:
@@ -82,11 +85,13 @@ class FactorSpec:
                 f"factor {self.name}의 허용된 값이 아닙니다: {text!r} "
                 f"(허용: {', '.join(sorted(self.values))})",
                 code="INVALID_FACTOR",
+                context={"factor": self.name, "value": value},
             )
         if self.pattern is not None and not self.pattern.fullmatch(text):
             raise PlannerError(
                 f"factor {self.name}의 형식이 올바르지 않습니다: {text!r}",
                 code="INVALID_FACTOR",
+                context={"factor": self.name, "value": value},
             )
         return text
 
@@ -328,6 +333,15 @@ FLAT_PROMPT_EXCLUDED = frozenset()
 CONTRACT_COMPANIONS = {
     "order": (("limit",), "순위를 매기려면 몇 개를 보일지(하나만 물으면 1)도 필요합니다."),
 }
+
+
+#: 값을 어떻게 나누고 모으고 줄 세우며 무엇을 답으로 돌려줄지 정하는 factor. 어떤 기록을 볼지 정하는 조건
+#: (date·time·taxi_type·taxi_status·vicinity)과 구별한다. factor 계약 오류(짝 누락, 답 대상, 허용되지 않은 값)는
+#: 이 묶음 안에서 서로 얽혀 생긴다. 예: 요일 순위에 answer=bucket을 붙이면 빠진 것은 bucket이지만 고칠 것은
+#: answer다. 그래서 factor 수정 재질의는 이 묶음 안의 추가·변경·삭제를 받고, 기록을 고르는 조건과 개념은 바꾸지
+#: 못한다.
+RESULT_SHAPE_FACTORS = ("bucket", "aggregation", "rollup", "answer",
+                        "dimension", "dimension_target", "order", "limit")
 
 
 def companions_for(factor):

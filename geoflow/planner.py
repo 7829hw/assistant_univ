@@ -37,7 +37,11 @@ from geoflow.repair import (
     RepairKind,
     RepairViolation,
     apply_patch,
+    decide as decide_repair,
+    describe_resolution,
+    parse_factor_patch,
     parse_patch,
+    validate_factor_change,
     validate_repair_delta,
 )
 
@@ -73,6 +77,19 @@ _VOCABULARY_HEADING = "[분석 개체와 측정값]"
 _FACTOR_HEADING = "[사용 가능한 factor]"
 _CONSTRAINT_HEADING = "[짝을 이루는 factor]"
 _SEMANTICS_HEADING = "[조건이 뜻하는 것]"
+
+
+@dataclass
+class PlanningDraft:
+    """grounding 계약을 통과하지 못한 첫 계획 응답. 계획 단계 factor 수정 재질의의 기준이다.
+
+    ``payload``는 조건 계층을 거친 뒤의 값이다. 수정안은 이 위에 적용되고 grounding 계약을 처음부터 다시
+    통과한다. 조건 계층은 다시 돌리지 않는다(수정 범위 밖 조건은 바뀌지 않으므로 기록이 그대로 맞다).
+    """
+
+    payload: dict
+    raw_text: str = ""
+    condition_audit: dict | None = None
 
 
 @dataclass
@@ -123,7 +140,7 @@ def load_planner_prompt(path=DEFAULT_PLANNER_PROMPT):
 REPAIR_INSTRUCTION_KEYS = {
     RepairKind.PLACE_VALUE: "repair_instruction",
     RepairKind.RELATION_QUALIFIER: "relation_repair_instruction",
-    RepairKind.FACTOR_COMPLETION: "factor_repair_instruction",
+    RepairKind.FACTOR_CORRECTION: "factor_repair_instruction",
 }
 
 
@@ -361,32 +378,48 @@ class GeoFlowPlanner:
             )
         return output
 
-    def repair_planning_error(self, question, previous, *, error, decision):
-        """계획을 만들지 못한 이유를 알려 주고 빠진 부분만 받아 채운다.
+    #: factor 수정안을 고친 뒤의 수정 범위 전체로 읽는다(현재 문구). 거짓이면 적은 것만 바꾼다.
+    factor_patch_full_set = True
 
-        모델은 고친 grounding 전체를 다시 내놓지 않는다. "무엇을 더할지"만
+    def repair_planning_error(self, question, previous, *, error, decision):
+        """계획을 만들지 못한 이유를 알려 주고 허용된 범위의 수정안만 받는다.
+
+        모델은 고친 grounding 전체를 다시 내놓지 않는다. 무엇을 더하거나 바꿀지만
         제안하고, 실제 수정은 코드가 한다. 손댈 수 있는 표면을 줄이면 손대면
         안 되는 곳이 바뀌는 실패가 아예 생기지 않는다.
+
+        ``previous``가 없으면 grounding 계약에서 멈춘 첫 응답(``error.draft``)을 기준으로 삼는다.
         """
+        draft = None
+        if previous is None:
+            draft = getattr(error, "draft", None)
+            if draft is None:
+                raise PlannerError(
+                    "고칠 기준 grounding이 없어 재질의할 수 없습니다.",
+                    code="REPAIR_NO_BASE",
+                )
         return self._ask_patch(question, previous, decision, message=(
             error.user_message or error.detail
-        ))
+        ), draft=draft)
 
-    def _ask_patch(self, question, previous, decision, *, message, extra=None):
+    def _ask_patch(self, question, previous, decision, *, message, extra=None,
+                   draft=None):
         """수정안을 받아 검증하고 코드가 적용한다."""
         started_at = time.perf_counter()
+        if previous is not None:
+            base_payload, base_factors = previous.grounding.to_dict(), previous.grounding.factors
+        else:
+            base_payload, base_factors = draft.payload, dict(draft.payload.get("factors") or {})
         instruction = _fill_instruction(
             self.repair_instructions[decision.kind],
-            {**_instruction_values(decision, message), **(extra or {})},
+            {**_instruction_values(decision, message, base_factors), **(extra or {})},
         )
         text, _attempts = self._call(
             [
                 *self.messages(question),
                 {
                     "role": "assistant",
-                    "content": json.dumps(
-                        previous.grounding.to_dict(), ensure_ascii=False,
-                    ),
+                    "content": json.dumps(base_payload, ensure_ascii=False),
                 },
                 {"role": "user", "content": instruction},
             ]
@@ -402,9 +435,21 @@ class GeoFlowPlanner:
                 context={"raw_text": text, "repair_kind": decision.kind},
             )
         try:
-            patch = parse_patch(payload, previous.grounding, decision)
-            repaired = apply_patch(previous.grounding, patch)
-            validate_repair_delta(previous.grounding, repaired, decision)
+            if previous is not None:
+                patch = parse_patch(payload, previous.grounding, decision,
+                                    full_set=self.factor_patch_full_set)
+                repaired = apply_patch(previous.grounding, patch)
+                validate_repair_delta(previous.grounding, repaired, decision)
+            else:
+                patch = parse_factor_patch(payload, base_factors, decision,
+                                           full_set=self.factor_patch_full_set)
+                corrected = patch.apply_to(base_factors)
+                validate_factor_change(base_factors, corrected, decision)
+                # 수정 결과도 grounding 계약을 처음부터 다시 통과한다.
+                repaired = self._parse(
+                    {**draft.payload, "factors": corrected}, draft.condition_audit,
+                    draft.raw_text, question,
+                )
         except RepairViolation as violation:
             raise PlannerError(
                 f"재계획이 허용된 범위를 벗어났습니다: {violation}",
@@ -502,11 +547,24 @@ class GeoFlowPlanner:
                 payload, question, reference_date=reference, raw_text=text,
                 structured=self.structured,
             )
-        grounding = parse_grounding(
-            payload, question, raw_text=text,
-            structured_aggregation=self.structured,
-            normalize=self.normalize_grounding,
-        )
+        return self._parse(payload, audit, text, question)
+
+    def _parse(self, payload, audit, text, question):
+        """grounding 계약 검사. 재질의로 고칠 수 있는 오류면 첫 응답을 초안으로 붙여 올린다.
+
+        합성 단계 오류와 같은 재질의 판정(``repair.decide``)을 쓴다. 판정이 계획 단계인지 합성 단계인지에
+        따라 달라지지 않게 하려는 것이다.
+        """
+        try:
+            grounding = parse_grounding(
+                payload, question, raw_text=text,
+                structured_aggregation=self.structured,
+                normalize=self.normalize_grounding,
+            )
+        except PlannerError as error:
+            if decide_repair(error).repairable:
+                error.draft = PlanningDraft(payload=payload, raw_text=text, condition_audit=audit)
+            raise
         grounding.condition_audit = audit
         # 발화에 없는 상위 지역은 조회를 어긋나게 만들 뿐이므로 덜어 낸다.
         # 거부가 아니라 제거로 처리하는 이유는 drop_invented_regions와 같다.
@@ -518,21 +576,26 @@ class GeoFlowPlanner:
 _INSTRUCTION_FIELDS = (
     "concept", "name", "region", "message",
     "concepts", "qualifier", "qualifiers", "factor", "missing", "allowed",
+    "current", "options",
 )
 
 
-def _instruction_values(decision, message):
+def _instruction_values(decision, message, factors=None):
     """요청문 자리표시자 값. 허용값 목록은 factor 정의에서 만든다."""
+    editable = decision.editable or decision.allowed_additions
+    current = {name: value for name, value in (factors or {}).items() if name in editable}
     return {
         "concepts": ", ".join(decision.targets) or "(없음)",
         "concept": ", ".join(decision.targets) or "(없음)",
         "qualifier": ", ".join(decision.allowed_additions),
         "qualifiers": ", ".join(decision.allowed_additions),
         "factor": ", ".join(decision.targets),
-        "missing": ", ".join(decision.allowed_additions),
+        "missing": ", ".join(decision.allowed_additions) or "(없음)",
         # 허용값만으로는 부족했다. 그 조건이 무엇을 정하는지 함께 보여 준다.
         # grounding prompt와 같은 metadata에서 만들므로 어긋날 수 없다.
-        "allowed": describe_factor_semantics(decision.allowed_additions),
+        "allowed": describe_factor_semantics(editable),
+        "current": json.dumps(current, ensure_ascii=False) if current else "{}",
+        "options": describe_resolution(decision) or "- 질문에 맞게 고칩니다.",
         "name": "",
         "region": "",
         "message": message,
