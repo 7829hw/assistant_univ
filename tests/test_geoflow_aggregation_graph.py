@@ -1191,8 +1191,8 @@ class StructuredGroundingPathTest(unittest.TestCase):
         flat = self.planner("flat").system_prompt()
         structured = self.planner("structured").system_prompt()
         # grounding_v4(2026-09-30): 모델에게 전달하는 계약과 실행 계약을 맞췄다. flat은 답 대상(answer: value|bucket),
-        # 짝 지침: 질문에 있는 조건은 짝을 읽을 수 없어도 적는다(82848b1f, grounding_v5 P). 이전 522aa3b1은 둘 다 빼라고 했다(명시 조건 유지와 모순). 문구를 더 줄인 ede43190은 전체 맞음 224 → 213이라 되돌렸다. 이전: 238ac8d6(grounding_v1), db113124, 64bbceb4.
-        self.assertEqual(hashlib.sha256(flat.encode()).hexdigest()[:8], "82848b1f")
+        # order→limit, od_role both를 안내한다(522aa3b1). 문구를 더 줄인 ede43190은 전체 맞음 224 → 213이라 되돌렸다. 이전: 238ac8d6(grounding_v1), db113124, 64bbceb4.
+        self.assertEqual(hashlib.sha256(flat.encode()).hexdigest()[:8], "522aa3b1")
         self.assertIn("- answer:", flat)
         self.assertNotIn("- answer:", structured)  # 구조화 표기는 aggregation_plan.result.select로 적는다
         self.assertIn("[집계 계획]", structured)
