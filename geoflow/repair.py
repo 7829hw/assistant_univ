@@ -24,6 +24,7 @@ import copy
 from dataclasses import dataclass, field
 from typing import Any
 
+from geoflow.aggregation import FLAT_KEYS as FLAT_AGGREGATION_KEYS
 from geoflow.factors import FACTOR_CONSTRAINTS, companions_for
 from geoflow.operator_registry import OPERATORS
 
@@ -167,6 +168,7 @@ def _decide_factor(context):
             ),
             context=context,
         )
+    one_of = tuple(context.get("one_of") or ())
     return RepairDecision(
         repairable=True,
         kind=RepairKind.FACTOR_COMPLETION,
@@ -174,8 +176,9 @@ def _decide_factor(context):
             "빠진 조건이 factor 어휘에 있고, 그 조건만 덧붙이면 성립합니다."
         ),
         targets=(factor,) if factor else (),
-        allowed_additions=missing,
-        context=context,
+        # 둘 중 하나로 성립하는 짝(bucket → rollup | select)은 둘 다 제안할 수 있다. 하나만 채운다.
+        allowed_additions=one_of or missing,
+        context={**context, "one_of": bool(one_of)},
     )
 
 
@@ -317,6 +320,10 @@ def _validate_factor_delta(before, after, decision):
     for name, value in before.factors.items():
         if after.factors.get(name) != value:
             raise RepairViolation(f"이미 있던 조건 {name!r}의 값을 바꿨습니다.")
+    if (decision.context or {}).get("one_of"):
+        if len(allowed & set(after.factors)) != 1:
+            raise RepairViolation("둘 중 하나만 채워야 합니다: " + ", ".join(sorted(allowed)))
+        return
     still_missing = sorted(allowed - set(after.factors))
     if still_missing:
         raise RepairViolation(
@@ -496,6 +503,12 @@ def _parse_factor_patch(payload, grounding, decision):
         raise RepairViolation(
             f"이미 있는 조건을 덮어쓸 수 없습니다: {', '.join(existing)}"
         )
+    if (decision.context or {}).get("one_of"):
+        if len(raw) != 1:
+            raise RepairViolation(
+                f"다음 중 하나만 채워야 합니다: {', '.join(sorted(allowed))}"
+            )
+        return FactorCompletionPatch(dict(raw))
     missing = sorted(allowed - set(raw))
     if missing:
         raise RepairViolation(
@@ -554,8 +567,9 @@ def apply_patch(grounding, patch):
         raise RepairViolation(f"알 수 없는 patch입니다: {type(patch).__name__}")
 
     structured = grounding.aggregation_plan
-    if structured is not None and isinstance(patch, FactorCompletionPatch):
-        # 구조화 집계가 있는데 flat 집계 factor를 덧붙이면 두 표현이 섞인다.
+    if (structured is not None and isinstance(patch, FactorCompletionPatch)
+            and set(patch.factors) & set(FLAT_AGGREGATION_KEYS)):
+        # 구조화 집계가 있는데 flat 집계 factor를 덧붙이면 두 표현이 섞인다. 집계가 아닌 짝(limit 등)은 채운다.
         raise RepairViolation("구조화 집계가 있는 grounding에 집계 factor를 덧붙일 수 없습니다.")
     repaired = parse_grounding(payload, grounding.question)
     # 직렬화 표현(factors)에는 구조화 집계가 없다. 수정 대상이 아니므로 그대로 옮긴다.

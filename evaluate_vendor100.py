@@ -46,7 +46,10 @@ HERE = Path(__file__).resolve().parent
 #: - v2(2026-09-29 grounding_v2): v1 + 장소 조회 **횟수**가 정답과 같아야 한다. 같은 장소를 두 번
 #:   조회하면 v1은 집합 비교라 맞음으로 셌다(업체 정답 093·095는 한 번 조회한 scope를 출발·도착에
 #:   함께 쓴다). 조건을 완화한 것이 아니라 더한 것이다.
-SCORER_VERSION = "v2"
+#: - v3(2026-09-30 grounding_v4): 문항이 ``expected_error``(허용 오류 코드 목록)를 적었으면, 기대한 결과 종류로
+#:   멈췄더라도 그 코드일 때만 정당한 거부다. 적지 않은 문항은 v2와 같다. grounding 비교는 집계를 표현 방식(flat
+#:   factor, 구조화 aggregation_plan)과 무관한 집계 IR(bucket·inner·outer·select)로 비교한다.
+SCORER_VERSION = "v3"
 
 
 def _code_root(argv):
@@ -445,6 +448,13 @@ def score(item, observed):
     if expected != "answered":
         # 답하지 않아야 하는 문항. 기대한 결과 종류로 멈췄을 때만 맞음.
         checks["expected_outcome"] = expected
+        allowed = item.get("expected_error")
+        if observed["outcome"] == expected and allowed:
+            allowed = [allowed] if isinstance(allowed, str) else list(allowed)
+            checks["expected_error"] = allowed
+            checks["refusal_reason_ok"] = observed.get("error_code") in allowed
+            return ("expected_refusal" if checks["refusal_reason_ok"]
+                    else "wrong_refusal_reason"), checks
         if observed["outcome"] == expected:
             return "expected_refusal", checks
         if observed["outcome"] == "answered":
@@ -503,6 +513,7 @@ _CLASS_OF = {
     "refused_unsupported": "부당한 거부",         # 답해야 할 문항을 지원 안 함으로 멈춤
     "refused_clarification": "부당한 거부",       # 답해야 할 문항을 확인 요청으로 멈춤
     "wrong_refusal_kind": "부당한 거부",          # 멈춰야 할 문항이지만 다른 종류로 멈춤
+    "wrong_refusal_reason": "부당한 거부",        # 기대한 종류로 멈췄지만 이유(expected_error)가 다름
     "failed": "실행 실패",                        # 오류로 끝남(계획·합성·조회 실패 등)
     "no_gold_grounding": "미실행",                # 정답 grounding 층에서 표현할 수 없어 실행하지 않음
 }
@@ -655,12 +666,51 @@ def _grounding_view(payload):
             scopes.append((concept.get("value"), role))
     defaults = {"taxi_type": "all", "taxi_status": "all", "dimension_target": "both",
                 "vicinity": False}
-    factors = {key: value for key, value in (payload.get("factors") or {}).items()
-               if value is not None and defaults.get(key, object()) != value}
-    if factors.get("aggregation") == "avg" and "bucket" not in factors:
-        factors.pop("aggregation")   # 한 단계 avg는 Tool 기본값과 같다(호출 채점과 같은 규칙).
+    raw_factors = payload.get("factors") or {}
+    factors = {key: value for key, value in raw_factors.items()
+               if value is not None and defaults.get(key, object()) != value
+               and key not in _AGGREGATION_KEYS}
+    spec = _aggregation_view(payload)
+    if spec is not None:
+        factors["aggregation_spec"] = spec
     return {"measure": measure, "places": sorted(places, key=str), "scopes": sorted(scopes, key=str),
             "factors": factors}
+
+
+#: 집계를 적는 자리. grounding 비교에서는 표현 방식과 무관한 집계 IR 하나로 바꿔 비교한다.
+_AGGREGATION_KEYS = ("aggregation", "bucket", "rollup", "select", "aggregation_plan")
+
+
+def _aggregation_view(payload):
+    """집계 IR(bucket, inner, outer, select). 없으면 None. 해석할 수 없는 표기는 그대로 표시한다.
+
+    flat factor, 구조화 aggregation_plan, Grounding.to_dict()의 "aggregation"을 같은 형태로 만든다.
+    구간이 없는 한 단계 avg는 Tool 기본값과 같다(호출 채점과 같은 규칙). 구간 안 집계가 없으면 unspecified.
+    """
+    from geoflow import aggregation as A
+    from geoflow.errors import PlannerError
+
+    factors = payload.get("factors") or {}
+    try:
+        if isinstance(payload.get("aggregation"), dict) and payload["aggregation"].get("source"):
+            spec = payload["aggregation"]
+            spec = (spec.get("bucket"), spec.get("inner"), spec.get("outer"), spec.get("select"))
+        elif factors.get(A.PLAN_KEY) is not None:
+            plan = A.parse_plan(factors[A.PLAN_KEY])
+            spec = (plan.bucket, plan.inner, plan.outer, plan.select)
+        else:
+            flat = A.from_flat({key: factors.get(key) for key in A.FLAT_KEYS if factors.get(key)})
+            spec = (flat.bucket, flat.inner, flat.outer, flat.select)
+    except PlannerError:
+        return ["invalid", str(factors.get(A.PLAN_KEY))[:60]]
+    bucket, inner, outer, select = spec
+    if bucket is None and inner == "avg":
+        inner = None
+    if bucket is not None and inner is None:
+        inner = A.UNSPECIFIED
+    if (bucket, inner, outer, select) == (None, None, None, None):
+        return None
+    return [bucket, inner, outer, select]
 
 
 def grounding_check(item, grounding):
@@ -769,7 +819,7 @@ def cmd_llm(args):
                 options["semantic_reinterpretation"] = False
             pipeline = GeoFlowPipeline.create(
                 client=recorder, tool_executor=_executor(),
-                aggregation_grounding=structured_grounding.FLAT,
+                aggregation_grounding=args.aggregation_grounding,
                 clock=lambda: REFERENCE_DATE, condition_check=args.condition_check,
                 execution_profile=providers.profile_for(providers.MOCK, providers.LEGACY),
                 **options)
@@ -796,7 +846,7 @@ def cmd_llm(args):
                                     "ollama_version": version, "model_details": details,
                                     "planner_prompt_sha256": prompt_sha,
                                     "replay_from": args.replay_from,
-                                    "pipeline": {"aggregation_grounding": "flat",
+                                    "pipeline": {"aggregation_grounding": args.aggregation_grounding,
                                                  "condition_check": args.condition_check,
                                                  "condition_notes": args.condition_notes,
                                                  "normalize_grounding": not args.no_normalize,
@@ -1225,6 +1275,8 @@ def main(argv=None):
                      help="조건 계층의 감사 문구를 답변에 덧붙인다(CLI --condition-check와 같음)")
     llm.add_argument("--no-normalize", action="store_true",
                      help="장소 값 자리 바로잡기를 끈다(이전 동작)")
+    llm.add_argument("--aggregation-grounding", default="flat", choices=("flat", "structured"),
+                     help="집계를 적는 grounding 계약(flat factor 또는 구조화 aggregation_plan)")
     llm.add_argument("--no-semantic", action="store_true",
                      help="조건 계층의 의미 재해석(측정값·관계·집계 다시 읽기)을 끈다. 날짜·유형·상태 보존과 "
                           "장소 근거 확인은 그대로다")

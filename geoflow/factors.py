@@ -169,7 +169,7 @@ FACTOR_SPECS: dict[str, FactorSpec] = {
         ),
         FactorSpec(
             "limit", kind="integer",
-            meaning="그룹별 결과에서 보여 줄 개수.",
+            meaning="그룹별 결과에서 보여 줄 개수. 순위(order)에는 늘 적는다. 하나만 묻는 순위는 1.",
         ),
         FactorSpec(
             "vicinity", kind="boolean",
@@ -202,6 +202,9 @@ FACTOR_STAGE_NOTE = """구간을 나누는 질문에서는 집계가 두 단계�
 - "총", "합계", "모두 더한"은 sum이다. "가장 큰 값", "최댓값"은 값을 묻는 집계(max)이다.
 - 구간 표현이 없으면 집계어는 aggregation이다.
   - "평균 수입은?" → aggregation=avg (bucket과 rollup은 넣지 않는다)
+- 값이 아니라 그 값을 가진 구간(어느 주, 어느 달)을 물으면 rollup 대신 select를 쓴다.
+  - "주별 운행 일수 평균이 가장 작은 주는?" → bucket=week, aggregation=avg, select=min
+  - 지역·요일을 고르는 순위("가장 많은 곳")는 select가 아니라 dimension·order·limit이다.
 - rollup에 week나 month 같은 시간 단위를 넣지 않는다. rollup은 합치는
   방식이다."""
 
@@ -228,7 +231,8 @@ FACTOR_CONSTRAINTS: dict[str, FactorConstraint] = {
     item.factor: item for item in (
         FactorConstraint(
             "bucket", ("rollup",),
-            "주·월 단위로 1차 집계하려면 그 결과를 합치는 방법도 필요합니다.",
+            "주·월 단위로 1차 집계하려면 그 결과를 합치는 방법(rollup)이나 한 구간을 고르는 방법(select) 중 "
+            "하나가 필요합니다.",
         ),
         FactorConstraint(
             "select", ("bucket",),
@@ -297,24 +301,31 @@ def describe_constraints(exclude=()):
     같은 규칙을 Prompt에 손으로 또 적어 두면 한쪽만 고쳐져 어긋난다.
     설명 문구까지 이 표에서 만들어 붙인다. ``exclude``의 factor가 걸린 규칙은 뺀다.
     """
-    return "\n".join(
-        f"- {item.factor}를 넣으면 {', '.join(item.requires)}도 함께 "
-        f"넣습니다. {item.reason}"
-        for item in sorted(
-            FACTOR_CONSTRAINTS.values(), key=lambda item: item.factor
-        )
-        if item.factor not in exclude and not set(item.requires) & set(exclude)
-    )
+    lines = []
+    for item in sorted(FACTOR_CONSTRAINTS.values(), key=lambda item: item.factor):
+        if item.factor in exclude or set(item.requires) & set(exclude):
+            continue
+        alternatives = [name for name in ALTERNATIVE_COMPANIONS.get(item.factor, ())
+                        if name not in exclude]
+        requires = (" 또는 ".join(alternatives) if len(alternatives) > 1
+                    else ", ".join(item.requires))
+        lines.append(f"- {item.factor}를 넣으면 {requires}도 함께 넣습니다. {item.reason}")
+    for factor, (requires, reason) in sorted(CONTRACT_COMPANIONS.items()):
+        if factor in exclude:
+            continue
+        lines.append(f"- {factor}를 넣으면 {', '.join(requires)}도 함께 넣습니다. {reason}")
+    return "\n".join(lines)
 
 
-#: flat planner prompt가 아직 안내하지 않는 factor. grounding 계약(parse·검증·합성)은 받는다.
-#: select: 구간 선택을 flat에서 표현한다(구조화 표기의 result.select와 같은 IR). production prompt에 안내하면
-#: qwen3:8b 업체 100 실측이 91 → 85로 떨어졌다(select 오용, 무관한 문항의 측정값 변동, grounding_v3 s2b).
-#: 안내 여부는 격리 실측으로 정한다. 구조화 prompt는 aggregation_plan.result.select로 안내한다.
-FLAT_PROMPT_EXCLUDED = frozenset({"select"})
+#: 모델에게 전달하는 계약과 실행 계약을 맞춘다(grounding_v4). grounding 계약(parse·검증·합성·재질의)이 받는
+#: 값은 모두 prompt에 안내한다. 빼 둘 factor가 생기면 여기에 적고 이유를 남긴다(현재 없음).
+FLAT_PROMPT_EXCLUDED = frozenset()
+
+#: 둘 중 하나가 있으면 성립하는 짝. bucket 뒤에는 구간별 값을 합치거나(rollup) 한 구간을 고른다(select).
+ALTERNATIVE_COMPANIONS = {"bucket": ("rollup", "select")}
 
 #: Tool 계약이 요구하는 짝. factor 자체의 성립 조건(FACTOR_CONSTRAINTS)과 달리 업체 Tool 호출 규칙에서 온다.
-#: prompt에 적지 않고 검증과 factor 재질의로 지킨다(재질의 요청문이 그 factor의 뜻을 보여 준다).
+#: prompt의 [짝을 이루는 factor]에 함께 적고(describe_constraints), 검증과 factor 재질의로 지킨다.
 #: - order → limit: 업체 system prompt "top이나 bottom값만 필요하다면 limit를 1개로 제한", "3곳" → limit=3.
 #:   정답 96문항이 모두 limit을 적는다. 빠지면 Tool 기본 개수로 다른 답이 된다.
 CONTRACT_COMPANIONS = {
@@ -375,6 +386,8 @@ def validate_factors(factors, *, raw_text=""):
                 "raw_text": raw_text,
                 "factor": name,
                 "missing": list(missing),
+                **({"one_of": list(ALTERNATIVE_COMPANIONS[name])}
+                   if name in ALTERNATIVE_COMPANIONS else {}),
                 "present": sorted(factors),
             },
         )
