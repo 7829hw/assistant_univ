@@ -168,7 +168,6 @@ def _decide_factor(context):
             ),
             context=context,
         )
-    one_of = tuple(context.get("one_of") or ())
     return RepairDecision(
         repairable=True,
         kind=RepairKind.FACTOR_COMPLETION,
@@ -176,9 +175,8 @@ def _decide_factor(context):
             "빠진 조건이 factor 어휘에 있고, 그 조건만 덧붙이면 성립합니다."
         ),
         targets=(factor,) if factor else (),
-        # 둘 중 하나로 성립하는 짝(bucket → rollup | select)은 둘 다 제안할 수 있다. 하나만 채운다.
-        allowed_additions=one_of or missing,
-        context={**context, "one_of": bool(one_of)},
+        allowed_additions=missing,
+        context=context,
     )
 
 
@@ -320,10 +318,6 @@ def _validate_factor_delta(before, after, decision):
     for name, value in before.factors.items():
         if after.factors.get(name) != value:
             raise RepairViolation(f"이미 있던 조건 {name!r}의 값을 바꿨습니다.")
-    if (decision.context or {}).get("one_of"):
-        if len(allowed & set(after.factors)) != 1:
-            raise RepairViolation("둘 중 하나만 채워야 합니다: " + ", ".join(sorted(allowed)))
-        return
     still_missing = sorted(allowed - set(after.factors))
     if still_missing:
         raise RepairViolation(
@@ -503,12 +497,6 @@ def _parse_factor_patch(payload, grounding, decision):
         raise RepairViolation(
             f"이미 있는 조건을 덮어쓸 수 없습니다: {', '.join(existing)}"
         )
-    if (decision.context or {}).get("one_of"):
-        if len(raw) != 1:
-            raise RepairViolation(
-                f"다음 중 하나만 채워야 합니다: {', '.join(sorted(allowed))}"
-            )
-        return FactorCompletionPatch(dict(raw))
     missing = sorted(allowed - set(raw))
     if missing:
         raise RepairViolation(

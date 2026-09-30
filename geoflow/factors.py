@@ -126,11 +126,11 @@ FACTOR_SPECS: dict[str, FactorSpec] = {
             ),
         ),
         FactorSpec(
-            "select", values=frozenset({"max", "min"}),
+            "answer", values=frozenset({"value", "bucket"}),
             meaning=(
-                "주·월 구간(bucket)별 값 가운데 가장 큰(max)·작은(min) **구간 자체**를 답으로 고른다. 값이 아니라 "
-                "그 값을 가진 주·월을 물을 때 rollup 대신 쓴다. bucket과 짝으로만 쓴다. 지역·요일 가운데 "
-                "고르는 순위는 select가 아니라 dimension·order·limit이다."
+                "구간(bucket)이 있는 질문에서 질문이 최종적으로 묻는 것. 값을 물으면 value(\"~ 중 가장 큰 값은?\", "
+                "생략하면 value), 그 값을 가진 주·월을 물으면 bucket(\"~가 가장 큰 달은?\", \"어느 주\")이다. "
+                "bucket은 rollup이 max나 min일 때만 뜻이 있다(가장 큰·작은 구간). bucket과 짝으로만 쓴다."
             ),
         ),
         FactorSpec(
@@ -202,9 +202,11 @@ FACTOR_STAGE_NOTE = """구간을 나누는 질문에서는 집계가 두 단계�
 - "총", "합계", "모두 더한"은 sum이다. "가장 큰 값", "최댓값"은 값을 묻는 집계(max)이다.
 - 구간 표현이 없으면 집계어는 aggregation이다.
   - "평균 수입은?" → aggregation=avg (bucket과 rollup은 넣지 않는다)
-- 값이 아니라 그 값을 가진 구간(어느 주, 어느 달)을 물으면 rollup 대신 select를 쓴다.
-  - "주별 운행 일수 평균이 가장 작은 주는?" → bucket=week, aggregation=avg, select=min
-  - 지역·요일을 고르는 순위("가장 많은 곳")는 select가 아니라 dimension·order·limit이다.
+- bucket이 있으면 answer로 질문이 묻는 것을 적는다. 값이면 value(생략해도 value), 그 값을 가진 주·월이면
+  bucket이다.
+  - "주별 운행 일수 평균 중 가장 작은 값은?" → bucket=week, aggregation=avg, rollup=min, answer=value
+  - "주별 운행 일수 평균이 가장 작은 주는?"   → bucket=week, aggregation=avg, rollup=min, answer=bucket
+  - 지역·요일을 고르는 순위("가장 많은 곳")는 bucket이 아니라 dimension·order·limit이다.
 - rollup에 week나 month 같은 시간 단위를 넣지 않는다. rollup은 합치는
   방식이다."""
 
@@ -231,12 +233,11 @@ FACTOR_CONSTRAINTS: dict[str, FactorConstraint] = {
     item.factor: item for item in (
         FactorConstraint(
             "bucket", ("rollup",),
-            "주·월 단위로 1차 집계하려면 그 결과를 합치는 방법(rollup)이나 한 구간을 고르는 방법(select) 중 "
-            "하나가 필요합니다.",
+            "주·월 단위로 1차 집계하려면 그 결과를 합치는 방법도 필요합니다.",
         ),
         FactorConstraint(
-            "select", ("bucket",),
-            "구간을 고르려면 어떤 단위로 나눌지도 필요합니다.",
+            "answer", ("bucket",),
+            "답 대상(값/구간)은 구간을 나눌 때만 적습니다.",
         ),
         FactorConstraint(
             "rollup", ("bucket",),
@@ -305,10 +306,7 @@ def describe_constraints(exclude=()):
     for item in sorted(FACTOR_CONSTRAINTS.values(), key=lambda item: item.factor):
         if item.factor in exclude or set(item.requires) & set(exclude):
             continue
-        alternatives = [name for name in ALTERNATIVE_COMPANIONS.get(item.factor, ())
-                        if name not in exclude]
-        requires = (" 또는 ".join(alternatives) if len(alternatives) > 1
-                    else ", ".join(item.requires))
+        requires = ", ".join(item.requires)
         lines.append(f"- {item.factor}를 넣으면 {requires}도 함께 넣습니다. {item.reason}")
     for factor, (requires, reason) in sorted(CONTRACT_COMPANIONS.items()):
         if factor in exclude:
@@ -321,8 +319,7 @@ def describe_constraints(exclude=()):
 #: 값은 모두 prompt에 안내한다. 빼 둘 factor가 생기면 여기에 적고 이유를 남긴다(현재 없음).
 FLAT_PROMPT_EXCLUDED = frozenset()
 
-#: 둘 중 하나가 있으면 성립하는 짝. bucket 뒤에는 구간별 값을 합치거나(rollup) 한 구간을 고른다(select).
-ALTERNATIVE_COMPANIONS = {"bucket": ("rollup", "select")}
+
 
 #: Tool 계약이 요구하는 짝. factor 자체의 성립 조건(FACTOR_CONSTRAINTS)과 달리 업체 Tool 호출 규칙에서 온다.
 #: prompt의 [짝을 이루는 factor]에 함께 적고(describe_constraints), 검증과 factor 재질의로 지킨다.
@@ -350,11 +347,8 @@ def companion_reason(factor, missing):
 
 
 def missing_companions(factors, factor):
-    """``factors`` 안에서 ``factor``에 빠진 동반 factor. bucket의 짝은 rollup 또는 select다."""
-    missing = tuple(name for name in companions_for(factor) if name not in factors)
-    if factor == "bucket" and "select" in factors:
-        missing = tuple(name for name in missing if name != "rollup")
-    return missing
+    """``factors`` 안에서 ``factor``에 빠진 동반 factor."""
+    return tuple(name for name in companions_for(factor) if name not in factors)
 
 
 def validate_factors(factors, *, raw_text=""):
@@ -365,11 +359,11 @@ def validate_factors(factors, *, raw_text=""):
     Validator G4가 같은 종류의 검사를 operator 기준으로 한 번 더 수행하며,
     그쪽은 계획이 어떤 경로로 만들어졌든 적용되는 마지막 방어선이다.
     """
-    if "rollup" in factors and "select" in factors:
+    if factors.get("answer") == "bucket" and factors.get("rollup") not in (None, "max", "min"):
         raise PlannerError(
-            "rollup(구간별 값을 합침)과 select(한 구간을 고름)는 함께 쓸 수 없습니다.",
-            user_message="구간별 값을 합칠지 한 구간을 고를지 하나만 정할 수 있습니다.",
-            code="INVALID_FACTOR_COMBINATION_EXCLUSIVE",
+            "구간을 답으로 고르려면 rollup이 max(가장 큰 구간)나 min(가장 작은 구간)이어야 합니다.",
+            user_message="어떤 구간을 고를지(가장 큰/작은) 질문에서 정하지 못했습니다.",
+            code="INVALID_ANSWER_TARGET",
             context={"raw_text": raw_text, "present": sorted(factors)},
         )
     for name in sorted(factors):
@@ -386,8 +380,6 @@ def validate_factors(factors, *, raw_text=""):
                 "raw_text": raw_text,
                 "factor": name,
                 "missing": list(missing),
-                **({"one_of": list(ALTERNATIVE_COMPANIONS[name])}
-                   if name in ALTERNATIVE_COMPANIONS else {}),
                 "present": sorted(factors),
             },
         )

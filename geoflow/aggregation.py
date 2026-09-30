@@ -48,7 +48,7 @@ UNSPECIFIED = "unspecified"
 #: 구조화 표기의 factor key.
 PLAN_KEY = "aggregation_plan"
 #: flat 표기의 집계 factor. 구조화 표기와 함께 쓰면 거부한다.
-FLAT_KEYS = ("bucket", "aggregation", "rollup", "select")
+FLAT_KEYS = ("bucket", "aggregation", "rollup", "answer")
 
 SOURCE_FLAT = "flat"
 SOURCE_STRUCTURED = "structured"
@@ -105,11 +105,14 @@ def from_flat(factors):
     bucket = factors.get("bucket")
     if bucket is None:
         return AggregationSpec(inner=factors.get("aggregation"))
+    if factors.get("answer") == "bucket":
+        # 답이 구간이면 구간별 값의 max/min은 "가장 큰/작은 구간"을 고르는 것이다(IR의 select).
+        return AggregationSpec(bucket=bucket, inner=factors.get("aggregation") or UNSPECIFIED,
+                               select=factors.get("rollup"))
     return AggregationSpec(
         bucket=bucket,
         inner=factors.get("aggregation") or UNSPECIFIED,
         outer=factors.get("rollup"),
-        select=factors.get("select"),
     )
 
 

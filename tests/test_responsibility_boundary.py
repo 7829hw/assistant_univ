@@ -178,7 +178,7 @@ if __name__ == "__main__":
 
 
 class FlatSelectionTest(unittest.TestCase):
-    """"가장 큰 값"(rollup)과 "그 값을 가진 주"(select)를 flat grounding에서 구분한다(grounding_v3).
+    """"가장 큰 값"(answer=value)과 "그 값을 가진 주"(answer=bucket)를 flat grounding에서 구분한다(grounding_v4).
 
     표현은 grounding이, 실행 가능 여부는 provider 계약이 정한다. 원문 패턴으로 미리 거부하지 않는다.
     """
@@ -203,7 +203,7 @@ class FlatSelectionTest(unittest.TestCase):
         from geoflow.providers import REFERENCE, profile_for
         from tests.test_reference_provider import Q4_MAX_WEEKLY_SUM, WEEKS, reference_executor
 
-        result = self.run_with(self.payload(select="max"), profile_for(REFERENCE),
+        result = self.run_with(self.payload(rollup="max", answer="bucket"), profile_for(REFERENCE),
                                reference_executor())
         self.assertEqual(result.outcome, "answered", result.runtime_error)
         value = result.hop_log[-1]["result"]
@@ -217,16 +217,21 @@ class FlatSelectionTest(unittest.TestCase):
 
     def test_tims_contract_decides_that_selection_is_not_executable(self):
         """TIMS bucket/rollup 호출은 대표값만 돌려주고, 로컬 재계산의 근거(day_records)는 계약에 없다."""
-        run = self.run_with(self.payload(select="max"), None, new_tool_executor())
+        run = self.run_with(self.payload(rollup="max", answer="bucket"), None, new_tool_executor())
         self.assertEqual(run.outcome, "unsupported")
         self.assertEqual(run.error["code"], "UNVERIFIED_TIMS_CONTRACT")
 
-    def test_rollup_and_select_are_exclusive(self):
+    def test_bucket_answer_needs_a_max_or_min(self):
+        from geoflow.aggregation import from_flat
         from geoflow.factors import validate_factors
 
         with self.assertRaises(PlannerError) as caught:
-            validate_factors({"bucket": "week", "rollup": "max", "select": "max"})
-        self.assertEqual(caught.exception.code, "INVALID_FACTOR_COMBINATION_EXCLUSIVE")
+            validate_factors({"bucket": "week", "rollup": "avg", "answer": "bucket"})
+        self.assertEqual(caught.exception.code, "INVALID_ANSWER_TARGET")
+        # answer를 생략하면 값이다(단순한 질문은 answer 없이 그대로 쓴다).
+        self.assertIsNone(from_flat({"bucket": "week", "aggregation": "sum", "rollup": "max"}).select)
+        self.assertEqual(from_flat({"bucket": "week", "aggregation": "sum", "rollup": "max",
+                                    "answer": "bucket"}).select, "max")
 
 
 class RankingCountContractTest(unittest.TestCase):

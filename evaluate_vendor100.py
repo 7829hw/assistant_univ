@@ -678,7 +678,7 @@ def _grounding_view(payload):
 
 
 #: 집계를 적는 자리. grounding 비교에서는 표현 방식과 무관한 집계 IR 하나로 바꿔 비교한다.
-_AGGREGATION_KEYS = ("aggregation", "bucket", "rollup", "select", "aggregation_plan")
+_AGGREGATION_KEYS = ("aggregation", "bucket", "rollup", "select", "answer", "aggregation_plan")
 
 
 def _aggregation_view(payload):
@@ -701,6 +701,9 @@ def _aggregation_view(payload):
         else:
             flat = A.from_flat({key: factors.get(key) for key in A.FLAT_KEYS if factors.get(key)})
             spec = (flat.bucket, flat.inner, flat.outer, flat.select)
+            if factors.get("select") and flat.bucket:
+                # 정답 라벨의 flat select(구간 선택)는 계약 표기와 무관하게 같은 IR로 읽는다.
+                spec = (flat.bucket, flat.inner, None, factors["select"])
     except PlannerError:
         return ["invalid", str(factors.get(A.PLAN_KEY))[:60]]
     bucket, inner, outer, select = spec

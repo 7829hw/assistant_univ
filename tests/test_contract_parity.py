@@ -10,7 +10,6 @@ import unittest
 
 from geoflow import structured_grounding
 from geoflow.factors import (
-    ALTERNATIVE_COMPANIONS,
     CONTRACT_COMPANIONS,
     FACTOR_CONSTRAINTS,
     FACTOR_SPECS,
@@ -64,16 +63,12 @@ class ContractParityTest(unittest.TestCase):
             for factor, (requires, _) in CONTRACT_COMPANIONS.items():
                 with self.subTest(mode=mode, contract=factor):
                     self.assertIn(f"- {factor}를 넣으면 {', '.join(requires)}", section)
-            if mode == structured_grounding.FLAT:
-                for factor, alternatives in ALTERNATIVE_COMPANIONS.items():
-                    self.assertIn(f"- {factor}를 넣으면 {' 또는 '.join(alternatives)}", section)
 
     def test_repair_can_only_fill_what_the_prompt_describes(self):
         """factor 재질의가 채우는 조건은 모두 prompt에 안내된 factor다."""
         names = set(advertised_factors(structured_grounding.FLAT))
         fillable = {name for constraint in FACTOR_CONSTRAINTS.values() for name in constraint.requires}
         fillable |= {name for requires, _ in CONTRACT_COMPANIONS.values() for name in requires}
-        fillable |= {name for group in ALTERNATIVE_COMPANIONS.values() for name in group}
         self.assertLessEqual(fillable, names)
 
     def test_every_place_role_is_in_the_prompt(self):
@@ -86,7 +81,7 @@ class ContractParityTest(unittest.TestCase):
     def test_both_contracts_can_state_the_answer_target(self):
         """값(최댓값)과 그 값을 가진 구간, 구간 안 집계 없음을 두 계약 모두 적을 수 있다."""
         flat, structured = prompt("flat"), prompt("structured")
-        self.assertIn("- select:", flat)
+        self.assertIn("- answer:", flat)
         for word in ('"select"', "unspecified", "result"):
             self.assertIn(word, structured)
 

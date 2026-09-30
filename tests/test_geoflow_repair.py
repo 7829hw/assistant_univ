@@ -192,9 +192,7 @@ class RepairDecisionTest(unittest.TestCase):
         decision = decide(error)
         self.assertTrue(decision.repairable)
         self.assertEqual(decision.kind, RepairKind.FACTOR_COMPLETION)
-        # grounding_v4: bucket 뒤에는 rollup 또는 select 하나가 온다. 재질의는 둘 중 하나를 고르게 한다.
-        self.assertEqual(decision.allowed_additions, ("rollup", "select"))
-        self.assertTrue(decision.context["one_of"])
+        self.assertEqual(decision.allowed_additions, ("rollup",))
 
     def test_unknown_planning_error_is_not_repairable(self):
         for code in ("NO_OPERATOR", "NO_MACRO", "UNSUPPORTED_MEASURE",
@@ -339,7 +337,7 @@ class RepairMutationGuardTest(unittest.TestCase):
         )
         with self.assertRaises(RepairViolation) as caught:
             validate_repair_delta(before, after, decision)
-        self.assertIn("하나만 채워야", str(caught.exception))
+        self.assertIn("그대로입니다", str(caught.exception))
 
     def test_changing_a_concept_during_factor_repair_is_rejected(self):
         before, decision = self._factor_case()

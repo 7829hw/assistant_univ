@@ -307,12 +307,10 @@ def pinned_factor_definitions():
     original_specs = dict(F.FACTOR_SPECS)
     original_constraints = dict(F.FACTOR_CONSTRAINTS)
     original_contract = dict(F.CONTRACT_COMPANIONS)
-    original_alternatives = dict(F.ALTERNATIVE_COMPANIONS)
     planner_module.FACTOR_STAGE_NOTE = stage_note
     try:
-        # 고정 시점에는 Tool 계약 짝과 둘 중 하나 짝이 없었다.
+        # 고정 시점에는 Tool 계약 짝이 없었다.
         F.CONTRACT_COMPANIONS.clear()
-        F.ALTERNATIVE_COMPANIONS.clear()
         for name in list(F.FACTOR_SPECS):
             if name not in pinned["specs"]:
                 del F.FACTOR_SPECS[name]
@@ -331,7 +329,6 @@ def pinned_factor_definitions():
         F.FACTOR_CONSTRAINTS.clear()
         F.FACTOR_CONSTRAINTS.update(original_constraints)
         F.CONTRACT_COMPANIONS.update(original_contract)
-        F.ALTERNATIVE_COMPANIONS.update(original_alternatives)
 
 
 def _pinned_base_prompt():

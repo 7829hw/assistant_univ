@@ -279,6 +279,11 @@ def _drop_default_target(factors, notes):
         factors = {key: value for key, value in factors.items() if key != "dimension_target"}
         notes.append({"rule": "default_target_without_dimension_dropped",
                       "factor": "dimension_target", "value": "both"})
+    if isinstance(factors, dict) and factors.get("answer") == "value" and not factors.get("bucket"):
+        # 구간이 없으면 답은 언제나 값이다. answer=value는 생략과 뜻이 같다(answer=bucket은 두어 검증이 거부한다).
+        factors = {key: value for key, value in factors.items() if key != "answer"}
+        notes.append({"rule": "default_answer_without_bucket_dropped", "factor": "answer",
+                      "value": "value"})
     return factors
 
 
