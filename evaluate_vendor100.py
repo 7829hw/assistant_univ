@@ -1279,7 +1279,14 @@ def cmd_layers(args):
             previous = layer
         final_ok = sum(1 for row in rows if row.get("grounding_ok"))
         correct = sum(1 for row in rows if row["result_class"] in ("정상 답변", "정당한 거부"))
-        lines += ["", f"- 이 run의 최종 grounding(그 run의 경로 + 재질의) 정확: {final_ok}/{len(judged)}",
+        # 재질의의 고침·훼손: 마지막 보정 층(재질의 전)과 최종 grounding(재질의 후)을 비교한다.
+        by_id = {row["id"]: row for row in rows}
+        last = "preserved"
+        gained = sorted(k for k in judged if by_id[k].get("grounding_ok") and not layers[k][last]["ok"])
+        lost = sorted(k for k in judged if not by_id[k].get("grounding_ok") and layers[k][last]["ok"])
+        lines += ["", f"- 재질의 전({LAYER_LABELS[last]}) → 최종 grounding: 고침 {len(gained)} {', '.join(gained)} / "
+                  f"훼손 {len(lost)} {', '.join(lost)}"]
+        lines += [f"- 이 run의 최종 grounding(그 run의 경로 + 재질의) 정확: {final_ok}/{len(judged)}",
                   f"- 이 run의 최종 호출·답변 맞음(정상 답변 + 정당한 거부): {correct}/{len(rows)}", ""]
         if args.json:
             Path(args.json).parent.mkdir(parents=True, exist_ok=True)
