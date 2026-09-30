@@ -1008,6 +1008,21 @@ development가 되었다.
 > grounding 층이 업체 100에서 98/100이었다. 정답 grounding 기반 실행은 양쪽 모두 100/100, 41+2/43로 같다(차이는 모두 grounding에서 옴).
 `evaluate_v2.py`는 사전 등록한 설정(condition_check 끔)을 그대로 쓴다.
 
+### 계약 정합과 답 대상 grounding_v4 (2026-09-30)
+
+모델에게 전달하는 grounding 계약과 파서·검증·재질의가 받는 계약을 맞췄다(`tests/test_contract_parity.py`). 설계·결과:
+`evaluation/grounding_v4/analysis.md`.
+
+* 답 대상: flat grounding은 `answer: value | bucket`로 질문이 값을 묻는지 그 값을 가진 주·월을 묻는지 적는다(생략 = value).
+  `answer=bucket` + `rollup=max|min`은 집계 IR의 select다. 실행 여부는 provider 계약이 정한다(reference: 로컬 선택,
+  TIMS legacy: `UNVERIFIED_TIMS_CONTRACT`). 후보 비교(답 대상 16문항): flat select 10(오답 4), 구조화 aggregation_plan 5,
+  answer 10(오답 2, 구간 질문 3/3을 실행 계약 이유로 멈춤).
+* prompt에 order→limit, od_role both를 적고, 검증이 요구하는 짝을 같은 표에서 안내한다. prompt sha256 238ac8d6 → 522aa3b1.
+* 구간을 묻는 질문 8개: 재정렬 기준 0/8(값으로 답함 5) → 7/8(모두 실행 계약 이유). 7개 셋 311문항 맞음 233 → 224(조용한 오답
+  38 → 31, 실행 실패 25 → 42). 업체 100 93 → 85, 기존 44 36 → 28은 대부분 prompt 변경 뒤 출력 변동이며, 기준 prompt를 고르는 데
+  쓰지 않은 셋의 합은 104 → 111이다.
+* 연도 없는 날짜는 확인 요청 정책을 유지했다. v4 k01·k04·k16의 2026년 라벨은 작성자 가정이며 정책 결정이 필요하다.
+
 ### 책임 경계 재정렬 grounding_v3 (2026-09-30)
 
 `geoflow/dev`(`f984306`)의 역할 분리로 되돌렸다. LLM이 개념·관계·조건·집계 의미를 grounding하고, 코드는 형식 정규화·계약
