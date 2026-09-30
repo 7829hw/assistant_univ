@@ -128,9 +128,9 @@ FACTOR_SPECS: dict[str, FactorSpec] = {
         FactorSpec(
             "answer", values=frozenset({"value", "bucket"}),
             meaning=(
-                "주·월 구간(bucket=week·month)을 나눈 질문에서만 쓴다. 질문이 구간별 값의 최댓값·최솟값 같은 값을 "
-                "물으면 value(생략하면 value), 그 값을 가진 주·월 자체를 물으면 bucket이다. bucket은 rollup이 max나 "
-                "min일 때만 뜻이 있다. 요일·지역을 고르는 질문에는 쓰지 않는다(dimension·order·limit)."
+                "구간(bucket)이 있는 질문에서 질문이 최종적으로 묻는 것. 값을 물으면 value(\"~ 중 가장 큰 값은?\", "
+                "생략하면 value), 그 값을 가진 주·월을 물으면 bucket(\"~가 가장 큰 달은?\", \"어느 주\")이다. "
+                "bucket은 rollup이 max나 min일 때만 뜻이 있다(가장 큰·작은 구간). bucket과 짝으로만 쓴다."
             ),
         ),
         FactorSpec(
@@ -202,11 +202,11 @@ FACTOR_STAGE_NOTE = """구간을 나누는 질문에서는 집계가 두 단계�
 - "총", "합계", "모두 더한"은 sum이다. "가장 큰 값", "최댓값"은 값을 묻는 집계(max)이다.
 - 구간 표현이 없으면 집계어는 aggregation이다.
   - "평균 수입은?" → aggregation=avg (bucket과 rollup은 넣지 않는다)
-- 주·월 bucket이 있으면 answer로 질문이 묻는 것을 적는다. 값이면 value(생략해도 value), 그 값을 가진
-  주·월이면 bucket이다.
+- bucket이 있으면 answer로 질문이 묻는 것을 적는다. 값이면 value(생략해도 value), 그 값을 가진 주·월이면
+  bucket이다.
   - "주별 운행 일수 평균 중 가장 작은 값은?" → bucket=week, aggregation=avg, rollup=min, answer=value
   - "주별 운행 일수 평균이 가장 작은 주는?"   → bucket=week, aggregation=avg, rollup=min, answer=bucket
-  - 지역·요일을 고르는 순위("가장 많은 곳", "가장 높은 요일")는 bucket·answer가 아니라 dimension·order·limit이다.
+  - 지역·요일을 고르는 순위("가장 많은 곳")는 bucket이 아니라 dimension·order·limit이다.
 - rollup에 week나 month 같은 시간 단위를 넣지 않는다. rollup은 합치는
   방식이다."""
 
