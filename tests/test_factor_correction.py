@@ -272,8 +272,12 @@ class ApplyTest(unittest.TestCase):
         copy = {"bucket": "week", "aggregation": "max", "rollup": "max"}
         twice = "지난달 주별 최댓값 중 최댓값은?"
         self.assertEqual(outcome(base, copy, twice, {"aggregation": "최댓값", "rollup": "최댓값"})[0], "applied")
+        # 서로 다른 문자열 둘은 같은 표현이 두 번 있다는 사실이 아니다(1b4a173 실측 t01c: "월별", "가장 큰 값").
         self.assertEqual(outcome(base, copy, twice, {"aggregation": "주별 최댓값", "rollup": "중 최댓값"})[0],
-                         "applied")
+                         "unverified")
+        t01c = "지난해 대구 소속 택시의 월별 수입 중 가장 큰 값은?"
+        self.assertEqual(outcome(base | {"bucket": "month"}, copy | {"bucket": "month"}, t01c,
+                                 {"aggregation": "월별", "rollup": "가장 큰 값"})[0], "unverified")
         once = "지난달 주별 수입 중 최댓값은?"
         self.assertEqual(outcome(base, copy, once, {"aggregation": "최댓값", "rollup": "최댓값"}),
                          ("unverified", ["aggregation", "rollup"]))
@@ -371,6 +375,14 @@ class PipelineTest(unittest.TestCase):
     QUESTION = "지난달 요일별 법인택시 평균 수입이 가장 낮은 요일은?"
     FIRST = {"date": "last_month", "taxi_type": "corporate", "dimension": "dayofweek",
              "aggregation": "avg", "order": "bottom", "limit": 1, "answer": "bucket"}
+
+    def test_stage_guidance_appears_only_when_the_scope_opens_stage_values(self):
+        """순위 복구 문구에는 집계 단계·evidence 지침을 섞지 않는다(1b4a173 실측: 순위 복구가 rollup을 남겼다)."""
+        _, client = run(self.QUESTION, plan(self.FIRST), {"factors": {"dimension": "dayofweek"}})
+        self.assertNotIn("evidence", client.calls[1][-1]["content"])
+        _, client = run("지난달 주별 수입의 평균은?", plan({"date": "last_month", "bucket": "week", "aggregation": "avg"}),
+                        {"factors": {"bucket": "week", "rollup": "avg"}})
+        self.assertIn("evidence", client.calls[1][-1]["content"])
 
     def test_answer_fix_runs_with_the_original_ranking(self):
         result, client = run(self.QUESTION, plan(self.FIRST), {"factors": {"dimension": "dayofweek"}})

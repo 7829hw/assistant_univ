@@ -32,7 +32,7 @@ from geoflow.factors import (
 )
 from geoflow.grounding import drop_unsupported_regions, parse_grounding
 from geoflow.operator_registry import OPERATORS
-from geoflow.correction_scope import describe_scope, kept_factors
+from geoflow.correction_scope import describe_scope, kept_factors, stage_guidance
 from geoflow.repair import (
     RepairDecision,
     RepairKind,
@@ -586,7 +586,7 @@ class GeoFlowPlanner:
 _INSTRUCTION_FIELDS = (
     "concept", "name", "region", "message",
     "concepts", "qualifier", "qualifiers", "factor", "missing", "allowed",
-    "current", "scope", "kept",
+    "current", "scope", "kept", "stage_rules",
 )
 
 
@@ -609,6 +609,8 @@ def _instruction_values(decision, message, factors=None):
                   else "- " + ", ".join(editable)),
         "kept": (json.dumps(kept_factors(decision.scope, factors or {}), ensure_ascii=False)
                  if decision.scope is not None else "{}"),
+        # 집계 단계 지침과 evidence 형식은 수정 범위가 집계 단계를 열 때만 보인다(순위 복구에 섞이지 않게).
+        "stage_rules": stage_guidance(decision.scope) if decision.scope is not None else "",
         "name": "",
         "region": "",
         "message": message,

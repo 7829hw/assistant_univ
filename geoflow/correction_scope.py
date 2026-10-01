@@ -246,8 +246,9 @@ def _occurrences(text, span):
 def check_stage_evidence(question, evidence, stages, *, disjoint):
     """새로 적은 집계 값마다 모델이 옮겨 적은 질문 표현이 질문에 있는지(문자열 사실만) 확인한다.
 
-    ``disjoint``이면 두 단계의 표현이 질문의 서로 겹치지 않는 자리에 있어야 한다(같은 값을 두 단계에 적은 경우).
-    확인하지 못한 단계 목록을 돌려준다. 표현의 뜻은 보지 않는다.
+    ``disjoint``이면(같은 값을 두 단계에 적은 경우) 두 단계의 표현이 **같은 문자열**이고 질문의 서로 겹치지 않는
+    두 자리에 있어야 한다. 서로 다른 문자열 두 개("월별", "가장 큰 값")는 같은 집계 표현이 두 번 있다는 사실이
+    아니다(1b4a173 실측 t01c). 확인하지 못한 단계 목록을 돌려준다. 표현의 뜻은 보지 않는다.
     """
     evidence = evidence if isinstance(evidence, dict) else {}
     spans = {stage: (evidence.get(stage) or "").strip() if isinstance(evidence.get(stage), str) else ""
@@ -256,6 +257,8 @@ def check_stage_evidence(question, evidence, stages, *, disjoint):
     if missing or not disjoint or len(stages) < 2:
         return missing
     first, second = (spans[stage] for stage in stages)
+    if first != second:
+        return list(stages)
     for a_start, a_end in _occurrences(question, first):
         for b_start, b_end in _occurrences(question, second):
             if a_end <= b_start or b_end <= a_start:
@@ -445,6 +448,24 @@ def describe_scope(scope, factors):
             how, why = "다른 집계 단계에서 옮긴 값만 받을 수 있음", "새 값을 만들지 않습니다"
         lines.append(f"- {name} ({current}): {how}. {why}")
     return "\n".join(lines)
+
+
+def opens_stage_values(scope):
+    """수정 범위가 집계 단계에 값을 적거나 옮기는 것을 여는가. 재질의 문구의 집계 단계 지침을 이때만 보인다."""
+    return bool(scope.ops("rollup") & {ADD, MOVE, RESELECT} or scope.ops("aggregation") & {MOVE, ADD})
+
+
+STAGE_GUIDANCE = """- 구간 안 집계(aggregation)와 구간별 결과의 집계(rollup)는 질문에서 따로 읽습니다. 질문의 집계 표현
+  하나는 한 단계에만 해당합니다. 두 단계에 같은 집계가 필요하면 질문에 같은 표현이 따로 두 번 있습니다.
+- aggregation에는 새 값을 적지 않습니다. 지금 값을 그대로 두거나 rollup으로 옮기기만 합니다. 구간 안 집계가
+  질문에 있는데 빠졌다면 비워 두세요. 사용자에게 확인합니다.
+- rollup에 새 값을 적거나 같은 값을 두 단계에 적으면, 그 값이 나온 질문 표현을 evidence에 질문 그대로 옮겨
+  적습니다. 두 단계에 같은 값을 적으면 단계마다 같은 표현을 적습니다.
+  예: {"factors": {...}, "evidence": {"rollup": "<질문 표현>"}}"""
+
+
+def stage_guidance(scope):
+    return STAGE_GUIDANCE if opens_stage_values(scope) else ""
 
 
 def kept_factors(scope, factors):
