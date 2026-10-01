@@ -239,21 +239,32 @@ class ApplyTest(unittest.TestCase):
                     self.assertEqual(blocked(base, {"dimension": grouping, "aggregation": "avg",
                                                     "order": direction, "limit": 1}), set())
 
-    def test_new_aggregation_values_need_evidence_found_in_the_question(self):
-        """g44: rollup을 채우며 aggregation을 avg → sum으로 바꿨다. 새 집계 값은 근거 표현이 질문에 있어야 한다.
+    def test_new_inner_aggregation_values_are_never_taken_from_a_repair(self):
+        """g44·s01d: rollup을 채우며 aggregation을 avg → sum으로 바꿨다. 구간 안 집계의 새 값은 받지 않는다.
 
-        근거가 없으면 막지 않고(정당한 질문일 수 있다) 실행하지도 않는다. 확정하지 못한 단계를 확인받는다.
-        근거 문자열이 있으면 적용한다. 그 표현이 그 집계를 뜻하는지는 코드가 확인하지 않는다(기록에 남긴다).
+        근거 문자열이 질문에 있어도("월별 수입", c2a0e2c 대조 셋 s01d) 그 값을 뜻한다는 것을 코드가 확인할 수 없다.
+        막는 대신 실행하지 않고 구간 안 집계를 확인받는다. 질문에 구간 안 집계 표현이 실제로 있는 경우(첫 응답이
+        단계를 잘못 배치함)도 같은 확인 요청으로 끝난다. 이것은 이 정책의 비용이다.
         """
         base = {"bucket": "week", "aggregation": "avg"}
         proposal = {"bucket": "week", "aggregation": "sum", "rollup": "avg"}
         g44 = "지난달 주별 개인택시 수입의 평균은?"
         self.assertEqual(outcome(base, proposal, g44), ("unverified", ["aggregation"]))
-        self.assertEqual(outcome(base, proposal, g44, {"aggregation": "합계"}), ("unverified", ["aggregation"]))
-        # 같은 구조, 질문에 구간 안 집계 표현이 있는 경우(집계 단계를 잘못 배치한 첫 응답).
+        self.assertEqual(outcome(base, proposal, g44, {"aggregation": "주별 개인택시 수입"}),
+                         ("unverified", ["aggregation"]))
         misplaced = "지난달 주별 개인택시 수입 합계의 평균은?"
-        kind, result = outcome(base, proposal, misplaced, {"aggregation": "합계"})
-        self.assertEqual((kind, result["aggregation"], result["rollup"]), ("applied", "sum", "avg"))
+        self.assertEqual(outcome(base, proposal, misplaced, {"aggregation": "합계"}), ("unverified", ["aggregation"]))
+        # 값만 옮기는 수정(구간 안 집계를 비움)은 받는다. 그 뒤 구간 안 집계 확인 요청은 합성 단계가 한다.
+        self.assertEqual(outcome(base, {"bucket": "week", "rollup": "avg"}, g44)[0], "applied")
+
+    def test_new_rollup_value_needs_a_literal_basis(self):
+        """빠진 짝(rollup)의 새 값은 근거 문자열이 질문에 있어야 한다(뜻은 확인하지 않는다)."""
+        base = {"bucket": "month", "aggregation": "sum"}
+        proposal = {"bucket": "month", "aggregation": "sum", "rollup": "max"}
+        question = "지난해 월별 수입 합계 중 가장 큰 값은?"
+        self.assertEqual(outcome(base, proposal, question, {"rollup": "가장 큰"})[0], "applied")
+        self.assertEqual(outcome(base, proposal, question), ("unverified", ["rollup"]))
+        self.assertEqual(outcome(base, proposal, question, {"rollup": "최댓값"}), ("unverified", ["rollup"]))
 
     def test_same_aggregation_in_both_stages_needs_two_separate_places(self):
         """두 단계에 같은 집계를 적으면 질문의 겹치지 않는 두 자리에 근거가 있어야 한다(값이 같다는 것만으로 막지 않는다)."""
@@ -523,16 +534,21 @@ class ExpressionAndRecoveryTest(unittest.TestCase):
                          (OUTCOME_NEEDS_CLARIFICATION, "AMBIGUOUS_INNER_AGGREGATION"))
         self.assertEqual(tools_called(result), [])
 
-    def test_misplaced_stage_with_the_inner_word_in_the_question_recovers(self):
-        """첫 응답이 평균을 aggregation에 두고 합계를 빠뜨렸다. 평균을 rollup으로 옮기고 합계를 근거와 함께 적는다."""
+    def test_misplaced_stage_is_expressible_directly_but_not_recovered_by_inventing(self):
+        """질문에 구간 안 합계가 있다. 첫 grounding이 바로 적으면 답한다. 첫 응답이 합계를 빠뜨리면 복구가 합계를
+        채우지 못하고 구간 안 집계를 확인받는다(정책 비용: 정당할 수 있는 수정이 확인 요청으로 끝남)."""
         question = "지난달 주별 수입 합계의 평균은?"
+        result, client = run(question, plan({"date": "last_month", "bucket": "week", "aggregation": "sum",
+                                             "rollup": "avg"}))
+        self.assertEqual(result.outcome, OUTCOME_ANSWERED, result.runtime_error)
+        self.assertEqual(len(client.calls), 1)
         draft = plan({"date": "last_month", "bucket": "week", "aggregation": "avg"})
         fix = {"factors": {"bucket": "week", "aggregation": "sum", "rollup": "avg"},
                "evidence": {"aggregation": "합계"}}
         result, _ = run(question, draft, fix)
-        self.assertEqual(result.outcome, OUTCOME_ANSWERED, result.runtime_error)
-        args = tool_args(result)
-        self.assertEqual((args.get("aggregation"), args.get("rollup")), ("sum", "avg"))
+        self.assertEqual((result.outcome, result.error["code"]),
+                         (OUTCOME_NEEDS_CLARIFICATION, "AMBIGUOUS_INNER_AGGREGATION"))
+        self.assertEqual(tools_called(result), [])
 
     def test_invented_inner_aggregation_ends_in_an_inner_clarification(self):
         """g44 형태: 질문에 구간 안 집계 표현이 없는데 sum을 지어냈다. 근거가 없으니 구간 안 집계를 확인받는다."""

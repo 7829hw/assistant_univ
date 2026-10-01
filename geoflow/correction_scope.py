@@ -373,14 +373,25 @@ def apply_correction(base, proposal, scope, *, question="", evidence=None):
                 record["applied"]["removed"][stage] = base[stage]
     record["stage_values"] = {"carried": carried, "new": new}
 
-    # 새로 적은 집계 값의 근거(문자열 사실). 두 단계가 같은 값이고 그중 하나라도 새 값이면 두 자리가 따로 있어야 한다.
+    # 새로 적은 집계 값. 코드가 확인할 수 있는 것과 없는 것을 가른다.
+    # - 구간 안 집계(aggregation)의 새 값: 받지 않는다. 계약이 요구하지 않고(미지정이 유효한 표현이다), 근거 문자열과 값의
+    #   관계를 코드가 확인할 수 없으며, 모델이 지어내는 것이 관측된 경로다(g44; c2a0e2c 대조 셋 s01d는 "월별 수입"을
+    #   근거로 sum을 지어냈다). 실행하지 않고 구간 안 집계를 확인받는다.
+    # - 같은 값을 두 단계에 적음: 첫 grounding이 그 집계로 읽은 표현이 질문에 따로 두 번 있는지(문자열 사실)만 본다.
+    # - rollup의 새 값(계약이 요구하는 짝): 근거 문자열이 질문에 있는지만 본다. 뜻은 확인하지 않는다.
     unverified = []
     if new:
         same_value = len(staged) == 2 and staged["aggregation"] == staged["rollup"]
-        needed = list(STAGES) if same_value else new
-        unverified = check_stage_evidence(question, evidence, needed, disjoint=same_value)
-        record["evidence_check"] = {"needed": needed, "unverified": unverified,
-                                    "note": "문자열이 질문에 있는지만 확인했다. 그 표현의 뜻은 확인하지 않았다."}
+        if "aggregation" in new and not same_value:
+            unverified = ["aggregation"]
+            record["evidence_check"] = {
+                "needed": ["aggregation"], "unverified": unverified,
+                "note": "구간 안 집계의 새 값은 재질의로 받지 않는다. 질문에서 확인할 방법이 없다."}
+        else:
+            needed = list(STAGES) if same_value else new
+            unverified = check_stage_evidence(question, evidence, needed, disjoint=same_value)
+            record["evidence_check"] = {"needed": needed, "unverified": unverified,
+                                        "note": "문자열이 질문에 있는지만 확인했다. 그 표현의 뜻은 확인하지 않았다."}
 
     def exclusive(factors):
         # 허용값이 아닌 bucket(예: dayofweek)은 아직 구간이 아니다. 성립하는 구간과의 충돌만 센다.
