@@ -343,6 +343,10 @@ CONTRACT_COMPANIONS = {
 RESULT_SHAPE_FACTORS = ("bucket", "aggregation", "rollup", "answer",
                         "dimension", "dimension_target", "order", "limit")
 
+#: 주·월 구간(bucket)과 함께 쓸 수 없는 factor. 공간·요일 그룹과 시간 구간을 함께 나누는 계산은 schema가 정하지
+#: 않았고 mock은 거절한다(합성 단계 UNSUPPORTED_AGGREGATION_COMBINATION). prompt의 dimension 설명에도 적혀 있다.
+EXCLUSIVE_WITH_BUCKET = ("dimension", "order", "limit")
+
 
 def companions_for(factor):
     """``factor``와 함께 있어야 하는 factor 이름(factor 성립 조건 + Tool 계약)."""
@@ -378,7 +382,7 @@ def validate_factors(factors, *, raw_text=""):
             "구간을 답으로 고르려면 rollup이 max(가장 큰 구간)나 min(가장 작은 구간)이어야 합니다.",
             user_message="어떤 구간을 고를지(가장 큰/작은) 질문에서 정하지 못했습니다.",
             code="INVALID_ANSWER_TARGET",
-            context={"raw_text": raw_text, "present": sorted(factors)},
+            context={"raw_text": raw_text, "present": sorted(factors), "factors": dict(factors)},
         )
     for name in sorted(factors):
         missing = missing_companions(factors, name)
@@ -395,6 +399,8 @@ def validate_factors(factors, *, raw_text=""):
                 "factor": name,
                 "missing": list(missing),
                 "present": sorted(factors),
+                # 수정 범위는 오류가 난 factor 전체에서 정한다(얽힌 위반을 함께 본다).
+                "factors": dict(factors),
             },
         )
     return factors

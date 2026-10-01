@@ -436,22 +436,32 @@ class RepairPatchSchemaTest(unittest.TestCase):
     # -- factor -----------------------------------------------------------
 
     def test_factor_patch_is_accepted(self):
-        patch = self._factor(factor_patch(rollup="avg"))
+        patch = self._factor(factor_patch(bucket="week", rollup="avg"))
         self.assertEqual(patch.values, {"rollup": "avg"})
 
     def test_record_filter_in_the_patch_is_rejected(self):
         with self.assertRaises(RepairViolation) as caught:
-            self._factor(factor_patch(rollup="avg", taxi_type="private"))
-        self.assertIn("바꿀 수 없는 조건입니다: taxi_type", str(caught.exception))
+            self._factor(factor_patch(bucket="week", rollup="avg", taxi_type="private"))
+        self.assertIn("taxi_type: 새로 적을 수 없는 조건", str(caught.exception))
 
     def test_echoed_values_are_not_changes(self):
         """그대로인 조건을 되풀이해 적는 것은 수정이 아니다(실측에서 흔했다)."""
         patch = self._factor({"factors": {"bucket": "week", "rollup": "avg"}})
         self.assertEqual((patch.values, patch.removed), ({"rollup": "avg"}, ()))
 
-    def test_null_removes_a_result_shape_factor(self):
-        patch = self._factor({"factors": {"bucket": None}})
-        self.assertEqual((patch.values, patch.removed), ({}, ("bucket",)))
+    def test_null_removes_an_opened_factor(self):
+        """뺄 수 있게 연 factor(bucket에 기대는 answer)는 null로 뺀다."""
+        concepts = [event("e", "operation"), measure("m", "AMOUNT", "revenue")]
+        before = ground(concepts, {"bucket": "week", "answer": "bucket"})
+        decision = decide(failure_of(concepts, {"bucket": "week", "answer": "bucket"}))
+        patch = parse_patch({"factors": {"bucket": "week", "rollup": "max", "answer": None}},
+                            before, decision)
+        self.assertEqual((patch.values, patch.removed), ({"rollup": "max"}, ("answer",)))
+
+    def test_removing_the_only_grouping_is_rejected(self):
+        with self.assertRaises(RepairViolation) as caught:
+            self._factor({"factors": {"bucket": None}})
+        self.assertIn("구간·그룹 기준이 모두 사라집니다", str(caught.exception))
 
     def test_patch_without_any_change_is_rejected(self):
         with self.assertRaises(RepairViolation) as caught:

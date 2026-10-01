@@ -278,8 +278,10 @@ class GeoFlowPipeline:
             run.retrieval = _retrieval_record(self.planner, question)
             # grounding 계약에서 멈춘 오류도 합성 단계 오류와 같은 판정으로 재질의한다. 판정이 수정 가능하다고
             # 해도 고칠 기준(첫 응답 초안)이 없으면 묻지 않는다.
-            decision = decide_repair(error)
-            attempted = bool(decision.repairable) and getattr(error, "draft", None) is not None
+            draft = getattr(error, "draft", None)
+            decision = decide_repair(
+                error, factors=(draft.payload.get("factors") or {}) if draft is not None else None)
+            attempted = bool(decision.repairable) and draft is not None
             record = _planning_attempt(attempt_index, error, decision,
                                        attempted=attempted, exhausted=False)
             run.attempts.append(record)
@@ -304,7 +306,7 @@ class GeoFlowPipeline:
                     question, planner_output, user_scopes, run, emit,
                 )
             except GeoFlowError as error:
-                decision = decide_repair(error)
+                decision = decide_repair(error, factors=planner_output.grounding.factors)
                 exhausted = repairs_used >= MAX_REPAIR_ATTEMPTS
                 attempted = bool(decision.repairable) and not exhausted
                 record = _planning_attempt(
@@ -430,8 +432,10 @@ class GeoFlowPipeline:
         except GeoFlowError as repair_error:
             record["repair_result"] = STATUS_REPAIR_FAILED
             record["repair_error"] = repair_error.to_dict()
+            record["correction"] = (repair_error.context or {}).get("correction")
             return None
         record["repair_result"] = STATUS_OK
+        record["correction"] = output.repair_record
         # 최초 오류와 수정 내용, 수정 뒤 grounding을 함께 남겨 추적할 수 있게 한다.
         record["repair_raw_text"] = output.raw_text
         record["repaired_factors"] = dict(output.grounding.factors)

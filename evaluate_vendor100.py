@@ -299,6 +299,7 @@ class _RecordingClient:
     def chat(self, messages, tools=None, **kwargs):
         import time
         started = time.perf_counter()
+        request_sha = _request_sha(messages)
         try:
             response = self.client.chat(messages, tools=tools, **kwargs)
         except Exception as error:
@@ -311,6 +312,8 @@ class _RecordingClient:
         message = (response or {}).get("message") or {}
         self.calls.append({
             "kind": "plan" if len(messages) <= 2 else "repair",
+            # 요청 전체(system prompt·첫 응답·재질의 문구)의 hash. 기록 응답을 다시 넣을 때 같은 요청인지 본다.
+            "request_sha256": request_sha,
             "replayed": bool((response or {}).get("replayed")),
             "duration_ms": round((time.perf_counter() - started) * 1000, 1),
             "load_duration_ms": round(((response or {}).get("load_duration") or 0) / 1e6, 1),
@@ -375,7 +378,7 @@ def _planner_trace(record):
         failure = attempt.get("error") or {}
         attempts.append({key: attempt.get(key) for key in (
             "index", "stage", "status", "error_code", "repair_kind", "repair_attempted",
-            "repair_result", "reason", "repair_raw_text", "repaired_factors")} | {
+            "repair_result", "reason", "repair_raw_text", "repaired_factors", "correction")} | {
             "detail": failure.get("detail"),
             "raw_text": (failure.get("context") or {}).get("raw_text"),
             # 재질의가 실패했으면 그 이유(범위 위반·형식 오류·질문에 없음)를 남긴다.
@@ -923,6 +926,10 @@ def cmd_replay(args):
     return 0
 
 
+def _request_sha(messages):
+    return hashlib.sha256(json.dumps(messages, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+
+
 class _SequenceClient:
     """기록된 모델 응답(계획·재질의)을 순서대로 돌려준다. 모델을 부르지 않는다.
 
@@ -935,12 +942,17 @@ class _SequenceClient:
         self.calls = list(calls)
         self.model = model
         self.needs_live = False
+        #: 호출마다 요청이 기록과 같은지: "same" / "changed" / "unknown"(기록에 hash 없음).
+        self.request_match = []
 
     def chat(self, messages, tools=None, **kwargs):
         if not self.calls:
             self.needs_live = True
             raise RuntimeError("기록에 없는 모델 호출")
         call = self.calls.pop(0)
+        recorded = call.get("request_sha256")
+        self.request_match.append(
+            "unknown" if recorded is None else "same" if recorded == _request_sha(messages) else "changed")
         if call.get("failed"):
             raise RuntimeError(call.get("error") or "기록된 호출 실패")
         return {"message": {"content": call["content"]}, "done_reason": "stop", "replayed": True}
@@ -974,7 +986,9 @@ def cmd_rerun(args):
                      "vendor_verdict": row.get("vendor_verdict", "-"), "category": category,
                      "checks": checks, "reset_ok": row.get("reset_ok"),
                      "grounding_ok": grounding_ok, "grounding_diffs": grounding_diffs,
-                     "llm_calls": used, "needs_live": client.needs_live, **observed})
+                     "llm_calls": used, "needs_live": client.needs_live,
+                     # 요청이 기록과 다르면(재질의 문구·경로 변경) 이 행은 모델 성능이 아니라 기록 응답의 코드 처리다.
+                     "request_match": client.request_match, **observed})
     meta = dict(source["meta"])
     meta.update(_meta("llm", {}))
     meta.update({key: source["meta"].get(key) for key in (

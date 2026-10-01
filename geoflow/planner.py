@@ -32,13 +32,13 @@ from geoflow.factors import (
 )
 from geoflow.grounding import drop_unsupported_regions, parse_grounding
 from geoflow.operator_registry import OPERATORS
+from geoflow.correction_scope import describe_scope, kept_factors
 from geoflow.repair import (
     RepairDecision,
     RepairKind,
     RepairViolation,
     apply_patch,
     decide as decide_repair,
-    describe_resolution,
     parse_factor_patch,
     parse_patch,
     validate_factor_change,
@@ -103,6 +103,8 @@ class PlannerOutput:
     attempts: int = 1
     #: 예시 검색을 켰다면 이 질문에 붙인 예시 기록(``RetrievalResult.to_dict``). 끄면 None.
     retrieval: dict | None = None
+    #: factor 수정 재질의의 적용 기록(수정 범위, 적용·보존·막힌 변경, 결과 역할 전후). 그 밖에는 None.
+    repair_record: dict | None = None
 
     @property
     def concepts(self):
@@ -434,6 +436,7 @@ class GeoFlowPlanner:
                 code="REPAIR_UNSUPPORTED",
                 context={"raw_text": text, "repair_kind": decision.kind},
             )
+        patch = None
         try:
             if previous is not None:
                 patch = parse_patch(payload, previous.grounding, decision,
@@ -450,6 +453,11 @@ class GeoFlowPlanner:
                     {**draft.payload, "factors": corrected}, draft.condition_audit,
                     draft.raw_text, question,
                 )
+        except PlannerError as error:
+            # 적용한 수정이 grounding 계약에서 멈췄다. 무엇을 적용했는지 함께 남긴다.
+            if getattr(patch, "record", None) is not None:
+                error.context.setdefault("correction", patch.record)
+            raise
         except RepairViolation as violation:
             raise PlannerError(
                 f"재계획이 허용된 범위를 벗어났습니다: {violation}",
@@ -457,6 +465,7 @@ class GeoFlowPlanner:
                 context={
                     "raw_text": text,
                     "repair_kind": decision.kind,
+                    "correction": getattr(violation, "record", None),
                 },
             ) from violation
         return PlannerOutput(
@@ -465,6 +474,7 @@ class GeoFlowPlanner:
             model=self.model,
             duration_ms=_elapsed_ms(started_at),
             retrieval=self.retrieval_record(question),
+            repair_record=getattr(patch, "record", None),
         )
 
     def _ask(self, messages, question):
@@ -562,7 +572,7 @@ class GeoFlowPlanner:
                 normalize=self.normalize_grounding,
             )
         except PlannerError as error:
-            if decide_repair(error).repairable:
+            if decide_repair(error, factors=(payload or {}).get("factors") or {}).repairable:
                 error.draft = PlanningDraft(payload=payload, raw_text=text, condition_audit=audit)
             raise
         grounding.condition_audit = audit
@@ -576,7 +586,7 @@ class GeoFlowPlanner:
 _INSTRUCTION_FIELDS = (
     "concept", "name", "region", "message",
     "concepts", "qualifier", "qualifiers", "factor", "missing", "allowed",
-    "current", "options",
+    "current", "scope", "kept",
 )
 
 
@@ -595,7 +605,10 @@ def _instruction_values(decision, message, factors=None):
         # grounding prompt와 같은 metadata에서 만들므로 어긋날 수 없다.
         "allowed": describe_factor_semantics(editable),
         "current": json.dumps(current, ensure_ascii=False) if current else "{}",
-        "options": describe_resolution(decision) or "- 질문에 맞게 고칩니다.",
+        "scope": (describe_scope(decision.scope, factors or {}) if decision.scope is not None
+                  else "- " + ", ".join(editable)),
+        "kept": (json.dumps(kept_factors(decision.scope, factors or {}), ensure_ascii=False)
+                 if decision.scope is not None else "{}"),
         "name": "",
         "region": "",
         "message": message,

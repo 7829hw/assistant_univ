@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from geoflow import analysis_ops, calendar_terms, measures, operator_mapping
 from geoflow.aggregation import FLAT_KEYS, REDUCERS
 from geoflow.errors import CompositionError
-from geoflow.factors import STRUCTURAL_FACTORS, validate_factors
+from geoflow.factors import EXCLUSIVE_WITH_BUCKET, STRUCTURAL_FACTORS, validate_factors
 from geoflow.macros import MacroLibrary
 from geoflow.operator_mapping import OperatorBinding
 from geoflow.operator_registry import get_operator
@@ -91,7 +91,7 @@ NON_RESTRICTIVE_FACTORS = {"taxi_type": "all", "taxi_status": "all"}
 
 #: 구간별 집계와 함께 쓸 수 없는 factor. 공간 그룹과 시간 구간을 함께 나누는
 #: 계산은 schema가 정하지 않았고 mock은 거절한다. 지원된다고 가정하지 않는다.
-_GROUPED_EXCLUSIVE = ("dimension", "order", "limit")
+_GROUPED_EXCLUSIVE = EXCLUSIVE_WITH_BUCKET
 
 #: 사용자에게 보일 조건 이름.
 _FACTOR_LABELS = {

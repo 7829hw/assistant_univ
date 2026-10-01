@@ -27,7 +27,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from geoflow.aggregation import FLAT_KEYS as FLAT_AGGREGATION_KEYS
-from geoflow.factors import FACTOR_SPECS, RESULT_SHAPE_FACTORS, companions_for
+from geoflow.correction_scope import ScopeViolation, apply_correction, correction_scope
+from geoflow.factors import FACTOR_SPECS, companions_for
 from geoflow.operator_registry import OPERATORS
 
 
@@ -68,6 +69,8 @@ class RepairDecision:
     context: dict[str, Any] = field(default_factory=dict)
     #: factor 수정에서 바꾸거나 뺄 수 있는 factor. 이 밖의 factor와 개념은 그대로여야 한다.
     editable: tuple[str, ...] = ()
+    #: factor 수정의 factor별 허용 동작과 근거(``correction_scope.CorrectionScope``).
+    scope: Any = None
 
     def to_dict(self):
         return {
@@ -77,6 +80,7 @@ class RepairDecision:
             "targets": list(self.targets),
             "allowed_additions": list(self.allowed_additions),
             "editable": list(self.editable),
+            "scope": self.scope.to_dict() if self.scope is not None else None,
         }
 
 
@@ -85,10 +89,15 @@ NOT_REPAIRABLE = RepairDecision(
 )
 
 
-def decide(error):
+#: factor 수정 재질의로 다루는 계약 오류.
+FACTOR_CONTRACT_CODES = frozenset({"INVALID_FACTOR_COMBINATION", "INVALID_ANSWER_TARGET", "INVALID_FACTOR"})
+
+
+def decide(error, factors=None):
     """``GeoFlowError`` 하나를 보고 재질의 여부와 범위를 정한다.
 
-    근거는 오류 코드, 오류가 남긴 구조화 context, registry/factor 계약뿐이다.
+    근거는 오류 코드, 오류가 남긴 구조화 context, registry/factor 계약뿐이다. factor 계약 오류는 오류가 난 grounding의
+    factor(``factors``, 없으면 context의 ``factors``)에서 수정 범위를 정한다.
     """
     code = getattr(error, "code", None)
     context = dict(getattr(error, "context", None) or {})
@@ -96,16 +105,44 @@ def decide(error):
         return _decide_relation(context, ambiguous=False)
     if code == "AMBIGUOUS_LOCATION_RELATION":
         return _decide_relation(context, ambiguous=True)
-    if code == "INVALID_FACTOR_COMBINATION":
-        return _decide_factor(context)
-    if code == "INVALID_ANSWER_TARGET":
-        return _factor_correction(
-            ("answer", "rollup"), (), context,
-            reason="답 대상(구간)과 구간별 결과의 집계가 맞지 않습니다. 결과 형태 조건 안에서 고칩니다.",
-        )
-    if code == "INVALID_FACTOR":
-        return _decide_factor_value(context)
+    if code in FACTOR_CONTRACT_CODES:
+        if code == "INVALID_FACTOR_COMBINATION":
+            precheck = _decide_factor(context)
+            if not precheck.repairable:
+                return precheck
+        factors = factors if factors is not None else context.get("factors")
+        if factors is None:
+            return RepairDecision(
+                repairable=False,
+                reason="오류가 난 grounding의 조건이 없어 수정 범위를 정할 수 없습니다.",
+                context=context,
+            )
+        return _decide_factor_scope(context, factors)
     return NOT_REPAIRABLE
+
+
+def _decide_factor_scope(context, factors):
+    """현재 factor의 계약 위반을 모두 보고, 그것을 고치는 데 필요한 범위만 연다(``correction_scope``)."""
+    scope = correction_scope(factors)
+    if not scope.repairable:
+        return RepairDecision(
+            repairable=False,
+            reason=("재질의로 고치지 않는 조건입니다: " + ", ".join(scope.unrepairable)
+                    if scope.unrepairable else "고칠 계약 위반을 찾지 못했습니다."),
+            context=context,
+        )
+    issues = scope.issues
+    return RepairDecision(
+        repairable=True,
+        kind=RepairKind.FACTOR_CORRECTION,
+        reason="계약 위반을 고치는 데 필요한 조건만 수정 범위로 엽니다.",
+        targets=tuple(dict.fromkeys(issue["factor"] for issue in issues)),
+        allowed_additions=tuple(dict.fromkeys(
+            name for issue in issues for name in issue.get("missing") or ())),
+        editable=scope.editable,
+        context=context,
+        scope=scope,
+    )
 
 
 def _decide_relation(context, *, ambiguous):
@@ -182,62 +219,18 @@ def _decide_factor(context):
             ),
             context=context,
         )
-    return _factor_correction(
-        (factor,) if factor else (), missing, context,
-        reason="짝이 맞지 않는 조건이 결과 형태 factor 안에 있어, 그 안에서 채우거나 고치면 성립합니다.",
-    )
-
-
-def _decide_factor_value(context):
-    """허용되지 않은 factor 값. 결과 형태 factor와 시간대 형식만 고치게 한다.
-
-    날짜·택시 유형·운행 상태는 조건 계층이 질문의 명시 근거로 보존한다. 재질의가 그 값을 다시 정하면 조건
-    계층의 기록과 어긋나므로 여기서 다루지 않는다.
-    """
-    factor = context.get("factor")
-    if factor in RESULT_SHAPE_FACTORS:
-        return _factor_correction(
-            (factor,), (), context,
-            reason="허용되지 않은 값이 결과 형태 factor에 있어, 그 안에서 고치면 됩니다.",
-        )
-    if factor == "time":
-        return _factor_correction(
-            (factor,), (), context, editable=(factor,),
-            reason="시간대 형식이 계약과 다릅니다. 그 조건의 형식만 고칩니다.",
-        )
-    return RepairDecision(
-        repairable=False,
-        reason=f"재질의로 고치지 않는 조건입니다: {factor or '(알 수 없음)'}",
-        context=context,
-    )
-
-
-def _factor_correction(targets, missing, context, *, reason,
-                       editable=RESULT_SHAPE_FACTORS):
-    involved = set(targets) | set(missing)
-    if not involved <= set(editable):
-        return RepairDecision(
-            repairable=False,
-            reason="고칠 조건이 수정 범위 밖에 있습니다: "
-                   + ", ".join(sorted(involved - set(editable))),
-            context=context,
-        )
-    return RepairDecision(
-        repairable=True,
-        kind=RepairKind.FACTOR_CORRECTION,
-        reason=reason,
-        targets=tuple(targets),
-        allowed_additions=tuple(missing),
-        editable=tuple(editable),
-        context=context,
-    )
+    return RepairDecision(repairable=True, reason="짝 규칙에 있는 조건입니다.", context=context)
 
 
 # -- mutation guard ---------------------------------------------------------
 
 
 class RepairViolation(ValueError):
-    """재질의 결과가 허용 범위를 벗어났다."""
+    """재질의 결과가 허용 범위를 벗어났다. factor 수정이면 ``record``에 제안·적용·막힌 변경을 남긴다."""
+
+    def __init__(self, message, record=None):
+        super().__init__(message)
+        self.record = record
 
 
 def _concept_shape(concept):
@@ -425,12 +418,15 @@ class FactorCorrectionPatch:
 
     values: dict[str, Any]
     removed: tuple[str, ...] = ()
+    #: 수정 범위·적용·보존·막힌 변경·결과 역할 전후(``correction_scope.apply_correction``의 기록).
+    record: dict | None = None
 
     def to_dict(self):
         return {
             "kind": RepairKind.FACTOR_CORRECTION,
             "factors": dict(self.values),
             "removed": list(self.removed),
+            "record": self.record,
         }
 
     def apply_to(self, factors):
@@ -560,43 +556,36 @@ def _parse_relation_patch(payload, grounding, decision):
 
 
 def _parse_factor_patch(payload, factors, decision, *, full_set=True):
-    """``{"factors": {...}}``를 고친 뒤의 수정 범위 factor **전체**로 읽는다.
+    """``{"factors": {...}}``를 고친 뒤의 결과 형태로 읽고, 수정 범위 안의 변경만 적용한다.
 
-    수정 범위(``decision.editable``) 안에서 적지 않은(또는 null인) factor는 빠진다. 처음에는 바뀐 것만 적게 했는데,
-    모델은 고친 뒤의 조건 전체를 적으면서 잘못된 조건을 빠뜨리는 식으로 답했다(R 재생에서 범위 위반 7건 중 5건:
-    answer를 빼고 나머지를 되풀이). 요청 형식을 모델이 실제로 쓰는 형식에 맞춘다.
-    수정 범위 밖 factor는 적지 않아도 그대로 남고, 적었다면 지금 값과 같아야 한다.
+    모델은 고친 뒤의 조건 전체를 적는 일이 잦다(R 재생). 그 형식은 받지만, 적지 않은 조건을 지우는 것은 수정 범위
+    (``decision.scope``)가 그 조건의 삭제를 허용할 때뿐이다. 범위 밖 조건은 빠져도 남는다. 범위 밖 조건을 다른 값으로
+    적거나 새로 적으면 수정안 전체를 받지 않는다(``correction_scope``).
 
     ``full_set``이 거짓이면 적은 factor만 바꾼다(null은 삭제). 측정 당시 문구를 쓰는 고정 변형의 재현용이다.
     """
     raw = payload.get("factors")
     if not isinstance(raw, dict) or not raw:
         raise RepairViolation("factors는 비어 있지 않은 object여야 합니다.")
+    if full_set and decision.scope is not None:
+        try:
+            result, record = apply_correction(factors, raw, decision.scope)
+        except ScopeViolation as violation:
+            raise RepairViolation(str(violation), violation.record) from violation
+        removed = tuple(sorted(name for name in factors if name not in result))
+        values = {name: value for name, value in result.items()
+                  if name not in factors or factors[name] != value}
+        return FactorCorrectionPatch(values, removed, record)
     editable = set(decision.editable)
-    for name, value in raw.items():
-        if name in editable:
-            continue
-        present = name in factors
-        if value is None or value == "":
-            if present:
-                raise RepairViolation(
-                    f"이 재질의에서 뺄 수 없는 조건입니다: {name}. "
-                    f"(고칠 수 있는 조건: {', '.join(decision.editable)})"
-                )
-            continue
-        if name not in FACTOR_SPECS and not present:
-            raise RepairViolation(f"알 수 없는 조건입니다: {name}")
-        if not (present and _same_factor_value(name, value, factors[name])):
-            raise RepairViolation(
-                f"이 재질의에서 바꿀 수 없는 조건입니다: {name}. "
-                f"(고칠 수 있는 조건: {', '.join(decision.editable)})"
-            )
     values, removed = {}, []
-    for name in decision.editable:
-        if not full_set and name not in raw:
-            continue
-        value = raw.get(name)
+    for name, value in raw.items():
         present = name in factors
+        if name not in editable:
+            if (value is None or value == "") and not present:
+                continue
+            if not (present and _same_factor_value(name, value, factors[name])):
+                raise RepairViolation(f"이 재질의에서 바꿀 수 없는 조건입니다: {name}")
+            continue
         if value is None or value == "":
             if present:
                 removed.append(name)
@@ -607,28 +596,6 @@ def _parse_factor_patch(payload, factors, decision, *, full_set=True):
     if not values and not removed:
         raise RepairViolation("바뀐 조건이 없습니다.")
     return FactorCorrectionPatch(values, tuple(sorted(removed)))
-
-
-def describe_resolution(decision):
-    """오류를 푸는 계약상 방법. 오류의 구조화 context와 factor 계약에서만 만든다(질문은 보지 않는다).
-
-    어느 방법이 맞는지는 질문을 읽는 모델이 정한다. 코드는 방법의 목록과 수정 결과의 계약 준수만 맡는다.
-    """
-    context = decision.context or {}
-    lines = []
-    factor = context.get("factor")
-    missing = list(context.get("missing") or ())
-    if missing and factor:
-        needed = ", ".join(missing)
-        lines.append(f"- {factor}는 {needed}이(가) 있을 때만 쓸 수 있습니다. 질문에 {needed}에 해당하는 표현이 "
-                     f"있으면 채우고, 없으면 {factor}를 뺍니다.")
-    elif factor and "value" in context:
-        lines.append(f"- {factor}={context.get('value')!r}는 허용값이 아닙니다. 질문의 뜻에 맞는 허용값으로 바꿉니다. "
-                     f"그 뜻을 다른 조건으로 적어야 한다면 {factor}를 빼고 그 조건을 적습니다.")
-    elif "answer" in decision.targets:
-        lines.append("- answer=bucket(그 값을 가진 주·월)은 rollup이 max나 min일 때만 씁니다. 질문이 주·월 구간을 "
-                     "고르는 것이면 rollup을 max나 min으로, 아니면 answer를 뺍니다.")
-    return "\n".join(lines)
 
 
 def _same_factor_value(name, value, current):
