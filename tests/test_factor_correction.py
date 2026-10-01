@@ -228,14 +228,31 @@ class ApplyTest(unittest.TestCase):
             for before, invented in (("avg", "sum"), ("sum", "avg"), ("max", "min")):
                 base = {"bucket": bucket, "aggregation": before}
                 with self.subTest(bucket=bucket, before=before):
-                    self.assertEqual(blocked(base, {"bucket": bucket, "aggregation": invented,
-                                                    "rollup": before}), {"aggregation"})
+                    self.assertIn("aggregation", blocked(base, {"bucket": bucket, "aggregation": invented,
+                                                               "rollup": before}))
                     # 값을 버리고 다른 rollup을 적는 것도 집계를 만들어 낸 것이다.
                     self.assertEqual(blocked(base, {"bucket": bucket, "rollup": invented}), {"aggregation"})
         # 집계가 없던 grounding에 집계를 새로 적는 것도 받지 않는다(답 대상 오류를 고치는 중).
         base = {"bucket": "week", "rollup": "avg", "answer": "bucket"}
         self.assertEqual(blocked(base, {"bucket": "week", "rollup": "max", "answer": "bucket",
                                         "aggregation": "sum"}), {"aggregation"})
+
+    def test_copying_the_kept_aggregation_into_rollup_is_rejected(self):
+        """c08b·g44(9a37248 실측): rollup을 채우며 aggregation=avg를 남기고 같은 값을 복사했다. 옮기기는 된다."""
+        for bucket in ("week", "month"):
+            for value in ("avg", "max", "sum"):
+                base = {"bucket": bucket, "aggregation": value}
+                with self.subTest(bucket=bucket, value=value):
+                    self.assertEqual(blocked(base, {"bucket": bucket, "aggregation": value, "rollup": value}),
+                                     {"rollup"})
+                    self.assertEqual(blocked(base, {"bucket": bucket, "rollup": value}), set())
+
+    def test_integer_written_as_text_is_read_as_integer(self):
+        """k36(9a37248 실측): limit을 "1"로 적은 올바른 수정안. 형식만 맞춘다."""
+        base = {"bucket": "dayofweek", "aggregation": "min", "rollup": "max"}
+        result, _ = correct(base, {"dimension": "dayofweek", "aggregation": "min", "order": "top",
+                                   "limit": "1"})
+        self.assertEqual(result["limit"], 1)
 
     def test_out_of_scope_changes_and_additions_are_not_applied(self):
         """c10a: answer를 빼면서 계약에 없는 bucket=emd를 새로 적었다. 범위 밖 변경이 있으면 수정안 전체를 받지 않는다."""

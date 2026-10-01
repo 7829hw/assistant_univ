@@ -226,9 +226,17 @@ def roles(factors):
     }
 
 
+def _format(name, value):
+    """의미를 바꾸지 않는 형식 맞춤. 정수 factor를 숫자 문자열로 적은 것("1")만 정수로 읽는다(k36 기록)."""
+    spec = FACTOR_SPECS.get(name)
+    if spec is not None and spec.kind == "integer" and isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    return value
+
+
 def apply_correction(base, proposal, scope):
     """수정안(고친 뒤의 결과 형태 전체)을 범위 안에서만 적용한다. (결과 factor, 기록)을 돌려준다."""
-    proposal = dict(proposal or {})
+    proposal = {name: _format(name, value) for name, value in dict(proposal or {}).items()}
     result = dict(base)
     shape = RESULT_SHAPE_FACTORS + ("time",)
     record = {"scope": scope.to_dict(), "applied": {"added": {}, "changed": {}, "removed": {}},
@@ -289,6 +297,11 @@ def apply_correction(base, proposal, scope):
     if "rollup" in removed and REMOVE not in scope.permissions.get("rollup", ()):
         if result.get("aggregation") != removed["rollup"]:
             block("rollup", "rollup 값을 aggregation으로 옮기지 않고 버렸습니다")
+    if ("rollup" in added and "aggregation" in base and result.get("aggregation") == base["aggregation"]
+            and added["rollup"] == base["aggregation"]):
+        # 빠진 단계를 채우면서 남아 있는 단계의 값을 그대로 복사했다. 한 집계 표현을 두 단계에 쓴 것이다(c08b·g44).
+        # 그 값이 구간별 결과의 집계라면 옮기기(aggregation을 빼고 rollup에 적기)로 적는다.
+        block("rollup", "구간 안 집계 값을 rollup에 복사했습니다(한 집계 표현을 두 단계에 씀)")
 
     def exclusive(factors):
         # 허용값이 아닌 bucket(예: dayofweek)은 아직 구간이 아니다. 성립하는 구간과의 충돌만 센다.
