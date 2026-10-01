@@ -1,0 +1,159 @@
+# evaluation/grounding_v7/stage_contrast_questions.yaml
+#
+# 집계 단계·답 대상·순위 역할 대조 사례(개발용). 한 group 안의 문장은 집계어 하나, 답 대상, 순위 방향만 다르다.
+#
+# - 작성: Claude(주 에이전트, 복구 정책을 고치는 쪽). 사람 검토 없음. 업체 정답이 아니다.
+# - 기대 결과는 실측 전에 고정했다(grounding_v7/preregistration.md). 결과를 본 뒤 고치면 독립 평가라고 하지 않는다.
+# - 구간 선택(어느 주·달) 문항은 grounding이 유효해도 TIMS legacy에서 실행 계약이 없어 unsupported
+#   (UNVERIFIED_TIMS_CONTRACT)가 기대 결과다. 이것은 provider 한계이며 grounding 오류가 아니다.
+# - 구간 안 집계가 없는 문항은 needs_clarification. 확인 요청 코드는 구간 안 집계 미지정
+#   (AMBIGUOUS_INNER_AGGREGATION)과 집계 단계 미확정(AMBIGUOUS_AGGREGATION_STAGE)을 모두 정당한 이유로 본다.
+# - 기준일 2026-09-25. 장소는 mock gazetteer에 있는 이름.
+
+version: grounding_v7_stage_contrast
+status: development
+items:
+  # S1. 두 단계에 같은 집계 / 한 단계만
+  - id: s01a
+    group: S1
+    contrast: "두 단계 모두 최댓값"
+    question: "지난달 대구 소속 택시의 주별 수입 최댓값 중 가장 큰 값은?"
+    gold_text: |-
+      get_place_scope(name=대구)
+      get_billing_metrics(metric=revenue, scope=$resolve.scope, date=last_month, bucket=week, aggregation=max, rollup=max)
+  - id: s01b
+    group: S1
+    contrast: "구간별 결과의 최댓값만(구간 안 집계 없음)"
+    question: "지난달 대구 소속 택시의 주별 수입 중 가장 큰 값은?"
+    expected_outcome: needs_clarification
+    expected_error: [AMBIGUOUS_INNER_AGGREGATION, AMBIGUOUS_AGGREGATION_STAGE]
+    why: "각 주 안에서 합할지 평균할지가 없다"
+    gold_grounding:
+      concepts:
+        - {id: place, concept: LOCATION, subtype: place, role: SUBCOND, source: user, value: {name: 대구, region: ""}}
+        - {id: event, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: measure, concept: AMOUNT, subtype: revenue, role: MEASURE, source: implicit}
+      factors: {date: last_month, bucket: week, rollup: max}
+  - id: s01c
+    group: S1
+    contrast: "두 단계 모두 평균"
+    question: "지난해 부산 소속 택시의 월별 평균 수입의 평균은?"
+    gold_text: |-
+      get_place_scope(name=부산)
+      get_billing_metrics(metric=revenue, scope=$resolve.scope, date=last_year, bucket=month, aggregation=avg, rollup=avg)
+  - id: s01d
+    group: S1
+    contrast: "구간별 결과의 평균만"
+    question: "지난해 부산 소속 택시의 월별 수입의 평균은?"
+    expected_outcome: needs_clarification
+    expected_error: [AMBIGUOUS_INNER_AGGREGATION, AMBIGUOUS_AGGREGATION_STAGE]
+    why: "각 달 안에서 합할지 평균할지가 없다"
+    gold_grounding:
+      concepts:
+        - {id: place, concept: LOCATION, subtype: place, role: SUBCOND, source: user, value: {name: 부산, region: ""}}
+        - {id: event, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: measure, concept: AMOUNT, subtype: revenue, role: MEASURE, source: implicit}
+      factors: {date: last_year, bucket: month, rollup: avg}
+
+  # S2. 집계 단계 배치(구간 안 집계가 있는 경우) / 미지정
+  - id: s02a
+    group: S2
+    contrast: "구간 안 합계 + 구간별 평균"
+    question: "지난해 부산 소속 택시의 월별 수입 합계의 평균은?"
+    gold_text: |-
+      get_place_scope(name=부산)
+      get_billing_metrics(metric=revenue, scope=$resolve.scope, date=last_year, bucket=month, aggregation=sum, rollup=avg)
+  - id: s02b
+    group: S2
+    contrast: "구간 안 합계 + 구간별 최솟값"
+    question: "이번 달 대구 소속 개인택시의 주별 운행 일수 합계 중 가장 작은 값은?"
+    gold_text: |-
+      get_place_scope(name=대구)
+      get_billing_metrics(metric=operating_days, scope=$resolve.scope, date=this_month, taxi_type=private, bucket=week, aggregation=sum, rollup=min)
+  - id: s02c
+    group: S2
+    contrast: "구간 안 집계 없음"
+    question: "이번 달 대구 소속 개인택시의 주별 운행 일수 중 가장 작은 값은?"
+    expected_outcome: needs_clarification
+    expected_error: [AMBIGUOUS_INNER_AGGREGATION, AMBIGUOUS_AGGREGATION_STAGE]
+    why: "각 주 안에서 합할지 평균할지가 없다"
+    gold_grounding:
+      concepts:
+        - {id: place, concept: LOCATION, subtype: place, role: SUBCOND, source: user, value: {name: 대구, region: ""}}
+        - {id: event, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: measure, concept: AMOUNT, subtype: operating_days, role: MEASURE, source: implicit}
+      factors: {date: this_month, taxi_type: private, bucket: week, rollup: min}
+
+  # S3. 값 / 그 값을 가진 구간
+  - id: s03a
+    group: S3
+    contrast: "구간별 합계 중 최댓값(값)"
+    question: "지난해 대구 소속 법인택시의 월별 수입 합계 중 가장 큰 값은?"
+    gold_text: |-
+      get_place_scope(name=대구)
+      get_billing_metrics(metric=revenue, scope=$resolve.scope, date=last_year, taxi_type=corporate, bucket=month, aggregation=sum, rollup=max)
+  - id: s03b
+    group: S3
+    contrast: "그 최댓값을 가진 달(구간)"
+    question: "지난해 대구 소속 법인택시의 월별 수입 합계가 가장 큰 달은?"
+    expected_outcome: unsupported
+    expected_error: UNVERIFIED_TIMS_CONTRACT
+    why: "뜻은 명확하다(month, sum, 구간 선택 max). TIMS legacy에서 실행할 수 없다(provider 한계)"
+    gold_grounding:
+      concepts:
+        - {id: place, concept: LOCATION, subtype: place, role: SUBCOND, source: user, value: {name: 대구, region: ""}}
+        - {id: event, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: measure, concept: AMOUNT, subtype: revenue, role: MEASURE, source: implicit}
+      factors: {date: last_year, taxi_type: corporate, bucket: month, aggregation: sum, select: max}
+  - id: s03c
+    group: S3
+    contrast: "구간별 평균 중 최솟값(값)"
+    question: "지난달 부산 소속 택시의 주별 평균 가동률 중 가장 낮은 값은?"
+    gold_text: |-
+      get_place_scope(name=부산)
+      get_billing_metrics(metric=active_taxi_ratio, scope=$resolve.scope, date=last_month, bucket=week, aggregation=avg, rollup=min)
+  - id: s03d
+    group: S3
+    contrast: "그 최솟값을 가진 주(구간)"
+    question: "지난달 부산 소속 택시의 주별 평균 가동률이 가장 낮은 주는 언제야?"
+    expected_outcome: unsupported
+    expected_error: UNVERIFIED_TIMS_CONTRACT
+    why: "뜻은 명확하다(week, avg, 구간 선택 min). TIMS legacy에서 실행할 수 없다(provider 한계)"
+    gold_grounding:
+      concepts:
+        - {id: place, concept: LOCATION, subtype: place, role: SUBCOND, source: user, value: {name: 부산, region: ""}}
+        - {id: event, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+        - {id: measure, concept: PROPORTION, subtype: active_taxi_ratio, role: MEASURE, source: implicit}
+      factors: {date: last_month, bucket: week, aggregation: avg, select: min}
+
+  # S4. 그룹을 고르는 순위(역할 이동 대상)
+  - id: s04a
+    group: S4
+    contrast: "요일 순위, 가장 높은 하나"
+    question: "지난달 요일별 법인택시 평균 수입이 가장 높은 요일은?"
+    gold_text: |-
+      get_billing_metrics(metric=revenue, date=last_month, taxi_type=corporate, aggregation=avg, dimension=dayofweek, order=top, limit=1)
+  - id: s04b
+    group: S4
+    contrast: "요일 순위, 가장 낮은 하나"
+    question: "올해 요일별 개인택시 평균 가동률이 가장 낮은 요일은?"
+    gold_text: |-
+      get_billing_metrics(metric=active_taxi_ratio, date=this_year, taxi_type=private, aggregation=avg, dimension=dayofweek, order=bottom, limit=1)
+  - id: s04c
+    group: S4
+    contrast: "시도 순위, 가장 적은 두 곳"
+    question: "지난달 시도별 개인택시 수입 합계가 가장 적은 두 곳은?"
+    gold_text: |-
+      get_billing_metrics(metric=revenue, date=last_month, taxi_type=private, aggregation=sum, dimension=sido, order=bottom, limit=2)
+  - id: s04d
+    group: S4
+    contrast: "시도 순위, 그룹 안 최댓값의 최솟값"
+    question: "지난달 시도마다 법인택시 하루 수입의 최댓값을 구했을 때 그 값이 가장 낮은 시도는?"
+    gold_text: |-
+      get_billing_metrics(metric=revenue, date=last_month, taxi_type=corporate, aggregation=max, dimension=sido, order=bottom, limit=1)
+  - id: s04e
+    group: S4
+    contrast: "요일 순위, 그룹 안 최솟값의 최댓값"
+    question: "올해 요일별로 택시 하루 수입의 최솟값을 구하면 그 값이 가장 큰 요일은?"
+    gold_text: |-
+      get_billing_metrics(metric=revenue, date=this_year, aggregation=min, dimension=dayofweek, order=top, limit=1)

@@ -134,6 +134,9 @@ def failure_of(concepts, factors=None, question="테스트 질문"):
 
 
 OD_QUESTION = "동성로에서 출발하여 신천동에 도착한 실차 구간 건수는?"
+#: factor 수정안이 새 rollup 값을 적을 때 근거 표현("평균")이 있는 질문.
+WEEKLY_AVG_QUESTION = "주 단위로 나눈 수입의 평균은?"
+AVG_EVIDENCE = {"rollup": "평균"}
 TRIP_CONCEPTS = [event("e", "trip"), measure("m", "AMOUNT", "trip_count")]
 
 
@@ -369,7 +372,7 @@ class RepairPatchSchemaTest(unittest.TestCase):
         self.factor_decision = decide(self.factor_error)
         self.factor_before = ground(
             [event("e", "operation"), measure("m", "AMOUNT", "revenue")],
-            {"bucket": "week"},
+            {"bucket": "week"}, question=WEEKLY_AVG_QUESTION,
         )
 
     def _relation(self, payload_dict):
@@ -436,8 +439,9 @@ class RepairPatchSchemaTest(unittest.TestCase):
     # -- factor -----------------------------------------------------------
 
     def test_factor_patch_is_accepted(self):
-        patch = self._factor(factor_patch(bucket="week", rollup="avg"))
+        patch = self._factor({**factor_patch(bucket="week", rollup="avg"), "evidence": AVG_EVIDENCE})
         self.assertEqual(patch.values, {"rollup": "avg"})
+        self.assertEqual(patch.record["evidence_check"]["unverified"], [])
 
     def test_record_filter_in_the_patch_is_rejected(self):
         with self.assertRaises(RepairViolation) as caught:
@@ -446,16 +450,16 @@ class RepairPatchSchemaTest(unittest.TestCase):
 
     def test_echoed_values_are_not_changes(self):
         """그대로인 조건을 되풀이해 적는 것은 수정이 아니다(실측에서 흔했다)."""
-        patch = self._factor({"factors": {"bucket": "week", "rollup": "avg"}})
+        patch = self._factor({"factors": {"bucket": "week", "rollup": "avg"}, "evidence": AVG_EVIDENCE})
         self.assertEqual((patch.values, patch.removed), ({"rollup": "avg"}, ()))
 
     def test_null_removes_an_opened_factor(self):
         """뺄 수 있게 연 factor(bucket에 기대는 answer)는 null로 뺀다."""
         concepts = [event("e", "operation"), measure("m", "AMOUNT", "revenue")]
-        before = ground(concepts, {"bucket": "week", "answer": "bucket"})
+        before = ground(concepts, {"bucket": "week", "answer": "bucket"}, question="주별 수입이 가장 큰 값은?")
         decision = decide(failure_of(concepts, {"bucket": "week", "answer": "bucket"}))
-        patch = parse_patch({"factors": {"bucket": "week", "rollup": "max", "answer": None}},
-                            before, decision)
+        patch = parse_patch({"factors": {"bucket": "week", "rollup": "max", "answer": None},
+                             "evidence": {"rollup": "가장 큰"}}, before, decision)
         self.assertEqual((patch.values, patch.removed), ({"rollup": "max"}, ("answer",)))
 
     def test_removing_the_only_grouping_is_rejected(self):
@@ -542,14 +546,14 @@ class RepairPatchApplyTest(unittest.TestCase):
         """수정안은 결과 형태 조건 전체다. 택시 유형처럼 범위 밖 조건은 적지 않아도 그대로 남는다."""
         before = ground(
             [event("e", "operation"), measure("m", "AMOUNT", "revenue")],
-            {"bucket": "week", "taxi_type": "private"},
+            {"bucket": "week", "taxi_type": "private"}, question=WEEKLY_AVG_QUESTION,
         )
         decision = decide(failure_of(
             [event("e", "operation"), measure("m", "AMOUNT", "revenue")],
             {"bucket": "week", "taxi_type": "private"},
         ))
         after = apply_patch(before, parse_patch(
-            factor_patch(bucket="week", rollup="avg"), before, decision,
+            {**factor_patch(bucket="week", rollup="avg"), "evidence": AVG_EVIDENCE}, before, decision,
         ))
         self.assertEqual(after.factors, {
             "bucket": "week", "taxi_type": "private", "rollup": "avg",
@@ -595,7 +599,8 @@ class FactorCompletionReproducerTest(unittest.TestCase):
     def test_bucket_only_is_repaired_by_a_factor_patch(self):
         pipeline, client = new_pipeline([
             payload(self.CONCEPTS, self.FACTORS),
-            factor_patch(bucket="month", aggregation="sum", rollup="max"),
+            {**factor_patch(bucket="month", aggregation="sum", rollup="max"),
+             "evidence": {"rollup": "최대값"}},
         ])
         run = pipeline.run(self.QUESTION)
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)
@@ -625,7 +630,8 @@ class FactorCompletionReproducerTest(unittest.TestCase):
         """
         pipeline, _client = new_pipeline([
             payload(self.CONCEPTS, self.FACTORS),
-            factor_patch(bucket="month", aggregation="sum", rollup="month"),
+            {**factor_patch(bucket="month", aggregation="sum", rollup="month"),
+             "evidence": {"rollup": "최대값"}},
         ])
         run = pipeline.run(self.QUESTION)
         self.assertIsNotNone(run.runtime_error)
@@ -676,7 +682,8 @@ class PlanningRepairPipelineTest(unittest.TestCase):
                      measure("m", "AMOUNT", "revenue")],
                     {"bucket": "week", "aggregation": "sum",
                      "date": "20260801-20260831"}),
-            factor_patch(bucket="week", aggregation="sum", rollup="avg"),
+            {**factor_patch(bucket="week", aggregation="sum", rollup="avg"),
+             "evidence": {"rollup": "평균"}},
         ])
         run = pipeline.run("2026년 8월 주 단위로 합산한 택시 수입의 평균은?")
         self.assertEqual(run.stage, Stage.DONE, run.runtime_error)

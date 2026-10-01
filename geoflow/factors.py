@@ -369,6 +369,37 @@ def missing_companions(factors, factor):
     return tuple(name for name in companions_for(factor) if name not in factors)
 
 
+#: answer=bucket이 고를 수 있는 구간 선택 방향.
+ANSWER_SELECTIONS = (None, "max", "min")
+
+
+def contract_issues(factors):
+    """factor 계약 위반 전부: 허용되지 않은 값, 답 대상과 구간 선택이 맞지 않음, 빠진 짝.
+
+    검증(``validate_factors``)과 factor 수정 재질의의 수정 범위(``correction_scope``)가 같은 정의를 쓴다. 검증은 첫
+    위반에서 멈추지만 수정 범위는 얽힌 위반(예: 요일 순위에 answer=bucket과 rollup=min이 함께 bucket 없이 있음)을
+    함께 본다. 이름 순서대로 돌려준다.
+    """
+    issues = []
+    for name in sorted(factors):
+        spec = FACTOR_SPECS.get(name)
+        if spec is None:
+            continue
+        try:
+            spec.coerce(factors[name])
+        except PlannerError:
+            issues.append({"kind": "invalid_value", "factor": name, "value": factors[name]})
+    if factors.get("answer") == "bucket" and factors.get("rollup") not in ANSWER_SELECTIONS:
+        issues.append({"kind": "answer_target", "factor": "answer", "rollup": factors.get("rollup")})
+    for name in sorted(factors):
+        if name not in FACTOR_SPECS:
+            continue
+        missing = list(missing_companions(factors, name))
+        if missing:
+            issues.append({"kind": "missing_companion", "factor": name, "missing": missing})
+    return issues
+
+
 def validate_factors(factors, *, raw_text=""):
     """grounding이 읽어 낸 조건이 그 자체로 성립하는지 확인한다.
 
@@ -376,18 +407,20 @@ def validate_factors(factors, *, raw_text=""):
     operator가 이 조건을 소비할지와 무관하게 참이어야 하기 때문이다.
     Validator G4가 같은 종류의 검사를 operator 기준으로 한 번 더 수행하며,
     그쪽은 계획이 어떤 경로로 만들어졌든 적용되는 마지막 방어선이다.
+    값 형식은 grounding 계약(``FactorSpec.coerce``)이 먼저 본다. 여기서는 답 대상과 짝을 본다.
     """
-    if factors.get("answer") == "bucket" and factors.get("rollup") not in (None, "max", "min"):
-        raise PlannerError(
-            "구간을 답으로 고르려면 rollup이 max(가장 큰 구간)나 min(가장 작은 구간)이어야 합니다.",
-            user_message="어떤 구간을 고를지(가장 큰/작은) 질문에서 정하지 못했습니다.",
-            code="INVALID_ANSWER_TARGET",
-            context={"raw_text": raw_text, "present": sorted(factors), "factors": dict(factors)},
-        )
-    for name in sorted(factors):
-        missing = missing_companions(factors, name)
-        if not missing:
+    for issue in contract_issues(factors):
+        if issue["kind"] == "answer_target":
+            raise PlannerError(
+                "구간을 답으로 고르려면 rollup이 max(가장 큰 구간)나 min(가장 작은 구간)이어야 합니다.",
+                user_message="어떤 구간을 고를지(가장 큰/작은) 질문에서 정하지 못했습니다.",
+                code="INVALID_ANSWER_TARGET",
+                context={"raw_text": raw_text, "present": sorted(factors), "factors": dict(factors)},
+            )
+    for issue in contract_issues(factors):
+        if issue["kind"] != "missing_companion":
             continue
+        name, missing = issue["factor"], tuple(issue["missing"])
         reason = companion_reason(name, missing)
         raise PlannerError(
             f"{name} 조건을 쓰려면 {', '.join(missing)} 조건도 함께 "

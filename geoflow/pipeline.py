@@ -639,6 +639,21 @@ def _unresolved(error, decision, record):
     밖이다. 그 밖의 재질의 실패(범위 위반, 형식 오류)는 최초 오류를 그대로 보고한다.
     """
     repair_error = record.get("repair_error") or {}
+    terminal = (record.get("correction") or {}).get("terminal")
+    if terminal and decision.kind == RepairKind.FACTOR_CORRECTION:
+        # 계약 안의 수정이지만 새 집계 값을 질문에서 확인하지 못했다. 실행하지 않고 그 단계를 확인받는다.
+        stages = terminal.get("unverified_stages") or []
+        names = {"aggregation": "각 구간 안에서 값을 모으는 방법", "rollup": "구간별 결과를 모으는 방법"}
+        clarified = PlannerError(
+            terminal.get("reason") or "집계 단계를 확정하지 못했습니다.",
+            user_message=("질문에서 " + "·".join(names.get(stage, stage) for stage in stages)
+                          + "을(를) 확정하지 못했습니다. 예: '주별 매출 합계의 평균'처럼 적어 주세요."),
+            code=terminal.get("code") or "AMBIGUOUS_AGGREGATION_STAGE",
+            context={"needs_clarification": True, "clarify": stages, "from": error.code,
+                     "reason": "repair_stage_value_unverified"},
+        )
+        clarified.stage = error.stage
+        return clarified
     if (repair_error.get("code") != "REPAIR_UNSUPPORTED"
             or decision.kind != RepairKind.FACTOR_CORRECTION):
         return error

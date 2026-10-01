@@ -445,7 +445,7 @@ class GeoFlowPlanner:
                 validate_repair_delta(previous.grounding, repaired, decision)
             else:
                 patch = parse_factor_patch(payload, base_factors, decision,
-                                           full_set=self.factor_patch_full_set)
+                                           full_set=self.factor_patch_full_set, question=question)
                 corrected = patch.apply_to(base_factors)
                 validate_factor_change(base_factors, corrected, decision)
                 # 수정 결과도 grounding 계약을 처음부터 다시 통과한다.

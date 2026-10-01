@@ -97,11 +97,28 @@ def correct(base, proposal):
     return apply_correction(base, proposal, correction_scope(base))
 
 
-def blocked(base, proposal):
+def outcome(base, proposal, question="", evidence=None):
+    """("applied", 결과) / ("blocked", 막힌 factor) / ("unverified", 확인 못 한 단계) / ("no change", None)."""
     try:
-        correct(base, proposal)
+        result, _ = apply_correction(base, proposal, correction_scope(base), question=question,
+                                     evidence=evidence)
     except ScopeViolation as violation:
-        return {item["factor"] for item in violation.record["blocked"]} or {"(no change)"}
+        if violation.record["blocked"]:
+            return "blocked", {item["factor"] for item in violation.record["blocked"]}
+        if violation.record.get("terminal"):
+            return "unverified", violation.record["terminal"]["unverified_stages"]
+        return "no change", None
+    return "applied", result
+
+
+def blocked(base, proposal, question="", evidence=None):
+    kind, detail = outcome(base, proposal, question, evidence)
+    if kind == "blocked":
+        return detail
+    if kind == "no change":
+        return {"(no change)"}
+    if kind == "unverified":
+        return {"(unverified)"}
     return set()
 
 
@@ -222,30 +239,71 @@ class ApplyTest(unittest.TestCase):
                     self.assertEqual(blocked(base, {"dimension": grouping, "aggregation": "avg",
                                                     "order": direction, "limit": 1}), set())
 
-    def test_inventing_or_changing_an_aggregation_is_rejected(self):
-        """g44: rollup을 채우면서 aggregation을 avg → sum으로 바꿨다. 집계 값은 옮길 수만 있고 새로 만들 수 없다."""
-        for bucket in ("week", "month"):
-            for before, invented in (("avg", "sum"), ("sum", "avg"), ("max", "min")):
-                base = {"bucket": bucket, "aggregation": before}
-                with self.subTest(bucket=bucket, before=before):
-                    self.assertIn("aggregation", blocked(base, {"bucket": bucket, "aggregation": invented,
-                                                               "rollup": before}))
-                    # 값을 버리고 다른 rollup을 적는 것도 집계를 만들어 낸 것이다.
-                    self.assertEqual(blocked(base, {"bucket": bucket, "rollup": invented}), {"aggregation"})
-        # 집계가 없던 grounding에 집계를 새로 적는 것도 받지 않는다(답 대상 오류를 고치는 중).
-        base = {"bucket": "week", "rollup": "avg", "answer": "bucket"}
-        self.assertEqual(blocked(base, {"bucket": "week", "rollup": "max", "answer": "bucket",
-                                        "aggregation": "sum"}), {"aggregation"})
+    def test_new_aggregation_values_need_evidence_found_in_the_question(self):
+        """g44: rollup을 채우며 aggregation을 avg → sum으로 바꿨다. 새 집계 값은 근거 표현이 질문에 있어야 한다.
 
-    def test_copying_the_kept_aggregation_into_rollup_is_rejected(self):
-        """c08b·g44(9a37248 실측): rollup을 채우며 aggregation=avg를 남기고 같은 값을 복사했다. 옮기기는 된다."""
-        for bucket in ("week", "month"):
-            for value in ("avg", "max", "sum"):
-                base = {"bucket": bucket, "aggregation": value}
-                with self.subTest(bucket=bucket, value=value):
-                    self.assertEqual(blocked(base, {"bucket": bucket, "aggregation": value, "rollup": value}),
-                                     {"rollup"})
-                    self.assertEqual(blocked(base, {"bucket": bucket, "rollup": value}), set())
+        근거가 없으면 막지 않고(정당한 질문일 수 있다) 실행하지도 않는다. 확정하지 못한 단계를 확인받는다.
+        근거 문자열이 있으면 적용한다. 그 표현이 그 집계를 뜻하는지는 코드가 확인하지 않는다(기록에 남긴다).
+        """
+        base = {"bucket": "week", "aggregation": "avg"}
+        proposal = {"bucket": "week", "aggregation": "sum", "rollup": "avg"}
+        g44 = "지난달 주별 개인택시 수입의 평균은?"
+        self.assertEqual(outcome(base, proposal, g44), ("unverified", ["aggregation"]))
+        self.assertEqual(outcome(base, proposal, g44, {"aggregation": "합계"}), ("unverified", ["aggregation"]))
+        # 같은 구조, 질문에 구간 안 집계 표현이 있는 경우(집계 단계를 잘못 배치한 첫 응답).
+        misplaced = "지난달 주별 개인택시 수입 합계의 평균은?"
+        kind, result = outcome(base, proposal, misplaced, {"aggregation": "합계"})
+        self.assertEqual((kind, result["aggregation"], result["rollup"]), ("applied", "sum", "avg"))
+
+    def test_same_aggregation_in_both_stages_needs_two_separate_places(self):
+        """두 단계에 같은 집계를 적으면 질문의 겹치지 않는 두 자리에 근거가 있어야 한다(값이 같다는 것만으로 막지 않는다)."""
+        base = {"bucket": "week", "aggregation": "max"}
+        copy = {"bucket": "week", "aggregation": "max", "rollup": "max"}
+        twice = "지난달 주별 최댓값 중 최댓값은?"
+        self.assertEqual(outcome(base, copy, twice, {"aggregation": "최댓값", "rollup": "최댓값"})[0], "applied")
+        self.assertEqual(outcome(base, copy, twice, {"aggregation": "주별 최댓값", "rollup": "중 최댓값"})[0],
+                         "applied")
+        once = "지난달 주별 수입 중 최댓값은?"
+        self.assertEqual(outcome(base, copy, once, {"aggregation": "최댓값", "rollup": "최댓값"}),
+                         ("unverified", ["aggregation", "rollup"]))
+        self.assertEqual(outcome(base, copy, twice), ("unverified", ["aggregation", "rollup"]))
+        # 같은 구조의 다른 조합.
+        for bucket, value, question, word in (("month", "avg", "월별 평균 매출의 평균은?", "평균"),
+                                              ("week", "sum", "주별 합계의 합계는?", "합계")):
+            with self.subTest(bucket=bucket, value=value):
+                self.assertEqual(outcome({"bucket": bucket, "aggregation": value},
+                                         {"bucket": bucket, "aggregation": value, "rollup": value}, question,
+                                         {"aggregation": word, "rollup": word})[0], "applied")
+                self.assertEqual(outcome({"bucket": bucket, "aggregation": value},
+                                         {"bucket": bucket, "aggregation": value, "rollup": value},
+                                         question.replace(word, "", 1), {"aggregation": word, "rollup": word})[0],
+                                 "unverified")
+
+    def test_moving_a_value_between_stages_needs_no_evidence_but_dropping_it_is_blocked(self):
+        base = {"bucket": "month", "aggregation": "avg"}
+        self.assertEqual(outcome(base, {"bucket": "month", "rollup": "avg"})[0], "applied")
+        # 값을 옮기지 않고 다른 rollup을 적으면 원래 값을 버린 것이다.
+        self.assertIn("aggregation", blocked(base, {"bucket": "month", "rollup": "max"}, "월별 최대",
+                                             {"rollup": "최대"}))
+
+    def test_answer_target_reselect_keeps_the_old_value(self):
+        """answer=bucket에 rollup=avg: 구간을 고르는 질문이면 avg를 aggregation으로 옮기고 rollup을 max·min으로 다시 고른다."""
+        base = {"bucket": "week", "rollup": "avg", "answer": "bucket"}
+        question = "지난달 주별 평균 수입이 가장 큰 주는?"
+        reselect = {"bucket": "week", "aggregation": "avg", "rollup": "max", "answer": "bucket"}
+        self.assertEqual(outcome(base, reselect, question, {"rollup": "가장 큰"})[0], "applied")
+        self.assertEqual(outcome(base, reselect, question), ("unverified", ["rollup"]))
+        # 원래 avg를 버리고 방향만 고르면 막는다.
+        self.assertIn("rollup", blocked(base, {"bucket": "week", "rollup": "max", "answer": "bucket"}, question,
+                                        {"rollup": "가장 큰"}))
+        # 값을 묻는 질문이면 answer를 뺀다(avg는 그대로).
+        kind, result = outcome(base, {"bucket": "week", "rollup": "avg"})
+        self.assertEqual((kind, result.get("answer"), result["rollup"]), ("applied", None, "avg"))
+
+    def test_answer_target_with_inner_aggregation_opens_only_answer_removal(self):
+        """aggregation이 이미 있으면 rollup을 다시 고를 때 원래 값을 보존할 자리가 없다. answer 빼기만 연다."""
+        base = {"bucket": "week", "aggregation": "sum", "rollup": "avg", "answer": "bucket"}
+        self.assertEqual(permissions(base), {"answer": {REMOVE}})
 
     def test_integer_written_as_text_is_read_as_integer(self):
         """k36(9a37248 실측): limit을 "1"로 적은 올바른 수정안. 형식만 맞춘다."""
@@ -399,6 +457,124 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual((result.outcome, result.error["code"]), (OUTCOME_UNSUPPORTED, "UNSUPPORTED_QUESTION"))
 
 
+def run_on(provider, question, *responses):
+    """TIMS legacy(mock) 또는 reference provider에서 실행한다. grounding 계약과 provider 실행 가능성을 따로 보기 위한 것이다."""
+    from build import build
+    from tool_executor import ToolExecutor
+    from tool_handlers import get_tool_handlers
+
+    client = ScriptedClient(responses)
+    if provider == providers.REFERENCE:
+        tools, _ = build()
+        executor = ToolExecutor(tools=tools, handlers=get_tool_handlers(providers.REFERENCE),
+                                provider=providers.REFERENCE)
+        profile = providers.profile_for(providers.REFERENCE)
+    else:
+        executor, profile = _executor(), providers.profile_for(providers.MOCK, providers.LEGACY)
+    pipeline = GeoFlowPipeline.create(client=client, tool_executor=executor, clock=lambda: REFERENCE_DATE,
+                                      condition_check=True, condition_notes=False, execution_profile=profile)
+    return pipeline.run(question), client
+
+
+class ExpressionAndRecoveryTest(unittest.TestCase):
+    """정상 표현 능력(첫 grounding이 바로 맞음)과 계약 오류 초안의 정당한 복구를 함께 본다. 허용해야 할 것이 통과하는지도 본다."""
+
+    TWICE = "지난달 주별 수입 최댓값 중 최댓값은?"
+    ONCE = "지난달 주별 수입 중 최댓값은?"
+
+    def test_same_aggregation_in_both_stages_is_expressible_directly(self):
+        result, client = run(self.TWICE, plan({"date": "last_month", "bucket": "week",
+                                               "aggregation": "max", "rollup": "max"}))
+        self.assertEqual(result.outcome, OUTCOME_ANSWERED, result.runtime_error)
+        self.assertEqual(len(client.calls), 1)
+
+    def test_same_aggregation_in_both_stages_recovers_from_a_draft_with_evidence(self):
+        draft = plan({"date": "last_month", "bucket": "week", "aggregation": "max"})
+        fix = {"factors": {"bucket": "week", "aggregation": "max", "rollup": "max"},
+               "evidence": {"aggregation": "최댓값", "rollup": "최댓값"}}
+        result, client = run(self.TWICE, draft, fix)
+        self.assertEqual(result.outcome, OUTCOME_ANSWERED, result.runtime_error)
+        attempt = result.attempts[0]
+        self.assertEqual(attempt["correction"]["evidence_check"]["unverified"], [])
+        self.assertIn("뜻은 확인하지 않았다", attempt["correction"]["evidence_check"]["note"])
+        args = tool_args(result)
+        self.assertEqual((args.get("aggregation"), args.get("rollup")), ("max", "max"))
+
+    def test_copy_without_two_places_ends_in_a_stage_clarification(self):
+        """같은 값을 두 단계에 적었는데 질문에 그 표현이 한 번뿐이다: 실행하지 않고 어느 단계인지 확인받는다."""
+        draft = plan({"date": "last_month", "bucket": "week", "aggregation": "max"})
+        fix = {"factors": {"bucket": "week", "aggregation": "max", "rollup": "max"},
+               "evidence": {"aggregation": "최댓값", "rollup": "최댓값"}}
+        result, client = run(self.ONCE, draft, fix)
+        self.assertEqual(result.outcome, OUTCOME_NEEDS_CLARIFICATION)
+        self.assertEqual(result.error["code"], "AMBIGUOUS_AGGREGATION_STAGE")
+        self.assertEqual(result.error["context"]["clarify"], ["aggregation", "rollup"])
+        self.assertEqual(tools_called(result), [])
+        self.assertEqual(len(client.calls), 2)
+
+    def test_one_stage_only_is_a_clarification_directly_and_after_a_move(self):
+        result, client = run(self.ONCE, plan({"date": "last_month", "bucket": "week", "rollup": "max"}))
+        self.assertEqual((result.outcome, result.error["code"]),
+                         (OUTCOME_NEEDS_CLARIFICATION, "AMBIGUOUS_INNER_AGGREGATION"))
+        self.assertEqual(len(client.calls), 1)
+        result, client = run(self.ONCE, plan({"date": "last_month", "bucket": "week", "aggregation": "max"}),
+                             {"factors": {"bucket": "week", "rollup": "max"}})
+        self.assertEqual((result.outcome, result.error["code"]),
+                         (OUTCOME_NEEDS_CLARIFICATION, "AMBIGUOUS_INNER_AGGREGATION"))
+        self.assertEqual(tools_called(result), [])
+
+    def test_misplaced_stage_with_the_inner_word_in_the_question_recovers(self):
+        """첫 응답이 평균을 aggregation에 두고 합계를 빠뜨렸다. 평균을 rollup으로 옮기고 합계를 근거와 함께 적는다."""
+        question = "지난달 주별 수입 합계의 평균은?"
+        draft = plan({"date": "last_month", "bucket": "week", "aggregation": "avg"})
+        fix = {"factors": {"bucket": "week", "aggregation": "sum", "rollup": "avg"},
+               "evidence": {"aggregation": "합계"}}
+        result, _ = run(question, draft, fix)
+        self.assertEqual(result.outcome, OUTCOME_ANSWERED, result.runtime_error)
+        args = tool_args(result)
+        self.assertEqual((args.get("aggregation"), args.get("rollup")), ("sum", "avg"))
+
+    def test_invented_inner_aggregation_ends_in_an_inner_clarification(self):
+        """g44 형태: 질문에 구간 안 집계 표현이 없는데 sum을 지어냈다. 근거가 없으니 구간 안 집계를 확인받는다."""
+        question = "지난달 주별 수입의 평균은?"
+        draft = plan({"date": "last_month", "bucket": "week", "aggregation": "avg"})
+        fix = {"factors": {"bucket": "week", "aggregation": "sum", "rollup": "avg"}}
+        result, _ = run(question, draft, fix)
+        self.assertEqual((result.outcome, result.error["code"]),
+                         (OUTCOME_NEEDS_CLARIFICATION, "AMBIGUOUS_INNER_AGGREGATION"))
+        self.assertEqual(result.error["context"]["reason"], "repair_stage_value_unverified")
+        self.assertEqual(tools_called(result), [])
+
+    def test_value_and_bucket_targets_are_separate_from_provider_support(self):
+        """값 질문은 TIMS에서 답한다. 구간 질문은 grounding이 유효하고, TIMS는 실행 계약으로 멈추며 reference는 계산한다."""
+        value = {"date": "last_month", "bucket": "week", "aggregation": "sum", "rollup": "max"}
+        result, client = run_on(providers.MOCK, "지난달 주별 수입 합계 중 가장 큰 값은?", plan(value))
+        self.assertEqual(result.outcome, OUTCOME_ANSWERED, result.runtime_error)
+        bucket = {**value, "answer": "bucket"}
+        question = "지난달 주별 수입 합계가 가장 큰 주는?"
+        result, client = run_on(providers.MOCK, question, plan(bucket))
+        self.assertEqual((result.outcome, result.error["code"], len(client.calls)),
+                         (OUTCOME_UNSUPPORTED, "UNVERIFIED_TIMS_CONTRACT", 1))
+        result, client = run_on(providers.REFERENCE, question, plan(bucket))
+        self.assertEqual(result.outcome, OUTCOME_ANSWERED, result.runtime_error)
+        self.assertEqual(len(client.calls), 1)
+
+    def test_answer_target_draft_recovers_and_provider_support_is_judged_after(self):
+        """answer=bucket + rollup=avg 초안: avg를 aggregation으로 옮기고 rollup=max를 근거와 함께 고른다.
+
+        고친 grounding은 유효하다. TIMS가 실행하지 못하는 것은 provider 계약이며 grounding 오류가 아니다.
+        """
+        question = "지난달 주별 평균 수입이 가장 큰 주는?"
+        draft = plan({"date": "last_month", "bucket": "week", "rollup": "avg", "answer": "bucket"})
+        fix = {"factors": {"bucket": "week", "aggregation": "avg", "rollup": "max", "answer": "bucket"},
+               "evidence": {"rollup": "가장 큰"}}
+        result, _ = run_on(providers.MOCK, question, draft, fix)
+        self.assertEqual((result.outcome, result.error["code"]), (OUTCOME_UNSUPPORTED, "UNVERIFIED_TIMS_CONTRACT"))
+        self.assertEqual(result.attempts[0]["repair_result"], "OK")
+        result, _ = run_on(providers.REFERENCE, question, draft, fix)
+        self.assertEqual(result.outcome, OUTCOME_ANSWERED, result.runtime_error)
+
+
 class ContractConsistencyTest(unittest.TestCase):
     """재질의가 보여 주는 수정 범위 = 파서가 적용하는 범위. 짝 규칙마다 본다."""
 
@@ -419,7 +595,7 @@ class ContractConsistencyTest(unittest.TestCase):
                 shown = {line[2:].split(" (")[0] for line in instruction.splitlines()
                          if line.startswith("- ") and " (지금 " in line}
                 grounding_factors = json.loads(client.calls[1][-2]["content"])["factors"]
-                self.assertEqual(shown, set(correction_scope(grounding_factors).permissions))
+                self.assertEqual(shown, set(correction_scope(grounding_factors).editable))
 
 
 if __name__ == "__main__":

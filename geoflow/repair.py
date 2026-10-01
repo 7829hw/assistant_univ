@@ -456,15 +456,16 @@ class PlaceValuePatch:
 
 PATCH_KEYS = {
     RepairKind.RELATION_QUALIFIER: ("updates",),
-    RepairKind.FACTOR_CORRECTION: ("factors",),
+    # evidence: 새로 적은 집계 값이 나온 질문 표현(모델이 옮겨 적음). 문자열이 질문에 있는지만 확인한다.
+    RepairKind.FACTOR_CORRECTION: ("factors", "evidence"),
     RepairKind.PLACE_VALUE: ("concept_id", "name", "region"),
 }
 
 
-def parse_factor_patch(payload, factors, decision, *, full_set=True):
+def parse_factor_patch(payload, factors, decision, *, full_set=True, question=""):
     """grounding을 만들기 전(계획 단계) 오류의 factor 수정안. 비교 기준은 초안의 factor 사전이다."""
     _check_patch_keys(payload, decision)
-    return _parse_factor_patch(payload, factors, decision, full_set=full_set)
+    return _parse_factor_patch(payload, factors, decision, full_set=full_set, question=question)
 
 
 def _check_patch_keys(payload, decision):
@@ -491,7 +492,8 @@ def parse_patch(payload, grounding, decision, *, full_set=True):
     if decision.kind == RepairKind.RELATION_QUALIFIER:
         return _parse_relation_patch(payload, grounding, decision)
     if decision.kind == RepairKind.FACTOR_CORRECTION:
-        return _parse_factor_patch(payload, grounding.factors, decision, full_set=full_set)
+        return _parse_factor_patch(payload, grounding.factors, decision, full_set=full_set,
+                                   question=grounding.question or "")
     if decision.kind == RepairKind.PLACE_VALUE:
         return _parse_place_patch(payload, grounding, decision)
     raise RepairViolation(f"알 수 없는 재질의 종류입니다: {decision.kind}")
@@ -555,7 +557,7 @@ def _parse_relation_patch(payload, grounding, decision):
     return RelationQualifierPatch(tuple(updates))
 
 
-def _parse_factor_patch(payload, factors, decision, *, full_set=True):
+def _parse_factor_patch(payload, factors, decision, *, full_set=True, question=""):
     """``{"factors": {...}}``를 고친 뒤의 결과 형태로 읽고, 수정 범위 안의 변경만 적용한다.
 
     모델은 고친 뒤의 조건 전체를 적는 일이 잦다(R 재생). 그 형식은 받지만, 적지 않은 조건을 지우는 것은 수정 범위
@@ -569,7 +571,8 @@ def _parse_factor_patch(payload, factors, decision, *, full_set=True):
         raise RepairViolation("factors는 비어 있지 않은 object여야 합니다.")
     if full_set and decision.scope is not None:
         try:
-            result, record = apply_correction(factors, raw, decision.scope)
+            result, record = apply_correction(factors, raw, decision.scope, question=question,
+                                              evidence=payload.get("evidence"))
         except ScopeViolation as violation:
             raise RepairViolation(str(violation), violation.record) from violation
         removed = tuple(sorted(name for name in factors if name not in result))
