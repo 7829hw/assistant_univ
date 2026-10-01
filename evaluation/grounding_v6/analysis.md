@@ -1,5 +1,11 @@
 # 계약 오류에 필요한 범위만 고치는 factor 복구 (grounding_v6)
 
+> **정정(grounding_v7):** 아래 1절의 "집계 값은 새로 만들거나 바꿀 수 없다"는 `59afe26` 구현과 달랐다. 답 대상 위반에서는 rollup을 아무 값으로 바꿀 수 있었다. 또 두 단계 값이 같으면 복사로 보고 막는 규칙은 "주별 최댓값 중 최댓값" 같은 정당한 질문까지 막는 정책이었다. grounding_v7(`ecf323c`)에서 다음처럼 고쳤다(`evaluation/grounding_v7/analysis.md`).
+> - rollup 다시 고르기는 max·min으로 좁히고, 원래 값은 aggregation으로 옮겨 보존한다.
+> - 같은 값 두 단계는 같은 근거 표현이 질문의 두 자리에 있을 때 받는다.
+> - 구간 안 집계 새 값은 받지 않고 확인 요청으로 끝낸다.
+
+
 - 변경 전 기준: `ee43487` (grounding_v5 최종). 실측 `evaluation/grounding_v5/runs_final`.
 - 참고:
   - 재정렬 기준 `cad3bb8` (`evaluation/grounding_v3/runs/final_*`, `grounding_v4/runs/at_base`)
