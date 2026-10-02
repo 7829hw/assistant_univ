@@ -1008,6 +1008,19 @@ development가 되었다.
 > grounding 층이 업체 100에서 98/100이었다. 정답 grounding 기반 실행은 양쪽 모두 100/100, 41+2/43로 같다(차이는 모두 grounding에서 옴).
 `evaluate_v2.py`는 사전 등록한 설정(condition_check 끔)을 그대로 쓴다.
 
+### 출발·도착 조건과 결과 그룹 기준 grounding_v8 (2026-10-03)
+
+OD 혼동(grounding_v7 조용한 오답 10건)을 최초 grounding에서 줄이려 했으나 **채택한 변경은 없다.** 설계·결과:
+`evaluation/grounding_v8/analysis.md`.
+
+* 원인: dimension_target 생략 6(schema 기본값 both=조합인데 prompt는 "한쪽 기준이 없으면 넣지 않는다"), 같은 지역 안 이동
+  both 누락 3, 장소 방향 3. 정답 grounding으로 현재 표현이 OD 조합을 모두 표현함을 확인해 계약은 바꾸지 않았다.
+* prompt 설명 후보 P2·P5는 7개 셋에서 조용한 오답 29 → 31·34, 정상 답변 222 → 208·217로 사전 등록 기준을 넘지 못했다.
+  placebo(뜻 없는 문구 변경) 비교에서 qwen3:8b는 첫 계획 대부분이 바뀌었다. held-out 40문항(하위 에이전트 작성)에서
+  P5는 OD 정상 10 → 13이었지만 채택 근거로 부족했다. prompt는 522aa3b1 그대로다.
+* 집계 정책: 같은 값 두 단계 예외가 두 단계 모두 새 값인 경우에도 구간 안 집계 새 값을 받던 구현을 설명과 맞췄다(`9b1832f`).
+* grounding_v7 분류 정정: n31·m31은 실패한 첫 장소 조회를 세는 채점 기준 때문에 오답이며 답변 값은 맞다.
+
 ### 복구 정책과 계약의 구분 grounding_v7 (2026-10-02)
 
 grounding_v6 복구 제한 가운데 실제 계약과 보수적 정책을 나눴다. 설계·결과: `evaluation/grounding_v7/analysis.md`.
