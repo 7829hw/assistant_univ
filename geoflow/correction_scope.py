@@ -384,7 +384,10 @@ def apply_correction(base, proposal, scope, *, question="", evidence=None):
     # - rollup의 새 값(계약이 요구하는 짝): 근거 문자열이 질문에 있는지만 본다. 뜻은 확인하지 않는다.
     unverified = []
     if new:
-        same_value = len(staged) == 2 and staged["aggregation"] == staged["rollup"]
+        # 같은 값 두 단계는 첫 grounding이 이미 적은 값(이어진 값)을 다른 단계에 한 번 더 쓰는 경우만이다. 두 단계가
+        # 모두 새 값이면 구간 안 집계 새 값이므로 아래 규칙을 따른다(근거 문자열 검사로 받지 않는다).
+        same_value = (len(staged) == 2 and staged["aggregation"] == staged["rollup"]
+                      and len(new) == 1)
         if "aggregation" in new and not same_value:
             unverified = ["aggregation"]
             record["evidence_check"] = {

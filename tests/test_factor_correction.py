@@ -257,6 +257,16 @@ class ApplyTest(unittest.TestCase):
         # 값만 옮기는 수정(구간 안 집계를 비움)은 받는다. 그 뒤 구간 안 집계 확인 요청은 합성 단계가 한다.
         self.assertEqual(outcome(base, {"bucket": "week", "rollup": "avg"}, g44)[0], "applied")
 
+    def test_two_new_equal_values_are_a_new_inner_value(self):
+        """두 단계가 모두 새 값이고 같으면 '첫 grounding이 읽은 값의 두 번째 자리'가 아니다. 구간 안 집계 새 값으로 본다.
+
+        grounding_v7(ecf323c)에서는 이 경우가 같은 값 두 단계 경로로 들어가 반복 문자열 검사만으로 받아졌다.
+        """
+        base = {"bucket": "week", "rollup": "top"}
+        twice = "지난달 주별 최댓값 중 최댓값은?"
+        self.assertEqual(outcome(base, {"bucket": "week", "aggregation": "max", "rollup": "max"}, twice,
+                                 {"aggregation": "최댓값", "rollup": "최댓값"}), ("unverified", ["aggregation"]))
+
     def test_new_rollup_value_needs_a_literal_basis(self):
         """빠진 짝(rollup)의 새 값은 근거 문자열이 질문에 있어야 한다(뜻은 확인하지 않는다)."""
         base = {"bucket": "month", "aggregation": "sum"}
