@@ -1,0 +1,134 @@
+# evaluation/grounding_v8/od_contrast_questions.yaml
+#
+# 출발·도착 조건(장소의 od_role)과 결과를 묶는 끝(dimension_target) 대조 사례. 한 group 안의 문장은 방향 하나,
+# 묶는 끝 하나, 또는 같은 지역 안 이동 여부만 다르다.
+#
+# - 작성: Claude(주 에이전트, prompt를 고치는 쪽). 사람 검토 없음. 개발셋이다(prompt 수정에 쓴다).
+# - 기준일 2026-09-25. 장소는 mock gazetteer에 있는 이름.
+# - 정답 호출은 업체 schema 표기(get_trip_count: scope_pickup·scope_dropoff, dimension, dimension_target)다.
+
+version: grounding_v8_od_contrast
+status: development
+items:
+  # O1. 장소 하나, 방향만
+  - id: o01a
+    group: O1
+    contrast: "출발 조건"
+    question: "지난달 대구 수성구에서 출발한 실차 구간 건수는?"
+    gold_text: |-
+      get_place_scope(name=수성구, region=대구)
+      get_trip_count(scope_pickup=$pickup.scope, date=last_month)
+  - id: o01b
+    group: O1
+    contrast: "도착 조건"
+    question: "지난달 대구 수성구에 도착한 실차 구간 건수는?"
+    gold_text: |-
+      get_place_scope(name=수성구, region=대구)
+      get_trip_count(scope_dropoff=$dropoff.scope, date=last_month)
+  - id: o01c
+    group: O1
+    contrast: "같은 지역 안 이동"
+    question: "지난달 대구 수성구 안에서 출발과 도착이 모두 이뤄진 실차 구간 건수는?"
+    gold_text: |-
+      get_place_scope(name=수성구, region=대구)
+      get_trip_count(scope_pickup=$area.scope, scope_dropoff=$area.scope, date=last_month)
+
+  # O2. 장소 조건 + 결과를 묶는 끝
+  - id: o02a
+    group: O2
+    contrast: "출발 조건, 도착 끝으로 묶음"
+    question: "지난달 대구 수성구에서 출발한 실차를 하차 읍면동별로 셌을 때 가장 많은 두 곳은?"
+    gold_text: |-
+      get_place_scope(name=수성구, region=대구)
+      get_trip_count(scope_pickup=$pickup.scope, date=last_month, dimension=emd, dimension_target=dropoff, order=top, limit=2)
+  - id: o02b
+    group: O2
+    contrast: "출발 조건, 출발 끝으로 묶음"
+    question: "지난달 대구 수성구에서 출발한 실차를 승차 읍면동별로 셌을 때 가장 많은 두 곳은?"
+    gold_text: |-
+      get_place_scope(name=수성구, region=대구)
+      get_trip_count(scope_pickup=$pickup.scope, date=last_month, dimension=emd, dimension_target=pickup, order=top, limit=2)
+  - id: o02c
+    group: O2
+    contrast: "도착 조건, 출발 끝으로 묶음"
+    question: "지난달 대구 수성구에 도착한 실차를 승차 읍면동별로 셌을 때 가장 많은 두 곳은?"
+    gold_text: |-
+      get_place_scope(name=수성구, region=대구)
+      get_trip_count(scope_dropoff=$dropoff.scope, date=last_month, dimension=emd, dimension_target=pickup, order=top, limit=2)
+  - id: o02d
+    group: O2
+    contrast: "도착 조건, 도착 끝으로 묶음"
+    question: "지난달 대구 수성구에 도착한 실차를 하차 읍면동별로 셌을 때 가장 많은 두 곳은?"
+    gold_text: |-
+      get_place_scope(name=수성구, region=대구)
+      get_trip_count(scope_dropoff=$dropoff.scope, date=last_month, dimension=emd, dimension_target=dropoff, order=top, limit=2)
+
+  # O3. 같은 지역 안 이동 + 묶는 끝
+  - id: o03a
+    group: O3
+    contrast: "같은 지역 안, 도착 끝으로 묶음"
+    question: "지난달 대구 안에서 출발과 도착이 모두 이뤄진 실차를 하차 시군구별로 셌을 때 가장 적은 곳은?"
+    gold_text: |-
+      get_place_scope(name=대구)
+      get_trip_count(scope_pickup=$area.scope, scope_dropoff=$area.scope, date=last_month, dimension=sigungu, dimension_target=dropoff, order=bottom, limit=1)
+  - id: o03b
+    group: O3
+    contrast: "같은 지역 안, 출발 끝으로 묶음"
+    question: "지난달 대구 안에서 출발과 도착이 모두 이뤄진 실차를 승차 시군구별로 셌을 때 가장 적은 곳은?"
+    gold_text: |-
+      get_place_scope(name=대구)
+      get_trip_count(scope_pickup=$area.scope, scope_dropoff=$area.scope, date=last_month, dimension=sigungu, dimension_target=pickup, order=bottom, limit=1)
+  - id: o03c
+    group: O3
+    contrast: "같은 지역 안, 출발지-도착지 조합으로 묶음"
+    question: "지난달 대구 안에서 출발과 도착이 모두 이뤄진 실차를 승차 시군구와 하차 시군구의 조합별로 셌을 때 가장 많은 조합은?"
+    gold_text: |-
+      get_place_scope(name=대구)
+      get_trip_count(scope_pickup=$area.scope, scope_dropoff=$area.scope, date=last_month, dimension=sigungu, dimension_target=both, order=top, limit=1)
+
+  # O4. 조합과 한쪽 끝, 장소 조건 유무
+  - id: o04a
+    group: O4
+    contrast: "장소 없음, 조합으로 묶음"
+    question: "지난달 출발 읍면동과 도착 읍면동의 조합 중 실차가 가장 많은 세 개는?"
+    gold_text: |-
+      get_trip_count(date=last_month, dimension=emd, dimension_target=both, order=top, limit=3)
+  - id: o04b
+    group: O4
+    contrast: "장소 없음, 도착 끝으로 묶음"
+    question: "지난달 하차 건수가 가장 많은 읍면동 세 곳은?"
+    gold_text: |-
+      get_trip_count(date=last_month, dimension=emd, dimension_target=dropoff, order=top, limit=3)
+  - id: o04c
+    group: O4
+    contrast: "출발 조건, 조합으로 묶음"
+    question: "지난달 부산 초량동에서 출발한 실차를 출발 읍면동과 도착 읍면동의 조합별로 셌을 때 가장 많은 두 개는?"
+    gold_text: |-
+      get_place_scope(name=초량동, region=부산)
+      get_trip_count(scope_pickup=$pickup.scope, date=last_month, dimension=emd, dimension_target=both, order=top, limit=2)
+
+  # O5. 장소 둘
+  - id: o05a
+    group: O5
+    contrast: "출발 A, 도착 B"
+    question: "지난달 부산 초량동에서 출발해 대구 동인동에 도착한 실차 구간 건수는?"
+    gold_text: |-
+      get_place_scope(name=초량동, region=부산)
+      get_place_scope(name=동인동, region=대구)
+      get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, date=last_month)
+  - id: o05b
+    group: O5
+    contrast: "출발 B, 도착 A(방향 바꿈)"
+    question: "지난달 대구 동인동에서 출발해 부산 초량동에 도착한 실차 구간 건수는?"
+    gold_text: |-
+      get_place_scope(name=동인동, region=대구)
+      get_place_scope(name=초량동, region=부산)
+      get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, date=last_month)
+  - id: o05c
+    group: O5
+    contrast: "출발 A·도착 B, 도착 끝으로 묶음"
+    question: "지난달 부산에서 출발해 대구에 도착한 실차를 하차 읍면동별로 셌을 때 가장 많은 두 곳은?"
+    gold_text: |-
+      get_place_scope(name=부산)
+      get_place_scope(name=대구)
+      get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, date=last_month, dimension=emd, dimension_target=dropoff, order=top, limit=2)
