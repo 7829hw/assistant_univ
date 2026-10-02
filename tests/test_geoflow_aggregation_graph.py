@@ -1191,8 +1191,8 @@ class StructuredGroundingPathTest(unittest.TestCase):
         flat = self.planner("flat").system_prompt()
         structured = self.planner("structured").system_prompt()
         # grounding_v4(2026-09-30): 모델에게 전달하는 계약과 실행 계약을 맞췄다. flat은 답 대상(answer: value|bucket),
-        # grounding_v8 P2(d464a2c9): od_role(장소가 제한하는 끝)과 dimension_target(결과를 묶는 끝)을 나눠 설명. 이전 522aa3b1. order→limit, od_role both를 안내한다(522aa3b1). 문구를 더 줄인 ede43190은 전체 맞음 224 → 213이라 되돌렸다. 이전: 238ac8d6(grounding_v1), db113124, 64bbceb4.
-        self.assertEqual(hashlib.sha256(flat.encode()).hexdigest()[:8], "d464a2c9")
+        # grounding_v8 P5(30a9fb7e, P2 d464a2c9 + trip 한정): od_role(장소가 제한하는 끝)과 dimension_target(결과를 묶는 끝)을 나눠 설명. 이전 522aa3b1. order→limit, od_role both를 안내한다(522aa3b1). 문구를 더 줄인 ede43190은 전체 맞음 224 → 213이라 되돌렸다. 이전: 238ac8d6(grounding_v1), db113124, 64bbceb4.
+        self.assertEqual(hashlib.sha256(flat.encode()).hexdigest()[:8], "30a9fb7e")
         self.assertIn("- answer:", flat)
         self.assertNotIn("- answer:", structured)  # 구조화 표기는 aggregation_plan.result.select로 적는다
         self.assertIn("[집계 계획]", structured)

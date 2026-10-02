@@ -1,0 +1,1137 @@
+{
+ "meta": {
+  "protocol": "vendor100_v1",
+  "kind": "llm",
+  "started_at": "2026-10-02T22:17:53.990369+09:00",
+  "command": "evaluate_vendor100.py --code-root /tmp/claude-1004/-home-hwkim-assistant-univ/a9aaa8a5-902f-4b87-b1c9-194599bfb41d/scratchpad/wt_placebo_A --gold evaluation/grounding_v4/answer_target_questions.yaml llm --model qwen3:8b --condition-check --only t01b,t01c,t02c,t05b --out evaluation/grounding_v8/runs_placebo/A_at.json",
+  "code_root": "/tmp/claude-1004/-home-hwkim-assistant-univ/a9aaa8a5-902f-4b87-b1c9-194599bfb41d/scratchpad/wt_placebo_A",
+  "code_commit": "ecf323cfe7fe35fcaac33d4f5de82d454aa142de",
+  "code_dirty": [
+   "M prompts/geoflow_planner.yaml"
+  ],
+  "code_diff_sha256": "4817db01c4185e57a0c8de4dd8882a5be1229ebda13815fe46772986f52746ab",
+  "code_untracked": {},
+  "gold_file": "evaluation/grounding_v4/answer_target_questions.yaml",
+  "gold_sha256": "78707de11e293874e7d8da1e0e45e699eff9caf85f27fd638abb08c505b0cfc4",
+  "reference_date": "2026-09-25",
+  "model": "qwen3:8b",
+  "model_digest": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
+  "ollama_version": "0.34.4",
+  "model_details": {
+   "family": "qwen3",
+   "parameter_size": "8.2B",
+   "quantization_level": "Q4_K_M",
+   "format": "gguf"
+  },
+  "planner_prompt_sha256": "fa195c83a73733df46eb31e44f0e6b66997370b40678e9614eb88bb19e5b9e21",
+  "replay_from": null,
+  "pipeline": {
+   "aggregation_grounding": "flat",
+   "condition_check": true,
+   "condition_notes": false,
+   "normalize_grounding": true,
+   "semantic_reinterpretation": true,
+   "provider": "mock",
+   "tims_execution": "legacy",
+   "temperature": 0,
+   "think": "auto",
+   "isolation": "unload_per_question"
+  },
+  "chat_timeout_s": 300.0,
+  "finished_at": "2026-10-02T22:17:53.990355+09:00",
+  "scorer_version": "v3"
+ },
+ "summary": {
+  "items": 4,
+  "categories": {
+   "expected_refusal": 1,
+   "wrong_refusal_reason": 2,
+   "answered_instead_of_refusal": 1
+  },
+  "llm_calls": {
+   "total": 6,
+   "plan": 4,
+   "repair": 2,
+   "failed": 0,
+   "llm_ms_total": 66297
+  },
+  "total_ms": {
+   "median": 14624.506,
+   "sum": 66311
+  },
+  "grounding_ok": {
+   "count": 1,
+   "of": 4
+  },
+  "by_vendor_verdict": {
+   "-": {
+    "expected_refusal": 1,
+    "wrong_refusal_reason": 2,
+    "answered_instead_of_refusal": 1
+   }
+  },
+  "outcomes": {
+   "unsupported": 1,
+   "needs_clarification": 2,
+   "answered": 1
+  },
+  "error_codes": {
+   "UNVERIFIED_TIMS_CONTRACT": 1,
+   "AMBIGUOUS_AGGREGATION_STAGE": 2
+  }
+ },
+ "rows": [
+  {
+   "id": "t01b",
+   "question": "지난해 대구 소속 택시의 월별 수입 합계가 가장 큰 달은?",
+   "vendor_verdict": "-",
+   "category": "expected_refusal",
+   "checks": {
+    "expected_outcome": "unsupported",
+    "expected_error": [
+     "UNVERIFIED_TIMS_CONTRACT"
+    ],
+    "refusal_reason_ok": true
+   },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "request_sha256": "013c931e1136c6c6c6262c866768de2755de16c02b2e8259cd81009c19f7cae8",
+     "replayed": false,
+     "duration_ms": 13039.0,
+     "load_duration_ms": 4357.9,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"location\",\n      \"text\": \"대구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"대구\", \"region\": \"대구\"}\n    },\n    {\n      \"id\": \"operation\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"text\": \"수입\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_year\",\n    \"bucket\": \"month\",\n    \"aggregation\": \"sum\",\n    \"rollup\": \"max\",\n    \"answer\": \"bucket\"\n  }\n}",
+     "thinking_chars": 2830
+    }
+   ],
+   "started_at": "2026-10-02T22:16:46.764423+09:00",
+   "finished_at": "2026-10-02T22:16:59.921235+09:00",
+   "planner_trace": {
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"location\",\n      \"text\": \"대구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"대구\", \"region\": \"대구\"}\n    },\n    {\n      \"id\": \"operation\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"text\": \"수입\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_year\",\n    \"bucket\": \"month\",\n    \"aggregation\": \"sum\",\n    \"rollup\": \"max\",\n    \"answer\": \"bucket\"\n  }\n}",
+    "error_stage": "compiler",
+    "error_detail": "measure_groups: 구간별 집계를 정확히 계산할 수 있는 호출 방법이 확인되지 않았습니다. fused_bucket_rollup: Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다; range_partition: 확인되지 않은 계약: range_inclusive; daily_partition: 확인되지 않은 계약: day_records:get_billing_metrics",
+    "error_context": {
+     "template": "PLACE_TO_SCOPE+EVENT_TO_GROUPED_MEASURE",
+     "rejected": [
+      {
+       "strategy": "fused_bucket_rollup",
+       "path": "provider_delegated",
+       "reason": "Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다"
+      },
+      {
+       "strategy": "range_partition",
+       "path": "local_recomputation",
+       "reason": "확인되지 않은 계약: range_inclusive"
+      },
+      {
+       "strategy": "daily_partition",
+       "path": "local_recomputation",
+       "reason": "확인되지 않은 계약: day_records:get_billing_metrics"
+      }
+     ]
+    },
+    "attempts": [
+     {
+      "index": 0,
+      "stage": "compiler",
+      "status": "planning_failed",
+      "error_code": "UNVERIFIED_TIMS_CONTRACT",
+      "repair_kind": null,
+      "repair_attempted": false,
+      "repair_result": null,
+      "reason": "다시 물어서 복구할 수 있는 실패가 아닙니다.",
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": null,
+      "detail": "measure_groups: 구간별 집계를 정확히 계산할 수 있는 호출 방법이 확인되지 않았습니다. fused_bucket_rollup: Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다; range_partition: 확인되지 않은 계약: range_inclusive; daily_partition: 확인되지 않은 계약: day_records:get_billing_metrics",
+      "raw_text": null,
+      "repair_error": null
+     }
+    ],
+    "repairs": {},
+    "durations": {
+     "planner_ms": 13044.962,
+     "execution_ms": 0.0,
+     "total_ms": 13046.297
+    }
+   },
+   "outcome": "unsupported",
+   "error_code": "UNVERIFIED_TIMS_CONTRACT",
+   "error_user_message": "이 구간별 계산은 TIMS의 동작이 문서로 확인되지 않아 정확한 값을 보장할 수 없으므로 수행하지 않았습니다.",
+   "error_context": {
+    "rejected": [
+     {
+      "strategy": "fused_bucket_rollup",
+      "path": "provider_delegated",
+      "reason": "Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다"
+     },
+     {
+      "strategy": "range_partition",
+      "path": "local_recomputation",
+      "reason": "확인되지 않은 계약: range_inclusive"
+     },
+     {
+      "strategy": "daily_partition",
+      "path": "local_recomputation",
+      "reason": "확인되지 않은 계약: day_records:get_billing_metrics"
+     }
+    ]
+   },
+   "calls": [],
+   "final_answer": null,
+   "grounding": {
+    "concepts": [
+     {
+      "id": "location",
+      "text": "대구",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "대구",
+       "region": ""
+      },
+      "attributes": {}
+     },
+     {
+      "id": "operation",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "operation",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "revenue",
+      "text": "수입",
+      "concept": "AMOUNT",
+      "subtype": "revenue",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "last_year",
+     "bucket": "month",
+     "aggregation": "sum",
+     "rollup": "max",
+     "answer": "bucket"
+    },
+    "aggregation": {
+     "bucket": "month",
+     "inner": "sum",
+     "outer": null,
+     "select": "max",
+     "source": "flat"
+    },
+    "normalizations": [
+     {
+      "concept": "location",
+      "rule": "region_equals_name",
+      "before": {
+       "name": "대구",
+       "region": "대구"
+      },
+      "after": {
+       "name": "대구",
+       "region": ""
+      }
+     }
+    ]
+   },
+   "condition_corrections": [],
+   "lowering": {},
+   "date_semantics": {},
+   "plan_calendar": null,
+   "execution_profile": {
+    "provider": "mock",
+    "contract": "tims",
+    "mode": "legacy",
+    "date_policy": "legacy",
+    "synthetic": false,
+    "legacy_assumptions": [
+     "relative_date_reference",
+     "range_inclusive",
+     "calendar_token_period"
+    ],
+    "delegation": true,
+    "delegated_semantics": [
+     "relative_date_reference",
+     "range_inclusive",
+     "calendar_token_period",
+     "bucket_week_start",
+     "bucket_partial",
+     "bucket_empty"
+    ],
+    "description": "mock(TIMS schema). 질문 표현을 옮긴 인자의 세부 달력 의미는 제공자에게 위임(legacy)"
+   }
+  },
+  {
+   "id": "t01c",
+   "question": "지난해 대구 소속 택시의 월별 수입 중 가장 큰 값은?",
+   "vendor_verdict": "-",
+   "category": "wrong_refusal_reason",
+   "checks": {
+    "expected_outcome": "needs_clarification",
+    "expected_error": [
+     "AMBIGUOUS_INNER_AGGREGATION"
+    ],
+    "refusal_reason_ok": false
+   },
+   "reset_ok": true,
+   "grounding_ok": false,
+   "grounding_diffs": [
+    [
+     "factor:aggregation_spec",
+     [
+      "month",
+      "unspecified",
+      "max",
+      null
+     ],
+     [
+      "month",
+      "max",
+      null,
+      null
+     ]
+    ]
+   ],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "request_sha256": "8aa18d82a02e85ba8bb0a2f83b09995dda07f5e8be154c966f27ab47ad0a1ccb",
+     "replayed": false,
+     "duration_ms": 10266.3,
+     "load_duration_ms": 4129.5,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"location\",\n      \"text\": \"대구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"대구\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"operation\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"text\": \"수입\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_year\",\n    \"bucket\": \"month\",\n    \"aggregation\": \"max\",\n    \"answer\": \"value\"\n  }\n}",
+     "thinking_chars": 1792
+    },
+    {
+     "kind": "repair",
+     "request_sha256": "dbb22480b1773b404a947e5640dae36f8759d884da0eef2114171504ef53fd8a",
+     "replayed": false,
+     "duration_ms": 4349.6,
+     "load_duration_ms": 5.2,
+     "content": "{\n  \"factors\": {\n    \"date\": \"last_year\",\n    \"bucket\": \"month\",\n    \"aggregation\": \"max\",\n    \"rollup\": \"max\",\n    \"answer\": \"value\"\n  }\n}",
+     "thinking_chars": 1690
+    }
+   ],
+   "started_at": "2026-10-02T22:16:59.921490+09:00",
+   "finished_at": "2026-10-02T22:17:14.802240+09:00",
+   "planner_trace": {
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"location\",\n      \"text\": \"대구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"대구\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"operation\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"text\": \"수입\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_year\",\n    \"bucket\": \"month\",\n    \"aggregation\": \"max\",\n    \"answer\": \"value\"\n  }\n}",
+    "error_stage": "planner",
+    "error_detail": "재질의가 적은 집계 값의 근거 표현을 질문에서 확인하지 못했습니다",
+    "error_context": {
+     "needs_clarification": true,
+     "clarify": [
+      "aggregation",
+      "rollup"
+     ],
+     "from": "INVALID_FACTOR_COMBINATION",
+     "reason": "repair_stage_value_unverified"
+    },
+    "attempts": [
+     {
+      "index": 0,
+      "stage": "planner",
+      "status": "planning_failed",
+      "error_code": "INVALID_FACTOR_COMBINATION",
+      "repair_kind": "factor_correction",
+      "repair_attempted": true,
+      "repair_result": "repair_failed",
+      "reason": null,
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": {
+       "scope": {
+        "issues": [
+         {
+          "kind": "missing_companion",
+          "factor": "bucket",
+          "missing": [
+           "rollup"
+          ]
+         }
+        ],
+        "permissions": {
+         "bucket": [
+          "remove"
+         ],
+         "answer": [
+          "remove"
+         ],
+         "rollup": [
+          "add"
+         ],
+         "order": [
+          "add"
+         ],
+         "limit": [
+          "add"
+         ],
+         "dimension": [
+          "add"
+         ],
+         "aggregation": [
+          "move"
+         ]
+        },
+        "reasons": {
+         "bucket": [
+          "bucket는 rollup 없이 성립하지 않습니다"
+         ],
+         "answer": [
+          "bucket를 빼면 answer도 성립하지 않습니다"
+         ],
+         "rollup": [
+          "bucket의 짝입니다"
+         ],
+         "order": [
+          "answer가 맡은 역할을 order로 적는 후보입니다(같은 계산이라는 뜻은 아닙니다)"
+         ],
+         "limit": [
+          "answer가 맡은 역할을 limit로 적는 후보입니다(같은 계산이라는 뜻은 아닙니다)"
+         ],
+         "dimension": [
+          "order의 짝입니다"
+         ],
+         "aggregation": [
+          "구간 안 집계로 적은 값이 구간별 결과의 집계라면 rollup으로 옮길 수 있습니다"
+         ]
+        },
+        "unrepairable": []
+       },
+       "applied": {
+        "added": {
+         "rollup": "max"
+        },
+        "changed": {},
+        "removed": {
+         "answer": "value"
+        }
+       },
+       "kept_omitted": [],
+       "blocked": [],
+       "before": {
+        "bucket": "month",
+        "aggregation": "max",
+        "answer": "value"
+       },
+       "proposed": {
+        "bucket": "month",
+        "aggregation": "max",
+        "rollup": "max",
+        "answer": "value"
+       },
+       "evidence": null,
+       "stage_values": {
+        "carried": {
+         "aggregation": "aggregation"
+        },
+        "new": [
+         "rollup"
+        ]
+       },
+       "evidence_check": {
+        "needed": [
+         "aggregation",
+         "rollup"
+        ],
+        "unverified": [
+         "aggregation",
+         "rollup"
+        ],
+        "note": "문자열이 질문에 있는지만 확인했다. 그 표현의 뜻은 확인하지 않았다."
+       },
+       "roles": {
+        "before": {
+         "grouping": "month",
+         "grouping_field": "bucket",
+         "direction": null,
+         "limit": null,
+         "answer": "value",
+         "aggregation": "max",
+         "rollup": null
+        },
+        "after": {
+         "grouping": "month",
+         "grouping_field": "bucket",
+         "direction": "top",
+         "limit": null,
+         "answer": "value",
+         "aggregation": "max",
+         "rollup": "max"
+        }
+       },
+       "after": {
+        "bucket": "month",
+        "aggregation": "max",
+        "rollup": "max"
+       },
+       "terminal": {
+        "code": "AMBIGUOUS_AGGREGATION_STAGE",
+        "unverified_stages": [
+         "aggregation",
+         "rollup"
+        ],
+        "reason": "재질의가 적은 집계 값의 근거 표현을 질문에서 확인하지 못했습니다"
+       }
+      },
+      "detail": "bucket 조건을 쓰려면 rollup 조건도 함께 필요합니다. 주·월 단위로 1차 집계하려면 그 결과를 합치는 방법도 필요합니다.",
+      "raw_text": "",
+      "repair_error": {
+       "code": "REPAIR_OUT_OF_SCOPE",
+       "detail": "재계획이 허용된 범위를 벗어났습니다: 새로 적은 집계 값의 근거를 질문에서 확인하지 못했습니다: aggregation, rollup"
+      }
+     }
+    ],
+    "repairs": {
+     "factor_correction": {
+      "attempted": 1,
+      "succeeded": 0
+     }
+    },
+    "durations": {
+     "planner_ms": 10267.077,
+     "execution_ms": 0.0,
+     "total_ms": 14617.777
+    }
+   },
+   "outcome": "needs_clarification",
+   "error_code": "AMBIGUOUS_AGGREGATION_STAGE",
+   "error_user_message": "질문에서 각 구간 안에서 값을 모으는 방법·구간별 결과를 모으는 방법을(를) 확정하지 못했습니다. 예: '주별 매출 합계의 평균'처럼 적어 주세요.",
+   "error_context": {
+    "reason": "repair_stage_value_unverified"
+   },
+   "calls": [],
+   "final_answer": null,
+   "grounding": {
+    "concepts": [
+     {
+      "id": "location",
+      "text": "대구",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "대구",
+       "region": ""
+      },
+      "attributes": {}
+     },
+     {
+      "id": "operation",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "operation",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "revenue",
+      "text": "수입",
+      "concept": "AMOUNT",
+      "subtype": "revenue",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "last_year",
+     "bucket": "month",
+     "aggregation": "max",
+     "answer": "value"
+    },
+    "aggregation": {
+     "bucket": "month",
+     "inner": "max",
+     "outer": null,
+     "select": null,
+     "source": "flat"
+    }
+   },
+   "condition_corrections": [],
+   "lowering": {},
+   "date_semantics": {},
+   "plan_calendar": null,
+   "execution_profile": null
+  },
+  {
+   "id": "t02c",
+   "question": "이번 달 부산 소속 개인택시의 주별 운행 일수 중 가장 작은 값은?",
+   "vendor_verdict": "-",
+   "category": "wrong_refusal_reason",
+   "checks": {
+    "expected_outcome": "needs_clarification",
+    "expected_error": [
+     "AMBIGUOUS_INNER_AGGREGATION"
+    ],
+    "refusal_reason_ok": false
+   },
+   "reset_ok": true,
+   "grounding_ok": false,
+   "grounding_diffs": [
+    [
+     "factor:aggregation_spec",
+     [
+      "week",
+      "unspecified",
+      "min",
+      null
+     ],
+     [
+      "week",
+      "min",
+      null,
+      null
+     ]
+    ]
+   ],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "request_sha256": "123073f9fe8572b4749c8f90db45b9ade41fb8b6b938cbf218dff14025d0dff2",
+     "replayed": false,
+     "duration_ms": 10815.4,
+     "load_duration_ms": 4334.1,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"location\",\n      \"text\": \"부산\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"부산\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"operation\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"operating_days\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"operating_days\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"this_month\",\n    \"bucket\": \"week\",\n    \"aggregation\": \"min\",\n    \"answer\": \"value\"\n  }\n}",
+     "thinking_chars": 1936
+    },
+    {
+     "kind": "repair",
+     "request_sha256": "529bf27957e8890dd8d4716ea032c4d5d1654599a8991d4c28fd6ff2e0f09c5d",
+     "replayed": false,
+     "duration_ms": 3806.9,
+     "load_duration_ms": 6.1,
+     "content": "{\n  \"factors\": {\n    \"date\": \"this_month\",\n    \"bucket\": \"week\",\n    \"aggregation\": \"min\",\n    \"rollup\": \"min\",\n    \"answer\": \"value\",\n    \"taxi_type\": \"private\"\n  }\n}",
+     "thinking_chars": 1496
+    }
+   ],
+   "started_at": "2026-10-02T22:17:14.802453+09:00",
+   "finished_at": "2026-10-02T22:17:29.711679+09:00",
+   "planner_trace": {
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"location\",\n      \"text\": \"부산\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"부산\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"operation\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"operating_days\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"operating_days\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"this_month\",\n    \"bucket\": \"week\",\n    \"aggregation\": \"min\",\n    \"answer\": \"value\"\n  }\n}",
+    "error_stage": "planner",
+    "error_detail": "재질의가 적은 집계 값의 근거 표현을 질문에서 확인하지 못했습니다",
+    "error_context": {
+     "needs_clarification": true,
+     "clarify": [
+      "aggregation",
+      "rollup"
+     ],
+     "from": "INVALID_FACTOR_COMBINATION",
+     "reason": "repair_stage_value_unverified"
+    },
+    "attempts": [
+     {
+      "index": 0,
+      "stage": "planner",
+      "status": "planning_failed",
+      "error_code": "INVALID_FACTOR_COMBINATION",
+      "repair_kind": "factor_correction",
+      "repair_attempted": true,
+      "repair_result": "repair_failed",
+      "reason": null,
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": {
+       "scope": {
+        "issues": [
+         {
+          "kind": "missing_companion",
+          "factor": "bucket",
+          "missing": [
+           "rollup"
+          ]
+         }
+        ],
+        "permissions": {
+         "bucket": [
+          "remove"
+         ],
+         "answer": [
+          "remove"
+         ],
+         "rollup": [
+          "add"
+         ],
+         "order": [
+          "add"
+         ],
+         "limit": [
+          "add"
+         ],
+         "dimension": [
+          "add"
+         ],
+         "aggregation": [
+          "move"
+         ]
+        },
+        "reasons": {
+         "bucket": [
+          "bucket는 rollup 없이 성립하지 않습니다"
+         ],
+         "answer": [
+          "bucket를 빼면 answer도 성립하지 않습니다"
+         ],
+         "rollup": [
+          "bucket의 짝입니다"
+         ],
+         "order": [
+          "answer가 맡은 역할을 order로 적는 후보입니다(같은 계산이라는 뜻은 아닙니다)"
+         ],
+         "limit": [
+          "answer가 맡은 역할을 limit로 적는 후보입니다(같은 계산이라는 뜻은 아닙니다)"
+         ],
+         "dimension": [
+          "order의 짝입니다"
+         ],
+         "aggregation": [
+          "구간 안 집계로 적은 값이 구간별 결과의 집계라면 rollup으로 옮길 수 있습니다"
+         ]
+        },
+        "unrepairable": []
+       },
+       "applied": {
+        "added": {
+         "rollup": "min"
+        },
+        "changed": {},
+        "removed": {
+         "answer": "value"
+        }
+       },
+       "kept_omitted": [],
+       "blocked": [],
+       "before": {
+        "bucket": "week",
+        "aggregation": "min",
+        "answer": "value"
+       },
+       "proposed": {
+        "bucket": "week",
+        "aggregation": "min",
+        "rollup": "min",
+        "answer": "value"
+       },
+       "evidence": null,
+       "stage_values": {
+        "carried": {
+         "aggregation": "aggregation"
+        },
+        "new": [
+         "rollup"
+        ]
+       },
+       "evidence_check": {
+        "needed": [
+         "aggregation",
+         "rollup"
+        ],
+        "unverified": [
+         "aggregation",
+         "rollup"
+        ],
+        "note": "문자열이 질문에 있는지만 확인했다. 그 표현의 뜻은 확인하지 않았다."
+       },
+       "roles": {
+        "before": {
+         "grouping": "week",
+         "grouping_field": "bucket",
+         "direction": null,
+         "limit": null,
+         "answer": "value",
+         "aggregation": "min",
+         "rollup": null
+        },
+        "after": {
+         "grouping": "week",
+         "grouping_field": "bucket",
+         "direction": "bottom",
+         "limit": null,
+         "answer": "value",
+         "aggregation": "min",
+         "rollup": "min"
+        }
+       },
+       "after": {
+        "bucket": "week",
+        "aggregation": "min",
+        "rollup": "min"
+       },
+       "terminal": {
+        "code": "AMBIGUOUS_AGGREGATION_STAGE",
+        "unverified_stages": [
+         "aggregation",
+         "rollup"
+        ],
+        "reason": "재질의가 적은 집계 값의 근거 표현을 질문에서 확인하지 못했습니다"
+       }
+      },
+      "detail": "bucket 조건을 쓰려면 rollup 조건도 함께 필요합니다. 주·월 단위로 1차 집계하려면 그 결과를 합치는 방법도 필요합니다.",
+      "raw_text": "",
+      "repair_error": {
+       "code": "REPAIR_OUT_OF_SCOPE",
+       "detail": "재계획이 허용된 범위를 벗어났습니다: 새로 적은 집계 값의 근거를 질문에서 확인하지 못했습니다: aggregation, rollup"
+      }
+     }
+    ],
+    "repairs": {
+     "factor_correction": {
+      "attempted": 1,
+      "succeeded": 0
+     }
+    },
+    "durations": {
+     "planner_ms": 10816.495,
+     "execution_ms": 0.0,
+     "total_ms": 14624.506
+    }
+   },
+   "outcome": "needs_clarification",
+   "error_code": "AMBIGUOUS_AGGREGATION_STAGE",
+   "error_user_message": "질문에서 각 구간 안에서 값을 모으는 방법·구간별 결과를 모으는 방법을(를) 확정하지 못했습니다. 예: '주별 매출 합계의 평균'처럼 적어 주세요.",
+   "error_context": {
+    "reason": "repair_stage_value_unverified"
+   },
+   "calls": [],
+   "final_answer": null,
+   "grounding": {
+    "concepts": [
+     {
+      "id": "location",
+      "text": "부산",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "부산",
+       "region": ""
+      },
+      "attributes": {}
+     },
+     {
+      "id": "operation",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "operation",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "operating_days",
+      "text": "",
+      "concept": "AMOUNT",
+      "subtype": "operating_days",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "this_month",
+     "bucket": "week",
+     "aggregation": "min",
+     "answer": "value",
+     "taxi_type": "private"
+    },
+    "aggregation": {
+     "bucket": "week",
+     "inner": "min",
+     "outer": null,
+     "select": null,
+     "source": "flat"
+    }
+   },
+   "condition_corrections": [
+    {
+     "condition": "taxi_type",
+     "from": null,
+     "to": "private",
+     "action": "filled",
+     "basis": "question_expression",
+     "evidence": [
+      {
+       "text": "개인택시"
+      }
+     ]
+    }
+   ],
+   "lowering": {},
+   "date_semantics": {},
+   "plan_calendar": null,
+   "execution_profile": null
+  },
+  {
+   "id": "t05b",
+   "question": "지난달 대구 소속 택시의 주별 수입의 평균은?",
+   "vendor_verdict": "-",
+   "category": "answered_instead_of_refusal",
+   "checks": {
+    "expected_outcome": "needs_clarification"
+   },
+   "reset_ok": true,
+   "grounding_ok": false,
+   "grounding_diffs": [
+    [
+     "factor:aggregation_spec",
+     [
+      "week",
+      "unspecified",
+      "avg",
+      null
+     ],
+     [
+      "week",
+      "sum",
+      "avg",
+      null
+     ]
+    ]
+   ],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "request_sha256": "0ca5e163c91fd5bc48c4652aa7026832fea644abc1e4ef50335dff1906df8287",
+     "replayed": false,
+     "duration_ms": 24019.8,
+     "load_duration_ms": 4185.8,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"location\",\n      \"text\": \"대구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"대구\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"operation\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"text\": \"수입\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_month\",\n    \"bucket\": \"week\",\n    \"aggregation\": \"sum\",\n    \"rollup\": \"avg\"\n  }\n}",
+     "thinking_chars": 8178
+    }
+   ],
+   "started_at": "2026-10-02T22:17:29.711903+09:00",
+   "finished_at": "2026-10-02T22:17:53.990079+09:00",
+   "planner_trace": {
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"location\",\n      \"text\": \"대구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"대구\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"operation\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"text\": \"수입\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_month\",\n    \"bucket\": \"week\",\n    \"aggregation\": \"sum\",\n    \"rollup\": \"avg\"\n  }\n}",
+    "error_stage": null,
+    "error_detail": null,
+    "error_context": {},
+    "attempts": [
+     {
+      "index": 0,
+      "stage": null,
+      "status": "OK",
+      "error_code": null,
+      "repair_kind": null,
+      "repair_attempted": null,
+      "repair_result": null,
+      "reason": null,
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": null,
+      "detail": null,
+      "raw_text": null,
+      "repair_error": null
+     }
+    ],
+    "repairs": {},
+    "durations": {
+     "planner_ms": 24020.604,
+     "execution_ms": 0.363,
+     "total_ms": 24022.779
+    }
+   },
+   "outcome": "answered",
+   "error_code": null,
+   "error_user_message": null,
+   "error_context": {},
+   "calls": [
+    {
+     "tool": "get_place_scope",
+     "args": {
+      "name": "대구",
+      "include_vicinity": false
+     },
+     "result": "scope:district:2700000000"
+    },
+    {
+     "tool": "get_billing_metrics",
+     "args": {
+      "scope": "scope:district:2700000000",
+      "aggregation": "sum",
+      "date": "last_month",
+      "metric": "revenue",
+      "bucket": "week",
+      "rollup": "avg"
+     },
+     "result": 200000.0
+    }
+   ],
+   "final_answer": "대구 지난달 영업 수익 — 주별 합계의 평균: 200,000\n- 계산: TIMS가 주 구간마다 합계를 구한 뒤 그 값들의 평균을 계산했습니다. 주 시작 요일, 기간 경계에서 잘린 주, 자료가 없는 주의 처리와 상대 기간의 날짜 범위는 TIMS 기준을 따릅니다.",
+   "grounding": {
+    "concepts": [
+     {
+      "id": "location",
+      "text": "대구",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "대구",
+       "region": ""
+      },
+      "attributes": {}
+     },
+     {
+      "id": "operation",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "operation",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "revenue",
+      "text": "수입",
+      "concept": "AMOUNT",
+      "subtype": "revenue",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "last_month",
+     "bucket": "week",
+     "aggregation": "sum",
+     "rollup": "avg"
+    },
+    "aggregation": {
+     "bucket": "week",
+     "inner": "sum",
+     "outer": "avg",
+     "select": null,
+     "source": "flat"
+    }
+   },
+   "condition_corrections": [],
+   "lowering": {
+    "measure_groups": {
+     "strategy": "fused_bucket_rollup",
+     "path": "provider_delegated",
+     "rejected": [],
+     "requires": [
+      "inner_is_aggregation",
+      "rollup_unweighted"
+     ],
+     "delegated": [
+      "week_start",
+      "partial",
+      "empty",
+      "relative_date"
+     ],
+     "semantics": {
+      "week_start": {
+       "value": "provider_defined",
+       "source": "provider",
+       "contract": "bucket_week_start",
+       "status": "unknown"
+      },
+      "partial": {
+       "value": "provider_defined",
+       "source": "provider",
+       "contract": "bucket_partial",
+       "status": "unknown"
+      },
+      "empty": {
+       "value": "provider_defined",
+       "source": "provider",
+       "contract": "bucket_empty",
+       "status": "unknown"
+      },
+      "relative_date": {
+       "value": "provider_defined",
+       "source": "provider",
+       "contract": "relative_date_reference",
+       "status": "unknown"
+      }
+     },
+     "checks": [
+      "tool_selection",
+      "stage_mapping",
+      "argument_combination",
+      "condition_preservation",
+      "scope_provenance",
+      "result_to_answer"
+     ],
+     "not_verified": [
+      "provider_calculation: 제공자 내부의 구간 경계·부분 구간·빈 구간·상대 날짜 기준·평균의 분모(위임한 의미)"
+     ]
+    }
+   },
+   "date_semantics": {
+    "measure_groups": {
+     "value": "last_month",
+     "kind": "relative",
+     "interpreted_range": "20260801-20260831",
+     "reference_date": "20260925",
+     "policy": "legacy",
+     "lowering": "passthrough",
+     "responsibility": "provider",
+     "request": [
+      "last_month"
+     ],
+     "provider": "unverified",
+     "requires": [
+      "relative_date_reference"
+     ],
+     "missing": [
+      "relative_date_reference"
+     ],
+     "interpretation": {
+      "source": "application_policy",
+      "rule": "기준일이 속한 달 바로 앞 달의 1일부터 말일까지"
+     }
+    }
+   },
+   "plan_calendar": null,
+   "execution_profile": {
+    "provider": "mock",
+    "contract": "tims",
+    "mode": "legacy",
+    "date_policy": "legacy",
+    "synthetic": false,
+    "legacy_assumptions": [
+     "relative_date_reference",
+     "range_inclusive",
+     "calendar_token_period"
+    ],
+    "delegation": true,
+    "delegated_semantics": [
+     "relative_date_reference",
+     "range_inclusive",
+     "calendar_token_period",
+     "bucket_week_start",
+     "bucket_partial",
+     "bucket_empty"
+    ],
+    "description": "mock(TIMS schema). 질문 표현을 옮긴 인자의 세부 달력 의미는 제공자에게 위임(legacy)"
+   }
+  }
+ ]
+}
