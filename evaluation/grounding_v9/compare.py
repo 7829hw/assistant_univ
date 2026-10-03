@@ -22,6 +22,9 @@ sys.path.insert(0, str(HERE.parents[1]))
 import evaluate_vendor100 as E  # noqa: E402
 
 SETS = ("od", "at", "contrast", "dev", "indepv2", "indepv3", "indepv4", "old44", "heldout")
+#: grounding_v8이 확인한 qwen3:8b의 OD 혼동 10건(개발셋).
+WATCH = ("indepv2/n06", "indepv4/k28", "indepv4/k31", "indepv3/m13", "indepv4/k34", "indepv4/k25",
+         "contrast/c04a", "contrast/c04c", "old44/g11", "indepv2/n03")
 CLASSES = ("정상 답변", "정당한 거부", "오답", "부당한 거부", "실행 실패")
 
 
@@ -54,10 +57,16 @@ def summarize(rows, raw):
     trip = [k for k in keys if rows[k]["od"] is not None]
     other = [k for k in keys if rows[k]["od"] is None]
     out = {"items": len(keys)}
-    for name, subset in (("all", keys), ("trip", trip), ("other", other)):
+    dev = [k for k in keys if not k.startswith(("od/", "heldout/"))]
+    groups = (("all", keys), ("trip", trip), ("other", other), ("dev", dev),
+              ("dev_trip", [k for k in dev if k in trip]), ("dev_other", [k for k in dev if k in other]),
+              ("od_contrast", [k for k in keys if k.startswith("od/")]))
+    for name, subset in groups:
         counter = Counter(rows[k]["v4"] for k in subset)
         out[name] = {c: counter.get(c, 0) for c in CLASSES} | {"n": len(subset)}
     out["v3_all"] = dict(Counter(rows[k]["v3"] for k in keys))
+    out["v3_dev"] = dict(Counter(rows[k]["v3"] for k in dev))
+    out["watch"] = {k: rows[k]["v4"] for k in WATCH if k in rows}
     od = [rows[k]["od"] for k in trip]
     out["od_layers"] = {layer: {part: sum(1 for o in od if o[layer][part]) for part in ("ends", "target", "both")}
                         for layer in E.OD_LAYERS} if od else {}
@@ -150,7 +159,9 @@ def main():
         Path(args.json).write_text(text, encoding="utf-8")
     for name, summary in report["arms"].items():
         print(f"== {name} ({summary['items']})")
-        print("  all  ", summary["all"]); print("  trip ", summary["trip"]); print("  other", summary["other"])
+        for g in ("all", "dev", "dev_trip", "dev_other", "od_contrast"):
+            print(f"  {g:11s}", summary[g])
+        print("  od10 normal", sum(v == "정상 답변" for v in summary["watch"].values()), summary["watch"])
         print("  v3   ", summary["v3_all"])
         print("  grounding_ok", summary["grounding_ok"])
         print("  od", summary["od_layers"])

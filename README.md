@@ -1008,6 +1008,24 @@ development가 되었다.
 > grounding 층이 업체 100에서 98/100이었다. 정답 grounding 기반 실행은 양쪽 모두 100/100, 41+2/43로 같다(차이는 모두 grounding에서 옴).
 `evaluate_v2.py`는 사전 등록한 설정(condition_check 끔)을 그대로 쓴다.
 
+### grounding 모델·계약 설명 비교 grounding_v9 (2026-10-04)
+
+같은 코드·prompt·평가에서 모델만 바꾼 비교와 계약 설명 정정(D)을 나눠 쟀다. **현재 조합(qwen3:8b + prompt 522aa3b1)을 유지한다.**
+설계·결과: `evaluation/grounding_v9/analysis.md`, 사전 등록: `evaluation/grounding_v9/preregistration.md`.
+
+* 채점: v3는 실패한 장소 조회까지 조회 집합·횟수에 넣어 n31·m31을 오답으로 셌다. v3는 보존하고, 최종 의미(정답 조회를 실행기로 푼
+  scope와 비교, 주변 포함·scope 출처 확인), 실행 경로(조회 쓰임·실패·중복·폐기), 비용을 나눈 축별 채점(`evaluate_vendor100.py axes`)을
+  모든 비교 대상에 같게 적용했다. 기존 기록에서 바뀐 것은 실패·중복 조회를 버린 문항과 지역 표기만 다른 문항뿐이다.
+* 후보: GPU 3번(48GB) 하나에서 설치된 모델만 비교했다. gemma4:12b는 temperature 0에서 thinking이 끝나지 않아, qwen3.5:9b는 선별 중
+  300초 timeout으로 탈락했다. qwen3:8b와 qwen3.8:27b는 같은 조건 재측정에서 첫 응답이 모두 같았다(327/327, 96/96).
+* qwen3.8:27b(개발 311): 정상 225 → 259, 조용한 오답 26 → 6, 최초 grounding 의미 정확 134 → 250/320, 재질의 79 → 19,
+  지연 중앙값 12.7 → 20.0초. 새 held-out 48(하위 에이전트 작성, 사람 검토 없음)에서 정상 30 → 40. 그러나 trip 질문의 "실차"를
+  taxi_status로 적어 OD 대조 정상이 11 → 6으로 줄어 사전 등록 기준을 충족하지 못했다. trip Tool이 운행 상태를 받지 않는다는 계약을
+  prompt가 알리지 않는 빈틈이다.
+* 설명 D(od_role과 dimension_target의 독립, 두 both의 차이, 생략 = both): qwen3.8:27b에서 개발 정상 259 → 267, OD 대조 6 → 8로
+  기준을 충족했지만 qwen3:8b에서는 trip 밖으로 번져 탈락했다. `grounding-v9-desc` 브랜치에 보존한다.
+* 다음 가설: trip과 taxi_status의 계약을 설명에 알리면 qwen3.8:27b + D가 모델 교체 기준을 모두 충족한다.
+
 ### 출발·도착 조건과 결과 그룹 기준 grounding_v8 (2026-10-03)
 
 OD 혼동(grounding_v7 조용한 오답 10건)을 최초 grounding에서 줄이려 했으나 **채택한 변경은 없다.** 설계·결과:
