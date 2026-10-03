@@ -259,11 +259,16 @@ sections:
       붙입니다.** 이것이 빠지면 어느 장소가 출발인지 정할 방법이 없어 분석
       자체가 만들어지지 않습니다. 장소가 하나뿐이어도 마찬가지입니다.
       - od_role은 attributes 안에 넣습니다.
+      - od_role은 그 장소가 이동의 어느 끝을 제한하는지입니다. 결과를 어느
+        끝 기준으로 묶을지는 od_role이 아니라 factors의 dimension_target으로
+        따로 적습니다.
       - "A에서 출발" → A의 od_role은 "pickup"
       - "B에 도착"   → B의 od_role은 "dropoff"
       - "A에서 출발하여 B에 도착" → 두 장소 모두에 각각 붙입니다.
       - 한 장소 안에서 출발과 도착이 모두 일어나는 이동("C 안에서 오간 노선") → C 하나에
         od_role "both"
+      - od_role "both"는 한 장소가 출발과 도착을 모두 제한한다는 뜻입니다.
+        결과를 출발지-도착지 조합으로 묶는 dimension_target "both"와 다릅니다.
       - "B에 도착한"처럼 한쪽만 있으면 그 장소에만 붙입니다. 나머지 한쪽을
         지어내지 않습니다.
       - pickup과 dropoff를 바꾸어 넣지 않습니다.
@@ -283,12 +288,14 @@ sections:
       - "요일별" → dayofweek, "시도별" → sido, "시군구별" → sigungu,
         "읍면동별" → emd
       - 단순히 평균이나 합계를 묻는 질문에는 dimension을 넣지 않습니다.
-    - 실차 구간(trip)을 나눌 때 승차·하차 한쪽 기준이 드러나면
-      dimension_target을 넣습니다.
+    - 실차 구간(trip)을 dimension으로 나누면 결과를 어느 끝 기준으로 묶을지가
+      dimension_target입니다. 생략하면 출발지-도착지 조합(both)으로 묶입니다.
       - "승차가 많은 읍면동", "출발 지역별" → pickup
       - "하차가 많은 읍면동", "도착 지역별" → dropoff
       - "승하차 노선", "출발지-도착지 조합" → both
-      - 그런 표현이 없으면 넣지 않습니다.
+      - 한쪽 끝 기준으로 묶는 질문이면 생략하지 않고 적습니다.
+      - 장소의 od_role과 묶는 끝은 서로 독립입니다. "A에서 출발한 실차를
+        도착 읍면동별로" → A의 od_role "pickup", dimension_target "dropoff"
     - 순위 표현
       - "가장 많은", "상위" → top
       - "가장 적은", "하위" → bottom

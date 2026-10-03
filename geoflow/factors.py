@@ -163,9 +163,9 @@ FACTOR_SPECS: dict[str, FactorSpec] = {
         FactorSpec(
             "dimension_target", values=frozenset({"pickup", "dropoff", "both"}),
             meaning=(
-                "실차 구간(trip)을 그룹으로 나눌 때 dimension을 적용할 위치. "
+                "실차 구간(trip)을 dimension으로 나눌 때 결과를 묶는 끝. "
                 "pickup=승차 지역별, dropoff=하차 지역별, both=승차지-하차지 "
-                "조합별. 질문에 승차나 하차 한쪽 기준이 없으면 넣지 않는다."
+                "조합별. 생략하면 both로 묶인다. 장소의 od_role(장소가 제한하는 끝)과 독립이다."
             ),
         ),
         FactorSpec(
