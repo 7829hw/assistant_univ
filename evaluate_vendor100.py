@@ -319,6 +319,10 @@ class _RecordingClient:
             "load_duration_ms": round(((response or {}).get("load_duration") or 0) / 1e6, 1),
             "content": message.get("content"),
             "thinking_chars": len(message.get("thinking") or ""),
+            # 생성 길이와 끝난 이유(length면 생성 상한에서 잘림). 이전 기록에는 없다.
+            "prompt_eval_count": (response or {}).get("prompt_eval_count"),
+            "eval_count": (response or {}).get("eval_count"),
+            "done_reason": (response or {}).get("done_reason"),
         })
         return response
 
@@ -512,6 +516,157 @@ def score(item, observed):
     ok = all(checks[key] for key in ("place_lookups_ok", "place_lookup_count_ok", "tool_ok",
                                      "args_ok", "single_analysis_call", "answer_value_ok"))
     return ("match" if ok else "answered_mismatch"), checks
+
+
+#: 축을 나눈 채점(grounding_v9). v3 범주는 그대로 두고 따로 계산한다. 저장된 관측만으로 계산하며 모델을 부르지 않는다.
+#: - 의미(semantic): 최종 분석 호출의 Tool·인자·답변 값. 정답 장소는 이 run의 조회가 아니라 정답 조회를 같은
+#:   실행기에 넣어 얻은 scope와 비교한다. 이름·지역 표기가 달라도 제공자가 같은 scope로 풀면 같은 장소다.
+#:   주변 포함(include_vicinity)은 scope 값에 드러나지 않으므로 그 scope를 만든 조회의 값이 정답과 같아야 한다.
+#:   분석 호출에 쓴 scope는 이 run의 성공한 조회 결과여야 한다(출처). 분석 호출은 하나여야 한다.
+#: - 경로(path): 장소 조회를 쓰임(최종 호출이 쓴 scope)·실패(오류 반환, 쓸 수 없음)·중복(앞과 같은 조회)·
+#:   폐기(성공했지만 최종 호출이 쓰지 않음)로 나눈다. 분석 호출의 오류, 정답보다 많은 조회도 센다.
+#: - 실패한 조회를 무시하는 것이 아니다. 잘못된 장소의 scope가 최종 호출에 들어가면 의미 축에서 틀리고,
+#:   쓰이지 않고 버려졌으면 의미는 맞되 경로 축에 남는다.
+SEMANTIC_SCORER_VERSION = "v4-axes"
+
+
+def _gold_scopes(gold_places):
+    """정답 장소 조회를 실행기에 넣은 결과(scope 또는 None). 모델 출력과 무관하다."""
+    executor = _gold_scopes.executor = getattr(_gold_scopes, "executor", None) or _executor()
+    out = []
+    for call in gold_places:
+        result = executor.execute("get_place_scope", call["args"])
+        out.append(result if isinstance(result, str) else None)
+    return out
+
+
+def _lookup_scope(call):
+    result = call.get("result")
+    if isinstance(result, str):
+        return result
+    if isinstance(result, dict) and isinstance(result.get("scope"), str):
+        return result["scope"]
+    return None
+
+
+def execution_path(item, observed):
+    """실행 경로의 장소 조회·분석 호출 분류. 의미 정확과 따로 본다."""
+    calls = observed.get("calls") or []
+    places = [call for call in calls if call["tool"] == "get_place_scope"]
+    analysis = [call for call in calls if call["tool"] != "get_place_scope"]
+    final_args = (analysis[-1]["args"] if analysis else {}) or {}
+    used_scopes = {value for value in final_args.values() if isinstance(value, str)
+                   and value.startswith("scope:")}
+    seen, kinds = set(), []
+    for call in places:
+        key = _place_key(call["args"])
+        scope = _lookup_scope(call)
+        if scope is None:
+            error = call.get("result") if isinstance(call.get("result"), dict) else {}
+            kinds.append("failed:" + str(error.get("error_code") or "ERROR"))
+        elif key in seen:
+            kinds.append("duplicate")
+        elif scope in used_scopes:
+            kinds.append("used")
+        else:
+            kinds.append("discarded")
+        seen.add(key)
+    gold_places = [call for call in item.get("gold") or [] if call["tool"] == "get_place_scope"]
+    analysis_errors = [call["tool"] for call in analysis
+                       if isinstance(call.get("result"), dict) and call["result"].get("status") == "ERROR"]
+    path = {
+        "lookups": len(places), "gold_lookups": len(gold_places), "lookup_kinds": kinds,
+        "failed_lookups": sum(1 for kind in kinds if kind.startswith("failed")),
+        "duplicate_lookups": kinds.count("duplicate"),
+        "discarded_lookups": kinds.count("discarded"),
+        "extra_lookups": max(0, len(places) - len(gold_places)),
+        "analysis_calls": len(analysis), "analysis_errors": analysis_errors,
+    }
+    path["clean"] = (path["lookups"] == path["gold_lookups"] and not path["failed_lookups"]
+                     and not path["duplicate_lookups"] and not path["discarded_lookups"]
+                     and len(analysis) <= 1 and not analysis_errors)
+    return path
+
+
+def score_semantic(item, observed):
+    """최종 질문 의미·조건·scope 출처·답변 값. (범주, 세부). 범주 이름은 v3와 같다(정상 답변 = match)."""
+    expected = item.get("expected_outcome", "answered")
+    if expected != "answered" or observed.get("outcome") != "answered" or not observed.get("calls"):
+        # 답하지 않는 결과의 판정은 v3와 같다.
+        return score(item, observed)
+    gold = item["gold"]
+    calls = observed["calls"]
+    checks = {}
+    gold_places = [call for call in gold if call["tool"] == "get_place_scope"]
+    gold_final = [call for call in gold if call["tool"] != "get_place_scope"][-1]
+    places = [call for call in calls if call["tool"] == "get_place_scope"]
+    analysis = [call for call in calls if call["tool"] != "get_place_scope"]
+    checks["single_analysis_call"] = len(analysis) == 1
+    final = analysis[-1] if analysis else {"tool": None, "args": {}}
+    checks["tool_ok"] = final["tool"] == gold_final["tool"]
+    gold_scope = _gold_scopes(gold_places)
+    # 이 run에서 성공한 조회: scope → 그 scope를 만든 조회 인자들
+    produced = {}
+    for call in places:
+        scope = _lookup_scope(call)
+        if scope is not None:
+            produced.setdefault(scope, []).append(call["args"])
+    want, vicinity = {}, {}
+    for key, value in gold_final["args"].items():
+        match = _BINDING.match(str(value))
+        if match:
+            place = _binding_place(match.group(1), gold_places)
+            scope = gold_scope[gold_places.index(place)]
+            want[key] = scope if scope is not None else f"<정답 조회 실패 {place['args'].get('name')}>"
+            vicinity[key] = bool(place["args"].get("include_vicinity"))
+        else:
+            want[key] = value
+    got = _normalized(final["tool"] or "", final["args"])
+    want = _normalized(gold_final["tool"], want)
+    checks["arg_mismatches"] = [[key, want.get(key), got.get(key)] for key in sorted(set(want) | set(got))
+                                if want.get(key) != got.get(key)]
+    checks["args_ok"] = not checks["arg_mismatches"]
+    # scope 출처와 주변 포함: 정답이 장소 조회 결과를 쓰는 인자마다. 사용자가 적은 scope literal은 args 비교로 충분하다.
+    provenance, vicinity_ok = True, True
+    for key, value in final["args"].items():
+        if key not in vicinity or not isinstance(value, str):
+            continue
+        sources = produced.get(value)
+        if not sources:
+            provenance = False
+            continue
+        if not any(bool(args.get("include_vicinity")) == vicinity[key]
+                                       for args in sources):
+            vicinity_ok = False
+    checks["scope_from_lookup"] = provenance
+    checks["vicinity_ok"] = vicinity_ok
+    checks["answer_value_ok"] = _answer_has_value(observed.get("final_answer"), final.get("result"))
+    ok = all(checks[key] for key in ("single_analysis_call", "tool_ok", "args_ok", "scope_from_lookup",
+                                     "vicinity_ok", "answer_value_ok"))
+    return ("match" if ok else "answered_mismatch"), checks
+
+
+def run_cost(row):
+    """모델 호출·재질의·지연. 기록에 없는 값은 None."""
+    calls = row.get("llm_calls") or []
+    trace = row.get("planner_trace") or {}
+    # 재질의 종류별 시도·성공(pipeline 기록). 성공은 "재질의 응답이 받아들여졌다"이지 의미가 맞았다는 뜻이 아니다.
+    repairs = trace.get("repairs") or {}
+    tokens = [c.get("eval_count") for c in calls if c.get("eval_count") is not None]
+    return {
+        "plan_calls": sum(1 for c in calls if c["kind"] == "plan"),
+        "repair_calls": sum(1 for c in calls if c["kind"] == "repair"),
+        "failed_calls": sum(1 for c in calls if c.get("failed")),
+        "repairs": sum(v.get("attempted") or 0 for v in repairs.values()),
+        "repair_kinds": sorted(kind for kind, v in repairs.items() if v.get("attempted")),
+        "repair_failed": sum((v.get("attempted") or 0) - (v.get("succeeded") or 0)
+                             for v in repairs.values()),
+        "llm_ms": round(sum(c.get("duration_ms") or 0 for c in calls)),
+        "total_ms": (trace.get("durations") or {}).get("total_ms"),
+        "thinking_chars": sum(c.get("thinking_chars") or 0 for c in calls),
+        "eval_tokens": sum(tokens) if tokens else None,
+        "truncated": sum(1 for c in calls if c.get("done_reason") == "length"),
+    }
 
 
 #: 채점 범주 → 보고용 결과 분류. 모든 범주가 정확히 하나로 간다(합계가 분모와 같다).
@@ -879,8 +1034,21 @@ def cmd_llm(args):
             print(f"{item['id']} {category} {observed['outcome']} {observed['error_code'] or ''}",
                   flush=True)
     rows = [done[item["id"]] for item in items if item["id"] in done]
+    import httpx
+    # 결과에 영향을 주는 모델 쪽 설정: Modelfile 기본 파라미터(penalty 등), 적재된 context 길이와 VRAM.
+    try:
+        shown = httpx.post(f"{args.host}/api/show", json={"model": args.model}, timeout=30).json()
+        loaded = [m for m in httpx.get(f"{args.host}/api/ps", timeout=5).json().get("models", [])
+                  if m.get("name") == args.model]
+        runtime = {"modelfile_parameters": shown.get("parameters"),
+                   "capabilities": shown.get("capabilities"),
+                   "context_length": loaded[0].get("context_length") if loaded else None,
+                   "size_vram": loaded[0].get("size_vram") if loaded else None}
+    except Exception as error:  # noqa: BLE001 - 기록 실패가 결과 저장을 막지 않게
+        runtime = {"error": f"{type(error).__name__}: {error}"}
     result = {"meta": _meta("llm", {"model": args.model, "model_digest": digest,
                                     "ollama_version": version, "model_details": details,
+                                    "model_runtime": runtime,
                                     "planner_prompt_sha256": prompt_sha,
                                     "replay_from": args.replay_from,
                                     "pipeline": {"aggregation_grounding": args.aggregation_grounding,
@@ -1314,6 +1482,198 @@ def cmd_layers(args):
     return 0
 
 
+def _resolve_place(name, region):
+    """장소 이름을 실행기(mock 제공자)로 푼 scope. 풀리지 않으면 이름 그대로. grounding 층 비교용."""
+    executor = _gold_scopes.executor = getattr(_gold_scopes, "executor", None) or _executor()
+    result = executor.execute("get_place_scope", {"name": name, **({"region": region} if region else {})})
+    return result if isinstance(result, str) else f"name:{name}|{region or ''}"
+
+
+def _od_view(payload, trip=True):
+    """(장소 끝 집합, 묶는 끝). 장소 끝 = {(장소 scope, pickup|dropoff)}; od_role both는 두 끝으로 편다.
+
+    묶는 끝은 dimension이 있을 때만 본다. 생략은 schema 기본값 both다(실행 계약과 같다).
+    """
+    if not payload or not isinstance(payload, dict) or "concepts" not in payload:
+        return None
+    ends = set()
+    for concept in payload.get("concepts") or []:
+        if concept.get("concept") != "LOCATION" or concept.get("role") == "MEASURE":
+            continue
+        role = (concept.get("attributes") or {}).get("od_role") or concept.get("od_role")
+        value = concept.get("value")
+        if concept.get("subtype") == "place" and isinstance(value, dict):
+            where = _resolve_place(value.get("name"), value.get("region"))
+        else:
+            where = str(value)
+        for end in ({"pickup", "dropoff"} if role == "both" else {role or "-"}):
+            ends.add((where, end))
+    factors = payload.get("factors") or {}
+    target = (factors.get("dimension_target") or "both") if factors.get("dimension") else None
+    return frozenset(ends), target
+
+
+def _od_call_view(call):
+    args = call.get("args") or {}
+    ends = {(args[key], end) for key, end in (("scope_pickup", "pickup"), ("scope_dropoff", "dropoff"))
+            if key in args}
+    target = (args.get("dimension_target") or "both") if args.get("dimension") else None
+    return frozenset(ends), target
+
+
+OD_LAYERS = ("raw", "normalized", "preserved", "repaired", "final_call")
+
+
+def od_layers(item, row):
+    """trip 건수 문항의 층별 (장소 끝 맞음, 묶는 끝 맞음, 둘 다). trip 건수 문항이 아니면 None.
+
+    - raw/normalized/preserved: 첫 계획 원출력을 현재 코드의 각 층에 다시 통과(``grounding_layers``와 같은 층).
+    - repaired: 이 run의 최종 grounding(재질의 반영).
+    - final_call: 실행된 get_trip_count 인자(장소는 scope 값).
+    """
+    from geoflow import conditions
+    from geoflow.errors import PlannerError
+    from geoflow.grounding import parse_grounding
+    from geoflow.planner import parse_planner_json
+
+    gold_calls = item.get("gold") or []
+    if not any(call["tool"] == "get_trip_count" for call in gold_calls) or \
+            item.get("expected_outcome", "answered") != "answered":
+        return None
+    want = _od_view(gold_grounding(item))
+    out = {}
+
+    def judge(view):
+        if view is None:
+            return {"ends": False, "target": False, "both": False}
+        ends_ok, target_ok = view[0] == want[0], view[1] == want[1]
+        return {"ends": ends_ok, "target": target_ok, "both": ends_ok and target_ok}
+
+    text = _first_plan(row)
+    try:
+        payload = parse_planner_json(text) if text else None
+    except PlannerError:
+        payload = None
+    for layer in ("raw", "normalized", "preserved"):
+        view = None
+        if isinstance(payload, dict) and "concepts" in payload:
+            try:
+                current = payload
+                if layer == "preserved":
+                    current, _ = conditions.reconcile_payload(
+                        payload, item["question"], reference_date=REFERENCE_DATE, raw_text=text)
+                view = _od_view(current if layer == "raw" else parse_grounding(
+                    current, item["question"], raw_text=text).to_dict())
+            except PlannerError:
+                view = _od_view(payload) if layer == "raw" else None
+        out[layer] = judge(view)
+    out["repaired"] = judge(_od_view(row.get("grounding")))
+    trip = [call for call in row.get("calls") or [] if call["tool"] == "get_trip_count"]
+    # 최종 호출은 scope 값으로 비교한다. 정답 쪽도 정답 조회를 실행기에 넣은 scope로 바꾼다.
+    gold_places = [call for call in gold_calls if call["tool"] == "get_place_scope"]
+    gold_scope = _gold_scopes(gold_places)
+    gold_final = [call for call in gold_calls if call["tool"] == "get_trip_count"][-1]
+    gold_args = {}
+    for key, value in gold_final["args"].items():
+        match = _BINDING.match(str(value))
+        gold_args[key] = gold_scope[gold_places.index(_binding_place(match.group(1), gold_places))] \
+            if match else value
+    want_call = _od_call_view({"args": gold_args})
+    if trip and row.get("outcome") == "answered":
+        got = _od_call_view(trip[-1])
+        out["final_call"] = {"ends": got[0] == want_call[0], "target": got[1] == want_call[1],
+                             "both": got == want_call}
+    else:
+        out["final_call"] = {"ends": False, "target": False, "both": False}
+    return out
+
+
+def axes_rows(path):
+    """저장된 run 하나를 v3 범주와 축별 채점으로 다시 본다. 파일은 바꾸지 않는다."""
+    result = _rescored(path)
+    gold = {item["id"]: item for item in load_gold(
+        HERE / result["meta"]["gold_file"] if result["meta"].get("gold_file") else None)["items"]}
+    rows = []
+    for row in result["rows"]:
+        item = gold[row["id"]]
+        category, checks = (score_semantic(item, row) if row["category"] != "no_gold_grounding"
+                            else (row["category"], {}))
+        v4 = dict(row, category=category)
+        rows.append({"id": row["id"], "v3": row["result_class"], "v4": result_class(v4),
+                     "v4_checks": checks, "v3_checks": row.get("checks"),
+                     "path": execution_path(item, row) if row.get("outcome") == "answered" else None,
+                     "cost": run_cost(row), "od": od_layers(item, row),
+                     "outcome": row.get("outcome"), "error_code": row.get("error_code"),
+                     "grounding_ok": row.get("grounding_ok")})
+    return result["meta"], rows
+
+
+def _axes_summary(rows):
+    from collections import Counter
+    v3, v4 = Counter(r["v3"] for r in rows), Counter(r["v4"] for r in rows)
+    answered = [r for r in rows if r["v4"] == "정상 답변"]
+    costs = [r["cost"] for r in rows]
+    totals = sorted(c["total_ms"] or 0 for c in costs)
+    od = [r["od"] for r in rows if r["od"]]
+    summary = {
+        "items": len(rows), "v3": dict(v3), "v4": dict(v4),
+        "v4_normal_clean_path": sum(1 for r in answered if r["path"] and r["path"]["clean"]),
+        "v4_normal_failed_lookup": sum(1 for r in answered if r["path"] and r["path"]["failed_lookups"]),
+        "v4_normal_discarded_or_dup": sum(1 for r in answered if r["path"] and (
+            r["path"]["discarded_lookups"] or r["path"]["duplicate_lookups"])),
+        "plan_calls": sum(c["plan_calls"] for c in costs),
+        "repair_calls": sum(c["repair_calls"] for c in costs),
+        "failed_calls": sum(c["failed_calls"] for c in costs),
+        "repairs": sum(c["repairs"] for c in costs),
+        "repair_failed": sum(c["repair_failed"] for c in costs),
+        "items_with_repair": sum(1 for c in costs if c["repairs"]),
+        "normal_with_repair": sum(1 for r in answered if r["cost"]["repairs"]),
+        "total_s": round(sum(totals) / 1000), "median_s": round(totals[len(totals) // 2] / 1000, 1)
+        if totals else None,
+        "p90_s": round(totals[min(len(totals) - 1, int(0.9 * len(totals)))] / 1000, 1) if totals else None,
+        "max_s": round(totals[-1] / 1000, 1) if totals else None,
+        "truncated": sum(c["truncated"] for c in costs),
+        "eval_tokens": sum(c["eval_tokens"] or 0 for c in costs) if any(
+            c["eval_tokens"] is not None for c in costs) else None,
+        "od_items": len(od),
+        "od": {layer: {key: sum(1 for o in od if o[layer][key]) for key in ("ends", "target", "both")}
+               for layer in OD_LAYERS} if od else {},
+    }
+    return summary
+
+
+def cmd_axes(args):
+    """여러 run을 같은 축별 채점으로 비교한다(모델 호출 없음). 원 결과 파일은 바꾸지 않는다."""
+    report = {"scorer": {"v3": SCORER_VERSION, "axes": SEMANTIC_SCORER_VERSION}, "runs": {}}
+    lines = [f"# 축별 채점 (`evaluate_vendor100.py axes`, v3 + {SEMANTIC_SCORER_VERSION})", ""]
+    for name, *paths in args.run:
+        rows, metas = [], []
+        for path in paths:
+            meta, part = axes_rows(path)
+            for row in part:
+                row["set"] = Path(path).stem
+            rows += part
+            metas.append({key: meta.get(key) for key in ("code_commit", "model", "model_digest",
+                                                          "planner_prompt_sha256", "ollama_version",
+                                                          "gold_file", "options")})
+        summary = _axes_summary(rows)
+        report["runs"][name] = {"paths": paths, "meta": metas, "summary": summary, "rows": rows}
+        changed = [r for r in rows if r["v3"] != r["v4"]]
+        lines += [f"## {name}", "", f"- 문항 {summary['items']}; v3 {summary['v3']}",
+                  f"- 축별 {summary['v4']}",
+                  f"- v3 → 축별 바뀐 문항 {len(changed)}: " + ", ".join(
+                      f"{r['set']}/{r['id']}({r['v3']}→{r['v4']}; 경로 {r['path'] and r['path']['lookup_kinds']})"
+                      for r in changed), ""]
+    text = "\n".join(lines) + "\n"
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+    if args.json:
+        Path(args.json).write_text(json.dumps(report, ensure_ascii=False, indent=1, default=list),
+                                   encoding="utf-8")
+    print(text)
+    return 0
+
+
 def cmd_gold_audit(args):
     """정답 grounding을 조건 계층에 통과시켜 훼손 여부를 본다(실행기 평가와 별개). LLM 없음."""
     from geoflow import conditions
@@ -1418,6 +1778,11 @@ def main(argv=None):
     layers.add_argument("--run", nargs=2, action="append", required=True, metavar=("NAME", "RUN"))
     layers.add_argument("--out", default="")
     layers.add_argument("--json", default="")
+    axes = sub.add_parser("axes")
+    axes.add_argument("--run", nargs="+", action="append", required=True, metavar="NAME RUN",
+                      help="이름 다음에 결과 파일 여러 개(셋마다 하나)")
+    axes.add_argument("--out", default="")
+    axes.add_argument("--json", default="")
     gold_audit = sub.add_parser("gold-audit")
     gold_audit.add_argument("gold_files", nargs="+")
     gold_audit.add_argument("--out", default="")
@@ -1433,7 +1798,7 @@ def main(argv=None):
             "rerun": cmd_rerun,
             "rescore": cmd_rescore, "compare": cmd_compare,
             "report": cmd_report, "layers": cmd_layers,
-            "gold-audit": cmd_gold_audit}[args.command](args)
+            "gold-audit": cmd_gold_audit, "axes": cmd_axes}[args.command](args)
 
 
 if __name__ == "__main__":
