@@ -175,8 +175,8 @@ sections:
                 예: 사용자가 직접 적은 "scope:edge:1742"
      - SUPPORT  측정의 대상이 되는 사건
                 예: 속도를 재는 대상인 passage
-     - MEASURE  질문이 구하려는 값. 질문마다 정확히 하나입니다.
-                예: 평균 속도의 speed
+     - MEASURE  세거나 집계하는 값. 질문마다 정확히 하나입니다.
+                예: 평균 속도의 speed, 건수를 세면 그 건수
 
     맥락 role (절차 순서를 갖지 않습니다)
      - EXTENT   공간적 배경
@@ -185,7 +185,23 @@ sections:
     - 장소명은 SUBCOND입니다. 조회를 거쳐야 범위가 되기 때문입니다.
     - 사용자가 직접 적은 scope는 COND입니다. 이미 범위이기 때문입니다.
     - 사건(EVENT)은 SUPPORT입니다.
-    - 구하려는 측정값은 MEASURE입니다.
+    - 세거나 집계하는 값이 MEASURE입니다.
+
+    질문은 네 부분으로 나누어 적습니다. 결과로 무엇이 돌아오는지와 무엇을
+    세는지는 다른 부분입니다.
+     1. 무엇을 세거나 집계하는가 → MEASURE(와 그 사건 SUPPORT)
+     2. 어떤 조건으로 대상을 제한하는가 → 장소 개념(od_role 포함), factors의
+        date·time·taxi_type·taxi_status·vicinity
+     3. 무엇을 기준으로 묶는가 → factors의 dimension(trip이면
+        dimension_target도), 기간을 나누면 bucket
+     4. 무엇을 돌려주는가
+        - 값 하나: 따로 적지 않습니다.
+        - 그룹별 값이나 순위로 고른 그룹(장소·요일): 그룹 이름은 3의
+          dimension에서 나오므로 order·limit만 적습니다. MEASURE는 여전히
+          1에서 센 값입니다.
+        - 나눈 기간 가운데 고른 주·월: answer=bucket
+        - 질문에 주어진 scope 자체의 이름: 이때만 MEASURE가
+          LOCATION/place입니다(세거나 집계할 값이 없습니다).
 
   metric_vocabulary: |-
     [분석 개체와 측정값 구분]
@@ -353,7 +369,8 @@ sections:
       지역, 날짜를 implicit으로 만들지 않습니다.
     - implicit 개념에는 value를 넣지 않습니다.
     - 모든 출력에는 role이 MEASURE인 개념이 정확히 하나 있어야 합니다.
-      질문이 구하려는 값이 통계값이 아니라 장소명일 수도 있습니다.
+      세거나 집계할 값 없이 주어진 scope의 이름만 묻는 질문이면 MEASURE는
+      LOCATION/place입니다.
 
   output_format: |-
     [출력 형식]
@@ -522,7 +539,8 @@ sections:
     주어졌는지(place) 범위로 주어졌는지(scope)뿐입니다. 두 질문을 서로 다른
     분석 유형으로 나누지 마세요.
 
-    예시 5처럼 구하려는 값이 통계값이 아닐 수도 있습니다. "여기가 어디인가"를
-    묻는 질문의 MEASURE는 LOCATION/place이며, 실행이 채우므로 value가
-    없습니다. 측정값(MEASURE)이 없는 출력은 허용되지 않습니다. 질문이 무엇을
-    구하는지 반드시 하나 정하세요.
+    예시 5는 주어진 scope가 어디인지(이름)만 묻습니다. 세거나 집계할 값이 없으므로
+    MEASURE는 LOCATION/place이며, 실행이 채우므로 value가 없습니다. 순위나
+    그룹으로 장소를 고르는 질문은 다릅니다. 그때 MEASURE는 세거나 집계하는 값이고,
+    장소는 dimension의 그룹 이름으로 돌아옵니다. 측정값(MEASURE)이 없는 출력은
+    허용되지 않습니다.

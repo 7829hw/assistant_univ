@@ -90,3 +90,16 @@ class StatusContractTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MeasureDescriptionTest(unittest.TestCase):
+    """MEASURE는 세거나 집계하는 값이고, 반환 대상(그룹 이름·구간·scope 이름)은 다른 부분에 적는다고 설명한다."""
+
+    def test_measure_is_what_is_counted_not_what_is_returned(self):
+        prompt = GeoFlowPlanner(client=None).system_prompt()
+        self.assertNotIn("질문이 구하려는 값", prompt)
+        self.assertIn("MEASURE  세거나 집계하는 값", prompt)
+        for part in ("1. 무엇을 세거나 집계하는가", "2. 어떤 조건으로 대상을 제한하는가",
+                     "3. 무엇을 기준으로 묶는가", "4. 무엇을 돌려주는가"):
+            self.assertIn(part, prompt)
+        self.assertIn("이때만 MEASURE가\n      LOCATION/place", prompt)
