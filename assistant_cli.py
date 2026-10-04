@@ -47,7 +47,13 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RUNS_DIR = os.path.join(BASE_DIR, "evaluation", "runs")
 
 DEFAULT_OLLAMA_HOST = "http://localhost:11434"
+#: react 모드(순차 Tool Calling)의 기본 모델. GeoFlow grounding 평가와 무관하며 이 서버에 설치돼 있지 않다.
 DEFAULT_MODEL_NAME = "qwen3-coder:30b"
+#: GeoFlow 모드의 기본 grounding 모델과 chat timeout. 평가(evaluate_vendor100.py llm)에서 검증한 조합과 같아야 한다.
+#: 바꾸면 README의 "실행 기본값" 절과 evaluation/grounding_v11/analysis.md를 함께 고친다.
+#: 사용자가 --model·OLLAMA_MODEL·--chat-timeout·OLLAMA_CHAT_TIMEOUT으로 지정한 값이 언제나 우선한다.
+GEOFLOW_DEFAULT_MODEL_NAME = "qwen3:8b"
+GEOFLOW_DEFAULT_CHAT_TIMEOUT = 300.0
 MAX_TOOL_HOPS = 10
 OLLAMA_OPTIONS = {"temperature": 0}
 
@@ -971,8 +977,9 @@ def parse_args(argv=None):
     )
     parser.add_argument(
         "--model",
-        default=os.environ.get("OLLAMA_MODEL", DEFAULT_MODEL_NAME),
-        help=f"Ollama 모델명(기본: {DEFAULT_MODEL_NAME})",
+        default=None,
+        help=(f"Ollama 모델명. 지정하지 않으면 OLLAMA_MODEL, 그것도 없으면 geoflow 모드 "
+              f"{GEOFLOW_DEFAULT_MODEL_NAME}, react 모드 {DEFAULT_MODEL_NAME}"),
     )
     parser.add_argument(
         "--ollama-host",
@@ -1081,9 +1088,27 @@ def parse_args(argv=None):
     if args.query_id and args.query_file is None:
         parser.error("--query-id는 --query-file과 함께 사용해야 합니다.")
     try:
-        args.chat_timeout = resolve_chat_timeout(args.chat_timeout)
+        resolve_run_settings(args)
     except ValueError as error:
         parser.error(str(error))
+    return args
+
+
+def resolve_run_settings(args, environ=None):
+    """모델과 chat timeout을 정한다: CLI 인자 > 환경변수 > 실행 모드의 기본값. 출처를 args에 남긴다."""
+    environment = os.environ if environ is None else environ
+    geoflow = args.agent_mode == AGENT_MODE_GEOFLOW
+    if args.model:
+        args.model_source = "--model"
+    elif environment.get("OLLAMA_MODEL"):
+        args.model, args.model_source = environment["OLLAMA_MODEL"], "OLLAMA_MODEL"
+    else:
+        args.model = GEOFLOW_DEFAULT_MODEL_NAME if geoflow else DEFAULT_MODEL_NAME
+        args.model_source = "default"
+    if args.chat_timeout is not None or environment.get("OLLAMA_CHAT_TIMEOUT") or not geoflow:
+        args.chat_timeout = resolve_chat_timeout(args.chat_timeout, environment)
+    else:
+        args.chat_timeout = GEOFLOW_DEFAULT_CHAT_TIMEOUT
     return args
 
 
@@ -1144,7 +1169,7 @@ def main(argv=None):
         if AGENT_MODE == AGENT_MODE_GEOFLOW else ""
     )
     print(
-        f"설정 — 모델: {MODEL_NAME} / 주소: {OLLAMA_HOST} "
+        f"설정 — 모델: {MODEL_NAME}({getattr(args, 'model_source', '-')}) / 주소: {OLLAMA_HOST} "
         f"/ chat timeout: {CHAT_TIMEOUT:g}초 / agent mode: {AGENT_MODE} "
         f"{grounding_note}"
         f"/ think: {args.model_think} "
