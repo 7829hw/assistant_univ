@@ -21,7 +21,7 @@ sys.path.insert(0, str(HERE.parents[1]))
 
 import evaluate_vendor100 as E  # noqa: E402
 
-SETS = ("od", "at", "contrast", "dev", "indepv2", "indepv3", "indepv4", "old44", "heldout")
+SETS = ("od", "status", "at", "contrast", "dev", "indepv2", "indepv3", "indepv4", "old44", "heldout")
 #: grounding_v8이 확인한 qwen3:8b의 OD 혼동 10건(개발셋).
 WATCH = ("indepv2/n06", "indepv4/k28", "indepv4/k31", "indepv3/m13", "indepv4/k34", "indepv4/k25",
          "contrast/c04a", "contrast/c04c", "old44/g11", "indepv2/n03")
@@ -39,7 +39,7 @@ def load_arm(directory, ids=None, extra=None):
         meta, part = E.axes_rows(str(path))
         source = {r["id"]: r for r in json.loads(Path(path).read_text(encoding="utf-8"))["rows"]}
         for row in part:
-            if ids is not None and set_name != "od" and row["id"] not in ids.get(set_name, ()):
+            if ids is not None and set_name not in ("od", "status", "heldout") and row["id"] not in ids.get(set_name, ()):
                 continue
             key = f"{set_name}/{row['id']}"
             rows[key] = row
@@ -57,7 +57,7 @@ def summarize(rows, raw):
     trip = [k for k in keys if rows[k]["od"] is not None]
     other = [k for k in keys if rows[k]["od"] is None]
     out = {"items": len(keys)}
-    dev = [k for k in keys if not k.startswith(("od/", "heldout/"))]
+    dev = [k for k in keys if not k.startswith(("od/", "heldout/", "status/"))]
     groups = (("all", keys), ("trip", trip), ("other", other), ("dev", dev),
               ("dev_trip", [k for k in dev if k in trip]), ("dev_other", [k for k in dev if k in other]),
               ("od_contrast", [k for k in keys if k.startswith("od/")]))
@@ -109,9 +109,14 @@ def summarize(rows, raw):
 _GOLD = {}
 
 
+#: 셋 이름 → 문항 파일. 다른 단계가 held-out 등을 바꿔 쓸 수 있게 모듈 수준에 둔다.
+GOLD_FILES = {}
+
+
 def _gold(set_name, row):
     if set_name not in _GOLD:
         files = {"od": "evaluation/grounding_v8/od_contrast_questions.yaml",
+                 "status": "evaluation/grounding_v10/status_contrast_questions.yaml",
                  "at": "evaluation/grounding_v4/answer_target_questions.yaml",
                  "contrast": "evaluation/grounding_v2/contrast_questions.yaml",
                  "dev": "evaluation/vendor100/gold.yaml",
@@ -120,6 +125,7 @@ def _gold(set_name, row):
                  "indepv4": "evaluation/grounding_v3/independent_v4_questions.yaml",
                  "old44": "evaluation/grounding_v1/holdout_questions.yaml",
                  "heldout": "evaluation/grounding_v9/heldout_questions.yaml"}
+        files.update(GOLD_FILES)
         _GOLD[set_name] = {i["id"]: i for i in E.load_gold(E.HERE / files[set_name])["items"]}
     return _GOLD[set_name]
 

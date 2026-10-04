@@ -1,0 +1,233 @@
+# evaluation/grounding_v10/status_contrast_questions.yaml
+#
+# 실차 구간(trip)이라는 분석 대상, 통행량에 붙는 운행 상태 조건(실차·공차·대기영업), trip으로 충족할 수 없는 상태·조건을
+# 가르는 대조 셋.
+#
+# - 작성: Claude(주 에이전트, 계약 설명 후보를 쓰는 쪽). 사람 검토 없음. 개발용 대조 셋이다.
+# - 기준일 2026-09-25(금). 장소는 mock gazetteer 이름.
+# - 기대 결과는 실행 계약(schemas/tims.yaml)과 질문 의미로 정했다. 후보 실행 전에 정답 실행기로 확인해 고정한다.
+#   - taxi_status를 받는 Tool은 get_passage_count뿐이다. get_trip_count는 taxi_status·taxi_type을 받지 않는다.
+#   - 실차 구간(trip)은 승객을 태운 운행 구간 자체다. "실차"가 그 대상을 가리키면 별도 조건이 아니다.
+#   - 질문이 trip으로 충족할 수 없는 상태(공차·대기영업)나 trip이 받지 않는 조건(택시 유형)을 요구하면 그 조건을 버리고
+#     답하면 안 된다. 지원 불가로 멈춰야 한다(expected_outcome: unsupported). 이런 문항은 gold_grounding으로 "조건을 보존한
+#     grounding이 그 이유로 멈춤"을 확인한다.
+# - category: A trip 대상 / B 통행량 상태 조건 / C 지원 불가 결합 / D 비슷한 단어·다른 측정값 / E 상태 표현 없는 회귀 /
+#   F 조건 계층이 질문 표현으로 상태 값을 채우는 경로(계약 설명으로 바뀌지 않는다. 따로 보고)
+
+version: grounding_v10_status_contrast
+status: development
+items:
+  # ── A. 실차 구간이 분석 대상 ─────────────────────────────────────────────
+  - id: s01
+    category: A
+    question: "지난달 대구 수성구에서 출발한 실차 건수는?"
+    gold_text: |-
+      get_place_scope(name=수성구, region=대구)
+      get_trip_count(scope_pickup=$pickup.scope, date=last_month)
+  - id: s02
+    category: A
+    note: "s01과 같은 뜻, '실차' 없음"
+    question: "지난달 대구 수성구에서 손님을 태워 출발한 운행은 몇 건이야?"
+    gold_text: |-
+      get_place_scope(name=수성구, region=대구)
+      get_trip_count(scope_pickup=$pickup.scope, date=last_month)
+  - id: s03
+    category: A
+    question: "지난주 부산에서 출발해 대구에 도착한 실차를 하차 읍면동별로 셌을 때 가장 많은 두 곳은?"
+    gold_text: |-
+      get_place_scope(name=부산)
+      get_place_scope(name=대구)
+      get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, date=last_week, dimension=emd, dimension_target=dropoff, order=top, limit=2)
+  - id: s04
+    category: A
+    question: "이번 달 대구 중구 안에서 승차와 하차가 모두 이뤄진 실차 구간은 몇 건이야?"
+    gold_text: |-
+      get_place_scope(name=중구, region=대구)
+      get_trip_count(scope_pickup=$area.scope, scope_dropoff=$area.scope, date=this_month)
+  - id: s05
+    category: A
+    question: "평일 오전 7시부터 9시까지 부산 초량동에 내린 실차를 승차 시군구별로 셌을 때 가장 적은 곳은?"
+    gold_text: |-
+      get_place_scope(name=초량동, region=부산)
+      get_trip_count(scope_dropoff=$dropoff.scope, date=weekday, time=070000-090000, dimension=sigungu, dimension_target=pickup, order=bottom, limit=1)
+  - id: s06
+    category: A
+    question: "지난달 실차를 출발 읍면동과 도착 읍면동의 조합별로 셌을 때 가장 많은 세 개는?"
+    gold_text: |-
+      get_trip_count(date=last_month, dimension=emd, dimension_target=both, order=top, limit=3)
+  - id: s07
+    category: A
+    note: "'실차' 없음"
+    question: "어제 대구 동인동에서 태운 손님들을 가장 많이 내려준 읍면동은 어디야?"
+    gold_text: |-
+      get_place_scope(name=동인동, region=대구)
+      get_trip_count(scope_pickup=$pickup.scope, date=20260924, dimension=emd, dimension_target=dropoff, order=top, limit=1)
+
+  # ── B. 통행량의 운행 상태 조건 ───────────────────────────────────────────
+  - id: s08
+    category: B
+    question: "어제 동성로를 지나간 실차 택시 통행량은?"
+    gold_text: |-
+      get_place_scope(name=동성로)
+      get_passage_count(scope=$resolve.scope, date=20260924, taxi_status=occupied)
+  - id: s09
+    category: B
+    question: "지난주 대구 수성구의 공차 택시 통행량을 읍면동별로 많은 순서대로 2곳 보여줘."
+    gold_text: |-
+      get_place_scope(name=수성구, region=대구)
+      get_passage_count(scope=$resolve.scope, date=last_week, taxi_status=vacant, dimension=emd, order=top, limit=2)
+  - id: s10
+    category: B
+    question: "주말에 동대구역 근처를 빈 차로 지나간 개인택시 통행량은?"
+    gold_text: |-
+      get_place_scope(name=동대구역, include_vicinity=true)
+      get_passage_count(scope=$resolve.scope, date=weekend, taxi_type=private, taxi_status=vacant)
+  - id: s11
+    category: B
+    question: "이번 달 대구 중구에서 대기영업 중이던 법인택시 통행량 알려줘."
+    gold_text: |-
+      get_place_scope(name=중구, region=대구)
+      get_passage_count(scope=$resolve.scope, date=this_month, taxi_type=corporate, taxi_status=stationary)
+  - id: s12
+    category: B
+    note: "상태 없는 통제(s08과 같은 장소·기간)"
+    question: "어제 동성로 택시 통행량은?"
+    gold_text: |-
+      get_place_scope(name=동성로)
+      get_passage_count(scope=$resolve.scope, date=20260924)
+
+  # ── C. trip으로 충족할 수 없는 상태·조건(조건을 보존하고 멈춰야 함) ──────────────
+  - id: s13
+    category: C
+    question: "지난달 대구 수성구에서 출발한 공차 운행 건수는?"
+    expected_outcome: unsupported
+    expected_error: [UNCONSUMED_CONDITION, UNSUPPORTED_QUESTION]
+    gold_text: ""
+    gold_grounding:
+      concepts:
+        - {id: origin, concept: LOCATION, subtype: place, role: SUBCOND, source: user, value: {name: 수성구, region: 대구}, attributes: {od_role: pickup}}
+        - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+        - {id: measure, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+      factors: {date: last_month, taxi_status: vacant}
+  - id: s14
+    category: C
+    question: "어제 동대구역에서 대기영업 상태로 출발한 실차 구간은 몇 건이야?"
+    expected_outcome: unsupported
+    expected_error: [UNCONSUMED_CONDITION, UNSUPPORTED_QUESTION]
+    gold_text: ""
+    gold_grounding:
+      concepts:
+        - {id: origin, concept: LOCATION, subtype: place, role: SUBCOND, source: user, value: {name: 동대구역, region: ""}, attributes: {od_role: pickup}}
+        - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+        - {id: measure, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+      factors: {date: "20260924", taxi_status: stationary}
+  - id: s15
+    category: C
+    question: "지난주 부산 초량동에 공차 상태로 도착한 운행을 승차 읍면동별로 세어 가장 많은 두 곳을 알려줘."
+    expected_outcome: unsupported
+    expected_error: [UNCONSUMED_CONDITION, UNSUPPORTED_QUESTION]
+    gold_text: ""
+    gold_grounding:
+      concepts:
+        - {id: destination, concept: LOCATION, subtype: place, role: SUBCOND, source: user, value: {name: 초량동, region: 부산}, attributes: {od_role: dropoff}}
+        - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+        - {id: measure, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+      factors: {date: last_week, taxi_status: vacant, dimension: emd, dimension_target: pickup, order: top, limit: 2}
+  - id: s16
+    category: C
+    question: "주말 대구 수성구를 공차로 달린 택시들의 평균 속도는?"
+    expected_outcome: unsupported
+    expected_error: [UNCONSUMED_CONDITION, UNSUPPORTED_QUESTION]
+    gold_text: ""
+    gold_grounding:
+      concepts:
+        - {id: place, concept: LOCATION, subtype: place, role: SUBCOND, source: user, value: {name: 수성구, region: 대구}}
+        - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+        - {id: measure, concept: AMOUNT, subtype: speed, role: MEASURE, source: implicit}
+      factors: {date: weekend, taxi_status: vacant, aggregation: avg}
+  - id: s17
+    category: C
+    note: "상태가 아니라 trip이 받지 않는 택시 유형 조건"
+    question: "지난달 대구 수성구에서 출발한 개인택시 실차 건수는?"
+    expected_outcome: unsupported
+    expected_error: [UNCONSUMED_CONDITION, UNSUPPORTED_QUESTION]
+    gold_text: ""
+    gold_grounding:
+      concepts:
+        - {id: origin, concept: LOCATION, subtype: place, role: SUBCOND, source: user, value: {name: 수성구, region: 대구}, attributes: {od_role: pickup}}
+        - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+        - {id: measure, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+      factors: {date: last_month, taxi_type: private}
+  - id: s18
+    category: C
+    question: "올해 공차 상태인 택시가 받은 요금의 평균은?"
+    expected_outcome: unsupported
+    expected_error: [UNCONSUMED_CONDITION, UNSUPPORTED_QUESTION]
+    gold_text: ""
+    gold_grounding:
+      concepts:
+        - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+        - {id: measure, concept: AMOUNT, subtype: fare, role: MEASURE, source: implicit}
+      factors: {date: this_year, taxi_status: vacant, aggregation: avg}
+
+  # ── D. 비슷한 단어, 다른 측정값 ─────────────────────────────────────────
+  - id: s19
+    category: D
+    question: "지난달 대구 택시의 평균 공차율은?"
+    gold_text: |-
+      get_place_scope(name=대구)
+      get_drive_metrics(metric=vacant_ratio, scope=$resolve.scope, date=last_month, aggregation=avg)
+  - id: s20
+    category: D
+    note: "s08(동성로 실차 통행량)과 짝: 같은 장소, trip 건수"
+    question: "어제 동성로에서 출발한 실차는 몇 건이야?"
+    gold_text: |-
+      get_place_scope(name=동성로)
+      get_trip_count(scope_pickup=$pickup.scope, date=20260924)
+  - id: s21
+    category: D
+    question: "지난주 부산 개인택시 공차율의 최댓값은?"
+    gold_text: |-
+      get_place_scope(name=부산)
+      get_drive_metrics(metric=vacant_ratio, scope=$resolve.scope, date=last_week, taxi_type=private, aggregation=max)
+  - id: s22
+    category: D
+    question: "올해 부산진구 소속 택시가 받은 평균 요금은?"
+    gold_text: |-
+      get_place_scope(name=부산진구)
+      get_trip_metrics(metric=fare, scope=$resolve.scope, date=this_year, aggregation=avg)
+
+  # ── E. 상태 표현 없는 OD·일반 회귀 ──────────────────────────────────────
+  - id: s23
+    category: E
+    question: "지난달 대구 수성구에 도착한 운행들을 출발 읍면동별로 묶으면 가장 많은 두 곳은?"
+    gold_text: |-
+      get_place_scope(name=수성구, region=대구)
+      get_trip_count(scope_dropoff=$dropoff.scope, date=last_month, dimension=emd, dimension_target=pickup, order=top, limit=2)
+  - id: s24
+    category: E
+    question: "이번 달 부산 시군구 가운데 택시 통행량이 가장 많은 세 곳은?"
+    gold_text: |-
+      get_place_scope(name=부산)
+      get_passage_count(scope=$resolve.scope, date=this_month, dimension=sigungu, order=top, limit=3)
+  - id: s25
+    category: E
+    question: "지난달 대구 법인택시의 하루 평균 수입은?"
+    gold_text: |-
+      get_place_scope(name=대구)
+      get_billing_metrics(metric=revenue, scope=$resolve.scope, date=last_month, taxi_type=corporate, aggregation=avg)
+  - id: s26
+    category: E
+    question: "어제 동대구역 근처 택시의 평균 속도는?"
+    gold_text: |-
+      get_place_scope(name=동대구역, include_vicinity=true)
+      get_passage_metrics(metric=speed, scope=$resolve.scope, date=20260924, aggregation=avg)
+
+  # ── F. 조건 계층이 질문 표현("실차 택시")으로 상태 값을 채우는 경로 ───────────────
+  - id: s27
+    category: F
+    note: "뜻은 trip 건수. 조건 계층이 '실차 택시'를 상태 조건으로 읽어 occupied를 채운다(모델 출력과 무관). 계약 설명으로 바뀌지 않으므로 따로 보고한다."
+    question: "어제 동대구역에서 실차 택시가 태운 손님은 몇 건이야?"
+    gold_text: |-
+      get_place_scope(name=동대구역)
+      get_trip_count(scope_pickup=$pickup.scope, date=20260924)
