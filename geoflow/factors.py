@@ -150,14 +150,18 @@ FACTOR_SPECS: dict[str, FactorSpec] = {
         FactorSpec(
             "taxi_status",
             values=frozenset({"occupied", "vacant", "stationary", "all"}),
-            meaning="운행 상태 조건.",
+            meaning=(
+                "운행 상태 조건(occupied=실차, vacant=공차, stationary=대기영업). 질문이 운행 상태를 "
+                "요구하면 측정값과 관계없이 적는다. 실차 구간(trip)은 정의상 실차이므로 그 대상을 가리키는 "
+                "'실차'는 조건으로 적지 않는다."
+            ),
         ),
         FactorSpec(
             "dimension",
             values=frozenset({"h3", "sido", "sigungu", "emd", "dayofweek"}),
             meaning=(
                 "결과를 나눌 그룹 기준. 지정하면 단일 값이 아니라 그룹별 "
-                "분포를 얻는다. bucket과 함께 쓸 수 없다."
+                "분포를 얻는다. bucket과 함께 쓰는 계산은 지원하지 않지만, 질문이 둘 다 요구하면 둘 다 적는다."
             ),
         ),
         FactorSpec(
@@ -344,7 +348,8 @@ RESULT_SHAPE_FACTORS = ("bucket", "aggregation", "rollup", "answer",
                         "dimension", "dimension_target", "order", "limit")
 
 #: 주·월 구간(bucket)과 함께 쓸 수 없는 factor. 공간·요일 그룹과 시간 구간을 함께 나누는 계산은 schema가 정하지
-#: 않았고 mock은 거절한다(합성 단계 UNSUPPORTED_AGGREGATION_COMBINATION). prompt의 dimension 설명에도 적혀 있다.
+#: 않았고 mock은 거절한다(합성 단계 UNSUPPORTED_AGGREGATION_COMBINATION). grounding 계약 위반이 아니므로 prompt의
+#: dimension 설명은 질문이 요구하면 둘 다 적으라고 하고, 지원 여부는 합성이 판단한다.
 EXCLUSIVE_WITH_BUCKET = ("dimension", "order", "limit")
 
 
