@@ -39,7 +39,7 @@ def load_arm(directory, ids=None, extra=None):
         meta, part = E.axes_rows(str(path))
         source = {r["id"]: r for r in json.loads(Path(path).read_text(encoding="utf-8"))["rows"]}
         for row in part:
-            if ids is not None and set_name not in ("od", "status", "heldout") and row["id"] not in ids.get(set_name, ()):
+            if ids is not None and set_name not in ("od", "status", "heldout", "measure") and row["id"] not in ids.get(set_name, ()):
                 continue
             key = f"{set_name}/{row['id']}"
             rows[key] = row
