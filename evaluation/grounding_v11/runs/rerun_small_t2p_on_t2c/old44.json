@@ -1,0 +1,586 @@
+{
+ "meta": {
+  "protocol": "vendor100_v1",
+  "kind": "llm",
+  "started_at": "2026-10-04T21:44:20.905660+09:00",
+  "command": "evaluate_vendor100.py --code-root /tmp/claude-1004/-home-hwkim-assistant-univ/a9aaa8a5-902f-4b87-b1c9-194599bfb41d/scratchpad/wt_T2C --gold evaluation/grounding_v1/holdout_questions.yaml rerun evaluation/grounding_v11/runs/small/t2p/old44.json --out evaluation/grounding_v11/runs/rerun_small_t2p_on_t2c/old44.json",
+  "code_root": "/tmp/claude-1004/-home-hwkim-assistant-univ/a9aaa8a5-902f-4b87-b1c9-194599bfb41d/scratchpad/wt_T2C",
+  "code_commit": "2f53c727381cf86565e5b6b194221c3490ae5dd6",
+  "code_dirty": [],
+  "code_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "code_untracked": {},
+  "gold_file": "evaluation/grounding_v1/holdout_questions.yaml",
+  "gold_sha256": "fac171e6c97ef20aee9a824a1c20217825266970e81b7abdb66b090ee91456d7",
+  "reference_date": "2026-09-25",
+  "model": "qwen3.8:27b",
+  "model_digest": "aaee06c39dcf2437cde036998d960e1fc1494b8191be7cc9657d01e509097813",
+  "ollama_version": "0.34.4",
+  "model_details": {
+   "family": "qwen35",
+   "parameter_size": "27.3B",
+   "quantization_level": "Q4_K_M",
+   "format": "gguf"
+  },
+  "model_runtime": {
+   "modelfile_parameters": "presence_penalty               0\nrepeat_penalty                 1\ntemperature                    1\ntop_k                          20\ntop_p                          0.95\ndraft_num_predict              4\nmin_p                          0",
+   "capabilities": [
+    "completion",
+    "vision",
+    "tools",
+    "thinking"
+   ],
+   "context_length": 262144,
+   "size_vram": 18542682438
+  },
+  "planner_prompt_sha256": "87048d0c554c365e0e7994d09a4515c1cc646785708ce6dc9d1f120b4b5e8c2c",
+  "replay_from": null,
+  "pipeline": {
+   "aggregation_grounding": "flat",
+   "condition_check": true,
+   "condition_notes": false,
+   "normalize_grounding": true,
+   "semantic_reinterpretation": true,
+   "provider": "mock",
+   "tims_execution": "legacy",
+   "temperature": 0,
+   "think": "auto",
+   "isolation": "unload_per_question"
+  },
+  "chat_timeout_s": 300.0,
+  "finished_at": "2026-10-04T21:37:09.868869+09:00",
+  "scorer_version": "v3",
+  "rerun_from": "evaluation/grounding_v11/runs/small/t2p/old44.json"
+ },
+ "summary": {
+  "items": 2,
+  "categories": {
+   "match": 2
+  },
+  "llm_calls": {
+   "total": 2,
+   "plan": 2,
+   "repair": 0,
+   "failed": 0,
+   "llm_ms_total": 50384
+  },
+  "total_ms": {
+   "median": 4.639,
+   "sum": 6
+  },
+  "grounding_ok": {
+   "count": 2,
+   "of": 2
+  },
+  "by_vendor_verdict": {
+   "-": {
+    "match": 2
+   }
+  },
+  "outcomes": {
+   "answered": 2
+  },
+  "error_codes": {}
+ },
+ "rows": [
+  {
+   "id": "g13",
+   "question": "지난 주 부산에서 출발해 대구에 도착한 실차 중 도착 읍면동 상위 2곳은?",
+   "vendor_verdict": "-",
+   "category": "match",
+   "checks": {
+    "place_lookups_ok": true,
+    "duplicate_place_lookups": 0,
+    "place_lookup_count_ok": true,
+    "single_analysis_call": true,
+    "tool_ok": true,
+    "arg_mismatches": [],
+    "args_ok": true,
+    "answer_value_ok": true
+   },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "request_sha256": "7b148f82df52fd31913191ab87c467802b2e916c4deda2e571d19a6ebdcd3a8c",
+     "replayed": true,
+     "duration_ms": 24289.7,
+     "load_duration_ms": 0.0,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"origin\",\n      \"text\": \"부산\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"부산\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"destination\",\n      \"text\": \"대구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"대구\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_week\",\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"dropoff\",\n    \"order\": \"top\",\n    \"limit\": 2\n  }\n}",
+     "thinking_chars": 0,
+     "prompt_eval_count": null,
+     "eval_count": null,
+     "done_reason": "stop"
+    }
+   ],
+   "needs_live": false,
+   "request_match": [
+    "same"
+   ],
+   "planner_trace": {
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"origin\",\n      \"text\": \"부산\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"부산\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"destination\",\n      \"text\": \"대구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"대구\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_week\",\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"dropoff\",\n    \"order\": \"top\",\n    \"limit\": 2\n  }\n}",
+    "error_stage": null,
+    "error_detail": null,
+    "error_context": {},
+    "attempts": [
+     {
+      "index": 0,
+      "stage": null,
+      "status": "OK",
+      "error_code": null,
+      "repair_kind": null,
+      "repair_attempted": null,
+      "repair_result": null,
+      "reason": null,
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": null,
+      "detail": null,
+      "raw_text": null,
+      "repair_error": null
+     }
+    ],
+    "repairs": {},
+    "durations": {
+     "planner_ms": 3.563,
+     "execution_ms": 0.186,
+     "total_ms": 4.639
+    }
+   },
+   "outcome": "answered",
+   "error_code": null,
+   "error_user_message": null,
+   "error_context": {},
+   "calls": [
+    {
+     "tool": "get_place_scope",
+     "args": {
+      "name": "부산",
+      "include_vicinity": false
+     },
+     "result": "scope:district:2600000000"
+    },
+    {
+     "tool": "get_place_scope",
+     "args": {
+      "name": "대구",
+      "include_vicinity": false
+     },
+     "result": "scope:district:2700000000"
+    },
+    {
+     "tool": "get_trip_count",
+     "args": {
+      "scope_pickup": "scope:district:2600000000",
+      "scope_dropoff": "scope:district:2700000000",
+      "date": "last_week",
+      "dimension": "emd",
+      "dimension_target": "dropoff",
+      "limit": 2,
+      "order": "top"
+     },
+     "result": [
+      {
+       "dropoff": "동인동",
+       "count": 20
+      },
+      {
+       "dropoff": "중앙로동",
+       "count": 20
+      }
+     ]
+    }
+   ],
+   "final_answer": "부산 → 대구 지난주 읍면동별 하차 지역 기준 상위 2개 실차 구간 건수\n- 동인동: 20건\n- 중앙로동: 20건",
+   "grounding": {
+    "concepts": [
+     {
+      "id": "origin",
+      "text": "부산",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "부산",
+       "region": ""
+      },
+      "attributes": {
+       "od_role": "pickup"
+      }
+     },
+     {
+      "id": "destination",
+      "text": "대구",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "대구",
+       "region": ""
+      },
+      "attributes": {
+       "od_role": "dropoff"
+      }
+     },
+     {
+      "id": "trip",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "trip",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "trip_count",
+      "text": "실차",
+      "concept": "AMOUNT",
+      "subtype": "trip_count",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "last_week",
+     "dimension": "emd",
+     "dimension_target": "dropoff",
+     "order": "top",
+     "limit": 2
+    },
+    "aggregation": {
+     "bucket": null,
+     "inner": null,
+     "outer": null,
+     "select": null,
+     "source": "flat"
+    }
+   },
+   "condition_corrections": [],
+   "condition_actions": {
+    "date": {
+     "llm_value": "last_week",
+     "value": "last_week",
+     "action": "confirmed",
+     "basis": "question_expression"
+    },
+    "taxi_type": {
+     "llm_value": null,
+     "value": null,
+     "action": "none",
+     "basis": "no_value_no_cue"
+    },
+    "taxi_status": {
+     "llm_value": null,
+     "value": null,
+     "action": "none",
+     "basis": "status_word_not_a_condition"
+    }
+   },
+   "lowering": {},
+   "date_semantics": {
+    "measure_od_event": {
+     "value": "last_week",
+     "kind": "relative",
+     "interpreted_range": "20260914-20260920",
+     "reference_date": "20260925",
+     "policy": "legacy",
+     "lowering": "passthrough",
+     "responsibility": "provider",
+     "request": [
+      "last_week"
+     ],
+     "provider": "unverified",
+     "requires": [
+      "relative_date_reference"
+     ],
+     "missing": [
+      "relative_date_reference"
+     ],
+     "interpretation": {
+      "source": "application_policy",
+      "rule": "기준일이 속한 주(월요일 시작) 바로 앞 주의 월요일부터 일요일까지"
+     }
+    }
+   },
+   "plan_calendar": null,
+   "execution_profile": {
+    "provider": "mock",
+    "contract": "tims",
+    "mode": "legacy",
+    "date_policy": "legacy",
+    "synthetic": false,
+    "legacy_assumptions": [
+     "relative_date_reference",
+     "range_inclusive",
+     "calendar_token_period"
+    ],
+    "delegation": true,
+    "delegated_semantics": [
+     "relative_date_reference",
+     "range_inclusive",
+     "calendar_token_period",
+     "bucket_week_start",
+     "bucket_partial",
+     "bucket_empty"
+    ],
+    "description": "mock(TIMS schema). 질문 표현을 옮긴 인자의 세부 달력 의미는 제공자에게 위임(legacy)"
+   }
+  },
+  {
+   "id": "g40",
+   "question": "지난달 대구에서 출발해 부산에 도착한 실차의 승차 읍면동 하위 2곳은?",
+   "vendor_verdict": "-",
+   "category": "match",
+   "checks": {
+    "place_lookups_ok": true,
+    "duplicate_place_lookups": 0,
+    "place_lookup_count_ok": true,
+    "single_analysis_call": true,
+    "tool_ok": true,
+    "arg_mismatches": [],
+    "args_ok": true,
+    "answer_value_ok": true
+   },
+   "reset_ok": true,
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "llm_calls": [
+    {
+     "kind": "plan",
+     "request_sha256": "0bfebcd5c1ae54522687172f6c4c22c7d418eee52ec02668be731b36bbbf93fb",
+     "replayed": true,
+     "duration_ms": 26094.7,
+     "load_duration_ms": 0.0,
+     "content": "{\n  \"concepts\": [\n    {\n      \"id\": \"origin\",\n      \"text\": \"대구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"대구\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"destination\",\n      \"text\": \"부산\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"부산\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_month\",\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"pickup\",\n    \"order\": \"bottom\",\n    \"limit\": 2\n  }\n}",
+     "thinking_chars": 0,
+     "prompt_eval_count": null,
+     "eval_count": null,
+     "done_reason": "stop"
+    }
+   ],
+   "needs_live": false,
+   "request_match": [
+    "same"
+   ],
+   "planner_trace": {
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"origin\",\n      \"text\": \"대구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"대구\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"destination\",\n      \"text\": \"부산\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"부산\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_month\",\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"pickup\",\n    \"order\": \"bottom\",\n    \"limit\": 2\n  }\n}",
+    "error_stage": null,
+    "error_detail": null,
+    "error_context": {},
+    "attempts": [
+     {
+      "index": 0,
+      "stage": null,
+      "status": "OK",
+      "error_code": null,
+      "repair_kind": null,
+      "repair_attempted": null,
+      "repair_result": null,
+      "reason": null,
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": null,
+      "detail": null,
+      "raw_text": null,
+      "repair_error": null
+     }
+    ],
+    "repairs": {},
+    "durations": {
+     "planner_ms": 0.612,
+     "execution_ms": 0.157,
+     "total_ms": 1.412
+    }
+   },
+   "outcome": "answered",
+   "error_code": null,
+   "error_user_message": null,
+   "error_context": {},
+   "calls": [
+    {
+     "tool": "get_place_scope",
+     "args": {
+      "name": "대구",
+      "include_vicinity": false
+     },
+     "result": "scope:district:2700000000"
+    },
+    {
+     "tool": "get_place_scope",
+     "args": {
+      "name": "부산",
+      "include_vicinity": false
+     },
+     "result": "scope:district:2600000000"
+    },
+    {
+     "tool": "get_trip_count",
+     "args": {
+      "scope_pickup": "scope:district:2700000000",
+      "scope_dropoff": "scope:district:2600000000",
+      "date": "last_month",
+      "dimension": "emd",
+      "dimension_target": "pickup",
+      "limit": 2,
+      "order": "bottom"
+     },
+     "result": [
+      {
+       "pickup": "동인동",
+       "count": 20
+      },
+      {
+       "pickup": "중앙로동",
+       "count": 20
+      }
+     ]
+    }
+   ],
+   "final_answer": "대구 → 부산 지난달 읍면동별 승차 지역 기준 하위 2개 실차 구간 건수\n- 동인동: 20건\n- 중앙로동: 20건",
+   "grounding": {
+    "concepts": [
+     {
+      "id": "origin",
+      "text": "대구",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "대구",
+       "region": ""
+      },
+      "attributes": {
+       "od_role": "pickup"
+      }
+     },
+     {
+      "id": "destination",
+      "text": "부산",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "부산",
+       "region": ""
+      },
+      "attributes": {
+       "od_role": "dropoff"
+      }
+     },
+     {
+      "id": "trip",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "trip",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "trip_count",
+      "text": "실차",
+      "concept": "AMOUNT",
+      "subtype": "trip_count",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "last_month",
+     "dimension": "emd",
+     "dimension_target": "pickup",
+     "order": "bottom",
+     "limit": 2
+    },
+    "aggregation": {
+     "bucket": null,
+     "inner": null,
+     "outer": null,
+     "select": null,
+     "source": "flat"
+    }
+   },
+   "condition_corrections": [],
+   "condition_actions": {
+    "date": {
+     "llm_value": "last_month",
+     "value": "last_month",
+     "action": "confirmed",
+     "basis": "question_expression"
+    },
+    "taxi_type": {
+     "llm_value": null,
+     "value": null,
+     "action": "none",
+     "basis": "no_value_no_cue"
+    },
+    "taxi_status": {
+     "llm_value": null,
+     "value": null,
+     "action": "none",
+     "basis": "status_word_not_a_condition"
+    }
+   },
+   "lowering": {},
+   "date_semantics": {
+    "measure_od_event": {
+     "value": "last_month",
+     "kind": "relative",
+     "interpreted_range": "20260801-20260831",
+     "reference_date": "20260925",
+     "policy": "legacy",
+     "lowering": "passthrough",
+     "responsibility": "provider",
+     "request": [
+      "last_month"
+     ],
+     "provider": "unverified",
+     "requires": [
+      "relative_date_reference"
+     ],
+     "missing": [
+      "relative_date_reference"
+     ],
+     "interpretation": {
+      "source": "application_policy",
+      "rule": "기준일이 속한 달 바로 앞 달의 1일부터 말일까지"
+     }
+    }
+   },
+   "plan_calendar": null,
+   "execution_profile": {
+    "provider": "mock",
+    "contract": "tims",
+    "mode": "legacy",
+    "date_policy": "legacy",
+    "synthetic": false,
+    "legacy_assumptions": [
+     "relative_date_reference",
+     "range_inclusive",
+     "calendar_token_period"
+    ],
+    "delegation": true,
+    "delegated_semantics": [
+     "relative_date_reference",
+     "range_inclusive",
+     "calendar_token_period",
+     "bucket_week_start",
+     "bucket_partial",
+     "bucket_empty"
+    ],
+    "description": "mock(TIMS schema). 질문 표현을 옮긴 인자의 세부 달력 의미는 제공자에게 위임(legacy)"
+   }
+  }
+ ]
+}

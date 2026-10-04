@@ -35,12 +35,33 @@ def _measure(grounding):
     return None
 
 
+def required_condition(key, item):
+    """요구된 조건 때문에 멈춰야 하는 문항의 그 조건. 아니면 None.
+
+    사전 등록의 "지원 불가 문항": 기대 결과가 지원 불가이고 기대 이유가 없거나 UNCONSUMED_CONDITION인 문항(정답
+    grounding의 taxi_status·taxi_type), n26, held-out의 required_condition. 집계 단계 확인 요청이나 다른 계약 이유
+    (UNVERIFIED_TIMS_CONTRACT)로 멈춰야 하는 문항은 넣지 않는다(grounding_v11 실행 기록: 첫 구현이 이런 문항까지 넣었다).
+    """
+    if key in R10.DEV_REQUIRED:
+        return R10.DEV_REQUIRED[key]
+    if item.get("required_condition"):
+        return dict(item["required_condition"])
+    if item.get("expected_outcome", "answered") != "unsupported":
+        return None
+    allowed = item.get("expected_error")
+    allowed = [allowed] if isinstance(allowed, str) else list(allowed or [])
+    if allowed and "UNCONSUMED_CONDITION" not in allowed:
+        return None
+    factors = (item.get("gold_grounding") or {}).get("factors") or {}
+    return {k: v for k, v in factors.items() if k in OWNED} or None
+
+
 def refusal_accuracy(rows, raw):
     out = {}
     for key in sorted(rows):
         set_name, item_id = key.split("/", 1)
         item = C._gold(set_name, rows[key])[item_id]
-        need = R10.required_condition(key, item)
+        need = required_condition(key, item)
         if not need:
             continue
         source = raw[key]

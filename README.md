@@ -1008,6 +1008,31 @@ development가 되었다.
 > grounding 층이 업체 100에서 98/100이었다. 정답 grounding 기반 실행은 양쪽 모두 100/100, 41+2/43로 같다(차이는 모두 grounding에서 옴).
 `evaluate_v2.py`는 사전 등록한 설정(condition_check 끔)을 그대로 쓴다.
 
+### 조건 보존과 실행 가능성 판단의 책임 분담 grounding_v11 (2026-10-05)
+
+**기본 조합을 바꾸지 않는다(qwen3:8b + prompt 522aa3b1).** 설계·결과: `evaluation/grounding_v11/analysis.md`.
+
+* 설명 T2: 계약 개념으로 적을 수 있는 질문은 실제 계산 가능 여부와 관계없이 grounding으로 적고, 계산 가능 여부와 멈춤 이유는
+  프로그램이 판단한다. 실행 가능성을 모델에게 넘기던 문장(T1의 taxi_status 의미, dimension의 "bucket과 함께 쓸 수 없다")을 고쳤다.
+* 조건 계층: 질문 표현으로 조건을 채우는 것은 측정값을 실제로 제한할 때만이다. 측정값 정의가 고정한 값(operator 계약
+  `inherent_conditions`, trip의 occupied)은 채우지 않는다. 공차·대기영업·받지 않는 택시 유형은 그대로 채워 그 이유로 멈춘다.
+* 최종 후보 T2PC(qwen3.8:27b + D + T2 + 조건 계층 수정, `grounding-v11-t2c`):
+  * 개발 311: 정상 280(기준 225), 조용한 오답 3(26), OD 대조 16/16, taxi_status 정지 0.
+  * 지원 불가 15: 정확한 거부 14, 조건을 버린 답 0.
+  * 제품 교체 기준을 모두 충족했지만, held-out 정상이 27b+D보다 1 적어(39 < 40) 사전 등록한 직접 효과 기준 하나를 충족하지 못했다.
+* 남은 제한:
+  * 조건 계층 수정은 측정값 오독을 우연히 막던 효과를 없앤다(qwen3:8b 기록에서 조용한 오답 2).
+  * "공차 운행 건수"를 통행량으로 읽는 오독, 장소를 측정값으로 읽는 오독.
+
+### 실행 기본값 (2026-10-05)
+
+* 평가 기준 조합: `--agent-mode geoflow --model qwen3:8b`, prompt 522aa3b1, 조건 계층 켬, temperature 0, think 미지정, timeout 300초.
+* CLI 모델 선택: `--model` > `OLLAMA_MODEL` > 모드 기본값. GeoFlow 모드 기본값은 평가 기준과 같은 `qwen3:8b`·300초
+  (`GEOFLOW_DEFAULT_MODEL_NAME`, `GEOFLOW_DEFAULT_CHAT_TIMEOUT`).
+* react 모드 기본값은 `qwen3-coder:30b`·120초로 GeoFlow 평가와 무관하다.
+* CLI 실행 모드의 기본값은 react다. GeoFlow 평가 경로는 `--agent-mode geoflow`로 실행한다.
+* 실행 머리말에 모델의 출처(`--model`·`OLLAMA_MODEL`·`default`)를 표시한다.
+
 ### 실차 구간과 운행 상태 조건 구분 grounding_v10 (2026-10-04)
 
 qwen3.8:27b + 설명 D의 남은 손실(trip 질문의 "실차"를 `taxi_status`로 적어 합성이 멈춤)을 설명으로 고치려 했으나 **후보 T1은
