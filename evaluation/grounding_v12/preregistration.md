@@ -132,3 +132,12 @@
   사용자 지정 `--model`·`OLLAMA_MODEL`·timeout 우선순위는 유지한다. 검증한 되돌리기 경로(태그 + 모델)를 문서에 남긴다.
 - **미채택:** 기본값을 유지하고 무엇이 막았는지 적는다. 현재 아키텍처에서 해결 가능한 문제인지, 모델·계약·평가 자료 중 무엇이 더
   필요한지 판단한다. 한 문항 수정이나 새 held-out 생성을 다음 단계로 자동 제안하지 않는다.
+
+## 실행 기록
+
+- **최종 검증 셋 고정:** 하위 에이전트 작성, 사람 검토 없음.
+  - 정답 실행기에서 답할 47/47 `match`, 비답변 9(지원 불가 8, 확인 요청 1). 실행기 결과를 본 뒤 고친 문항 없음.
+  - 묶음: rank_return 10, value 6, scope_name 2, od 12, status_passage 5, status_trip 5, unsupported 8, general 8.
+  - required_condition: taxi_status 3, taxi_type 3, dimension 2.
+  - sha256 `1afabe145242dcbdf37b20f7f1a73f2b8b19c3e6627d2f516340a254e5caf08b`. 주 에이전트는 내용을 읽지 않았다.
+  - 작은 검증(T3PC)을 시작한 뒤, 그 결과를 보기 전에 커밋했다.
