@@ -119,3 +119,11 @@ qwen3.8:27b와 설명 D의 개선을 유지하면서 trip(실차 구간)의 의�
 
 최초 grounding, 조건 보존 뒤, 재질의 뒤, 최종 결과를 나누고 정상·정당 거부·조용한 오답·부당 거부·실행 실패를 따로 센다.
 운행 상태 지표(정지, 조건 보존, 조건을 버린 답)와 재질의 의존도·지연·timeout·VRAM을 함께 보고한다.
+
+## 실행 기록
+
+- **새 held-out 고정:** 하위 에이전트 작성, 사람 검토 없음, 정답 실행기 답할 41/41 `match`(비답변 7: 지원 불가 6, 확인 요청 1),
+  실행기 확인 뒤 수정 없음. status_trip 7, status_passage 6, status_unsupported 5(required_condition: vacant 2, stationary 1,
+  occupied 1, taxi_type corporate 1), od_plain 15, general_plain 15(지원 불가 1은 taxi_type private 요구).
+  sha256 `cde494489073abaa185bd5a49afec6e5378d2b8b8c82ffb6ad5289e6d5de2888`. 주 에이전트는 내용을 읽지 않았다.
+  T1 소규모 실측을 시작한 뒤, 그 결과를 보기 전에 커밋했다.
