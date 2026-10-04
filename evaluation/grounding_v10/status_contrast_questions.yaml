@@ -231,3 +231,68 @@ items:
     gold_text: |-
       get_place_scope(name=동대구역)
       get_trip_count(scope_pickup=$pickup.scope, date=20260924)
+
+  # ── grounding_v11 추가(후보 실행 전에 고정): 조건 계층 채움 경로와 상태 밖의 지원 불가 조합 ─────────
+  - id: s28
+    category: F
+    note: "뜻은 trip 건수. '실차 택시'는 대상(손님을 태운 운행)을 다시 말한 것이다."
+    question: "지난주 부산진구에서 실차 택시를 타고 출발한 운행은 몇 건이야?"
+    gold_text: |-
+      get_place_scope(name=부산진구)
+      get_trip_count(scope_pickup=$pickup.scope, date=last_week)
+  - id: s29
+    category: F
+    question: "이번 달 대구 중구에서 실차 택시가 태운 승객들을 하차 읍면동별로 셌을 때 가장 많은 곳은?"
+    gold_text: |-
+      get_place_scope(name=중구, region=대구)
+      get_trip_count(scope_pickup=$pickup.scope, date=this_month, dimension=emd, dimension_target=dropoff, order=top, limit=1)
+  - id: s30
+    category: C
+    note: "'공차 택시'는 실제 상태 요구다. 조건 계층 수정 뒤에도 사라지면 안 된다."
+    question: "지난달 공차 택시가 대구 수성구에서 태운 손님은 몇 건이야?"
+    expected_outcome: unsupported
+    expected_error: [UNCONSUMED_CONDITION, UNSUPPORTED_QUESTION]
+    gold_text: ""
+    gold_grounding:
+      concepts:
+        - {id: origin, concept: LOCATION, subtype: place, role: SUBCOND, source: user, value: {name: 수성구, region: 대구}, attributes: {od_role: pickup}}
+        - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+        - {id: measure, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+      factors: {date: last_month, taxi_status: vacant}
+  - id: s31
+    category: C
+    question: "어제 대기영업 택시가 동대구역에서 출발한 운행은 몇 건이야?"
+    expected_outcome: unsupported
+    expected_error: [UNCONSUMED_CONDITION, UNSUPPORTED_QUESTION]
+    gold_text: ""
+    gold_grounding:
+      concepts:
+        - {id: origin, concept: LOCATION, subtype: place, role: SUBCOND, source: user, value: {name: 동대구역, region: ""}, attributes: {od_role: pickup}}
+        - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+        - {id: measure, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+      factors: {date: "20260924", taxi_status: stationary}
+  - id: s32
+    category: C
+    note: "상태가 아니라 요금 Tool이 받지 않는 택시 유형"
+    question: "올해 법인택시가 받은 요금의 평균은?"
+    expected_outcome: unsupported
+    expected_error: [UNCONSUMED_CONDITION, UNSUPPORTED_QUESTION]
+    gold_text: ""
+    gold_grounding:
+      concepts:
+        - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+        - {id: measure, concept: AMOUNT, subtype: fare, role: MEASURE, source: implicit}
+      factors: {date: this_year, taxi_type: corporate, aggregation: avg}
+  - id: s33
+    category: C
+    note: "속도 Tool이 받지 않는 택시 유형"
+    question: "지난주 동성로를 지나간 개인택시의 평균 속도는?"
+    expected_outcome: unsupported
+    expected_error: [UNCONSUMED_CONDITION, UNSUPPORTED_QUESTION]
+    gold_text: ""
+    gold_grounding:
+      concepts:
+        - {id: place, concept: LOCATION, subtype: place, role: SUBCOND, source: user, value: {name: 동성로, region: ""}}
+        - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+        - {id: measure, concept: AMOUNT, subtype: speed, role: MEASURE, source: implicit}
+      factors: {date: last_week, taxi_type: private, aggregation: avg}

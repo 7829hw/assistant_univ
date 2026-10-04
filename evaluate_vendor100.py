@@ -421,6 +421,11 @@ def run_item(pipeline, question):
         "grounding": record.get("grounding"),
         # 조건 계층이 모델 출력에서 바꾼 것(근거 표현·전후 값·이유). 보정 전후 grounding 차이의 기록이다.
         "condition_corrections": (record.get("condition_audit") or {}).get("corrections"),
+        # 조건 계층이 소유한 조건마다의 판정(채움·확인·보존·삭제·측정값 정의로 채우지 않음)과 근거. 바꾸지 않은 판정도 남긴다.
+        "condition_actions": {
+            key: {field: (value or {}).get(field) for field in ("llm_value", "value", "action", "basis")}
+            for key, value in (record.get("condition_audit") or {}).items()
+            if key in ("date", "taxi_type", "taxi_status") and isinstance(value, dict)},
         "lowering": (record.get("execution_plan") or {}).get("lowering") or {},
         "date_semantics": (record.get("execution_plan") or {}).get("date_semantics") or {},
         "plan_calendar": (record.get("plan") or {}).get("calendar"),
