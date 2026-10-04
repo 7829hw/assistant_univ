@@ -1008,6 +1008,20 @@ development가 되었다.
 > grounding 층이 업체 100에서 98/100이었다. 정답 grounding 기반 실행은 양쪽 모두 100/100, 41+2/43로 같다(차이는 모두 grounding에서 옴).
 `evaluate_v2.py`는 사전 등록한 설정(condition_check 끔)을 그대로 쓴다.
 
+### 실차 구간과 운행 상태 조건 구분 grounding_v10 (2026-10-04)
+
+qwen3.8:27b + 설명 D의 남은 손실(trip 질문의 "실차"를 `taxi_status`로 적어 합성이 멈춤)을 설명으로 고치려 했으나 **후보 T1은
+사전 등록 소규모 기준 하나를 넘지 못했다. 기본 조합(qwen3:8b + prompt 522aa3b1)을 유지한다.** 설계·결과:
+`evaluation/grounding_v10/analysis.md`.
+
+* 원인: 통행량 항목 안의 "실차·공차·대기영업은 taxi_status 조건"과 "'실차 구간 건수'만 trip_count"를 모델이 trip으로 확장했다.
+  조건 계층은 모델 값을 보존(held)했고, trip에는 이 조건을 받는 변환이 없어 `UNCONSUMED_CONDITION`으로 멈췄다(24건 모두 같은 사슬).
+* T1(trip은 정의상 실차, 통행량 범위의 상태 조건, taxi_status를 받는 측정값은 통행량뿐): taxi_status 정지 27 → 1, OD 대조 8 → 16,
+  조건을 버린 조용한 오답 0. 그러나 모델이 지원 불가 판단을 떠맡아 `{"unsupported": true}`를 내, 지원 불가 7문항 중 요구 조건이
+  grounding에 남은 것이 7 → 2로 줄었다. 후보 T1은 `grounding-v10-status` 브랜치에 보존한다.
+* 다음 가설: T1의 앞 두 문장을 유지하고, 세 번째 문장을 "요구된 상태는 적고 실행 가능성은 프로그램이 판단한다"로 바꾼다.
+  v10 held-out(48)은 실행하지 않아 다음 검증에 쓸 수 있다.
+
 ### grounding 모델·계약 설명 비교 grounding_v9 (2026-10-04)
 
 같은 코드·prompt·평가에서 모델만 바꾼 비교와 계약 설명 정정(D)을 나눠 쟀다. **현재 조합(qwen3:8b + prompt 522aa3b1)을 유지한다.**

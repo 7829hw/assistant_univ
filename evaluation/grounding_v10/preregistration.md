@@ -127,3 +127,9 @@ qwen3.8:27b와 설명 D의 개선을 유지하면서 trip(실차 구간)의 의�
   occupied 1, taxi_type corporate 1), od_plain 15, general_plain 15(지원 불가 1은 taxi_type private 요구).
   sha256 `cde494489073abaa185bd5a49afec6e5378d2b8b8c82ffb6ad5289e6d5de2888`. 주 에이전트는 내용을 읽지 않았다.
   T1 소규모 실측을 시작한 뒤, 그 결과를 보기 전에 커밋했다.
+- **소규모 S(T1):** 기준 1–4 충족(taxi_status 정지 27 → 1, 대조 C에서 조건을 버리고 답함 0, B 5·E 4, OD 대조 16/16).
+  **기준 5 미충족**: n26은 정당한 거부지만 모델이 `{"unsupported": true}`를 내 요구된 vacant가 grounding에 없다.
+  대조 C와 n26의 7문항 중 조건이 남은 것은 2(27b+D 7). thinking 확인: T1의 "받는 측정값은 통행량뿐 … 받지 않으면 지원 불가로
+  멈춘다"를 모델이 스스로 판단할 지시로 읽었다.
+- **판정:** T1 탈락. 후보가 하나였으므로 전체 평가와 held-out을 실행하지 않는다. 새 held-out은 쓰지 않은 채 보존한다.
+  기본 조합(qwen3:8b + 522aa3b1)을 유지한다.
