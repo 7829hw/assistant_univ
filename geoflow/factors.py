@@ -150,7 +150,12 @@ FACTOR_SPECS: dict[str, FactorSpec] = {
         FactorSpec(
             "taxi_status",
             values=frozenset({"occupied", "vacant", "stationary", "all"}),
-            meaning="운행 상태 조건.",
+            meaning=(
+                "운행 상태 조건(occupied=실차, vacant=공차, stationary=대기영업). 이 조건을 받는 측정값은 "
+                "통행량(passage_count)뿐이다. 실차 구간(trip)은 정의상 실차이므로 그 대상을 가리키는 '실차'는 "
+                "조건으로 적지 않는다. 질문이 공차·대기영업 같은 상태를 요구하면 측정값과 관계없이 적는다. "
+                "그 측정값이 받지 않으면 지원 불가로 멈춘다."
+            ),
         ),
         FactorSpec(
             "dimension",
