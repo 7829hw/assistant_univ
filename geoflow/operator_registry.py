@@ -250,6 +250,10 @@ class OperatorSpec:
     #: aggregation을 받지 않지만 결과 자체가 정해진 집계인 Tool. 개수 Tool은 사건을
     #: 센 값(=합)을 돌려준다. 질문의 집계가 이 값과 같으면 조건을 잃지 않은 것이다.
     inherent_reducer: str | None = None
+    #: 측정값의 정의가 이미 고정한 조건. schema가 이 Tool의 대상을 그 상태로 정의한다(예: get_trip_count는
+    #: "실차 구간(trip)" 건수). 조건 계층은 질문 표현만으로 이 값을 별도 조건으로 채우지 않는다. 모델이 적은
+    #: 값을 지우거나 합성이 받아 준다는 뜻은 아니다(그 경우는 지금처럼 받는 변환이 없어 멈춘다).
+    inherent_conditions: dict[str, str] = field(default_factory=dict)
 
     #: 원시 값의 집계 방식을 받는 parameter와 기간 parameter.
     REDUCER_PARAM = "aggregation"
@@ -458,6 +462,8 @@ _SPECS: tuple[OperatorSpec, ...] = (
             allowed=frozenset({(CoreConcept.AMOUNT, Subtype.TRIP_COUNT)}),
         ),
         inherent_reducer="sum",
+        # vendor schema: "실차 구간(trip) 건수". 대상 자체가 실차다.
+        inherent_conditions={"taxi_status": "occupied"},
         params=frozenset({
             "date", "time", "dimension", "dimension_target", "order", "limit",
         }),
@@ -486,6 +492,8 @@ _SPECS: tuple[OperatorSpec, ...] = (
         output=OperatorOutput(
             allowed=frozenset({(CoreConcept.AMOUNT, Subtype.FARE)}),
         ),
+        # vendor schema: "실차 운행 구간(trip)의 통계값". 요금은 실차 구간에서만 생긴다.
+        inherent_conditions={"taxi_status": "occupied"},
         params=frozenset({"metric", "date", "time", "aggregation"}),
         param_enums={"aggregation": frozenset({"max", "min", "sum", "avg", "med"})},
     ),
