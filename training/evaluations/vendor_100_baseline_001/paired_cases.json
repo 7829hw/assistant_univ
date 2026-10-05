@@ -1,0 +1,1135 @@
+{
+  "base_to_sft_improvements": [],
+  "sft_to_dpo_improvements": [
+    {
+      "id": "008",
+      "question": "지난 주 대구의 읍면동별 공차 택시 통행량 하위 3곳은?",
+      "vendor_gold_calls": [
+        {
+          "tool": "get_place_scope",
+          "args": {
+            "name": "대구"
+          }
+        },
+        {
+          "tool": "get_passage_count",
+          "args": {
+            "scope": "$resolve.scope",
+            "date": "last_week",
+            "taxi_status": "vacant",
+            "dimension": "emd",
+            "order": "bottom",
+            "limit": 3
+          }
+        }
+      ],
+      "predictions": {
+        "base": {
+          "first_raw": "{\n  \"concepts\": [\n    {\n      \"id\": \"place_1\",\n      \"text\": \"대구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"대구\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"passage_count\",\n      \"text\": \"공차 택시 통행량\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"passage_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_week\",\n    \"dimension\": \"emd\",\n    \"order\": \"bottom\",\n    \"limit\": 3,\n    \"taxi_status\": \"vacant\"\n  }\n}",
+          "final_grounding": {
+            "concepts": [
+              {
+                "id": "place_1",
+                "text": "대구",
+                "concept": "LOCATION",
+                "subtype": "place",
+                "role": "SUBCOND",
+                "source": "user",
+                "value": {
+                  "name": "대구",
+                  "region": ""
+                },
+                "attributes": {}
+              },
+              {
+                "id": "passage",
+                "text": "",
+                "concept": "EVENT",
+                "subtype": "passage",
+                "role": "SUPPORT",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              },
+              {
+                "id": "passage_count",
+                "text": "공차 택시 통행량",
+                "concept": "AMOUNT",
+                "subtype": "passage_count",
+                "role": "MEASURE",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              }
+            ],
+            "factors": {
+              "date": "last_week",
+              "dimension": "emd",
+              "order": "bottom",
+              "limit": 3,
+              "taxi_status": "vacant"
+            },
+            "aggregation": {
+              "bucket": null,
+              "inner": null,
+              "outer": null,
+              "select": null,
+              "source": "flat"
+            }
+          },
+          "differences": [],
+          "error_code": null
+        },
+        "sft": {
+          "first_raw": "{\n  \"concepts\": [\n    {\n      \"id\": \"place_1\",\n      \"text\": \"대구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"대구\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"passage_count\",\n      \"text\": \"공차 택시 통행량\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"passage_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_week\",\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"pickup\",\n    \"order\": \"bottom\",\n    \"limit\": 3\n  }\n}",
+          "final_grounding": {
+            "concepts": [
+              {
+                "id": "place_1",
+                "text": "대구",
+                "concept": "LOCATION",
+                "subtype": "place",
+                "role": "SUBCOND",
+                "source": "user",
+                "value": {
+                  "name": "대구",
+                  "region": ""
+                },
+                "attributes": {}
+              },
+              {
+                "id": "passage",
+                "text": "",
+                "concept": "EVENT",
+                "subtype": "passage",
+                "role": "SUPPORT",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              },
+              {
+                "id": "passage_count",
+                "text": "공차 택시 통행량",
+                "concept": "AMOUNT",
+                "subtype": "passage_count",
+                "role": "MEASURE",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              }
+            ],
+            "factors": {
+              "date": "last_week",
+              "dimension": "emd",
+              "dimension_target": "pickup",
+              "order": "bottom",
+              "limit": 3
+            },
+            "aggregation": {
+              "bucket": null,
+              "inner": null,
+              "outer": null,
+              "select": null,
+              "source": "flat"
+            }
+          },
+          "differences": [
+            [
+              "factor:dimension_target",
+              null,
+              "pickup"
+            ],
+            [
+              "factor:taxi_status",
+              "vacant",
+              null
+            ]
+          ],
+          "error_code": "UNCONSUMED_CONDITION"
+        },
+        "sft_dpo": {
+          "first_raw": "{\n  \"concepts\": [\n    {\n      \"id\": \"place_1\",\n      \"text\": \"대구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"대구\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"passage_count\",\n      \"text\": \"공차 택시 통행량\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"passage_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_week\",\n    \"dimension\": \"emd\",\n    \"order\": \"bottom\",\n    \"limit\": 3,\n    \"taxi_status\": \"vacant\"\n  }\n}",
+          "final_grounding": {
+            "concepts": [
+              {
+                "id": "place_1",
+                "text": "대구",
+                "concept": "LOCATION",
+                "subtype": "place",
+                "role": "SUBCOND",
+                "source": "user",
+                "value": {
+                  "name": "대구",
+                  "region": ""
+                },
+                "attributes": {}
+              },
+              {
+                "id": "passage",
+                "text": "",
+                "concept": "EVENT",
+                "subtype": "passage",
+                "role": "SUPPORT",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              },
+              {
+                "id": "passage_count",
+                "text": "공차 택시 통행량",
+                "concept": "AMOUNT",
+                "subtype": "passage_count",
+                "role": "MEASURE",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              }
+            ],
+            "factors": {
+              "date": "last_week",
+              "dimension": "emd",
+              "order": "bottom",
+              "limit": 3,
+              "taxi_status": "vacant"
+            },
+            "aggregation": {
+              "bucket": null,
+              "inner": null,
+              "outer": null,
+              "select": null,
+              "source": "flat"
+            }
+          },
+          "differences": [],
+          "error_code": null
+        }
+      }
+    },
+    {
+      "id": "084",
+      "question": "주말 대구에서 출발해 부산에 도착한 실차 중 부산의 하차 읍면동 상위 3곳은?",
+      "vendor_gold_calls": [
+        {
+          "tool": "get_place_scope",
+          "args": {
+            "name": "대구"
+          }
+        },
+        {
+          "tool": "get_place_scope",
+          "args": {
+            "name": "부산"
+          }
+        },
+        {
+          "tool": "get_trip_count",
+          "args": {
+            "scope_pickup": "$pickup.scope",
+            "scope_dropoff": "$dropoff.scope",
+            "date": "weekend",
+            "dimension": "emd",
+            "dimension_target": "dropoff",
+            "order": "top",
+            "limit": 3
+          }
+        }
+      ],
+      "predictions": {
+        "base": {
+          "first_raw": "{\n  \"concepts\": [\n    {\n      \"id\": \"origin\", \"text\": \"대구\",\n      \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"대구\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"destination\", \"text\": \"부산\",\n      \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"부산\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\", \"subtype\": \"trip\", \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"dropoff_emd\", \"text\": \"하차 읍면동\",\n      \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"DIMENSION\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\", \"text\": \"실차 중\",\n      \"concept\": \"AMOUNT\", \"subtype\": \"trip_count\", \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"dropoff\",\n    \"order\": \"top\",\n    \"limit\": 3,\n    \"date\": \"weekend\"\n  }\n}",
+          "final_grounding": {
+            "concepts": [
+              {
+                "id": "origin",
+                "text": "대구",
+                "concept": "LOCATION",
+                "subtype": "place",
+                "role": "SUBCOND",
+                "source": "user",
+                "value": {
+                  "name": "대구",
+                  "region": ""
+                },
+                "attributes": {
+                  "od_role": "pickup"
+                }
+              },
+              {
+                "id": "destination",
+                "text": "부산",
+                "concept": "LOCATION",
+                "subtype": "place",
+                "role": "SUBCOND",
+                "source": "user",
+                "value": {
+                  "name": "부산",
+                  "region": ""
+                },
+                "attributes": {
+                  "od_role": "dropoff"
+                }
+              },
+              {
+                "id": "trip",
+                "text": "",
+                "concept": "EVENT",
+                "subtype": "trip",
+                "role": "SUPPORT",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              },
+              {
+                "id": "trip_count",
+                "text": "실차 중",
+                "concept": "AMOUNT",
+                "subtype": "trip_count",
+                "role": "MEASURE",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              }
+            ],
+            "factors": {
+              "dimension": "emd",
+              "dimension_target": "dropoff",
+              "order": "top",
+              "limit": 3,
+              "date": "weekend"
+            },
+            "aggregation": {
+              "bucket": null,
+              "inner": null,
+              "outer": null,
+              "select": null,
+              "source": "flat"
+            },
+            "normalizations": [
+              {
+                "concept": "dropoff_emd",
+                "rule": "unit_word_place_dropped",
+                "before": {
+                  "text": "하차 읍면동"
+                }
+              }
+            ]
+          },
+          "differences": [],
+          "error_code": null
+        },
+        "sft": {
+          "first_raw": "{\n  \"concepts\": [\n    {\n      \"id\": \"origin\", \"text\": \"대구\",\n      \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"대구\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"destination\", \"text\": \"부산\",\n      \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"부산\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\", \"subtype\": \"trip\", \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"dropoff_emd\", \"text\": \"하차 읍면동\",\n      \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"DIMENSION\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\", \"text\": \"실차 중\",\n      \"concept\": \"AMOUNT\", \"subtype\": \"trip_count\", \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"dropoff\",\n    \"order\": \"top\",\n    \"limit\": 3\n  }\n}",
+          "final_grounding": {
+            "concepts": [
+              {
+                "id": "origin",
+                "text": "대구",
+                "concept": "LOCATION",
+                "subtype": "place",
+                "role": "SUBCOND",
+                "source": "user",
+                "value": {
+                  "name": "대구",
+                  "region": ""
+                },
+                "attributes": {
+                  "od_role": "pickup"
+                }
+              },
+              {
+                "id": "destination",
+                "text": "부산",
+                "concept": "LOCATION",
+                "subtype": "place",
+                "role": "SUBCOND",
+                "source": "user",
+                "value": {
+                  "name": "부산",
+                  "region": ""
+                },
+                "attributes": {
+                  "od_role": "dropoff"
+                }
+              },
+              {
+                "id": "trip",
+                "text": "",
+                "concept": "EVENT",
+                "subtype": "trip",
+                "role": "SUPPORT",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              },
+              {
+                "id": "trip_count",
+                "text": "실차 중",
+                "concept": "AMOUNT",
+                "subtype": "trip_count",
+                "role": "MEASURE",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              }
+            ],
+            "factors": {
+              "dimension": "emd",
+              "dimension_target": "dropoff",
+              "order": "top",
+              "limit": 3
+            },
+            "aggregation": {
+              "bucket": null,
+              "inner": null,
+              "outer": null,
+              "select": null,
+              "source": "flat"
+            },
+            "normalizations": [
+              {
+                "concept": "dropoff_emd",
+                "rule": "unit_word_place_dropped",
+                "before": {
+                  "text": "하차 읍면동"
+                }
+              }
+            ]
+          },
+          "differences": [
+            [
+              "factor:date",
+              "weekend",
+              null
+            ]
+          ],
+          "error_code": null
+        },
+        "sft_dpo": {
+          "first_raw": "{\n  \"concepts\": [\n    {\n      \"id\": \"origin\", \"text\": \"대구\",\n      \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"대구\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"destination\", \"text\": \"부산\",\n      \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"부산\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\", \"subtype\": \"trip\", \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"dropoff_emd\", \"text\": \"하차 읍면동\",\n      \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"DIMENSION\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\", \"text\": \"실차 중\",\n      \"concept\": \"AMOUNT\", \"subtype\": \"trip_count\", \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"dropoff\",\n    \"order\": \"top\",\n    \"limit\": 3,\n    \"date\": \"weekend\"\n  }\n}",
+          "final_grounding": {
+            "concepts": [
+              {
+                "id": "origin",
+                "text": "대구",
+                "concept": "LOCATION",
+                "subtype": "place",
+                "role": "SUBCOND",
+                "source": "user",
+                "value": {
+                  "name": "대구",
+                  "region": ""
+                },
+                "attributes": {
+                  "od_role": "pickup"
+                }
+              },
+              {
+                "id": "destination",
+                "text": "부산",
+                "concept": "LOCATION",
+                "subtype": "place",
+                "role": "SUBCOND",
+                "source": "user",
+                "value": {
+                  "name": "부산",
+                  "region": ""
+                },
+                "attributes": {
+                  "od_role": "dropoff"
+                }
+              },
+              {
+                "id": "trip",
+                "text": "",
+                "concept": "EVENT",
+                "subtype": "trip",
+                "role": "SUPPORT",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              },
+              {
+                "id": "trip_count",
+                "text": "실차 중",
+                "concept": "AMOUNT",
+                "subtype": "trip_count",
+                "role": "MEASURE",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              }
+            ],
+            "factors": {
+              "dimension": "emd",
+              "dimension_target": "dropoff",
+              "order": "top",
+              "limit": 3,
+              "date": "weekend"
+            },
+            "aggregation": {
+              "bucket": null,
+              "inner": null,
+              "outer": null,
+              "select": null,
+              "source": "flat"
+            },
+            "normalizations": [
+              {
+                "concept": "dropoff_emd",
+                "rule": "unit_word_place_dropped",
+                "before": {
+                  "text": "하차 읍면동"
+                }
+              }
+            ]
+          },
+          "differences": [],
+          "error_code": null
+        }
+      }
+    }
+  ],
+  "sft_to_dpo_regressions": [],
+  "all_fail": [
+    {
+      "id": "001",
+      "question": "주말 오후 6시부터 8시까지 광안리 주변의 공차 법인택시 통행량은?",
+      "vendor_gold_calls": [
+        {
+          "tool": "get_place_scope",
+          "args": {
+            "name": "광안리",
+            "include_vicinity": true
+          }
+        },
+        {
+          "tool": "get_passage_count",
+          "args": {
+            "scope": "$resolve.scope",
+            "date": "weekend",
+            "time": "180000-200000",
+            "taxi_type": "corporate",
+            "taxi_status": "vacant"
+          }
+        }
+      ],
+      "predictions": {
+        "base": {
+          "first_raw": "{\n  \"concepts\": [\n    {\n      \"id\": \"place_1\",\n      \"text\": \"광안리\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"광안리\", \"region\": \"\"},\n      \"attributes\": {\"vicinity\": true}\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"passage_count\",\n      \"text\": \"통행량\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"passage_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"time\": \"180000-200000\",\n    \"taxi_type\": \"corporate\",\n    \"taxi_status\": \"vacant\"\n  }\n}",
+          "final_grounding": {
+            "concepts": [
+              {
+                "id": "place_1",
+                "text": "광안리",
+                "concept": "LOCATION",
+                "subtype": "place",
+                "role": "SUBCOND",
+                "source": "user",
+                "value": {
+                  "name": "광안리",
+                  "region": ""
+                },
+                "attributes": {}
+              },
+              {
+                "id": "passage",
+                "text": "",
+                "concept": "EVENT",
+                "subtype": "passage",
+                "role": "SUPPORT",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              },
+              {
+                "id": "passage_count",
+                "text": "통행량",
+                "concept": "AMOUNT",
+                "subtype": "passage_count",
+                "role": "MEASURE",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              }
+            ],
+            "factors": {
+              "vicinity": true,
+              "time": "180000-200000",
+              "taxi_type": "corporate",
+              "taxi_status": "vacant"
+            },
+            "aggregation": {
+              "bucket": null,
+              "inner": null,
+              "outer": null,
+              "select": null,
+              "source": "flat"
+            }
+          },
+          "differences": [
+            [
+              "factor:date",
+              "weekend",
+              null
+            ]
+          ],
+          "error_code": null
+        },
+        "sft": {
+          "first_raw": "{\n  \"concepts\": [\n    {\n      \"id\": \"place_1\",\n      \"text\": \"광안리\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"광안리\", \"region\": \"\"},\n      \"attributes\": {\"vicinity\": true}\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"passage_count\",\n      \"text\": \"통행량\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"passage_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"time\": \"180000-200000\",\n    \"taxi_type\": \"corporate\",\n    \"taxi_status\": \"vacant\"\n  }\n}",
+          "final_grounding": {
+            "concepts": [
+              {
+                "id": "place_1",
+                "text": "광안리",
+                "concept": "LOCATION",
+                "subtype": "place",
+                "role": "SUBCOND",
+                "source": "user",
+                "value": {
+                  "name": "광안리",
+                  "region": ""
+                },
+                "attributes": {}
+              },
+              {
+                "id": "passage",
+                "text": "",
+                "concept": "EVENT",
+                "subtype": "passage",
+                "role": "SUPPORT",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              },
+              {
+                "id": "passage_count",
+                "text": "통행량",
+                "concept": "AMOUNT",
+                "subtype": "passage_count",
+                "role": "MEASURE",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              }
+            ],
+            "factors": {
+              "vicinity": true,
+              "time": "180000-200000",
+              "taxi_type": "corporate",
+              "taxi_status": "vacant"
+            },
+            "aggregation": {
+              "bucket": null,
+              "inner": null,
+              "outer": null,
+              "select": null,
+              "source": "flat"
+            }
+          },
+          "differences": [
+            [
+              "factor:date",
+              "weekend",
+              null
+            ]
+          ],
+          "error_code": null
+        },
+        "sft_dpo": {
+          "first_raw": "{\n  \"concepts\": [\n    {\n      \"id\": \"place_1\",\n      \"text\": \"광안리\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"광안리\", \"region\": \"\"},\n      \"attributes\": {\"vicinity\": true}\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"passage_count\",\n      \"text\": \"통행량\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"passage_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"time\": \"180000-200000\",\n    \"taxi_type\": \"corporate\",\n    \"taxi_status\": \"vacant\"\n  }\n}",
+          "final_grounding": {
+            "concepts": [
+              {
+                "id": "place_1",
+                "text": "광안리",
+                "concept": "LOCATION",
+                "subtype": "place",
+                "role": "SUBCOND",
+                "source": "user",
+                "value": {
+                  "name": "광안리",
+                  "region": ""
+                },
+                "attributes": {}
+              },
+              {
+                "id": "passage",
+                "text": "",
+                "concept": "EVENT",
+                "subtype": "passage",
+                "role": "SUPPORT",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              },
+              {
+                "id": "passage_count",
+                "text": "통행량",
+                "concept": "AMOUNT",
+                "subtype": "passage_count",
+                "role": "MEASURE",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              }
+            ],
+            "factors": {
+              "vicinity": true,
+              "time": "180000-200000",
+              "taxi_type": "corporate",
+              "taxi_status": "vacant"
+            },
+            "aggregation": {
+              "bucket": null,
+              "inner": null,
+              "outer": null,
+              "select": null,
+              "source": "flat"
+            }
+          },
+          "differences": [
+            [
+              "factor:date",
+              "weekend",
+              null
+            ]
+          ],
+          "error_code": null
+        }
+      }
+    },
+    {
+      "id": "002",
+      "question": "이번 주 부산의 시군구별 택시 통행량을 적은 순서로 2곳 알려줘.",
+      "vendor_gold_calls": [
+        {
+          "tool": "get_place_scope",
+          "args": {
+            "name": "부산"
+          }
+        },
+        {
+          "tool": "get_passage_count",
+          "args": {
+            "scope": "$resolve.scope",
+            "date": "this_week",
+            "dimension": "sigungu",
+            "order": "bottom",
+            "limit": 2
+          }
+        }
+      ],
+      "predictions": {
+        "base": {
+          "first_raw": "{\n  \"concepts\": [\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"passage_count\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"passage_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"location\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"COND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"부산\", \"region\": \"\"}\n    }\n  ],\n  \"factors\": {\n    \"date\": \"this_week\",\n    \"dimension\": \"sigungu\",\n    \"order\": \"top\",\n    \"limit\": 2\n  }\n}",
+          "final_grounding": {
+            "concepts": [
+              {
+                "id": "passage",
+                "text": "",
+                "concept": "EVENT",
+                "subtype": "passage",
+                "role": "SUPPORT",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              },
+              {
+                "id": "passage_count",
+                "text": "",
+                "concept": "AMOUNT",
+                "subtype": "passage_count",
+                "role": "MEASURE",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              },
+              {
+                "id": "location",
+                "text": "",
+                "concept": "LOCATION",
+                "subtype": "place",
+                "role": "COND",
+                "source": "user",
+                "value": {
+                  "name": "부산",
+                  "region": ""
+                },
+                "attributes": {}
+              }
+            ],
+            "factors": {
+              "date": "this_week",
+              "dimension": "sigungu",
+              "order": "top",
+              "limit": 2
+            },
+            "aggregation": {
+              "bucket": null,
+              "inner": null,
+              "outer": null,
+              "select": null,
+              "source": "flat"
+            }
+          },
+          "differences": [
+            [
+              "factor:order",
+              "bottom",
+              "top"
+            ]
+          ],
+          "error_code": null
+        },
+        "sft": {
+          "first_raw": "{\n  \"concepts\": [\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"passage_count\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"passage_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"location\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"COND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"부산\", \"region\": \"\"}\n    }\n  ],\n  \"factors\": {\n    \"date\": \"this_week\",\n    \"dimension\": \"sigungu\",\n    \"order\": \"top\",\n    \"limit\": 2\n  }\n}",
+          "final_grounding": {
+            "concepts": [
+              {
+                "id": "passage",
+                "text": "",
+                "concept": "EVENT",
+                "subtype": "passage",
+                "role": "SUPPORT",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              },
+              {
+                "id": "passage_count",
+                "text": "",
+                "concept": "AMOUNT",
+                "subtype": "passage_count",
+                "role": "MEASURE",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              },
+              {
+                "id": "location",
+                "text": "",
+                "concept": "LOCATION",
+                "subtype": "place",
+                "role": "COND",
+                "source": "user",
+                "value": {
+                  "name": "부산",
+                  "region": ""
+                },
+                "attributes": {}
+              }
+            ],
+            "factors": {
+              "date": "this_week",
+              "dimension": "sigungu",
+              "order": "top",
+              "limit": 2
+            },
+            "aggregation": {
+              "bucket": null,
+              "inner": null,
+              "outer": null,
+              "select": null,
+              "source": "flat"
+            }
+          },
+          "differences": [
+            [
+              "factor:order",
+              "bottom",
+              "top"
+            ]
+          ],
+          "error_code": null
+        },
+        "sft_dpo": {
+          "first_raw": "{\n  \"concepts\": [\n    {\n      \"id\": \"place_1\", \"text\": \"부산\",\n      \"concept\": \"LOCATION\", \"subtype\": \"place\", \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"부산\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\", \"subtype\": \"passage\", \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"passage_count\", \"text\": \"택시 통행량\",\n      \"concept\": \"AMOUNT\", \"subtype\": \"passage_count\", \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"this_week\",\n    \"dimension\": \"sigungu\",\n    \"order\": \"top\",\n    \"limit\": 2\n  }\n}",
+          "final_grounding": {
+            "concepts": [
+              {
+                "id": "place_1",
+                "text": "부산",
+                "concept": "LOCATION",
+                "subtype": "place",
+                "role": "SUBCOND",
+                "source": "user",
+                "value": {
+                  "name": "부산",
+                  "region": ""
+                },
+                "attributes": {}
+              },
+              {
+                "id": "passage",
+                "text": "",
+                "concept": "EVENT",
+                "subtype": "passage",
+                "role": "SUPPORT",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              },
+              {
+                "id": "passage_count",
+                "text": "택시 통행량",
+                "concept": "AMOUNT",
+                "subtype": "passage_count",
+                "role": "MEASURE",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              }
+            ],
+            "factors": {
+              "date": "this_week",
+              "dimension": "sigungu",
+              "order": "top",
+              "limit": 2
+            },
+            "aggregation": {
+              "bucket": null,
+              "inner": null,
+              "outer": null,
+              "select": null,
+              "source": "flat"
+            }
+          },
+          "differences": [
+            [
+              "factor:order",
+              "bottom",
+              "top"
+            ]
+          ],
+          "error_code": null
+        }
+      }
+    },
+    {
+      "id": "004",
+      "question": "휴일 인천 소속 개인택시의 공차율 중간값은?",
+      "vendor_gold_calls": [
+        {
+          "tool": "get_place_scope",
+          "args": {
+            "name": "인천"
+          }
+        },
+        {
+          "tool": "get_drive_metrics",
+          "args": {
+            "scope": "$resolve.scope",
+            "metric": "vacant_ratio",
+            "date": "holiday",
+            "taxi_type": "private",
+            "aggregation": "med"
+          }
+        }
+      ],
+      "predictions": {
+        "base": {
+          "first_raw": "{\n  \"concepts\": [\n    {\n      \"id\": \"location_1\",\n      \"text\": \"인천\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"인천\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"taxi_type\",\n      \"text\": \"개인택시\",\n      \"concept\": \"OBJECT\",\n      \"subtype\": \"taxi_type\",\n      \"role\": \"COND\",\n      \"source\": \"user\",\n      \"value\": \"private\"\n    },\n    {\n      \"id\": \"drive\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"drive\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"vacant_ratio\",\n      \"text\": \"공차율\",\n      \"concept\": \"PROPORTION\",\n      \"subtype\": \"vacant_ratio\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"aggregation\": \"med\"\n  }\n}",
+          "final_grounding": {
+            "concepts": [
+              {
+                "id": "location_1",
+                "text": "인천",
+                "concept": "LOCATION",
+                "subtype": "place",
+                "role": "SUBCOND",
+                "source": "user",
+                "value": {
+                  "name": "인천",
+                  "region": ""
+                },
+                "attributes": {}
+              },
+              {
+                "id": "drive",
+                "text": "",
+                "concept": "EVENT",
+                "subtype": "drive",
+                "role": "SUPPORT",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              },
+              {
+                "id": "vacant_ratio",
+                "text": "공차율",
+                "concept": "PROPORTION",
+                "subtype": "vacant_ratio",
+                "role": "MEASURE",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              }
+            ],
+            "factors": {
+              "taxi_type": "private",
+              "aggregation": "med"
+            },
+            "aggregation": {
+              "bucket": null,
+              "inner": "med",
+              "outer": null,
+              "select": null,
+              "source": "flat"
+            },
+            "normalizations": [
+              {
+                "concept": "taxi_type",
+                "rule": "condition_concept_to_factor",
+                "factor": "taxi_type",
+                "value": "private"
+              }
+            ]
+          },
+          "differences": [
+            [
+              "factor:date",
+              "holiday",
+              null
+            ]
+          ],
+          "error_code": null
+        },
+        "sft": {
+          "first_raw": "{\n  \"concepts\": [\n    {\n      \"id\": \"location_1\",\n      \"text\": \"인천\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"인천\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"taxi_type\",\n      \"text\": \"개인택시\",\n      \"concept\": \"OBJECT\",\n      \"subtype\": \"taxi_type\",\n      \"role\": \"COND\",\n      \"source\": \"user\",\n      \"value\": \"private\"\n    },\n    {\n      \"id\": \"drive\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"drive\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"vacant_ratio\",\n      \"text\": \"공차율\",\n      \"concept\": \"PROPORTION\",\n      \"subtype\": \"vacant_ratio\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"aggregation\": \"med\"\n  }\n}",
+          "final_grounding": {
+            "concepts": [
+              {
+                "id": "location_1",
+                "text": "인천",
+                "concept": "LOCATION",
+                "subtype": "place",
+                "role": "SUBCOND",
+                "source": "user",
+                "value": {
+                  "name": "인천",
+                  "region": ""
+                },
+                "attributes": {}
+              },
+              {
+                "id": "drive",
+                "text": "",
+                "concept": "EVENT",
+                "subtype": "drive",
+                "role": "SUPPORT",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              },
+              {
+                "id": "vacant_ratio",
+                "text": "공차율",
+                "concept": "PROPORTION",
+                "subtype": "vacant_ratio",
+                "role": "MEASURE",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              }
+            ],
+            "factors": {
+              "taxi_type": "private",
+              "aggregation": "med"
+            },
+            "aggregation": {
+              "bucket": null,
+              "inner": "med",
+              "outer": null,
+              "select": null,
+              "source": "flat"
+            },
+            "normalizations": [
+              {
+                "concept": "taxi_type",
+                "rule": "condition_concept_to_factor",
+                "factor": "taxi_type",
+                "value": "private"
+              }
+            ]
+          },
+          "differences": [
+            [
+              "factor:date",
+              "holiday",
+              null
+            ]
+          ],
+          "error_code": null
+        },
+        "sft_dpo": {
+          "first_raw": "{\n  \"concepts\": [\n    {\n      \"id\": \"location_1\",\n      \"text\": \"인천\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"인천\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"taxi_type\",\n      \"text\": \"개인택시\",\n      \"concept\": \"OBJECT\",\n      \"subtype\": \"taxi_type\",\n      \"role\": \"COND\",\n      \"source\": \"user\",\n      \"value\": \"private\"\n    },\n    {\n      \"id\": \"drive\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"drive\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"vacant_ratio\",\n      \"text\": \"공차율\",\n      \"concept\": \"PROPORTION\",\n      \"subtype\": \"vacant_ratio\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"aggregation\": \"med\"\n  }\n}",
+          "final_grounding": {
+            "concepts": [
+              {
+                "id": "location_1",
+                "text": "인천",
+                "concept": "LOCATION",
+                "subtype": "place",
+                "role": "SUBCOND",
+                "source": "user",
+                "value": {
+                  "name": "인천",
+                  "region": ""
+                },
+                "attributes": {}
+              },
+              {
+                "id": "drive",
+                "text": "",
+                "concept": "EVENT",
+                "subtype": "drive",
+                "role": "SUPPORT",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              },
+              {
+                "id": "vacant_ratio",
+                "text": "공차율",
+                "concept": "PROPORTION",
+                "subtype": "vacant_ratio",
+                "role": "MEASURE",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              }
+            ],
+            "factors": {
+              "taxi_type": "private",
+              "aggregation": "med"
+            },
+            "aggregation": {
+              "bucket": null,
+              "inner": "med",
+              "outer": null,
+              "select": null,
+              "source": "flat"
+            },
+            "normalizations": [
+              {
+                "concept": "taxi_type",
+                "rule": "condition_concept_to_factor",
+                "factor": "taxi_type",
+                "value": "private"
+              }
+            ]
+          },
+          "differences": [
+            [
+              "factor:date",
+              "holiday",
+              null
+            ]
+          ],
+          "error_code": null
+        }
+      }
+    }
+  ]
+}
