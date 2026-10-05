@@ -1127,10 +1127,18 @@ T2PC 유지. 모델 호출 없이 도구·표시·절차를 정리했다. 상세
   | 모델·digest | qwen3.8:27b, `aaee06c39dcf2437…` | 모델은 설정과, digest는 Ollama `/api/tags`와 비교 |
   | Ollama | 0.34.4 | `/api/version`과 비교 |
   | prompt | sha256 `87048d0c…` | 현재 planner prompt의 hash와 비교 |
-  | 실행 의미 코드 | 내용 지문 `97efa866…` | `execution_spec.SEMANTIC_CODE` 파일 내용으로 지문을 만들어 비교 |
+  | 실행 의미 코드 | 내용 지문 `791c4a68…`(2026-10-06 갱신, 이전 `97efa866…`) | `execution_spec.SEMANTIC_CODE` 파일 내용으로 지문을 만들어 비교 |
   | 설정 | temperature 0, think·num_predict 미지정, timeout 300초, aggregation flat, 조건 계층 켬, example retrieval off | CLI 설정과 비교 |
   | provider·실행 | mock, legacy | CLI 설정과 비교 |
 
+  * **지문 갱신(2026-10-06, `evaluation/fix_condition_hoist/analysis.md`):** `97efa866…` → `791c4a68…`.
+    * 바뀐 것: 모델 출력의 값 형식(dict·list 등)이 틀리면 grounding 정리 단계가 `TypeError`로 끝나던 것을 계약 오류로 멈추게 했다
+      (`geoflow/grounding.py`, `geoflow/conditions.py`). 모델과 prompt는 바꾸지 않았다.
+    * 근거: 지문 `97efa866…`으로 만든 T2PC 기록 전부(개발 428·최종 56·운영 230 등 37개 기록 1,115문항)를 새 코드로 재적용해
+      분류·`grounding_ok`·오류 코드·요청이 모두 같았다(`needs_live` 0). 결과가 달라지는 것은 예외로 끝나던 입력뿐이다.
+    * 모델 재측정 없이 명세의 지문만 갱신했다. 위 표와 아래 근거 수치는 갱신 전 측정이다.
+    * B 명세(`7e99136d…`)의 코드에는 같은 버그가 남아 있다. B로 되돌리면 이 예외가 다시 생기고,
+      `tests/test_grounding_value_shapes.py`가 실패한다(되돌리기 스크립트는 이 테스트를 지우지 않는다).
   * 실행 의미 코드는 geoflow/, 매크로·템플릿·예시, prompts/, schemas/, reference 데이터, Tool 실행·mock·reference provider, `ollama_client.py`, `assistant_runtime.py`다(64개 파일).
     * 커밋이 아니라 파일 내용으로 비교한다. README·평가 기록·테스트만 바뀐 커밋은 같은 지문이다.
     * `assistant_cli.py`는 넣지 않는다. CLI가 pipeline에 넘기는 값은 설정 비교로 확인한다.
