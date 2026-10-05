@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "evaluation/real_data/record_schema.json",
+  "title": "실제 질문 검증 기록(한 질문)",
+  "description": "실제 질문 원문·기준일, 사람이 검토한 의미와 기대 동작, 라벨 근거, provider 계약 버전, GeoFlow 실행과 실제 응답, 비교 결과를 한 기록으로 잇는다. 합성 문항을 이 형식으로 넣어 실제 자료처럼 쓰지 않는다(question.source).",
+  "type": "object",
+  "required": ["record_id", "question", "review"],
+  "additionalProperties": false,
+  "properties": {
+    "record_id": {"type": "string", "minLength": 1},
+    "question": {
+      "type": "object",
+      "required": ["text", "reference_date", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "text": {"type": "string", "minLength": 1, "description": "사용자가 실제로 입력한 원문(개인정보는 지운 뒤)"},
+        "asked_at": {"type": "string", "format": "date-time"},
+        "timezone": {"type": "string", "default": "Asia/Seoul"},
+        "reference_date": {"type": "string", "format": "date", "description": "상대 날짜(어제·지난달)를 풀 기준일. CLI --reference-date에 그대로 넣는다"},
+        "source": {"enum": ["real_user", "service_staff", "vendor"], "description": "실제 사용자 질문 / 서비스 담당자가 작성 / 업체가 작성. 합성(Claude 작성) 문항은 이 형식에 넣지 않는다"},
+        "anonymized": {"type": "boolean"}
+      }
+    },
+    "review": {
+      "type": "object",
+      "required": ["status"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {"enum": ["unreviewed", "reviewed", "disputed"]},
+        "reviewer_role": {"type": "string", "description": "검토자의 역할(예: 업체 담당자, 서비스 담당자). 이름은 적지 않는다"},
+        "reviewed_at": {"type": "string", "format": "date"},
+        "meaning": {"type": "string", "description": "검토자가 확인한 질문의 의미(무엇을 세나, 조건, 묶는 기준, 돌려줄 대상)"},
+        "expected_behavior": {"enum": ["answer", "clarify", "unsupported"]},
+        "expected_call": {"type": ["string", "null"], "description": "기대하는 Tool 호출(gold_text 표기). 답하지 않는 경우 null"},
+        "required_conditions": {"type": "object", "description": "버리면 안 되는 조건(지원 불가·확인 요청의 근거)"},
+        "label_basis": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["kind", "ref"],
+            "additionalProperties": false,
+            "properties": {
+              "kind": {"enum": ["question_explicit", "vendor_contract", "project_policy", "vendor_decision"]},
+              "ref": {"type": "string", "minLength": 1, "description": "근거 위치(질문의 표현, schema 경로, 정책 문서, 결정표 D1–D4와 결정 기록)"}
+            }
+          }
+        },
+        "decision_refs": {"type": "array", "items": {"type": "string", "pattern": "^D[0-9]+$"}, "description": "decisions.md의 결정 항목"},
+        "notes": {"type": "string"}
+      },
+      "allOf": [
+        {"if": {"properties": {"status": {"const": "reviewed"}}},
+         "then": {"required": ["reviewer_role", "reviewed_at", "meaning", "expected_behavior", "label_basis"]}}
+      ]
+    },
+    "provider": {
+      "type": "object",
+      "required": ["name", "contract_version"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {"enum": ["tims"], "description": "실제 자료 검증은 실제 TIMS만. mock·reference 실행은 이 형식의 실제 비교로 쓰지 않는다"},
+        "contract_version": {"type": "string", "description": "TIMS Tool 계약(schema)·API 문서의 버전"},
+        "endpoint_version": {"type": ["string", "null"]}
+      }
+    },
+    "run": {
+      "type": "object",
+      "required": ["geoflow_verification", "cli_record"],
+      "additionalProperties": false,
+      "properties": {
+        "geoflow_verification": {"type": "object", "description": "CLI 저장 기록의 geoflow_verification(비교 대상·일치·다름·확인 안 함)"},
+        "geoflow_settings": {"type": "object", "description": "CLI 저장 기록의 geoflow_settings(기준일 포함)"},
+        "cli_record": {"type": "string", "description": "CLI query_raw.json 경로와 질문 id"}
+      }
+    },
+    "actual": {
+      "type": "object",
+      "required": ["outcome"],
+      "additionalProperties": false,
+      "properties": {
+        "outcome": {"enum": ["answered", "needs_clarification", "unsupported", "failed"]},
+        "calls": {"type": "array", "items": {"type": "object"}},
+        "tims_responses_ref": {"type": "string", "description": "실제 TIMS 응답 원본의 보관 위치"},
+        "answer_text": {"type": "string"}
+      }
+    },
+    "comparison": {
+      "type": "object",
+      "required": ["result"],
+      "additionalProperties": false,
+      "properties": {
+        "result": {"enum": ["correct", "silent_wrong", "correct_refusal", "wrong_refusal", "failure", "not_compared"]},
+        "unacceptable": {"type": "array", "items": {"enum": ["U1_condition_dropped", "U2_wrong_scope", "U3_wrong_measure", "U4_condition_added", "R2_unrepresentable_dropped", "R3_undetermined_filled", "R4_default_od_end"]}},
+        "value_check": {"enum": ["matches_tims", "differs", "not_checked"], "description": "답변 값이 실제 TIMS 응답·독립 계산과 맞는가"},
+        "notes": {"type": "string"}
+      }
+    }
+  },
+  "allOf": [
+    {"if": {"required": ["comparison"], "properties": {"comparison": {"properties": {"result": {"not": {"const": "not_compared"}}}}}},
+     "then": {"required": ["provider", "run", "actual"], "properties": {"review": {"properties": {"status": {"const": "reviewed"}}}}}}
+  ]
+}

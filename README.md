@@ -1007,6 +1007,19 @@ development가 되었다.
 > grounding 층이 업체 100에서 98/100이었다. 정답 grounding 기반 실행은 양쪽 모두 100/100, 41+2/43로 같다(차이는 모두 grounding에서 옴).
 `evaluate_v2.py`는 사전 등록한 설정(condition_check 끔)을 그대로 쓴다.
 
+### 평가 기록 신뢰성·검증 표시 정리와 실제 자료 검증 준비 grounding_v15 (2026-10-05)
+
+T2PC 유지. 모델 호출 없이 도구·표시·절차를 정리했다. 상세: `evaluation/grounding_v15/README.md`.
+
+* **평가 harness:**
+  * run 동일성을 실행 명세 전체(모델·digest·prompt·실행 의미 코드 지문·문항·옵션·기준일·적재 방식·순서·재적용 출처)로 정한다.
+  * `keep_loaded` run은 중단 뒤 같은 run으로 재개하지 않는다.
+  * 기록 재적용이 섞인 행은 순수 live 측정으로 표시하지 않는다.
+* **CLI 검증 표시:** 실행할 때 prompt hash와 코드 지문까지 비교하고, 일치·다름·확인 안 함·명세 밖을 나눠 적는다.
+* **되돌리기:** `git revert -m 1 b62f6dc`는 이제 충돌한다. 현재 절차는 `scripts/geoflow_rollback_to_b.sh`이며 별도 worktree에서 확인했다.
+* **기록 프록시:** 클라이언트 연결 종료를 upstream에 바로 전달한다. v14의 도구 판별 보장 범위와 계획 이탈(재측정, 예산 480 → 572회)을 v14 문서에 적었다.
+* **실제 자료 검증 준비:** `evaluation/real_data/`(결정표 D1–D4, 입력 형식·검사, 표본 수 기준, 외부 입력 목록). 실제 TIMS 연결·응답·실제 사용자 질문은 아직 없다.
+
 ### 운영 조건(연속 실행) 검증 grounding_v14 (2026-10-05)
 
 **T2PC 조합을 유지한다.** 사전 등록한 운영 기준 OP1–OP4를 모두 충족했다. 설계·결과: `evaluation/grounding_v14/analysis.md`.
