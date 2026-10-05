@@ -121,25 +121,57 @@ class EvaluatorControlsTest(unittest.TestCase):
         self.assertEqual(E.run_settings(args), {"reference_date": "2026-09-25",
                                                 "model_state": "unload_per_question", "order": "file"})
 
-    def test_resume_refuses_rows_from_another_condition(self):
+    def test_resume_refuses_legacy_rows_without_spec(self):
         with tempfile.TemporaryDirectory() as tmp:
             partial = Path(tmp) / "run.jsonl"
-            partial.write_text(json.dumps({"id": "1"}) + "\n", encoding="utf-8")   # 예전 기록(조건 없음)
-            default = {"reference_date": "2026-09-25", "model_state": "unload_per_question", "order": "file"}
-            self.assertIn("1", E.load_partial_rows(partial, default))
+            partial.write_text(json.dumps({"id": "1", "run_settings": {"model_state": "unload_per_question"}}) + "\n",
+                               encoding="utf-8")
             with self.assertRaises(SystemExit):
-                E.load_partial_rows(partial, dict(default, model_state="keep_loaded"))
+                E.load_partial_rows(partial, {}, "sha", model_state="unload_per_question")
 
-    def run_llm(self, model_state, tmp):
-        gold = Path(tmp) / "gold.yaml"
-        gold.write_text(
-            "items:\n"
-            "  - id: a\n    question: \"2026년 9월 1일 택시 수입은?\"\n"
-            "    gold_text: get_billing_metrics(metric=revenue, date=20260901)\n"
-            "  - id: b\n    question: \"2026년 9월 2일 택시 수입은?\"\n"
-            "    gold_text: get_billing_metrics(metric=revenue, date=20260902)\n", encoding="utf-8")
-        client = RecordingClient([_grounding("20260901"), _grounding("20260902")])
-        resets = []
+
+class QuestionClient:
+    """질문의 날짜로 대본 grounding을 고른다(순서와 무관). interrupt_after번째 호출에서 중단을 흉내 낸다."""
+    model = "scripted"
+
+    def __init__(self, interrupt_after=None):
+        self.calls = 0
+        self.interrupt_after = interrupt_after
+        self.options = {"temperature": 0}
+        self.think = None
+
+    def chat(self, messages, tools=None, **kwargs):
+        self.calls += 1
+        if self.interrupt_after is not None and self.calls > self.interrupt_after:
+            raise KeyboardInterrupt("simulated interruption")
+        question = messages[-1]["content"]
+        day = "2026090" + question.split("9월 ")[1][0]
+        return {"message": {"content": json.dumps(_grounding(day), ensure_ascii=False)}}
+
+
+GOLD_FIXTURE = "".join(
+    f"  - id: {key}\n    question: \"2026년 9월 {n}일 택시 수입은?\"\n"
+    f"    gold_text: get_billing_metrics(metric=revenue, date=2026090{n})\n"
+    for key, n in (("a", 1), ("b", 2), ("c", 3)))
+
+
+class ResumePolicyTest(unittest.TestCase):
+    """중단 뒤 재개: 문항별 해제 run은 명세가 같으면 새 세션으로 이어 붙이고, keep_loaded run은 거부하거나 별도
+    세션으로 기록한다. 실행 명세의 어느 항목이 바뀌어도 기존 기록과 합치지 않는다."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(dir=HERE)
+        self.dir = Path(self.tmp.name)
+        self.gold = self.dir / "gold.yaml"
+        self.gold.write_text("items:\n" + GOLD_FIXTURE, encoding="utf-8")
+        self.resets = []
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def run_llm(self, model_state, *, interrupt_after=None, digest="d1", resume_new_session=False, only="",
+                order="file", replay_from=None, condition_check=True, name="run"):
+        resets = self.resets
 
         class Reset:
             def __init__(self, *a, **k):
@@ -149,36 +181,101 @@ class EvaluatorControlsTest(unittest.TestCase):
                 resets.append(1)
                 return Namespace(succeeded=True)
 
-        args = Namespace(host="http://x", model="m", chat_timeout=1.0, out=str(Path(tmp) / f"{model_state}.json"),
-                         only="", condition_check=True, condition_notes=False, no_normalize=False,
-                         aggregation_grounding="flat", no_semantic=False, replay_from=None,
-                         reference_date=FIXED, model_state=model_state, order="reverse")
-        with mock.patch.object(E, "GOLD_PATH", gold), \
-                mock.patch("ollama_client.OllamaClient", return_value=client), \
+        args = Namespace(host="http://x", model="m", chat_timeout=1.0, out=str(self.dir / f"{name}.json"),
+                         only=only, condition_check=condition_check, condition_notes=False, no_normalize=False,
+                         aggregation_grounding="flat", no_semantic=False, replay_from=replay_from,
+                         reference_date=FIXED, model_state=model_state, order=order,
+                         resume_new_session=resume_new_session)
+        with mock.patch.object(E, "GOLD_PATH", self.gold), \
+                mock.patch("ollama_client.OllamaClient", return_value=QuestionClient(interrupt_after)), \
                 mock.patch("evaluate_prompt_ab.OllamaStateReset", Reset), \
                 mock.patch("evaluate_prompt_ab.unload_all_models", return_value=[]), \
-                mock.patch("evaluate_prompt_ab._server_details", return_value=("0", "d", {})), \
+                mock.patch("evaluate_prompt_ab._server_details", return_value=("0.34.4", digest, {})), \
                 mock.patch("builtins.print"):
             E.cmd_llm(args)
-        return json.loads(Path(args.out).read_text(encoding="utf-8")), resets
+        return json.loads(Path(args.out).read_text(encoding="utf-8"))
 
-    def test_keep_loaded_skips_per_question_unload_and_is_recorded(self):
-        with tempfile.TemporaryDirectory(dir=HERE) as tmp:
-            result, resets = self.run_llm("keep_loaded", tmp)
-            self.assertEqual(resets, [])
-            meta = result["meta"]
-            self.assertEqual(meta["pipeline"]["isolation"], "keep_loaded")
-            self.assertEqual(meta["run_settings"], {"reference_date": "2026-09-25", "model_state": "keep_loaded",
-                                                    "order": "reverse"})
-            self.assertEqual(meta["item_order"], ["b", "a"])
-            self.assertEqual([r["run_settings"]["model_state"] for r in result["rows"]], ["keep_loaded"] * 2)
-            self.assertEqual([r["reset_ok"] for r in result["rows"]], [None, None])
+    def interrupted(self, model_state, **kwargs):
+        with self.assertRaises(KeyboardInterrupt):
+            self.run_llm(model_state, interrupt_after=1, **kwargs)
+        rows = (self.dir / "run.jsonl").read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(rows), 1)
+
+    def test_unload_run_resumes_as_a_new_session(self):
+        self.interrupted("unload_per_question")
+        result = self.run_llm("unload_per_question")
+        self.assertEqual([r["session"] for r in result["rows"]], [1, 2, 2])
+        self.assertEqual(result["meta"]["sessions"], [{"session": 1, "items": 1}, {"session": 2, "items": 2}])
+        self.assertTrue(result["meta"]["pure_live"])
+        self.assertFalse(result["meta"]["pure_continuous"])     # 문항별 해제 run은 연속 실행이 아니다
+
+    def test_keep_loaded_run_is_not_resumed_into_the_same_run(self):
+        self.interrupted("keep_loaded")
+        with self.assertRaises(SystemExit) as raised:
+            self.run_llm("keep_loaded")
+        self.assertIn("keep_loaded", str(raised.exception))
+
+    def test_keep_loaded_resume_as_separate_session_is_marked_broken(self):
+        self.interrupted("keep_loaded")
+        result = self.run_llm("keep_loaded", resume_new_session=True)
+        self.assertEqual([r["session"] for r in result["rows"]], [1, 2, 2])
+        self.assertFalse(result["meta"]["pure_continuous"])
+
+    def test_uninterrupted_keep_loaded_run_is_pure_continuous(self):
+        result = self.run_llm("keep_loaded", order="reverse")
+        self.assertTrue(result["meta"]["pure_continuous"])
+        self.assertEqual(result["meta"]["measurement"], {"live": 3})
+        self.assertEqual(self.resets, [])                               # 문항별 해제 없음
+        self.assertEqual(result["meta"]["pipeline"]["isolation"], "keep_loaded")
+        self.assertEqual(result["meta"]["item_order"], ["c", "b", "a"])
+        self.assertEqual(result["meta"]["run_spec"]["items"], ["c", "b", "a"])
+        self.assertEqual([r["reset_ok"] for r in result["rows"]], [None] * 3)
 
     def test_unload_per_question_is_the_default_behaviour(self):
-        with tempfile.TemporaryDirectory(dir=HERE) as tmp:
-            result, resets = self.run_llm("unload_per_question", tmp)
-            self.assertEqual(len(resets), 2)
-            self.assertEqual(result["meta"]["pipeline"]["isolation"], "unload_per_question")
+        result = self.run_llm("unload_per_question")
+        self.assertEqual(len(self.resets), 3)
+        self.assertEqual(result["meta"]["pipeline"]["isolation"], "unload_per_question")
+        self.assertEqual(result["meta"]["run_spec"]["model_digest"], "d1")
+
+    def test_any_spec_change_refuses_to_merge(self):
+        changes = [{"digest": "d2"}, {"only": "a,b"}, {"order": "reverse"}, {"condition_check": False}]
+        for change in changes:
+            with self.subTest(change=change):
+                for path in self.dir.glob("run.*"):
+                    path.unlink()
+                self.interrupted("unload_per_question")
+                with self.assertRaises(SystemExit) as raised:
+                    self.run_llm("unload_per_question", **change)
+                self.assertIn("실행 명세", str(raised.exception))
+
+    def test_gold_file_change_refuses_to_merge(self):
+        self.interrupted("unload_per_question")
+        self.gold.write_text("items:\n" + GOLD_FIXTURE.replace("택시 수입은", "택시 수입은 얼마야"), encoding="utf-8")
+        with self.assertRaises(SystemExit) as raised:
+            self.run_llm("unload_per_question")
+        self.assertIn("gold_sha256", str(raised.exception))
+
+    def test_code_change_refuses_to_merge(self):
+        self.interrupted("unload_per_question")
+        original = E.run_spec
+
+        def changed(*a, **k):
+            spec = original(*a, **k)
+            spec["code_fingerprint"] = "other"
+            return spec
+        with mock.patch.object(E, "run_spec", side_effect=changed):
+            with self.assertRaises(SystemExit) as raised:
+                self.run_llm("unload_per_question")
+        self.assertIn("code_fingerprint", str(raised.exception))
+
+    def test_replayed_rows_are_not_a_pure_live_measurement(self):
+        source = self.run_llm("keep_loaded", name="source")
+        replay_path = self.dir / "source.json"
+        self.assertTrue(source["meta"]["pure_continuous"])
+        result = self.run_llm("keep_loaded", replay_from=str(replay_path), name="replayed")
+        self.assertEqual({r["measurement"] for r in result["rows"]}, {"replayed"})
+        self.assertFalse(result["meta"]["pure_live"])
+        self.assertFalse(result["meta"]["pure_continuous"])
 
 
 if __name__ == "__main__":

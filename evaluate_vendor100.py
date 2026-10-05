@@ -92,26 +92,94 @@ def order_items(items, order):
     raise SystemExit(f"알 수 없는 --order: {order}")
 
 
-def load_partial_rows(partial, settings):
-    """이어 실행할 기존 행. 다른 실행 조건의 행이 섞이지 않게 조건이 다르면 멈춘다."""
+def _execution_spec_module():
+    """실행 명세 부품은 이 저장소(harness) 것을 쓴다(--code-root의 다른 판이 아니라)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("_harness_execution_spec", HERE / "execution_spec.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_partial_rows(partial, spec, spec_sha, *, model_state, new_session=False):
+    """이어 실행할 기존 행과 이번 세션 번호. 같은 실험으로 합칠 수 없으면 멈춘다.
+
+    - 기존 행마다 실행 명세 hash(run_spec_sha256)가 있어야 하고 지금 명세와 같아야 한다. 명세가 없는 이전 형식 행은
+      조건을 확인할 수 없으므로 이어 붙이지 않는다(읽기·채점은 그대로 된다).
+    - unload_per_question: 문항마다 모델을 내리므로 문항끼리 서버 상태가 이어지지 않는다. 명세가 같으면 새 세션
+      번호로 이어 붙인다.
+    - keep_loaded: 앞선 처리 이력이 출력에 영향을 준다(grounding_v14). 중단 전 서버 상태는 복원할 수 없고, 이전
+      요청을 다시 보내도 같은 상태가 된다고 가정하지 않는다. 기본은 거부한다. new_session=True면 나머지를 별도
+      세션으로 기록하고 run을 "순수 연속 아님"으로 표시한다.
+    """
     done = {}
     if not partial.is_file():
-        return done
+        return done, 1
+    sidecar = partial.with_suffix(".spec.json")
+    previous_spec = json.loads(sidecar.read_text(encoding="utf-8")) if sidecar.is_file() else None
+    sessions = set()
     for line in partial.read_text(encoding="utf-8").splitlines():
         row = json.loads(line)
-        # 예전 기록에는 run_settings가 없다. 그때의 조건은 기본값과 같다.
-        previous = row.get("run_settings") or {"reference_date": "2026-09-25",
-                                               "model_state": MODEL_STATES[0], "order": "file"}
-        if previous != settings:
-            raise SystemExit(f"{partial}의 기존 행은 다른 실행 조건({previous})이다. 지금 조건: {settings}")
+        if row.get("run_spec_sha256") is None:
+            raise SystemExit(f"{partial}: 실행 명세가 없는 이전 형식 행({row.get('id')})이라 조건을 확인할 수 없다. "
+                             "새 --out으로 시작한다.")
+        if row["run_spec_sha256"] != spec_sha:
+            differences = (_execution_spec_module().spec_differences(previous_spec, spec)
+                           if previous_spec else ["(명세 파일 없음)"])
+            raise SystemExit(f"{partial}: 기존 행의 실행 명세가 지금과 다르다(다른 항목: {', '.join(differences)}). "
+                             "새 --out으로 시작한다.")
+        sessions.add(row.get("session", 1))
         done[row["id"]] = row
-    return done
+    if done and model_state == "keep_loaded" and not new_session:
+        raise SystemExit(f"{partial}: keep_loaded run은 이어 실행하지 않는다. 중단 전 서버 상태를 복원할 수 없어 나머지가 "
+                         "같은 연속 실행이 아니다. 새 --out으로 다시 시작하거나, 나머지를 별도 세션으로 기록하려면 "
+                         "--resume-new-session을 쓴다(순수 연속 실행으로 표시하지 않는다).")
+    return done, (max(sessions) + 1) if sessions else 1
 
 
 def run_settings(args):
     """결과에 영향을 주는 실행 조건. 행마다 남기고, 이어 실행할 때 같은지 확인한다."""
     return {"reference_date": args.reference_date.isoformat(), "model_state": args.model_state,
             "order": args.order}
+
+
+def run_spec(args, *, digest, version, prompt_sha, items):
+    """결과에 영향을 주는 조건 전체(실행 명세). 같은 run으로 합칠 수 있는지는 이 명세의 hash로 정한다."""
+    module = _execution_spec_module()
+    gold = Path(GOLD_PATH or GOLD_FILE)
+    replay = Path(args.replay_from) if args.replay_from else None
+    return {
+        "model": args.model, "model_digest": digest, "ollama_version": version,
+        "planner_prompt_sha256": prompt_sha,
+        "code_fingerprint": module.code_fingerprint(CODE_ROOT)["sha256"],
+        "gold_sha256": hashlib.sha256(gold.read_bytes()).hexdigest(),
+        "items": [item["id"] for item in items],     # 선택 문항(--only)과 순서(--order)를 함께 고정한다
+        "options": {"condition_check": args.condition_check, "condition_notes": args.condition_notes,
+                    "normalize_grounding": not args.no_normalize, "semantic_reinterpretation": not args.no_semantic,
+                    "aggregation_grounding": args.aggregation_grounding, "chat_timeout_s": args.chat_timeout,
+                    "temperature": 0, "think": "auto", "provider": "mock", "tims_execution": "legacy"},
+        "run_settings": run_settings(args),
+        "replay_from_sha256": hashlib.sha256(replay.read_bytes()).hexdigest() if replay else None,
+    }
+
+
+def _measurement(calls):
+    """문항의 측정 종류: live(모든 호출이 실제 모델), replayed(모두 기록 재적용), mixed."""
+    replayed = [bool(call.get("replayed")) for call in calls if not call.get("failed")]
+    if not replayed or not any(replayed):
+        return "live"
+    return "replayed" if all(replayed) else "mixed"
+
+
+def _continuity(rows, model_state):
+    """run의 세션 구성과 측정 종류. 순수 연속 실측은 keep_loaded·한 세션·기록 재적용 없음일 때뿐이다."""
+    from collections import Counter
+    sessions = Counter(row.get("session", 1) for row in rows)
+    kinds = Counter(row.get("measurement", "live") for row in rows)
+    return {"sessions": [{"session": key, "items": sessions[key]} for key in sorted(sessions)],
+            "measurement": dict(kinds),
+            "pure_live": set(kinds) <= {"live"},
+            "pure_continuous": model_state == "keep_loaded" and len(sessions) == 1 and set(kinds) <= {"live"}}
 PROTOCOL = "vendor100_v1"
 #: 평가 문항 파일(--gold). None이면 업체 gold.yaml.
 GOLD_PATH = None
@@ -1017,14 +1085,18 @@ def cmd_llm(args):
                          if not args.only or item["id"] in args.only.split(",")], args.order)
     out = Path(args.out)
     partial = out.with_suffix(".jsonl")
-    done = load_partial_rows(partial, settings)
+    from geoflow.planner import GeoFlowPlanner
+    prompt_sha = hashlib.sha256(GeoFlowPlanner(client=None).system_prompt().encode(
+        "utf-8")).hexdigest()
+    spec = run_spec(args, digest=digest, version=version, prompt_sha=prompt_sha, items=items)
+    spec_sha = _execution_spec_module().spec_sha256(spec)
+    done, session = load_partial_rows(partial, spec, spec_sha, model_state=args.model_state,
+                                      new_session=args.resume_new_session)
+    partial.with_suffix(".spec.json").write_text(json.dumps(spec, ensure_ascii=False, indent=1), encoding="utf-8")
     cache = load_replay_cache(args.replay_from) if args.replay_from else None
     if cache is None:
         A.unload_all_models(args.host)
     reset = A.OllamaStateReset(args.host, args.model)
-    from geoflow.planner import GeoFlowPlanner
-    prompt_sha = hashlib.sha256(GeoFlowPlanner(client=None).system_prompt().encode(
-        "utf-8")).hexdigest()
     with partial.open("a", encoding="utf-8") as handle:
         for item in items:
             if item["id"] in done:
@@ -1067,6 +1139,8 @@ def cmd_llm(args):
                    "vendor_verdict": item["vendor_verdict"], "category": category,
                    "checks": checks, "reset_ok": state.succeeded,
                    "run_settings": settings, "sequence_index": len(done) + 1,
+                   "run_spec_sha256": spec_sha, "session": session,
+                   "measurement": _measurement(recorder.calls),
                    "grounding_ok": grounding_ok, "grounding_diffs": grounding_diffs,
                    "llm_calls": recorder.calls,
                    # 모델 unload(격리)와 실행을 포함한 문항 경과 시간. 전체 경과 시간은 첫 started_at부터
@@ -1107,6 +1181,8 @@ def cmd_llm(args):
                                                  "isolation": args.model_state},
                                     "run_settings": settings,
                                     "item_order": [item["id"] for item in items],
+                                    "run_spec": spec, "run_spec_sha256": spec_sha,
+                                    **_continuity(rows, args.model_state),
                                     "chat_timeout_s": args.chat_timeout,
                                     "finished_at": datetime.now(ZoneInfo("Asia/Seoul")).isoformat(),
                                     "scorer_version": SCORER_VERSION}),
@@ -1812,6 +1888,8 @@ def build_parser():
     llm.add_argument("--model-state", choices=MODEL_STATES, default=MODEL_STATES[0],
                      help="unload_per_question: 문항마다 모델을 내리고 실행(기존 평가 조건). "
                           "keep_loaded: 시작할 때만 내리고 모델을 올린 채 연속 실행(CLI 연속 사용과 같은 서버 조건)")
+    llm.add_argument("--resume-new-session", action="store_true",
+                     help="keep_loaded run을 중단 뒤 이어 실행할 때 나머지를 별도 세션으로 기록한다(순수 연속 아님으로 표시)")
     llm.add_argument("--order", default="file",
                      help="문항 순서: file(기본), reverse, shuffle:SEED")
     llm.add_argument("--replay-from", default=None,

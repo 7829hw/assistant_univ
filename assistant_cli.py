@@ -51,36 +51,51 @@ RUNS_DIR = os.path.join(BASE_DIR, "evaluation", "runs")
 DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 #: react 모드(순차 Tool Calling)의 기본 모델. GeoFlow grounding 평가와 무관하며 이 서버에 설치돼 있지 않다.
 DEFAULT_MODEL_NAME = "qwen3-coder:30b"
-#: GeoFlow 모드의 기본 grounding 모델과 chat timeout. 평가(evaluate_vendor100.py llm)에서 검증한 조합과 같아야 한다.
-#: 바꾸면 README의 "실행 기본값" 절과 evaluation/grounding_v11/analysis.md를 함께 고친다.
-#: 사용자가 --model·OLLAMA_MODEL·--chat-timeout·OLLAMA_CHAT_TIMEOUT으로 지정한 값이 언제나 우선한다.
-GEOFLOW_DEFAULT_MODEL_NAME = "qwen3.8:27b"
-GEOFLOW_DEFAULT_CHAT_TIMEOUT = 300.0
-#: GeoFlow 모드에서 검증한 실행 명세(evaluation/grounding_v13 품질 평가, evaluation/grounding_v14 운영 조건).
-#: 모델·prompt·코드·실행 설정을 한 조합으로 검증했다. 확인 방법은 항목마다 다르다.
-#: - model, model_digest, settings: 실행할 때 비교해 머리말과 저장 기록에 다른 항목을 적는다(실행은 막지 않는다).
-#: - prompt_sha256_prefix: tests/test_cli_run_settings.py가 현재 prompt와 대조한다(prompt가 바뀌면 테스트 실패).
-#: - 코드: 실행 중에는 확인하지 않는다. 검증한 코드는 code_commit이며, geoflow/ 변경은 재검증 대상이다.
-#: - 기준일과 모델 적재 상태(연속 실행)는 명세에 넣지 않는다. 운영 조건 검증 범위는 grounding_v14 문서에 있다.
-GEOFLOW_VERIFIED_SPEC = {
-    "model": "qwen3.8:27b",
-    "model_digest": "aaee06c39dcf2437cde036998d960e1fc1494b8191be7cc9657d01e509097813",
-    "ollama_version": "0.34.4",
-    "prompt_sha256_prefix": "87048d0c",
-    "code_commit": "b62f6dc",
-    "settings": {
-        "options": {"temperature": 0},
-        "think": None,
-        "chat_timeout_s": 300.0,
-        "aggregation_grounding": "flat",
-        "condition_check": True,
-        "example_retrieval": "off",
-        "provider": "mock",
-        "tims_execution": "legacy",
+_VERIFIED_SETTINGS = {
+    "options": {"temperature": 0},
+    "think": None,
+    "chat_timeout_s": 300.0,
+    "aggregation_grounding": "flat",
+    "condition_check": True,
+    "example_retrieval": "off",
+    "provider": "mock",
+    "tims_execution": "legacy",
+}
+#: GeoFlow 모드에서 검증한 실행 명세. 모델·prompt·실행 의미 코드·실행 설정을 한 조합으로 검증했다.
+#: - code_fingerprint: execution_spec.py의 실행 의미 코드(geoflow/·매크로·템플릿·예시·prompts/·schemas/·Tool 실행·provider·client) 내용 지문.
+#:   커밋이 아니라 파일 내용으로 비교하므로 문서·평가 기록·테스트 변경은 영향을 주지 않는다. assistant_cli.py는
+#:   넣지 않고, CLI가 pipeline에 넘기는 설정은 settings로 따로 비교한다.
+#: - 기준일, 모델 적재 상태(연속 실행), 동시 요청은 명세 밖이다. 검증 범위는 README "실행 기본값"에 있다.
+#: 실행할 때 모든 항목을 비교해 머리말과 저장 기록에 일치·다름·확인 안 함을 나눠 적는다. 실행은 막지 않는다.
+GEOFLOW_VERIFIED_SPECS = {
+    "T2PC": {
+        "description": "qwen3.8:27b + prompt 87048d0c + 조건 계층 수정(grounding_v13 채택, grounding_v14 운영 검증)",
+        "model": "qwen3.8:27b",
+        "model_digest": "aaee06c39dcf2437cde036998d960e1fc1494b8191be7cc9657d01e509097813",
+        "ollama_version": "0.34.4",
+        "prompt_sha256": "87048d0c554c365e0e7994d09a4515c1cc646785708ce6dc9d1f120b4b5e8c2c",
+        "code_fingerprint": "97efa866391a370a9fed797686e24b15ccdcafd398d71ecc51db704b8f7f2015",
+        "settings": _VERIFIED_SETTINGS,
+    },
+    "B": {
+        "description": "qwen3:8b + prompt 522aa3b1 + grounding-v12-baseline 코드(이전 기본, 되돌리기 대상)",
+        "model": "qwen3:8b",
+        "model_digest": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
+        "ollama_version": "0.34.4",
+        "prompt_sha256": "522aa3b1716248b53a755ee1b236e7aef302c85504e9cfac3825f4d3cc817945",
+        "code_fingerprint": "7e99136d5971562753070397adedd332660a4e1fbbb33e6cad20a96c7bcb7a10",
+        "settings": _VERIFIED_SETTINGS,
     },
 }
-GEOFLOW_VERIFIED_MODELS = (GEOFLOW_VERIFIED_SPEC["model"],)
-GEOFLOW_VERIFIED_PROMPT_SHA256_PREFIX = GEOFLOW_VERIFIED_SPEC["prompt_sha256_prefix"]
+#: GeoFlow 모드의 기본 조합. 기본 모델은 이 조합의 모델이다. 되돌리기는 실행 의미 코드를 그 조합의 코드로 복원하고
+#: 이 이름을 바꾸는 것이다(README "실행 기본값"). tests/test_cli_run_settings.py가 현재 코드·prompt와 이 조합이
+#: 맞는지 확인한다.
+GEOFLOW_DEFAULT_SPEC_NAME = "T2PC"
+#: 사용자가 --model·OLLAMA_MODEL·--chat-timeout·OLLAMA_CHAT_TIMEOUT으로 지정한 값이 언제나 우선한다.
+GEOFLOW_DEFAULT_MODEL_NAME = GEOFLOW_VERIFIED_SPECS[GEOFLOW_DEFAULT_SPEC_NAME]["model"]
+GEOFLOW_DEFAULT_CHAT_TIMEOUT = 300.0
+#: 검증 명세 밖이지만 결과에 영향을 줄 수 있는 조건(머리말에 "명세 밖"으로 적는다).
+GEOFLOW_OUTSIDE_SPEC = ("기준일", "모델 적재 상태(연속 실행)", "동시 요청", "assistant_cli.py 자체")
 MAX_TOOL_HOPS = 10
 OLLAMA_OPTIONS = {"temperature": 0}
 
@@ -582,9 +597,15 @@ def geoflow_run_settings():
 
 
 def geoflow_verification():
-    """현재 설정과 서버 사실을 검증 명세와 비교한 결과. 실행 머리말과 저장 기록에 쓴다."""
-    facts = model_server_facts(get_ollama_client())
-    return {**facts, "differences": verification_differences(geoflow_run_settings(), facts)}
+    """현재 설정·서버·코드를 검증 명세와 비교한 결과. 실행 머리말과 저장 기록에 쓴다."""
+    server = model_server_facts(get_ollama_client())
+    try:
+        local = local_code_facts()
+    except Exception:  # noqa: BLE001 - 확인 실패는 "확인 안 함"으로 남긴다
+        local = {"prompt_sha256": None, "code_fingerprint": None}
+    name = select_verified_spec(local)
+    result = compare_with_spec(geoflow_run_settings(), server, local, GEOFLOW_VERIFIED_SPECS[name])
+    return {"compared_to": name, "server": server, "local": local, **result}
 
 
 def reference_date_label():
@@ -1180,13 +1201,6 @@ def parse_args(argv=None):
     return args
 
 
-def geoflow_combination_note(model):
-    """GeoFlow 모드에서 검증하지 않은 모델이면 머리말에 붙일 표시. 실행은 막지 않는다."""
-    if AGENT_MODE != AGENT_MODE_GEOFLOW or model in GEOFLOW_VERIFIED_MODELS:
-        return ""
-    return ", 현재 코드·prompt와 검증하지 않은 조합"
-
-
 def model_server_facts(client):
     """선택 모델의 digest와 Ollama 버전. 확인하지 못하면 None."""
     facts = {"model_digest": None, "ollama_version": None}
@@ -1196,32 +1210,69 @@ def model_server_facts(client):
                 facts["model_digest"] = item.get("digest")
         response = httpx.get(f"{client.host}/api/version", timeout=5.0)
         facts["ollama_version"] = response.json().get("version")
-    except Exception:  # noqa: BLE001 - 확인 실패는 실행을 막지 않고 "확인 불가"로 남긴다
+    except Exception:  # noqa: BLE001 - 확인 실패는 실행을 막지 않고 "확인 안 함"으로 남긴다
         pass
     return facts
 
 
-def verification_differences(settings, facts, spec=GEOFLOW_VERIFIED_SPEC):
-    """현재 GeoFlow 실행이 검증한 실행 명세와 다른 항목. 확인하지 못한 항목은 "(확인 불가)"를 붙인다."""
-    differences = []
-    if settings.get("model") != spec["model"]:
-        differences.append("model")
-    for key in ("model_digest", "ollama_version"):
-        if facts.get(key) is None:
-            differences.append(f"{key}(확인 불가)")
-        elif facts[key] != spec[key]:
-            differences.append(key)
+def local_code_facts():
+    """이 checkout의 planner prompt hash와 실행 의미 코드 지문."""
+    from execution_spec import code_fingerprint
+    from geoflow.planner import GeoFlowPlanner
+    prompt = GeoFlowPlanner(client=None, aggregation_grounding=AGGREGATION_GROUNDING).system_prompt()
+    return {"prompt_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
+            "code_fingerprint": code_fingerprint(BASE_DIR)["sha256"]}
+
+
+def select_verified_spec(local, specs=None):
+    """현재 코드·prompt와 맞는 검증 명세 이름. 맞는 것이 없으면 기본 조합 이름(코드·prompt가 다름으로 나온다)."""
+    specs = GEOFLOW_VERIFIED_SPECS if specs is None else specs
+    for name, spec in specs.items():
+        if (local.get("prompt_sha256"), local.get("code_fingerprint")) == (spec["prompt_sha256"],
+                                                                           spec["code_fingerprint"]):
+            return name
+    return GEOFLOW_DEFAULT_SPEC_NAME
+
+
+def compare_with_spec(settings, server, local, spec):
+    """항목별 비교. matched·different는 이번 실행에서 확인한 결과, unchecked는 확인하지 못한 항목과 이유."""
+    matched, different, unchecked = [], [], {}
+
+    def check(name, actual, expected, reason="확인하지 못함"):
+        if actual is None:
+            unchecked[name] = reason
+        elif actual == expected:
+            matched.append(name)
+        else:
+            different.append(name)
+
+    check("model", settings.get("model"), spec["model"])
+    check("model_digest", server.get("model_digest"), spec["model_digest"], "Ollama /api/tags에서 찾지 못함")
+    check("ollama_version", server.get("ollama_version"), spec["ollama_version"], "Ollama /api/version 응답 없음")
+    check("prompt", local.get("prompt_sha256"), spec["prompt_sha256"])
+    check("code", local.get("code_fingerprint"), spec["code_fingerprint"])
     for key, value in spec["settings"].items():
-        if settings.get(key) != value:
-            differences.append(key)
-    return differences
+        if key not in settings:
+            unchecked[key] = "설정 기록에 없음"
+        elif settings[key] == value:
+            matched.append(key)
+        else:
+            different.append(key)
+    return {"matched": matched, "different": different, "unchecked": unchecked,
+            "outside_spec": list(GEOFLOW_OUTSIDE_SPEC)}
 
 
-def verification_line(differences):
-    if not differences:
-        return "검증 — 검증한 실행 명세와 같음(GeoFlow, grounding_v13·v14)"
-    return ("검증 — 검증하지 않은 조합. 다른 항목: " + ", ".join(differences)
-            + " (실행은 그대로 진행한다. 검증 범위: README '실행 기본값')")
+def verification_line(result):
+    name = result["compared_to"]
+    head = f"검증 — 비교 대상 {name}({GEOFLOW_VERIFIED_SPECS[name]['description']})"
+    parts = [f"일치 {len(result['matched'])}"]
+    if result["different"]:
+        parts.append("다름: " + ", ".join(result["different"]))
+    if result["unchecked"]:
+        parts.append("확인 안 함: " + ", ".join(f"{k}({v})" for k, v in result["unchecked"].items()))
+    status = ("검증한 실행 명세와 같음" if not result["different"] and not result["unchecked"]
+              else "검증한 실행 명세와 같다고 확인되지 않음(실행은 그대로 진행)")
+    return f"{head} / {status} / " + " / ".join(parts) + " / 명세 밖: " + ", ".join(result["outside_spec"])
 
 
 def resolve_run_settings(args, environ=None):
@@ -1302,7 +1353,7 @@ def main(argv=None):
         if AGENT_MODE == AGENT_MODE_GEOFLOW else ""
     )
     print(
-        f"설정 — 모델: {MODEL_NAME}({getattr(args, 'model_source', '-')}{geoflow_combination_note(MODEL_NAME)})"
+        f"설정 — 모델: {MODEL_NAME}({getattr(args, 'model_source', '-')})"
         f" / 주소: {OLLAMA_HOST} "
         f"/ chat timeout: {CHAT_TIMEOUT:g}초 / agent mode: {AGENT_MODE} "
         f"{grounding_note}"
@@ -1311,7 +1362,7 @@ def main(argv=None):
     )
     check_ollama_connection()
     if AGENT_MODE == AGENT_MODE_GEOFLOW:
-        print(verification_line(geoflow_verification()["differences"]))
+        print(verification_line(geoflow_verification()))
     try:
         tools, system_prompt, config_sources = _build_with_config_snapshot()
     except (OSError, RuntimeError) as error:
