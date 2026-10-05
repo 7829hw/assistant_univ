@@ -1,0 +1,62 @@
+model:
+  name_or_path: Qwen/Qwen3-8B
+  revision: b968826d9c46dd6066d109eabc6255188de91218
+  trust_remote_code: false
+  load_in_4bit: false
+  attn_implementation: sdpa
+data:
+  train: /home/hwkim/assistant_univ/training/experiments/thor_pilot_002/snapshot/corpus/sft_train.jsonl
+  valid: /home/hwkim/assistant_univ/training/experiments/thor_pilot_002/snapshot/corpus/sft_valid.jsonl
+  manifest: /home/hwkim/assistant_univ/training/experiments/thor_pilot_002/snapshot/corpus/manifest.json
+chat_template_kwargs:
+  enable_thinking: false
+training:
+  output_dir: /home/hwkim/assistant_univ/training/experiments/thor_pilot_002/checkpoints/sft
+  num_train_epochs: 1
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 1
+  learning_rate: 5.0e-05
+  warmup_ratio: 0
+  max_seq_length: 6912
+  bf16: true
+  fp16: false
+  gradient_checkpointing: true
+  eval_strategy: steps
+  save_strategy: steps
+  save_total_limit: 6
+  logging_steps: 1
+  report_to: none
+  seed: 42
+  optim: adamw_torch
+  dataloader_num_workers: 0
+  dataloader_pin_memory: false
+  torch_compile: false
+  gradient_checkpointing_kwargs:
+    use_reentrant: false
+  max_steps: 12
+  eval_steps: 2
+  save_steps: 2
+  warmup_steps: 1
+  disable_tqdm: true
+lora:
+  enabled: true
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+safety:
+  unified_memory: true
+  reserve_fraction: 0.2
+  reserve_gib: 16
+  min_disk_gib: 20
+profiling:
+  enabled: true
+  output: /home/hwkim/assistant_univ/training/experiments/thor_pilot_002/metrics/sft_profile.json

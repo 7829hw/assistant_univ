@@ -35,13 +35,14 @@ import paraphrase_corpus as P
 from build import build
 from geoflow import validator as geoflow_validator
 from geoflow import analysis_ops
+from geoflow import aggregation as grounding_aggregation
 from geoflow.compiler import compile_plan
 from geoflow.composer import MacroComposer
 from geoflow.errors import GeoFlowError
-from geoflow.grounding import OD_ROLE
+from geoflow.grounding import OD_ROLE, drop_unsupported_regions, parse_grounding
 from geoflow.executor import STATUS_OK, execute_plan
 from geoflow.macros import MacroLibrary
-from geoflow.planner import NO_TEMPLATE, GeoFlowPlanner
+from geoflow.planner import NO_TEMPLATE, IGNORABLE_KEYS, GeoFlowPlanner, parse_planner_json
 from geoflow.repair import decide as decide_repair
 from geoflow.types import CoreConcept
 from ollama_client import (
@@ -221,7 +222,7 @@ def evaluate_model(model, queries, *, host, chat_timeout, repeat, verbose,
 
 def evaluate_once(planner, composer, item, *, attempt=1,
                   available_tools=None, execute=False, tool_executor=None,
-                  system_prompt_chars=0, variant=None):
+                  system_prompt_chars=0, variant=None, execution_profile=None):
     """질문 하나를 한 번 측정해 record를 돌려준다.
 
     한 번의 측정을 함수로 떼어 둔 이유는, prompt A/B처럼 질문 단위로
@@ -250,6 +251,9 @@ def evaluate_once(planner, composer, item, *, attempt=1,
         "macro_score": _empty_score(),
         "operator_score": _empty_score(),
         "validated": False,
+        "composed": False,
+        "validation_codes": [],
+        "checked_rules": [],
         "executed": None,
         # 실행 실패가 재계획으로 복구 가능한 종류였는지. 장소 조회
         # 실패는 런타임이 한 번 고쳐 다시 시도하지만, 이 측정은
@@ -275,6 +279,28 @@ def evaluate_once(planner, composer, item, *, attempt=1,
         "initial_error": None,
         "duration_ms": 0.0,
     }
+    # Factor/schema errors can omit raw_text in their exception context. Observe
+    # the existing client calls without changing inference or retry behavior.
+    original_client = getattr(planner, "client", None)
+    captured_calls = []
+    if original_client is not None:
+        original_chat = original_client.chat
+        local_chat = vars(original_client).get("chat")
+        had_local_chat = "chat" in vars(original_client)
+
+        def observed_chat(*args, **kwargs):
+            call = {"raw_text": ""}
+            captured_calls.append(call)
+            started = time.perf_counter()
+            try:
+                response = original_chat(*args, **kwargs)
+                call["raw_text"] = (response.get("message") or {}).get("content", "")
+                return response
+            finally:
+                call["duration_ms"] = (time.perf_counter() - started) * 1000
+        # Preserve client identity/type: the existing A/B harness identifies
+        # RecordingClient by isinstance when annotating repair calls.
+        original_client.chat = observed_chat
     try:
         output = planner.plan(item["question"])
         record["initial_planner_ms"] = output.duration_ms
@@ -296,6 +322,7 @@ def evaluate_once(planner, composer, item, *, attempt=1,
         plan = _compose_with_repair(
             composer, planner, item["question"], output, record,
         )
+        record["composed"] = True
         record["semantic_macros"] = list(plan.applied_macros)
         record["semantic_operators"] = [
             item.operator for item in plan.transformations
@@ -313,6 +340,8 @@ def evaluate_once(planner, composer, item, *, attempt=1,
             plan, available_tools=available_tools,
         )
         record["validated"] = report.ok
+        record["validation_codes"] = report.failed_rules()
+        record["checked_rules"] = list(report.checked_rules)
         if not report.ok:
             record["status"] = "VALIDATION_FAILED"
             record["error"] = "; ".join(
@@ -323,8 +352,14 @@ def evaluate_once(planner, composer, item, *, attempt=1,
             # 사용자가 발화에 적은 scope는 실행 시점에도 known scope로
             # 넘겨야 한다. 파이프라인이 하는 것과 같은 처리이며,
             # 빠뜨리면 provenance gate가 정상 질의를 막는다.
+            compile_kwargs = {"reference_date": P.EVALUATION_REFERENCE_DATE}
+            if execution_profile is not None:
+                compile_kwargs.update(contract=execution_profile.contract,
+                                      date_policy=execution_profile.date_policy,
+                                      delegation=execution_profile.delegation)
+                record["execution_profile"] = execution_profile.to_dict()
             result = execute_plan(
-                compile_plan(plan, reference_date=P.EVALUATION_REFERENCE_DATE),
+                compile_plan(plan, **compile_kwargs),
                 tool_executor,
                 known_scopes=set(extract_scopes(item["question"])),
             )
@@ -355,6 +390,23 @@ def evaluate_once(planner, composer, item, *, attempt=1,
     except Exception as error:  # noqa: BLE001 - 모델 오류도 기록 대상
         record["status"] = "CLIENT_ERROR"
         record["error"] = f"{type(error).__name__}: {error}"
+    finally:
+        if original_client is not None:
+            if had_local_chat:
+                original_client.chat = local_chat
+            else:
+                del original_client.chat
+    if captured_calls:
+        record["raw_text"] = captured_calls[0]["raw_text"]
+        record["planner_calls"] = len(captured_calls)
+        record["output_chars"] = len(record["raw_text"])
+        if not record["initial_planner_ms"]:
+            record["initial_planner_ms"] = captured_calls[0]["duration_ms"]
+    # Failed planning must still contribute gold denominators. Otherwise an
+    # invalid grounding disappears from concept/macro/operator recall.
+    record["concept_score"] = score_concepts(record["concepts"], expected_concepts)
+    record["macro_score"] = score_sequence(record["macros"], expected_macros)
+    record["operator_score"] = score_sequence(record["operators"], expected_operators)
     record["duration_ms"] = round(
         (time.perf_counter() - started_at) * 1000, 3
     )
@@ -375,8 +427,78 @@ def evaluate_once(planner, composer, item, *, attempt=1,
         record["correct"] = not record["validated"]
     record["system_prompt_chars"] = system_prompt_chars
     record["variant"] = variant
+    record.update(score_raw_grounding(record["raw_text"], item))
     _annotate_record(record)
     return record
+
+
+def _factor_view(grounding):
+    factors = dict(grounding.factors)
+    if grounding.aggregation_plan is not None:
+        factors = {k: v for k, v in factors.items() if k not in grounding_aggregation.FLAT_KEYS}
+        factors.update(grounding_aggregation.to_flat(grounding.aggregation))
+    return factors
+
+
+def _grounding_signature(grounding):
+    """Meaning equality: ignore local IDs/text/order, retain role/source/value/OD."""
+    concepts = sorted(json.dumps({"concept": c.concept.value, "subtype": c.subtype,
+                                  "role": c.role.value, "source": c.source.value,
+                                  "value": c.value, "attributes": c.attributes},
+                                 ensure_ascii=False, sort_keys=True) for c in grounding.concepts)
+    return concepts, _factor_view(grounding)
+
+
+def score_raw_grounding(text, item):
+    """Additional first-response metrics; no model calls, training imports or repairs.
+
+    JSON rate uses production's tolerant JSON extractor. Contract rate checks
+    accepted raw keys and the production grounding parser. Gold-dependent metrics
+    are None if an evaluation corpus supplies labels but no complete grounding.
+    """
+    result = {"json_parse_ok": False, "planner_contract_ok": False, "predicted_unsupported": False,
+              "expected_unsupported": NO_TEMPLATE in (item.get("expected_macros") or []),
+              "grounding_exact": None, "factor_exact": None, "factor_score": None}
+    golden = item.get("golden") or item.get("grounding")
+    expected = None
+    if isinstance(golden, dict):
+        result["expected_unsupported"] = golden.get("unsupported") is True
+        result["grounding_exact"] = False
+        result["factor_exact"] = False if not golden.get("unsupported") else None
+        if not golden.get("unsupported"):
+            try:
+                expected = parse_grounding(golden, item["question"], structured_aggregation=True)
+                expected_count = len(_factor_view(expected))
+            except (GeoFlowError, ValueError, TypeError, KeyError):
+                # Do not turn invalid gold into an apparent model miss.
+                result["grounding_exact"] = result["factor_exact"] = None
+                expected_count = None
+            if expected_count is not None:
+                result["factor_score"] = {"matched": 0, "expected": expected_count, "predicted": 0}
+    try:
+        payload = parse_planner_json(text)
+        result["json_parse_ok"] = True
+        result["predicted_unsupported"] = payload.get("unsupported") is True
+        if set(payload) - {"concepts", "factors", "unsupported"} - IGNORABLE_KEYS:
+            return result
+        if payload.get("unsupported"):
+            result["planner_contract_ok"] = payload.get("unsupported") is True and not ({"concepts", "factors"} & set(payload))
+            if isinstance(golden, dict):
+                result["grounding_exact"] = result["planner_contract_ok"] and golden.get("unsupported") is True
+            return result
+        predicted = parse_grounding(payload, item["question"])
+        drop_unsupported_regions(predicted)
+        result["planner_contract_ok"] = True
+        if expected is not None:
+            expected_factors, predicted_factors = _factor_view(expected), _factor_view(predicted)
+            result["factor_score"] = {"matched": sum(key in predicted_factors and predicted_factors[key] == value
+                                                     for key, value in expected_factors.items()),
+                                      "expected": len(expected_factors), "predicted": len(predicted_factors)}
+            result["factor_exact"] = expected_factors == predicted_factors
+            result["grounding_exact"] = _grounding_signature(predicted) == _grounding_signature(expected)
+    except (GeoFlowError, ValueError, TypeError, KeyError):
+        pass
+    return result
 
 
 #: 집계 단계를 잘못 고른 대표 실패. rollup은 합치는 방식이지 시간 단위가
@@ -557,7 +679,9 @@ def summarize(records):
     operator_expected = sum(
         item["operator_score"]["expected"] for item in records
     )
+    extra = summarize_grounding_metrics(records)
     return {
+        **extra,
         "total": total,
         "correct": correct,
         "accuracy": _ratio(correct, total),
@@ -632,6 +756,35 @@ def summarize(records):
         "system_prompt_chars": (
             records[0].get("system_prompt_chars", 0) if records else 0
         ),
+    }
+
+
+def summarize_grounding_metrics(records):
+    """Only new metrics; existing concept/macro/execution scoring stays above."""
+    total = len(records)
+    exact = [r.get("grounding_exact") for r in records if r.get("grounding_exact") is not None]
+    factors = [r.get("factor_exact") for r in records if r.get("factor_exact") is not None]
+    scores = [r["factor_score"] for r in records if r.get("factor_score") is not None]
+    tp = sum(r.get("predicted_unsupported", False) and r.get("expected_unsupported", False) for r in records)
+    attempted = sum(r.get("repair_attempted", False) for r in records)
+    checked = [r for r in records if r.get("checked_rules")]
+    return {
+        "json_parse_rate": _ratio(sum(r.get("json_parse_ok", False) for r in records), total),
+        "planner_contract_pass_rate": _ratio(sum(r.get("planner_contract_ok", False) for r in records), total),
+        "grounding_exact_match": _ratio(sum(exact), len(exact)) if exact else None,
+        "grounding_labeled_count": len(exact),
+        "factor_precision": _ratio(sum(s["matched"] for s in scores), sum(s["predicted"] for s in scores)) if scores else None,
+        "factor_recall": _ratio(sum(s["matched"] for s in scores), sum(s["expected"] for s in scores)) if scores else None,
+        "factor_exact_match": _ratio(sum(factors), len(factors)) if factors else None,
+        "factor_labeled_count": len(factors),
+        "unsupported_precision": _ratio(tp, sum(r.get("predicted_unsupported", False) for r in records)),
+        "unsupported_recall": _ratio(tp, sum(r.get("expected_unsupported", False) for r in records)),
+        "composition_success_rate": _ratio(sum(r.get("composed", False) for r in records), total),
+        "g1_g7_pass_rates": {rule: _ratio(sum(rule not in r.get("validation_codes", []) for r in checked), len(checked))
+                            if checked else None for rule in geoflow_validator.ALL_RULES},
+        "validation_checked_count": len(checked),
+        "repair_attempted_rate": _ratio(attempted, total),
+        "repair_success_rate": _ratio(sum(r.get("repair_succeeded", False) for r in records), attempted) if attempted else None,
     }
 
 

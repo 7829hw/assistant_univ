@@ -1,0 +1,35 @@
+model:
+  name_or_path: Qwen/Qwen3-8B
+  revision: main # Freeze a model commit SHA for research runs.
+  trust_remote_code: false
+  load_in_4bit: true
+data:
+  train: training/generated/sft_train.jsonl
+  valid: training/generated/sft_valid.jsonl
+  manifest: training/generated/manifest.json
+chat_template_kwargs:
+  enable_thinking: false
+training:
+  output_dir: training/checkpoints/sft
+  num_train_epochs: 3
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 16
+  learning_rate: 0.0002
+  warmup_ratio: 0.05
+  max_seq_length: 8192
+  bf16: true
+  fp16: false
+  gradient_checkpointing: true
+  eval_strategy: epoch
+  save_strategy: epoch
+  save_total_limit: 2
+  logging_steps: 5
+  report_to: none
+  seed: 42
+lora:
+  enabled: true
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]

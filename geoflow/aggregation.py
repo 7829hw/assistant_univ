@@ -116,6 +116,27 @@ def from_flat(factors):
     )
 
 
+def to_flat(spec):
+    """Losslessly project an aggregation spec to the production flat contract.
+
+    This is serialization only; it never chooses an unspecified reducer.
+    Used by offline annotation conversion and evaluation, not planner inference.
+    """
+    factors = {}
+    if spec.inner not in (None, UNSPECIFIED):
+        factors["aggregation"] = spec.inner
+    if spec.bucket:
+        factors["bucket"] = spec.bucket
+        if spec.select:
+            factors.update(rollup=spec.select, answer="bucket")
+        elif spec.outer:
+            factors["rollup"] = spec.outer
+    after = from_flat(factors)
+    if (after.bucket, after.inner, after.outer, after.select) != (spec.bucket, spec.inner, spec.outer, spec.select):
+        raise ValueError("Aggregation spec cannot be represented losslessly as flat factors.")
+    return factors
+
+
 def _plan_error(message, raw_text, **context):
     return PlannerError(
         f"aggregation_plan: {message}",

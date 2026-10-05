@@ -1,0 +1,72 @@
+model:
+  name_or_path: Qwen/Qwen3-8B
+  revision: b968826d9c46dd6066d109eabc6255188de91218
+  initial_mode: sft
+  trust_remote_code: false
+  load_in_4bit: false
+  attn_implementation: sdpa
+  adapter_path: SELECTED_V002_SFT_REQUIRED
+reference:
+  mode: initial_policy
+  strategy: shared_adapter
+data:
+  train: /home/hwkim/assistant_univ/training/experiments/thor_pilot_002/snapshot/corpus/dpo_train.jsonl
+  valid: /home/hwkim/assistant_univ/training/experiments/thor_pilot_002/snapshot/corpus/dpo_valid.jsonl
+  manifest: /home/hwkim/assistant_univ/training/experiments/thor_pilot_002/snapshot/corpus/manifest.json
+chat_template_kwargs:
+  enable_thinking: false
+training:
+  output_dir: /home/hwkim/assistant_univ/training/experiments/thor_pilot_002/checkpoints/dpo
+  num_train_epochs: 1
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 1
+  learning_rate: 1.0e-05
+  warmup_ratio: 0
+  beta: 0.1
+  max_prompt_length: 6784
+  max_completion_length: 256
+  max_length: 6912
+  bf16: true
+  fp16: false
+  gradient_checkpointing: true
+  eval_strategy: steps
+  save_strategy: steps
+  save_total_limit: 6
+  logging_steps: 1
+  report_to: none
+  seed: 42
+  use_logits_to_keep: true
+  precompute_ref_log_probs: false
+  optim: adamw_torch
+  dataloader_num_workers: 0
+  dataloader_pin_memory: false
+  torch_compile: false
+  gradient_checkpointing_kwargs:
+    use_reentrant: false
+  max_steps: 8
+  eval_steps: 2
+  save_steps: 2
+  warmup_steps: 1
+  disable_tqdm: true
+lora:
+  enabled: true
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+safety:
+  unified_memory: true
+  reserve_fraction: 0.2
+  reserve_gib: 16
+  min_disk_gib: 20
+profiling:
+  enabled: true
+  output: /home/hwkim/assistant_univ/training/experiments/thor_pilot_002/metrics/dpo_profile.json
