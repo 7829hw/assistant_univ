@@ -55,7 +55,7 @@ PAIRS = [("A", "B", "thinking (522aa3b1, 조건 계층 켬)"),
 
 
 def convert_hf(cell_dir):
-    """thor runner raw jsonl → vendor100 결과 형식(dev.json). 이미 있으면 그대로 둔다."""
+    """thor runner raw jsonl → vendor100 결과 형식(dev.json). 실행할 때마다 raw에서 다시 만든다."""
     raw = cell_dir / "raw" / "base_raw.jsonl"
     target = cell_dir / "dev.json"
     if not raw.is_file():
@@ -92,7 +92,14 @@ def load_cell(path, empty):
         regraded, diffs = EV.grounding_check(gold[item_id], source.get("grounding"))
         plans = [c for c in source.get("llm_calls") or [] if c.get("kind") == "plan" and not c.get("failed")]
         thinking = [c.get("thinking_chars") for c in source.get("llm_calls") or [] if c.get("thinking_chars") is not None]
-        out[item_id] = {"v4": row["v4"], "report_class": report_class(row, flags), "u_flags": flags,
+        try:
+            layers = EV.grounding_layers(gold[item_id], source)
+        except Exception as error:  # noqa: BLE001 - 현재 코드도 같은 원출력에서 미처리 예외(057, grounding.py)
+            layers = {name: {"valid": False, "ok": False, "code": f"EXCEPTION:{type(error).__name__}"}
+                      for name in ("raw", "normalized", "preserved")}
+        out[item_id] = {"layers": {name: {"valid": layers[name].get("valid"), "ok": layers[name].get("ok")}
+                                   for name in ("raw", "normalized", "preserved")},
+                        "v4": row["v4"], "report_class": report_class(row, flags), "u_flags": flags,
                         "grounding_ok": bool(regraded), "grounding_ok_recorded": source.get("grounding_ok"),
                         "grounding_diff_keys": sorted({d if isinstance(d, str) else d[0] for d in diffs}),
                         "outcome": source.get("outcome"), "error_code": source.get("error_code"),
@@ -120,6 +127,11 @@ def summary(items):
         "latency_s": {"median": round(statistics.median(totals), 1) if totals else None,
                       "p90": round(totals[min(n - 1, int(0.9 * n))], 1) if totals else None,
                       "sum": round(sum(totals))},
+        # 첫 응답을 현재 코드(dev-v2 HEAD)의 층별 처리로 다시 통과시킨 값(evaluate_vendor100.grounding_layers, 재질의 없음).
+        # raw = 계약 그대로(정규화 끔), normalized = 자리 바로잡기, preserved = + 조건 계층(현재 코드의 조건 계층).
+        "first_response_layers": {name: {"valid": sum(bool(i["layers"][name]["valid"]) for i in items.values()),
+                                         "grounding_ok": sum(bool(i["layers"][name]["ok"]) for i in items.values())}
+                                  for name in ("raw", "normalized", "preserved")},
         "repair_calls": sum(i["repair_calls"] for i in items.values()),
         "failed_calls": sum(i["failed_calls"] for i in items.values()),
         "thinking_chars_first_plan": {"items_with_thinking": sum(1 for t in thinking if t > 0), "of": len(thinking),
