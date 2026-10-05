@@ -534,6 +534,8 @@ def reconcile_taxi_type(factors, question, raw_text="", concepts=None):
 
 
 def _measure(concepts):
+    if not isinstance(concepts or [], list):
+        return None      # concepts가 list가 아니다. 판정하지 않고 grounding 계약(MISSING_CONCEPTS)에 맡긴다
     return next((item for item in concepts or []
                  if isinstance(item, dict) and item.get("role") == "MEASURE"), None)
 
@@ -548,7 +550,8 @@ def consumable(concepts, factor):
     from geoflow.types import CoreConcept
 
     measure = _measure(concepts)
-    if measure is None:
+    if measure is None or not isinstance(measure.get("subtype"), str):
+        # 문자열이 아닌 subtype은 어느 operator도 만들지 않는다(registry 조회에 넣지 않는다).
         return True
     try:
         candidates = operator_mapping.candidates_for(CoreConcept(measure.get("concept")),
@@ -569,7 +572,8 @@ def fixed_by_measure(concepts, factor):
     from geoflow.types import CoreConcept
 
     measure = _measure(concepts)
-    if measure is None:
+    if measure is None or not isinstance(measure.get("subtype"), str):
+        # 문자열이 아닌 subtype은 어느 operator도 만들지 않는다(registry 조회에 넣지 않는다).
         return None
     try:
         candidates = operator_mapping.candidates_for(CoreConcept(measure.get("concept")),
@@ -593,6 +597,8 @@ def check_places(concepts, question, raw_text=""):
     """
     compact = _compact(question)
     records = []
+    if not isinstance(concepts or [], list):
+        return records   # concepts가 list가 아니다. grounding 계약이 거부한다
     for item in concepts or []:
         if not isinstance(item, dict) or item.get("concept") != "LOCATION":
             continue
@@ -605,7 +611,8 @@ def check_places(concepts, question, raw_text=""):
             continue
         record = {"id": item.get("id"), "text": text, "lookup_name": name,
                   "region": (value or {}).get("region", "") if isinstance(value, dict) else "",
-                  "od_role": (item.get("attributes") or {}).get("od_role") or item.get("od_role"),
+                  "od_role": ((item.get("attributes") or {}).get("od_role")
+                              if isinstance(item.get("attributes") or {}, dict) else None) or item.get("od_role"),
                   "semantics": "name_evidence_only"}
         if _compact(name) in compact:
             record["evidence"] = "exact"
@@ -647,6 +654,12 @@ def reconcile_payload(payload, question, *, reference_date, raw_text="", structu
     """
     if reference_date is None:
         raise ValueError("조건 해석에는 기준일이 필요합니다.")
+    if payload.get("factors") and not isinstance(payload.get("factors"), dict):
+        # factors가 object가 아니다. 조건 계층이 읽을 형식이 아니므로 바꾸지 않고 그대로 넘겨 grounding
+        # 계약(INVALID_FACTORS)이 거부하게 한다. 비우거나 채우면 잘못된 출력이 유효한 grounding이 된다.
+        return copy.deepcopy(payload), {"reference_date": reference_date.isoformat(),
+                                        "timezone": str(SERVICE_TIMEZONE),
+                                        "skipped": "factors_not_object", "corrections": [], "held": []}
     fixed = copy.deepcopy(payload)
     factors = fixed.get("factors")
     if not isinstance(factors, dict):

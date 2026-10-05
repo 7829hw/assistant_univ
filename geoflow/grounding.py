@@ -224,7 +224,9 @@ def parse_grounding(payload, question, *, raw_text="",
         raw_factors, plan = aggregation_semantics.split_plan(
             raw_factors, raw_text=raw_text,
         )
-    factors = _parse_factors({**hoisted, **(raw_factors or {})}, raw_text)
+    # factors가 object가 아니면 합치지 않고 그대로 넘겨 계약 검증(INVALID_FACTORS)이 거부한다.
+    factors = _parse_factors({**hoisted, **(raw_factors or {})} if isinstance(raw_factors or {}, dict)
+                             else raw_factors, raw_text)
     grounding = Grounding(
         question=question, concepts=concepts, factors=factors,
         aggregation_plan=plan, calendar=calendar_terms.read(question),
@@ -253,7 +255,13 @@ def _hoist_structural_factors(raw_concepts):
             cleaned.append(raw)
             continue
         raw = dict(raw)
-        attributes = dict(raw.get("attributes") or {})
+        try:
+            attributes = dict(raw.get("attributes") or {})
+        except (TypeError, ValueError):
+            # object로 바꿀 수 없는 attributes는 이 정리 규칙에 해당하지 않는다. 그대로 두어
+            # _parse_attributes가 계약 오류(INVALID_CONCEPT)로 거부한다.
+            cleaned.append(raw)
+            continue
         for name in STRUCTURAL_FACTORS:
             if name in attributes:
                 hoisted.setdefault(name, attributes.pop(name))
@@ -313,8 +321,21 @@ SCOPELESS_WORDS = frozenset({"전국", "전 지역", "전체 지역"})
 _UNIT_TEXT_PREFIX = re.compile(r"^(?:출발|도착|승차|하차|각|소속)?\s*")
 
 
+def _rule_text(value):
+    """정리 규칙이 읽는 문자열 필드. 비었으면 "", 문자열이 아니면 None(정리 규칙에 해당하지 않음).
+
+    형식이 틀린 값은 정리하지 않고 그대로 넘겨 형식 검증이 계약 오류로 처리하게 한다.
+    """
+    if not value:
+        return ""
+    return value if isinstance(value, str) else None
+
+
 def _unit_text(raw):
-    text = _UNIT_TEXT_PREFIX.sub("", (raw.get("text") or "").strip()).strip()
+    text = _rule_text(raw.get("text"))
+    if text is None:
+        return None
+    text = _UNIT_TEXT_PREFIX.sub("", text.strip()).strip()
     return text.replace("별", "").replace(" 간", "").strip()
 
 
@@ -335,11 +356,12 @@ def normalize_place_concepts(raw_concepts, factors=None):
     """
     if not isinstance(raw_concepts, list):
         return raw_concepts, []
-    grouped = bool((factors or {}).get("dimension"))
-    named = {(raw["value"].get("name") or "").strip() for raw in raw_concepts
+    grouped = isinstance(factors or {}, dict) and bool((factors or {}).get("dimension"))
+    named = {_rule_text(raw["value"].get("name")).strip() for raw in raw_concepts
              if isinstance(raw, dict) and raw.get("concept") == "LOCATION"
              and isinstance(raw.get("value"), dict)
-             and (raw["value"].get("name") or "").strip() not in NON_PLACE_WORDS}
+             and _rule_text(raw["value"].get("name")) is not None
+             and _rule_text(raw["value"].get("name")).strip() not in NON_PLACE_WORDS}
     notes, cleaned = [], []
     for raw in raw_concepts:
         if (isinstance(raw, dict) and raw.get("concept") == "LOCATION"
@@ -353,8 +375,12 @@ def normalize_place_concepts(raw_concepts, factors=None):
             cleaned.append(raw)
             continue
         value = dict(raw["value"])
-        name = (value.get("name") or "").strip()
-        region = (value.get("region") or "").strip()
+        if _rule_text(value.get("name")) is None or _rule_text(value.get("region")) is None:
+            # name·region이 문자열이 아니다. 정리하지 않고 넘겨 _coerce_place가 계약 오류로 거부한다.
+            cleaned.append(raw)
+            continue
+        name = _rule_text(value.get("name")).strip()
+        region = _rule_text(value.get("region")).strip()
         before = {"name": value.get("name"), "region": value.get("region")}
         rule = None
         if name in NON_PLACE_WORDS and not region and not grouped \
@@ -410,28 +436,33 @@ def hoist_condition_concepts(raw_concepts, factors):
       factor가 이미 있을 때만(질문 표현으로 정해진 값) 개념을 뺀다. 없으면 두어 검증이 거부한다.
     같은 factor에 다른 값이 이미 있으면 옮기지 않는다(어느 쪽이 맞는지 고르지 않는다).
     """
-    if not isinstance(raw_concepts, list):
+    if not isinstance(raw_concepts, list) or not isinstance(factors, dict):
         return raw_concepts, {}, []
     moved, notes, cleaned = {}, [], []
     for raw in raw_concepts:
         if not isinstance(raw, dict) or raw.get("role") == "MEASURE":
             cleaned.append(raw)
             continue
+        # 조건 값·이름은 문자열이다. 문자열이 아닌 subtype·value(dict, list 등)는 이 정리 규칙에 해당하지
+        # 않는다. 그대로 두어 _parse_concept가 계약 오류로 거부한다(hash 기반 포함 검사에 넣지 않는다).
         subtype = raw.get("subtype")
+        text_value = raw.get("value") if isinstance(raw.get("value"), str) else None
         name, value = None, None
         if (raw.get("concept") == "OBJECT" and not subtype
-                and raw.get("value") in _CONDITION_SUBTYPES
+                and text_value in _CONDITION_SUBTYPES
                 and factors.get(_CONDITION_SUBTYPES[raw["value"]]) == raw["value"]):
             # subtype 없이 조건 값만 적은 개념이 같은 factor를 그대로 되풀이한다. 정보가 없다.
             notes.append({"concept": raw.get("id"), "rule": "redundant_condition_concept_dropped",
                           "factor": _CONDITION_SUBTYPES[raw["value"]], "kept": raw["value"]})
             continue
+        if not isinstance(subtype, str):
+            cleaned.append(raw)
+            continue
         if raw.get("concept") == "OBJECT" and subtype in _CONDITION_SUBTYPES:
             name, value = _CONDITION_SUBTYPES[subtype], subtype
         elif subtype in _CONDITION_NAMES:
             name = subtype
-            value = raw.get("value") if FACTOR_SPECS[name].values and raw.get(
-                "value") in FACTOR_SPECS[name].values else None
+            value = text_value if FACTOR_SPECS[name].values and text_value in FACTOR_SPECS[name].values else None
         if name is None:
             cleaned.append(raw)
             continue
@@ -585,7 +616,8 @@ def _parse_attributes(where, raw, raw_text):
         attributes[OD_ROLE] = raw[OD_ROLE]
 
     od_role = attributes.get(OD_ROLE)
-    if od_role is not None and od_role not in OD_ROLES:
+    # 문자열이 아닌 값(dict, list 등)은 hash 기반 포함 검사 전에 같은 계약 오류로 거부한다.
+    if od_role is not None and (not isinstance(od_role, str) or od_role not in OD_ROLES):
         raise PlannerError(
             f"{where}.{OD_ROLE}: {', '.join(sorted(OD_ROLES))} 중 하나여야 "
             f"합니다. (받은 값: {od_role!r})",

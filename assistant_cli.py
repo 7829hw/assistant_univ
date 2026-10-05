@@ -74,7 +74,7 @@ GEOFLOW_VERIFIED_SPECS = {
         "model_digest": "aaee06c39dcf2437cde036998d960e1fc1494b8191be7cc9657d01e509097813",
         "ollama_version": "0.34.4",
         "prompt_sha256": "87048d0c554c365e0e7994d09a4515c1cc646785708ce6dc9d1f120b4b5e8c2c",
-        "code_fingerprint": "97efa866391a370a9fed797686e24b15ccdcafd398d71ecc51db704b8f7f2015",
+        "code_fingerprint": "791c4a68a59647131321e3efad2325e549a46bc522230b25b2954a88c42eac6e",
         "settings": _VERIFIED_SETTINGS,
     },
     "B": {
