@@ -401,7 +401,19 @@ lock, 모델 revision과 GPU 정보를 experiment 기록에 추가한다.
 후속 작업 브랜치는 `geoflow/sft-dpo-thor`이다. 작업 단위마다 테스트/검증, diff 확인,
 커밋, SHA 보고를 수행하며 `geoflow/dev-v2`에는 커밋하지 않는다. Push는 별도 요청이 필요하다.
 
-[records/README.md](records/README.md)에 bounded pilot 001/002 보고서, reviewed v001/v002
-승인·coverage·manifest와 pending review batch 003의 작은 텍스트 기록을 보존했다.
-원본 ignored 산출물과 weights/checkpoints/XLSX는 추적하지 않는다. 이 기록은 읽기 전용
-실험 근거이며 새 training export 또는 승인된 v003 corpus가 아니다.
+[records/README.md](records/README.md)에 bounded pilot 001/002 보고서, reviewed v001/v002/v003
+승인·coverage·manifest와 batch003의 원래 pending queue, 별도 최종 decision을 보존했다.
+V003의 compact index는 같은 production prompt hash에서 정확한 export 재구성을 지원한다.
+원본 ignored 산출물과 weights/checkpoints/XLSX는 추적하지 않는다.
+
+## V003 token/memory gate
+
+Reviewed v003는 기존 6912 limit을 초과하는 승인 record 7건을 보존한다. Thor GPU smoke가
+통과한 새 bounded profile은 `configs/qwen3_8b_thor_pilot_003_sft.yaml`과
+`configs/qwen3_8b_thor_pilot_003_dpo.yaml`이다. SFT total7040, DPO total7040/prompt6816/
+completion256이며 기존 generic/Thor/pilot001/002 config는 변경하지 않았다.
+전체67 record의 token preflight와 최장 SFT/DPO 실제 backward/optimizer proof, memory/time
+비교, config hashes는 [THOR_V003_TOKEN_VALIDATION.md](THOR_V003_TOKEN_VALIDATION.md)에 있다.
+본 pilot003은 아직 실행하지 않았다. SFT는 Base에서 시작하고 DPO는 새 SFT의 best generation
+checkpoint를 선택한 뒤 `SELECTED_V003_SFT_REQUIRED`를 별도 resolved config에서 지정한다.
+LR0 memory-smoke bootstrap adapter는 품질 학습에 사용하지 않는다.
