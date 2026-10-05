@@ -157,7 +157,8 @@ def run_spec(args, *, digest, version, prompt_sha, items):
         "options": {"condition_check": args.condition_check, "condition_notes": args.condition_notes,
                     "normalize_grounding": not args.no_normalize, "semantic_reinterpretation": not args.no_semantic,
                     "aggregation_grounding": args.aggregation_grounding, "chat_timeout_s": args.chat_timeout,
-                    "temperature": 0, "think": "auto", "provider": "mock", "tims_execution": "legacy"},
+                    "temperature": 0, "think": getattr(args, "model_think", "auto"), "provider": "mock",
+                    "tims_execution": "legacy"},
         "run_settings": run_settings(args),
         "replay_from_sha256": hashlib.sha256(replay.read_bytes()).hexdigest() if replay else None,
     }
@@ -1074,8 +1075,9 @@ def cmd_llm(args):
     from ollama_client import OllamaClient, resolve_think
 
     tools, _ = build()
+    # think는 지정한 경우에만 payload에 들어간다(auto = 넣지 않음, 이전 기록과 같은 요청).
     client = OllamaClient(args.host, args.model, {"temperature": 0},
-                          chat_timeout=args.chat_timeout, think=resolve_think("auto"))
+                          chat_timeout=args.chat_timeout, think=resolve_think(getattr(args, "model_think", "auto")))
     version, digest, details = A._server_details(args.host, args.model)
     document = load_gold(GOLD_PATH)
     global REFERENCE_DATE
@@ -1177,7 +1179,7 @@ def cmd_llm(args):
                                                  "normalize_grounding": not args.no_normalize,
                                                  "semantic_reinterpretation": not args.no_semantic,
                                                  "provider": "mock", "tims_execution": "legacy",
-                                                 "temperature": 0, "think": "auto",
+                                                 "temperature": 0, "think": getattr(args, "model_think", "auto"),
                                                  "isolation": args.model_state},
                                     "run_settings": settings,
                                     "item_order": [item["id"] for item in items],
@@ -1883,6 +1885,9 @@ def build_parser():
     llm.add_argument("--no-semantic", action="store_true",
                      help="조건 계층의 의미 재해석(측정값·관계·집계 다시 읽기)을 끈다. 날짜·유형·상태 보존과 "
                           "장소 근거 확인은 그대로다")
+    llm.add_argument("--model-think", choices=("auto", "on", "off"), default="auto",
+                     help="Ollama /api/chat의 think. auto(기본)는 payload에 넣지 않는다(이전 평가와 같은 요청). "
+                          "on/off는 think=true/false를 넣는다")
     llm.add_argument("--reference-date", type=date.fromisoformat, default=REFERENCE_DATE,
                      help="상대 날짜를 풀 기준일(조건 계층·컴파일·채점에 같이 쓴다). 기본 2026-09-25(정답 셋의 기준일)")
     llm.add_argument("--model-state", choices=MODEL_STATES, default=MODEL_STATES[0],
