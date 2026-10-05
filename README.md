@@ -1010,6 +1010,7 @@ development가 되었다.
 ### 운영 조건(연속 실행) 검증 grounding_v14 (2026-10-05)
 
 **T2PC 조합을 유지한다.** 사전 등록한 운영 기준 OP1–OP4를 모두 충족했다. 설계·결과: `evaluation/grounding_v14/analysis.md`.
+기록 프록시 오류로 B W1·W3를 계획에 없이 다시 쟀고, 질문 실행이 사전 상한 480회를 넘어 572회가 됐다(수정 전 기록 보존, 결론 영향 없음).
 
 * **원인 분리:**
   * 평가 harness와 CLI는 같은 질문에 바이트 단위로 같은 요청을 보내고, 이전 질문은 섞이지 않는다.
@@ -1086,19 +1087,29 @@ development가 되었다.
   * `--agent-mode geoflow`에서 모델을 지정하지 않으면 `qwen3.8:27b`를 쓴다(`GEOFLOW_DEFAULT_MODEL_NAME`).
   * CLI 실행 모드의 기본값은 여전히 react다. react 모드 기본 모델 `qwen3-coder:30b`·120초는 GeoFlow 평가와 무관하다.
 * **모델 선택 우선순위:** `--model` > `OLLAMA_MODEL` > 모드 기본값. 머리말에 모델의 출처를 표시한다.
-* **검증한 실행 명세** (`assistant_cli.py GEOFLOW_VERIFIED_SPEC`):
+* **검증한 실행 명세** (`assistant_cli.py GEOFLOW_VERIFIED_SPECS`): 검증한 조합은 T2PC(기본)와 B(이전 기본, 되돌리기 대상) 둘이다.
+  GeoFlow 모드로 실행할 때마다 아래 항목을 모두 비교한다.
 
-  | 항목 | 값 | 확인 방법 |
+  | 항목 | T2PC 값 | 실행 시 확인 |
   |---|---|---|
-  | 모델·digest | qwen3.8:27b, `aaee06c39dcf2437…` | 실행할 때 `/api/tags`와 비교 |
-  | Ollama | 0.34.4 | 실행할 때 `/api/version`과 비교 |
-  | prompt | sha256 87048d0c | 테스트(`tests/test_cli_run_settings.py`, prompt가 바뀌면 실패) |
-  | 코드 | geoflow/·prompts/ = b62f6dc | 실행 중 확인하지 않음. geoflow/ 변경은 재검증 대상 |
-  | 설정 | temperature 0, think·num_predict 미지정, timeout 300초, aggregation flat, 조건 계층 켬, example retrieval off | 실행할 때 비교 |
-  | provider·실행 | mock, legacy | 실행할 때 비교 |
+  | 모델·digest | qwen3.8:27b, `aaee06c39dcf2437…` | 모델은 설정과, digest는 Ollama `/api/tags`와 비교 |
+  | Ollama | 0.34.4 | `/api/version`과 비교 |
+  | prompt | sha256 `87048d0c…` | 현재 planner prompt의 hash와 비교 |
+  | 실행 의미 코드 | 내용 지문 `97efa866…` | `execution_spec.SEMANTIC_CODE` 파일 내용으로 지문을 만들어 비교 |
+  | 설정 | temperature 0, think·num_predict 미지정, timeout 300초, aggregation flat, 조건 계층 켬, example retrieval off | CLI 설정과 비교 |
+  | provider·실행 | mock, legacy | CLI 설정과 비교 |
 
-  * GeoFlow 모드 머리말의 `검증 —` 줄과 저장 기록의 `geoflow_verification`이 명세와 다른 항목을 적는다.
-  * 다른 설정이나 모델도 막지 않고 그대로 실행한다.
+  * 실행 의미 코드는 geoflow/, 매크로·템플릿·예시, prompts/, schemas/, reference 데이터, Tool 실행·mock·reference provider, `ollama_client.py`, `assistant_runtime.py`다(64개 파일).
+    * 커밋이 아니라 파일 내용으로 비교한다. README·평가 기록·테스트만 바뀐 커밋은 같은 지문이다.
+    * `assistant_cli.py`는 넣지 않는다. CLI가 pipeline에 넘기는 값은 설정 비교로 확인한다.
+  * 머리말의 `검증 —` 줄과 저장 기록의 `geoflow_verification`은 결과를 네 가지로 나눠 적는다.
+    * 일치
+    * 다름
+    * 확인 안 함(예: Ollama가 응답하지 않아 digest를 못 봄)
+    * 명세 밖(기준일, 모델 적재 상태, 동시 요청, `assistant_cli.py` 자체)
+  * "검증한 실행 명세와 같음"은 다름과 확인 안 함이 모두 없을 때만 표시한다.
+  * 현재 코드·prompt와 맞는 명세가 비교 대상이 된다. 되돌린 checkout이면 B와 비교한다.
+  * 다른 모델·설정도 막지 않고 그대로 실행한다.
 * **검증한 실행 조건:**
   * 문항마다 모델을 내린 평가: grounding_v13, 개발 428·최종 56.
   * 모델을 올린 채 연속 실행: grounding_v14, 최종 56을 순서 3개로 실행.
@@ -1119,8 +1130,15 @@ development가 되었다.
   * 모델을 올린 채 연속 실행하면 같은 질문도 앞선 처리에 따라 다른 결과가 나올 수 있다.
     * qwen3.8:27b: 56문항 중 4회 실행에서 분류가 바뀐 문항 5개.
     * qwen3:8b: 결과 종류가 바뀐 문항 21개.
-* **되돌리기:** `git revert -m 1 b62f6dc`.
-  * 코드·prompt·CLI 기본 모델이 함께 `grounding-v12-baseline` 상태(qwen3:8b, prompt 522aa3b1)로 돌아간다.
+* **되돌리기(현재 HEAD 기준):** `scripts/geoflow_rollback_to_b.sh`를 실행한 뒤, 테스트를 확인하고 커밋한다.
+  * 스크립트가 하는 일:
+    * geoflow/·prompts/와 T2PC 전용 테스트를 태그 `grounding-v12-baseline` 상태로 되돌린다.
+    * `GEOFLOW_DEFAULT_SPEC_NAME`을 B로 바꾼다.
+    * 끝에서 현재 코드·prompt·기본 모델이 B 명세와 맞는지 확인한다. 결과는 B, qwen3:8b, prompt 522aa3b1, 지문 `7e99136d…`이다.
+  * 별도 worktree에서 확인한 결과:
+    * 적용 뒤 CLI 검증 표시가 "B와 같음(일치 13)"이었다.
+    * 전체 테스트가 통과했다. 단 git에 없는 업체 원본 xlsx가 필요한 테스트 하나는, 되돌리기와 무관하게 새 checkout이면 실패한다.
+  * `git revert -m 1 b62f6dc`는 grounding_v14 뒤 `assistant_cli.py`·`tests/test_cli_run_settings.py`에서 충돌하므로 더 이상 쓰지 않는다.
   * 모델 이름만 qwen3:8b로 바꾸는 것은 되돌리기가 아니다(위 표 셋째 줄).
 * **재현:**
   * 품질: `evaluation/grounding_v13/run_set.sh MODEL TAG CODE_ROOT final`.

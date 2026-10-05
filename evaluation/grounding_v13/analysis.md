@@ -120,7 +120,7 @@
 - CLI GeoFlow 기본 모델을 qwen3.8:27b로 바꿈. timeout은 300초 그대로.
 - `GEOFLOW_VERIFIED_MODELS = ("qwen3.8:27b",)`와 prompt hash 확인 테스트. prompt가 바뀌면 테스트가 실패해 재검증을 요구한다.
 
-**되돌리기:** `git revert -m 1 b62f6dc`.
+**되돌리기:** `git revert -m 1 b62f6dc`. (grounding_v15 정정: v14 뒤에는 이 revert가 충돌한다. 현재 절차는 README "실행 기본값"과 `scripts/geoflow_rollback_to_b.sh`.)
 - 별도 worktree에서 확인한 결과:
   - geoflow/·prompts/가 태그 `grounding-v12-baseline`과 같다(prompt 522aa3b1).
   - `assistant_cli.py`가 채택 전과 같고, 기본 모델은 qwen3:8b다.

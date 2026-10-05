@@ -78,7 +78,7 @@ class RunSettingsTest(unittest.TestCase):
         self.assertEqual((result["different"], result["unchecked"]), ([], {}))
         self.assertIn("code", result["matched"])
         self.assertIn("prompt", result["matched"])
-        result = self.compare(settings=self.settings(model="qwen3:8b", think=False, provider="reference"))
+        result = self.compare(settings=self.settings(model="not-the-spec-model", think=False, provider="reference"))
         self.assertEqual(result["different"], ["model", "think", "provider"])
         result = self.compare(server=self.server(model_digest="x"), local=self.local(code_fingerprint="other"))
         self.assertEqual(result["different"], ["model_digest", "code"])
