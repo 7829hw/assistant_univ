@@ -9,8 +9,14 @@
 """
 import argparse
 import hashlib
+import gzip
 import json
 from collections import defaultdict
+
+
+def _open(path):
+    """기록 프록시 로그(.jsonl 또는 압축한 .jsonl.gz)."""
+    return gzip.open(path, "rt", encoding="utf-8") if str(path).endswith(".gz") else open(path, encoding="utf-8")
 
 
 def _sha(text):
@@ -20,7 +26,7 @@ def _sha(text):
 def chats(path):
     out = defaultdict(list)
     order = []
-    for line in open(path, encoding="utf-8"):
+    for line in _open(path):
         rec = json.loads(line)
         if not rec["path"].startswith("/api/chat") or "request" not in rec:
             continue
@@ -66,7 +72,7 @@ def main():
     leaks = []
     for path in (args.a, args.b):
         seen = []
-        for line in open(path, encoding="utf-8"):
+        for line in _open(path):
             rec = json.loads(line)
             if not rec["path"].startswith("/api/chat") or "request" not in rec:
                 continue

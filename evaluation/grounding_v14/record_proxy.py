@@ -17,6 +17,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import httpx
 
 LOCK = threading.Lock()
+#: Ollama 요청의 최대 대기. 평가·CLI의 chat timeout(300초)과 같게 둔다(--upstream-timeout).
+UPSTREAM_TIMEOUT = 300.0
 COUNTER = itertools.count(1)
 
 
@@ -30,15 +32,28 @@ def make_handler(upstream, log_path):
             body = self.rfile.read(length) if length else b""
             seq = next(COUNTER)
             started = time.time()
-            response = httpx.request(method, upstream + self.path, content=body,
-                                     headers={"Content-Type": self.headers.get("Content-Type", "application/json")},
-                                     timeout=900.0)
+            # 클라이언트(chat timeout)와 같은 시간에 Ollama 연결을 닫는다. 그래야 클라이언트가 포기한 생성이 서버에서
+            # 계속 돌며 다음 요청을 막지 않는다(프록시가 없을 때와 같은 동작). 2026-10-05 첫 구현은 900초를 써서, B의 연속
+            # 실행에서 버려진 재질의가 다음 질문을 timeout시켰다(runs/ops/b_proxy_artifact).
+            try:
+                response = httpx.request(method, upstream + self.path, content=body,
+                                         headers={"Content-Type": self.headers.get("Content-Type", "application/json")},
+                                         timeout=UPSTREAM_TIMEOUT)
+            except httpx.TimeoutException as error:
+                self._log({"seq": seq, "t": started, "elapsed_s": round(time.time() - started, 3), "method": method,
+                           "path": self.path, "status": None, "error": f"upstream {type(error).__name__}",
+                           "request_sha256": hashlib.sha256(body).hexdigest() if body else None})
+                self.close_connection = True
+                return
             elapsed = time.time() - started
-            self.send_response(response.status_code)
-            self.send_header("Content-Type", response.headers.get("Content-Type", "application/json"))
-            self.send_header("Content-Length", str(len(response.content)))
-            self.end_headers()
-            self.wfile.write(response.content)
+            try:
+                self.send_response(response.status_code)
+                self.send_header("Content-Type", response.headers.get("Content-Type", "application/json"))
+                self.send_header("Content-Length", str(len(response.content)))
+                self.end_headers()
+                self.wfile.write(response.content)
+            except (BrokenPipeError, ConnectionResetError):
+                pass   # 클라이언트가 먼저 끊었다. 기록은 남긴다.
             record = {"seq": seq, "t": started, "elapsed_s": round(elapsed, 3), "method": method, "path": self.path,
                       "status": response.status_code}
             if body:
@@ -61,6 +76,9 @@ def make_handler(upstream, log_path):
                 record["response"]["content"] = message.get("content", data.get("response"))
                 record["response"]["thinking_sha256"] = hashlib.sha256(
                     (message.get("thinking") or "").encode("utf-8")).hexdigest()
+            self._log(record)
+
+        def _log(self, record):
             with LOCK, open(log_path, "a", encoding="utf-8") as handle:
                 handle.write(json.dumps(record, ensure_ascii=False) + "\n")
 
@@ -78,7 +96,10 @@ def main():
     parser.add_argument("--listen", type=int, default=11500)
     parser.add_argument("--upstream", default="http://localhost:11434")
     parser.add_argument("--log", required=True)
+    parser.add_argument("--upstream-timeout", type=float, default=300.0)
     args = parser.parse_args()
+    global UPSTREAM_TIMEOUT
+    UPSTREAM_TIMEOUT = args.upstream_timeout
     server = ThreadingHTTPServer(("127.0.0.1", args.listen), make_handler(args.upstream.rstrip("/"), args.log))
     server.serve_forever()
 

@@ -11,12 +11,18 @@
 """
 import argparse
 import hashlib
+import gzip
 import json
 import time
 
 import httpx
 
 HOST = "http://localhost:11434"
+
+
+def _open(path):
+    """기록 프록시 로그(.jsonl 또는 압축한 .jsonl.gz)."""
+    return gzip.open(path, "rt", encoding="utf-8") if str(path).endswith(".gz") else open(path, encoding="utf-8")
 
 
 def sha(text):
@@ -49,7 +55,7 @@ def main():
     parser.add_argument("--model", required=True)
     args = parser.parse_args()
     firsts, seen = [], set()
-    for line in open(args.log, encoding="utf-8"):
+    for line in _open(args.log):
         rec = json.loads(line)
         if rec["path"].startswith("/api/chat") and "request" in rec:
             users = [m for m in rec["request"]["messages"] if m["role"] == "user"]
