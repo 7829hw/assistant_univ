@@ -1,0 +1,34 @@
+version: grounding_v14_cli_check
+note: grounding_v13 cli_check 6문항을 같은 순서로 한 파일에 모은 것(정답은 원본 셋에서 그대로 복사). 조건 확인용.
+items:
+- id: od-o01a
+  question: 지난달 대구 수성구에서 출발한 실차 구간 건수는?
+  gold_text: 'get_place_scope(name=수성구, region=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=last_month)'
+- id: od-o02a
+  question: 지난달 대구 수성구에서 출발한 실차를 하차 읍면동별로 셌을 때 가장 많은 두 곳은?
+  gold_text: 'get_place_scope(name=수성구, region=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=last_month, dimension=emd, dimension_target=dropoff,
+    order=top, limit=2)'
+- id: status-s01
+  question: 지난달 대구 수성구에서 출발한 실차 건수는?
+  gold_text: 'get_place_scope(name=수성구, region=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=last_month)'
+- id: status-s27
+  question: 어제 동대구역에서 실차 택시가 태운 손님은 몇 건이야?
+  gold_text: 'get_place_scope(name=동대구역)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=20260924)'
+- id: measure-m05
+  question: 이번 달 택시 수입이 가장 많은 요일은 언제야?
+  gold_text: get_billing_metrics(metric=revenue, date=this_month, dimension=dayofweek,
+    order=top, limit=1)
+- id: measure-m13
+  question: 지난주 대구 중구의 실차 택시 통행량을 읍면동별로 많은 순서로 두 곳 알려줘.
+  gold_text: 'get_place_scope(name=중구, region=대구)
+
+    get_passage_count(scope=$resolve.scope, date=last_week, taxi_status=occupied,
+    dimension=emd, order=top, limit=2)'

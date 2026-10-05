@@ -51,6 +51,7 @@ SET_BY_FILE = {
     "evaluation/grounding_v10/heldout_questions.yaml": "heldout",
     "evaluation/grounding_v12/final_questions.yaml": "final",
     "evaluation/vendor100/gold.yaml": "dev",
+    "evaluation/grounding_v14/cli_check_gold.yaml": "clicheck",
 }
 LATENT_FACTORS = ("date", "time", "taxi_type", "taxi_status")
 NORMAL, WRONG = "정상 답변", "오답"
