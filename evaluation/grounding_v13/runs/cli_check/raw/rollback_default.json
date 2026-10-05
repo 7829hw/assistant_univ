@@ -1,0 +1,3392 @@
+{
+  "model": "qwen3:8b",
+  "agent_mode": "geoflow",
+  "chat_timeout_seconds": 300.0,
+  "timestamp": "2026-10-05T15:18:34.744472+09:00",
+  "query_count": 6,
+  "query_source_type": "yaml",
+  "query_source_sha256": "95bd276b3dac9f1e96330fc6ca5e346767d2ac67cde529799d137dfcc5e0206e",
+  "requested_query_ids": [
+    "od-o01a",
+    "od-o02a",
+    "status-s01",
+    "status-s27",
+    "measure-m05",
+    "measure-m13"
+  ],
+  "repeat": 1,
+  "requested_attempt_count": 6,
+  "tool_provider": "mock",
+  "config_hash": {
+    "prompts/system.yaml": "1e51ccbeaeb4001ea4970ff8f7906f12e88538f1e1f71fcccc153a8829a46c80",
+    "schemas/_common.yaml": "b3479ffbd07ae1749ddacaf39332b503ca57abd2ddcf84fbb7ba497174306397",
+    "schemas/gazetteer.yaml": "688e44d4a323aa09ba60375539236002162b12604245c61d5f689a5273172a51",
+    "schemas/tims.yaml": "8065cfffd951b578cb0210114211f7c22f9972cfa014d9ab17e8d00cb218b764"
+  },
+  "queries": [
+    {
+      "id": "od-o01a",
+      "question": "지난달 대구 수성구에서 출발한 실차 구간 건수는?",
+      "agent_mode": "geoflow",
+      "hops": [
+        {
+          "model_hop": 1,
+          "tool_index": 1,
+          "tool_count": 1,
+          "step_id": "resolve_scope",
+          "operator": "RESOLVE_PLACE_SCOPE",
+          "tool": "get_place_scope",
+          "arguments": {
+            "name": "수성구",
+            "region": "대구",
+            "include_vicinity": false
+          },
+          "result": "scope:district:2726000000",
+          "duration_ms": 0.157,
+          "phase": "tool",
+          "covers": [
+            "resolve_scope"
+          ],
+          "output_nodes": [
+            "origin_scope"
+          ]
+        },
+        {
+          "model_hop": 2,
+          "tool_index": 1,
+          "tool_count": 1,
+          "step_id": "measure_od_event",
+          "operator": "TRIP_COUNT",
+          "tool": "get_trip_count",
+          "arguments": {
+            "scope_pickup": "scope:district:2726000000",
+            "date": "last_month"
+          },
+          "result": {
+            "count": 20
+          },
+          "duration_ms": 0.054,
+          "phase": "tool",
+          "covers": [
+            "measure_od_event"
+          ],
+          "output_nodes": [
+            "trip_count"
+          ]
+        }
+      ],
+      "model_calls": [
+        {
+          "event": "model_call",
+          "model_hop": 1,
+          "phase": "geoflow_planner",
+          "duration_ms": 9268.667,
+          "error": null
+        }
+      ],
+      "total_duration_ms": 9270.813,
+      "final_answer": "대구 수성구 출발 지난달 실차 구간 건수: 20건",
+      "runtime_error": null,
+      "runtime_status": "OK",
+      "cancelled": false,
+      "geoflow": {
+        "agent_mode": "geoflow",
+        "outcome": "answered",
+        "stage": "done",
+        "repair_count": 0,
+        "repairs": {},
+        "scope_labels": {},
+        "condition_audit": {
+          "reference_date": "2026-10-05",
+          "timezone": "Asia/Seoul",
+          "date": {
+            "mentions": [
+              {
+                "kind": "date",
+                "text": "지난달",
+                "status": "supported",
+                "value": "last_month",
+                "meaning": "last_month: 직전 달력 월"
+              }
+            ],
+            "llm_value": "last_month",
+            "unparsed_cues": false,
+            "value": "last_month",
+            "status": "interpreted",
+            "action": "confirmed",
+            "basis": "question_expression",
+            "interpreted_range": "20260901-20260930"
+          },
+          "taxi_type": {
+            "mentions": [],
+            "llm_value": null,
+            "value": null,
+            "stated": "not_stated",
+            "status": "absent",
+            "action": "none",
+            "basis": "no_value_no_cue"
+          },
+          "taxi_status": {
+            "mentions": [],
+            "llm_value": null,
+            "value": null,
+            "status": "absent",
+            "action": "none",
+            "basis": "status_word_not_a_condition"
+          },
+          "places": [
+            {
+              "id": "origin",
+              "text": "대구 수성구",
+              "lookup_name": "수성구",
+              "region": "대구",
+              "od_role": "pickup",
+              "semantics": "name_evidence_only",
+              "evidence": "exact"
+            }
+          ],
+          "place_completeness": "unchecked",
+          "not_checked": [
+            "place_completeness: 질문의 장소가 모두 출력되었는지(누락 탐지 없음)",
+            "place_semantics: 장소명이 뜻하는 지역(동명 지역 구분)",
+            "od_semantics: 출발/도착 관계(모델 grounding의 몫, 보존만 함)",
+            "unsupported_grammar: 지원 문법 밖의 날짜·유형 표현(보류로 둠)"
+          ],
+          "corrections": [],
+          "held": []
+        },
+        "condition_trace": [
+          {
+            "condition": "date",
+            "text": [
+              "지난달"
+            ],
+            "value": "last_month",
+            "status": "interpreted",
+            "action": "confirmed",
+            "interpreted_range": "20260901-20260930",
+            "applied_to": [
+              "measure_od_event"
+            ],
+            "calls": [
+              {
+                "step": "measure_od_event",
+                "argument": "last_month",
+                "partition": false,
+                "lowering": "passthrough",
+                "allowed": [
+                  "last_month"
+                ]
+              }
+            ],
+            "provider": [
+              "unverified"
+            ]
+          },
+          {
+            "condition": "place",
+            "text": "대구 수성구",
+            "value": "수성구",
+            "od_role": "pickup",
+            "evidence": "exact",
+            "semantics": "name_evidence_only",
+            "history": [],
+            "applied_to": [
+              "resolve_scope"
+            ],
+            "calls": [
+              {
+                "step": "resolve_scope",
+                "argument": "수성구"
+              }
+            ]
+          }
+        ],
+        "verification": {
+          "conditions": {
+            "date": {
+              "interpretation": "interpreted",
+              "action": "confirmed",
+              "basis": "question_expression",
+              "interpreted_range": "20260901-20260930",
+              "request": [
+                "last_month"
+              ],
+              "provider": [
+                "unverified"
+              ]
+            },
+            "taxi_type": {
+              "interpretation": "absent",
+              "action": "none",
+              "basis": "no_value_no_cue",
+              "stated": "not_stated",
+              "request": [],
+              "provider": [
+                "confirmed"
+              ]
+            },
+            "place": {
+              "interpretation": "name_evidence_only",
+              "names": [
+                "수성구"
+              ],
+              "completeness": "unchecked",
+              "provider": [
+                "unverified"
+              ]
+            }
+          },
+          "verified": [
+            "taxi_type"
+          ],
+          "contract": "tims",
+          "unverified": [
+            "date",
+            "place"
+          ],
+          "not_checked": [
+            "place_completeness: 질문의 장소가 모두 출력되었는지(누락 탐지 없음)",
+            "place_semantics: 장소명이 뜻하는 지역(동명 지역 구분)",
+            "od_semantics: 출발/도착 관계(모델 grounding의 몫, 보존만 함)",
+            "unsupported_grammar: 지원 문법 밖의 날짜·유형 표현(보류로 둠)"
+          ],
+          "complete": false
+        },
+        "execution_profile": {
+          "provider": "mock",
+          "contract": "tims",
+          "mode": "legacy",
+          "date_policy": "legacy",
+          "synthetic": false,
+          "legacy_assumptions": [
+            "relative_date_reference",
+            "range_inclusive",
+            "calendar_token_period"
+          ],
+          "delegation": true,
+          "delegated_semantics": [
+            "relative_date_reference",
+            "range_inclusive",
+            "calendar_token_period",
+            "bucket_week_start",
+            "bucket_partial",
+            "bucket_empty"
+          ],
+          "description": "mock(TIMS schema). 질문 표현을 옮긴 인자의 세부 달력 의미는 제공자에게 위임(legacy)"
+        },
+        "retrieval": null,
+        "attempts": [
+          {
+            "index": 0,
+            "template": "PLACE_TO_SCOPE+OD_EVENT_TO_MEASURE",
+            "applied_macros": [
+              "PLACE_TO_SCOPE",
+              "OD_EVENT_TO_MEASURE"
+            ],
+            "slots": {
+              "date": "last_month",
+              "origin": {
+                "name": "수성구",
+                "region": "대구"
+              },
+              "metric": "trip_count"
+            },
+            "status": "OK",
+            "tools": [
+              "get_place_scope",
+              "get_trip_count"
+            ],
+            "error": null
+          }
+        ],
+        "planner": {
+          "grounding": {
+            "concepts": [
+              {
+                "id": "origin",
+                "text": "대구 수성구",
+                "concept": "LOCATION",
+                "subtype": "place",
+                "role": "SUBCOND",
+                "source": "user",
+                "value": {
+                  "name": "수성구",
+                  "region": "대구"
+                },
+                "attributes": {
+                  "od_role": "pickup"
+                }
+              },
+              {
+                "id": "trip",
+                "text": "",
+                "concept": "EVENT",
+                "subtype": "trip",
+                "role": "SUPPORT",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              },
+              {
+                "id": "trip_count",
+                "text": "실차 구간 건수",
+                "concept": "AMOUNT",
+                "subtype": "trip_count",
+                "role": "MEASURE",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              }
+            ],
+            "factors": {
+              "date": "last_month"
+            },
+            "aggregation": {
+              "bucket": null,
+              "inner": null,
+              "outer": null,
+              "select": null,
+              "source": "flat"
+            }
+          },
+          "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"origin\",\n      \"text\": \"대구 수성구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"수성구\", \"region\": \"대구\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_month\"\n  }\n}",
+          "duration_ms": 9268.667,
+          "model": "qwen3:8b",
+          "attempts": 1,
+          "retrieval": null
+        },
+        "template": "PLACE_TO_SCOPE+OD_EVENT_TO_MEASURE",
+        "applied_macros": [
+          "PLACE_TO_SCOPE",
+          "OD_EVENT_TO_MEASURE"
+        ],
+        "grounding": {
+          "concepts": [
+            {
+              "id": "origin",
+              "text": "대구 수성구",
+              "concept": "LOCATION",
+              "subtype": "place",
+              "role": "SUBCOND",
+              "source": "user",
+              "value": {
+                "name": "수성구",
+                "region": "대구"
+              },
+              "attributes": {
+                "od_role": "pickup"
+              }
+            },
+            {
+              "id": "trip",
+              "text": "",
+              "concept": "EVENT",
+              "subtype": "trip",
+              "role": "SUPPORT",
+              "source": "implicit",
+              "value": null,
+              "attributes": {}
+            },
+            {
+              "id": "trip_count",
+              "text": "실차 구간 건수",
+              "concept": "AMOUNT",
+              "subtype": "trip_count",
+              "role": "MEASURE",
+              "source": "implicit",
+              "value": null,
+              "attributes": {}
+            }
+          ],
+          "factors": {
+            "date": "last_month"
+          },
+          "aggregation": {
+            "bucket": null,
+            "inner": null,
+            "outer": null,
+            "select": null,
+            "source": "flat"
+          }
+        },
+        "slots": {
+          "date": "last_month",
+          "origin": {
+            "name": "수성구",
+            "region": "대구"
+          },
+          "metric": "trip_count"
+        },
+        "plan": {
+          "version": "1.0",
+          "question": "지난달 대구 수성구에서 출발한 실차 구간 건수는?",
+          "template": "PLACE_TO_SCOPE+OD_EVENT_TO_MEASURE",
+          "slots": {
+            "date": "last_month",
+            "origin": {
+              "name": "수성구",
+              "region": "대구"
+            },
+            "metric": "trip_count"
+          },
+          "applied_macros": [
+            "PLACE_TO_SCOPE",
+            "OD_EVENT_TO_MEASURE"
+          ],
+          "unused_factors": {},
+          "concepts": [
+            {
+              "id": "origin",
+              "concept": "LOCATION",
+              "subtype": "place",
+              "role": "SUBCOND",
+              "source": "user",
+              "value": {
+                "name": "수성구",
+                "region": "대구"
+              },
+              "attributes": {
+                "od_role": "pickup"
+              }
+            },
+            {
+              "id": "trip",
+              "concept": "EVENT",
+              "subtype": "trip",
+              "role": "SUPPORT",
+              "source": "implicit",
+              "value": "trip",
+              "attributes": {}
+            },
+            {
+              "id": "trip_count",
+              "concept": "AMOUNT",
+              "subtype": "trip_count",
+              "role": "MEASURE",
+              "source": "tool",
+              "value": null,
+              "attributes": {}
+            },
+            {
+              "id": "origin_scope",
+              "concept": "LOCATION",
+              "subtype": "scope",
+              "role": "COND",
+              "source": "tool",
+              "value": null,
+              "attributes": {
+                "od_role": "pickup"
+              }
+            }
+          ],
+          "transformations": [
+            {
+              "id": "resolve_scope",
+              "operator": "RESOLVE_PLACE_SCOPE",
+              "inputs": {
+                "place_name": {
+                  "$ref": "origin",
+                  "field": "name"
+                },
+                "place_region": {
+                  "$ref": "origin",
+                  "field": "region"
+                }
+              },
+              "outputs": [
+                "origin_scope"
+              ],
+              "params": {
+                "include_vicinity": false
+              }
+            },
+            {
+              "id": "measure_od_event",
+              "operator": "TRIP_COUNT",
+              "inputs": {
+                "event": {
+                  "$ref": "trip",
+                  "field": null
+                },
+                "pickup": {
+                  "$ref": "origin_scope",
+                  "field": null
+                }
+              },
+              "outputs": [
+                "trip_count"
+              ],
+              "params": {
+                "date": "last_month"
+              }
+            }
+          ],
+          "final_node": "trip_count"
+        },
+        "validation": {
+          "status": "OK",
+          "template": "PLACE_TO_SCOPE+OD_EVENT_TO_MEASURE",
+          "checked_rules": [
+            "G1_ACYCLICITY",
+            "G2_ROLE_ORDERING",
+            "G3_TYPE_COMPATIBILITY",
+            "G4_EXECUTABILITY",
+            "G5_CONNECTIVITY",
+            "G6_SCOPE_PROVENANCE",
+            "G7_AGGREGATION_SEMANTICS"
+          ],
+          "failed_rules": [],
+          "errors": [],
+          "topological_order": [
+            "resolve_scope",
+            "measure_od_event"
+          ]
+        },
+        "execution_plan": {
+          "template": "PLACE_TO_SCOPE+OD_EVENT_TO_MEASURE",
+          "final_node": "trip_count",
+          "steps": [
+            {
+              "id": "resolve_scope",
+              "operator": "RESOLVE_PLACE_SCOPE",
+              "tool_name": "get_place_scope",
+              "arguments": {
+                "name": "수성구",
+                "region": "대구",
+                "include_vicinity": false
+              },
+              "output_bindings": {
+                "scope": "origin_scope"
+              },
+              "kind": "tool",
+              "covers": [
+                "resolve_scope"
+              ],
+              "argument_sources": {
+                "name": "resolve_scope.inputs.place_name",
+                "region": "resolve_scope.inputs.place_region",
+                "include_vicinity": "resolve_scope.params.include_vicinity"
+              }
+            },
+            {
+              "id": "measure_od_event",
+              "operator": "TRIP_COUNT",
+              "tool_name": "get_trip_count",
+              "arguments": {
+                "scope_pickup": {
+                  "$ref": "origin_scope",
+                  "field": null
+                },
+                "date": "last_month"
+              },
+              "output_bindings": {
+                "$": "trip_count"
+              },
+              "kind": "tool",
+              "covers": [
+                "measure_od_event"
+              ],
+              "argument_sources": {
+                "scope_pickup": "measure_od_event.inputs.pickup",
+                "date": "measure_od_event.params.date"
+              }
+            }
+          ],
+          "semantic_map": {
+            "resolve_scope": [
+              "resolve_scope"
+            ],
+            "measure_od_event": [
+              "measure_od_event"
+            ]
+          },
+          "unobserved": {},
+          "periods": {},
+          "lowering": {},
+          "date_semantics": {
+            "measure_od_event": {
+              "value": "last_month",
+              "kind": "relative",
+              "interpreted_range": "20260901-20260930",
+              "reference_date": "20261005",
+              "policy": "legacy",
+              "lowering": "passthrough",
+              "responsibility": "provider",
+              "request": [
+                "last_month"
+              ],
+              "provider": "unverified",
+              "requires": [
+                "relative_date_reference"
+              ],
+              "missing": [
+                "relative_date_reference"
+              ],
+              "interpretation": {
+                "source": "application_policy",
+                "rule": "기준일이 속한 달 바로 앞 달의 1일부터 말일까지"
+              }
+            }
+          }
+        },
+        "execution": {
+          "status": "OK",
+          "state": {
+            "origin": {
+              "name": "수성구",
+              "region": "대구"
+            },
+            "trip": "trip",
+            "origin_scope": "scope:district:2726000000",
+            "trip_count": {
+              "count": 20
+            }
+          },
+          "trace": [
+            {
+              "model_hop": 1,
+              "tool_index": 1,
+              "tool_count": 1,
+              "step_id": "resolve_scope",
+              "operator": "RESOLVE_PLACE_SCOPE",
+              "tool": "get_place_scope",
+              "arguments": {
+                "name": "수성구",
+                "region": "대구",
+                "include_vicinity": false
+              },
+              "result": "scope:district:2726000000",
+              "duration_ms": 0.157,
+              "phase": "tool",
+              "covers": [
+                "resolve_scope"
+              ],
+              "output_nodes": [
+                "origin_scope"
+              ]
+            },
+            {
+              "model_hop": 2,
+              "tool_index": 1,
+              "tool_count": 1,
+              "step_id": "measure_od_event",
+              "operator": "TRIP_COUNT",
+              "tool": "get_trip_count",
+              "arguments": {
+                "scope_pickup": "scope:district:2726000000",
+                "date": "last_month"
+              },
+              "result": {
+                "count": 20
+              },
+              "duration_ms": 0.054,
+              "phase": "tool",
+              "covers": [
+                "measure_od_event"
+              ],
+              "output_nodes": [
+                "trip_count"
+              ]
+            }
+          ],
+          "final_node": "trip_count",
+          "final_value": {
+            "count": 20
+          },
+          "error": null
+        },
+        "final_answer": "대구 수성구 출발 지난달 실차 구간 건수: 20건",
+        "error": null,
+        "durations": {
+          "planner_ms": 9268.667,
+          "execution_ms": 0.383,
+          "total_ms": 9270.764
+        }
+      },
+      "repeat_index": 1
+    },
+    {
+      "id": "od-o02a",
+      "question": "지난달 대구 수성구에서 출발한 실차를 하차 읍면동별로 셌을 때 가장 많은 두 곳은?",
+      "agent_mode": "geoflow",
+      "hops": [
+        {
+          "model_hop": 1,
+          "tool_index": 1,
+          "tool_count": 1,
+          "step_id": "resolve_scope",
+          "operator": "RESOLVE_PLACE_SCOPE",
+          "tool": "get_place_scope",
+          "arguments": {
+            "name": "수성구",
+            "region": "대구",
+            "include_vicinity": false
+          },
+          "result": "scope:district:2726000000",
+          "duration_ms": 0.132,
+          "phase": "tool",
+          "covers": [
+            "resolve_scope"
+          ],
+          "output_nodes": [
+            "origin_scope"
+          ]
+        },
+        {
+          "model_hop": 2,
+          "tool_index": 1,
+          "tool_count": 1,
+          "step_id": "measure_od_event",
+          "operator": "TRIP_COUNT",
+          "tool": "get_trip_count",
+          "arguments": {
+            "scope_pickup": "scope:district:2726000000",
+            "date": "last_month",
+            "dimension": "emd",
+            "dimension_target": "pickup",
+            "limit": 2,
+            "order": "top"
+          },
+          "result": [
+            {
+              "pickup": "두산동",
+              "count": 20
+            }
+          ],
+          "duration_ms": 0.119,
+          "phase": "tool",
+          "covers": [
+            "measure_od_event"
+          ],
+          "output_nodes": [
+            "trip_count"
+          ]
+        }
+      ],
+      "model_calls": [
+        {
+          "event": "model_call",
+          "model_hop": 1,
+          "phase": "geoflow_planner",
+          "duration_ms": 5969.057,
+          "error": null
+        }
+      ],
+      "total_duration_ms": 5970.975,
+      "final_answer": "대구 수성구 출발 지난달 읍면동별 승차 지역 기준 상위 2개 실차 구간 건수\n- 두산동: 20건",
+      "runtime_error": null,
+      "runtime_status": "OK",
+      "cancelled": false,
+      "geoflow": {
+        "agent_mode": "geoflow",
+        "outcome": "answered",
+        "stage": "done",
+        "repair_count": 0,
+        "repairs": {},
+        "scope_labels": {},
+        "condition_audit": {
+          "reference_date": "2026-10-05",
+          "timezone": "Asia/Seoul",
+          "date": {
+            "mentions": [
+              {
+                "kind": "date",
+                "text": "지난달",
+                "status": "supported",
+                "value": "last_month",
+                "meaning": "last_month: 직전 달력 월"
+              }
+            ],
+            "llm_value": "20230901-20230930",
+            "unparsed_cues": false,
+            "value": "last_month",
+            "status": "conflict",
+            "action": "corrected",
+            "basis": "question_expression_over_llm_value",
+            "interpreted_range": "20260901-20260930"
+          },
+          "taxi_type": {
+            "mentions": [],
+            "llm_value": null,
+            "value": null,
+            "stated": "not_stated",
+            "status": "absent",
+            "action": "none",
+            "basis": "no_value_no_cue"
+          },
+          "taxi_status": {
+            "mentions": [],
+            "llm_value": null,
+            "value": null,
+            "status": "absent",
+            "action": "none",
+            "basis": "status_word_not_a_condition"
+          },
+          "places": [
+            {
+              "id": "origin",
+              "text": "대구 수성구",
+              "lookup_name": "수성구",
+              "region": "대구",
+              "od_role": "pickup",
+              "semantics": "name_evidence_only",
+              "evidence": "exact"
+            }
+          ],
+          "place_completeness": "unchecked",
+          "not_checked": [
+            "place_completeness: 질문의 장소가 모두 출력되었는지(누락 탐지 없음)",
+            "place_semantics: 장소명이 뜻하는 지역(동명 지역 구분)",
+            "od_semantics: 출발/도착 관계(모델 grounding의 몫, 보존만 함)",
+            "unsupported_grammar: 지원 문법 밖의 날짜·유형 표현(보류로 둠)"
+          ],
+          "corrections": [
+            {
+              "condition": "date",
+              "from": "20230901-20230930",
+              "to": "last_month",
+              "action": "corrected",
+              "basis": "question_expression_over_llm_value",
+              "evidence": [
+                {
+                  "text": "지난달"
+                }
+              ]
+            }
+          ],
+          "held": []
+        },
+        "condition_trace": [
+          {
+            "condition": "date",
+            "text": [
+              "지난달"
+            ],
+            "value": "last_month",
+            "status": "conflict",
+            "action": "corrected",
+            "interpreted_range": "20260901-20260930",
+            "applied_to": [
+              "measure_od_event"
+            ],
+            "calls": [
+              {
+                "step": "measure_od_event",
+                "argument": "last_month",
+                "partition": false,
+                "lowering": "passthrough",
+                "allowed": [
+                  "last_month"
+                ]
+              }
+            ],
+            "provider": [
+              "unverified"
+            ]
+          },
+          {
+            "condition": "place",
+            "text": "대구 수성구",
+            "value": "수성구",
+            "od_role": "pickup",
+            "evidence": "exact",
+            "semantics": "name_evidence_only",
+            "history": [],
+            "applied_to": [
+              "resolve_scope"
+            ],
+            "calls": [
+              {
+                "step": "resolve_scope",
+                "argument": "수성구"
+              }
+            ]
+          }
+        ],
+        "verification": {
+          "conditions": {
+            "date": {
+              "interpretation": "conflict",
+              "action": "corrected",
+              "basis": "question_expression_over_llm_value",
+              "interpreted_range": "20260901-20260930",
+              "request": [
+                "last_month"
+              ],
+              "provider": [
+                "unverified"
+              ]
+            },
+            "taxi_type": {
+              "interpretation": "absent",
+              "action": "none",
+              "basis": "no_value_no_cue",
+              "stated": "not_stated",
+              "request": [],
+              "provider": [
+                "confirmed"
+              ]
+            },
+            "place": {
+              "interpretation": "name_evidence_only",
+              "names": [
+                "수성구"
+              ],
+              "completeness": "unchecked",
+              "provider": [
+                "unverified"
+              ]
+            }
+          },
+          "verified": [
+            "taxi_type"
+          ],
+          "contract": "tims",
+          "unverified": [
+            "date",
+            "place"
+          ],
+          "not_checked": [
+            "place_completeness: 질문의 장소가 모두 출력되었는지(누락 탐지 없음)",
+            "place_semantics: 장소명이 뜻하는 지역(동명 지역 구분)",
+            "od_semantics: 출발/도착 관계(모델 grounding의 몫, 보존만 함)",
+            "unsupported_grammar: 지원 문법 밖의 날짜·유형 표현(보류로 둠)"
+          ],
+          "complete": false
+        },
+        "execution_profile": {
+          "provider": "mock",
+          "contract": "tims",
+          "mode": "legacy",
+          "date_policy": "legacy",
+          "synthetic": false,
+          "legacy_assumptions": [
+            "relative_date_reference",
+            "range_inclusive",
+            "calendar_token_period"
+          ],
+          "delegation": true,
+          "delegated_semantics": [
+            "relative_date_reference",
+            "range_inclusive",
+            "calendar_token_period",
+            "bucket_week_start",
+            "bucket_partial",
+            "bucket_empty"
+          ],
+          "description": "mock(TIMS schema). 질문 표현을 옮긴 인자의 세부 달력 의미는 제공자에게 위임(legacy)"
+        },
+        "retrieval": null,
+        "attempts": [
+          {
+            "index": 0,
+            "template": "PLACE_TO_SCOPE+OD_EVENT_TO_MEASURE",
+            "applied_macros": [
+              "PLACE_TO_SCOPE",
+              "OD_EVENT_TO_MEASURE"
+            ],
+            "slots": {
+              "date": "last_month",
+              "dimension": "emd",
+              "dimension_target": "pickup",
+              "order": "top",
+              "limit": 2,
+              "origin": {
+                "name": "수성구",
+                "region": "대구"
+              },
+              "metric": "trip_count"
+            },
+            "status": "OK",
+            "tools": [
+              "get_place_scope",
+              "get_trip_count"
+            ],
+            "error": null
+          }
+        ],
+        "planner": {
+          "grounding": {
+            "concepts": [
+              {
+                "id": "origin",
+                "text": "대구 수성구",
+                "concept": "LOCATION",
+                "subtype": "place",
+                "role": "SUBCOND",
+                "source": "user",
+                "value": {
+                  "name": "수성구",
+                  "region": "대구"
+                },
+                "attributes": {
+                  "od_role": "pickup"
+                }
+              },
+              {
+                "id": "trip",
+                "text": "",
+                "concept": "EVENT",
+                "subtype": "trip",
+                "role": "SUPPORT",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              },
+              {
+                "id": "trip_count",
+                "text": "실차 구간 건수",
+                "concept": "AMOUNT",
+                "subtype": "trip_count",
+                "role": "MEASURE",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              }
+            ],
+            "factors": {
+              "date": "last_month",
+              "dimension": "emd",
+              "dimension_target": "pickup",
+              "order": "top",
+              "limit": 2
+            },
+            "aggregation": {
+              "bucket": null,
+              "inner": null,
+              "outer": null,
+              "select": null,
+              "source": "flat"
+            },
+            "normalizations": [
+              {
+                "rule": "default_answer_without_bucket_dropped",
+                "factor": "answer",
+                "value": "value"
+              }
+            ]
+          },
+          "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"origin\",\n      \"text\": \"대구 수성구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"수성구\", \"region\": \"대구\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"20230901-20230930\",\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"pickup\",\n    \"order\": \"top\",\n    \"limit\": 2,\n    \"answer\": \"value\"\n  }\n}",
+          "duration_ms": 5969.057,
+          "model": "qwen3:8b",
+          "attempts": 1,
+          "retrieval": null
+        },
+        "template": "PLACE_TO_SCOPE+OD_EVENT_TO_MEASURE",
+        "applied_macros": [
+          "PLACE_TO_SCOPE",
+          "OD_EVENT_TO_MEASURE"
+        ],
+        "grounding": {
+          "concepts": [
+            {
+              "id": "origin",
+              "text": "대구 수성구",
+              "concept": "LOCATION",
+              "subtype": "place",
+              "role": "SUBCOND",
+              "source": "user",
+              "value": {
+                "name": "수성구",
+                "region": "대구"
+              },
+              "attributes": {
+                "od_role": "pickup"
+              }
+            },
+            {
+              "id": "trip",
+              "text": "",
+              "concept": "EVENT",
+              "subtype": "trip",
+              "role": "SUPPORT",
+              "source": "implicit",
+              "value": null,
+              "attributes": {}
+            },
+            {
+              "id": "trip_count",
+              "text": "실차 구간 건수",
+              "concept": "AMOUNT",
+              "subtype": "trip_count",
+              "role": "MEASURE",
+              "source": "implicit",
+              "value": null,
+              "attributes": {}
+            }
+          ],
+          "factors": {
+            "date": "last_month",
+            "dimension": "emd",
+            "dimension_target": "pickup",
+            "order": "top",
+            "limit": 2
+          },
+          "aggregation": {
+            "bucket": null,
+            "inner": null,
+            "outer": null,
+            "select": null,
+            "source": "flat"
+          },
+          "normalizations": [
+            {
+              "rule": "default_answer_without_bucket_dropped",
+              "factor": "answer",
+              "value": "value"
+            }
+          ]
+        },
+        "slots": {
+          "date": "last_month",
+          "dimension": "emd",
+          "dimension_target": "pickup",
+          "order": "top",
+          "limit": 2,
+          "origin": {
+            "name": "수성구",
+            "region": "대구"
+          },
+          "metric": "trip_count"
+        },
+        "plan": {
+          "version": "1.0",
+          "question": "지난달 대구 수성구에서 출발한 실차를 하차 읍면동별로 셌을 때 가장 많은 두 곳은?",
+          "template": "PLACE_TO_SCOPE+OD_EVENT_TO_MEASURE",
+          "slots": {
+            "date": "last_month",
+            "dimension": "emd",
+            "dimension_target": "pickup",
+            "order": "top",
+            "limit": 2,
+            "origin": {
+              "name": "수성구",
+              "region": "대구"
+            },
+            "metric": "trip_count"
+          },
+          "applied_macros": [
+            "PLACE_TO_SCOPE",
+            "OD_EVENT_TO_MEASURE"
+          ],
+          "unused_factors": {},
+          "concepts": [
+            {
+              "id": "origin",
+              "concept": "LOCATION",
+              "subtype": "place",
+              "role": "SUBCOND",
+              "source": "user",
+              "value": {
+                "name": "수성구",
+                "region": "대구"
+              },
+              "attributes": {
+                "od_role": "pickup"
+              }
+            },
+            {
+              "id": "trip",
+              "concept": "EVENT",
+              "subtype": "trip",
+              "role": "SUPPORT",
+              "source": "implicit",
+              "value": "trip",
+              "attributes": {}
+            },
+            {
+              "id": "trip_count",
+              "concept": "AMOUNT",
+              "subtype": "trip_count",
+              "role": "MEASURE",
+              "source": "tool",
+              "value": null,
+              "attributes": {}
+            },
+            {
+              "id": "origin_scope",
+              "concept": "LOCATION",
+              "subtype": "scope",
+              "role": "COND",
+              "source": "tool",
+              "value": null,
+              "attributes": {
+                "od_role": "pickup"
+              }
+            }
+          ],
+          "transformations": [
+            {
+              "id": "resolve_scope",
+              "operator": "RESOLVE_PLACE_SCOPE",
+              "inputs": {
+                "place_name": {
+                  "$ref": "origin",
+                  "field": "name"
+                },
+                "place_region": {
+                  "$ref": "origin",
+                  "field": "region"
+                }
+              },
+              "outputs": [
+                "origin_scope"
+              ],
+              "params": {
+                "include_vicinity": false
+              }
+            },
+            {
+              "id": "measure_od_event",
+              "operator": "TRIP_COUNT",
+              "inputs": {
+                "event": {
+                  "$ref": "trip",
+                  "field": null
+                },
+                "pickup": {
+                  "$ref": "origin_scope",
+                  "field": null
+                }
+              },
+              "outputs": [
+                "trip_count"
+              ],
+              "params": {
+                "date": "last_month",
+                "dimension": "emd",
+                "dimension_target": "pickup",
+                "limit": 2,
+                "order": "top"
+              }
+            }
+          ],
+          "final_node": "trip_count"
+        },
+        "validation": {
+          "status": "OK",
+          "template": "PLACE_TO_SCOPE+OD_EVENT_TO_MEASURE",
+          "checked_rules": [
+            "G1_ACYCLICITY",
+            "G2_ROLE_ORDERING",
+            "G3_TYPE_COMPATIBILITY",
+            "G4_EXECUTABILITY",
+            "G5_CONNECTIVITY",
+            "G6_SCOPE_PROVENANCE",
+            "G7_AGGREGATION_SEMANTICS"
+          ],
+          "failed_rules": [],
+          "errors": [],
+          "topological_order": [
+            "resolve_scope",
+            "measure_od_event"
+          ]
+        },
+        "execution_plan": {
+          "template": "PLACE_TO_SCOPE+OD_EVENT_TO_MEASURE",
+          "final_node": "trip_count",
+          "steps": [
+            {
+              "id": "resolve_scope",
+              "operator": "RESOLVE_PLACE_SCOPE",
+              "tool_name": "get_place_scope",
+              "arguments": {
+                "name": "수성구",
+                "region": "대구",
+                "include_vicinity": false
+              },
+              "output_bindings": {
+                "scope": "origin_scope"
+              },
+              "kind": "tool",
+              "covers": [
+                "resolve_scope"
+              ],
+              "argument_sources": {
+                "name": "resolve_scope.inputs.place_name",
+                "region": "resolve_scope.inputs.place_region",
+                "include_vicinity": "resolve_scope.params.include_vicinity"
+              }
+            },
+            {
+              "id": "measure_od_event",
+              "operator": "TRIP_COUNT",
+              "tool_name": "get_trip_count",
+              "arguments": {
+                "scope_pickup": {
+                  "$ref": "origin_scope",
+                  "field": null
+                },
+                "date": "last_month",
+                "dimension": "emd",
+                "dimension_target": "pickup",
+                "limit": 2,
+                "order": "top"
+              },
+              "output_bindings": {
+                "$": "trip_count"
+              },
+              "kind": "tool",
+              "covers": [
+                "measure_od_event"
+              ],
+              "argument_sources": {
+                "scope_pickup": "measure_od_event.inputs.pickup",
+                "date": "measure_od_event.params.date",
+                "dimension": "measure_od_event.params.dimension",
+                "dimension_target": "measure_od_event.params.dimension_target",
+                "limit": "measure_od_event.params.limit",
+                "order": "measure_od_event.params.order"
+              }
+            }
+          ],
+          "semantic_map": {
+            "resolve_scope": [
+              "resolve_scope"
+            ],
+            "measure_od_event": [
+              "measure_od_event"
+            ]
+          },
+          "unobserved": {},
+          "periods": {},
+          "lowering": {},
+          "date_semantics": {
+            "measure_od_event": {
+              "value": "last_month",
+              "kind": "relative",
+              "interpreted_range": "20260901-20260930",
+              "reference_date": "20261005",
+              "policy": "legacy",
+              "lowering": "passthrough",
+              "responsibility": "provider",
+              "request": [
+                "last_month"
+              ],
+              "provider": "unverified",
+              "requires": [
+                "relative_date_reference"
+              ],
+              "missing": [
+                "relative_date_reference"
+              ],
+              "interpretation": {
+                "source": "application_policy",
+                "rule": "기준일이 속한 달 바로 앞 달의 1일부터 말일까지"
+              }
+            }
+          }
+        },
+        "execution": {
+          "status": "OK",
+          "state": {
+            "origin": {
+              "name": "수성구",
+              "region": "대구"
+            },
+            "trip": "trip",
+            "origin_scope": "scope:district:2726000000",
+            "trip_count": [
+              {
+                "pickup": "두산동",
+                "count": 20
+              }
+            ]
+          },
+          "trace": [
+            {
+              "model_hop": 1,
+              "tool_index": 1,
+              "tool_count": 1,
+              "step_id": "resolve_scope",
+              "operator": "RESOLVE_PLACE_SCOPE",
+              "tool": "get_place_scope",
+              "arguments": {
+                "name": "수성구",
+                "region": "대구",
+                "include_vicinity": false
+              },
+              "result": "scope:district:2726000000",
+              "duration_ms": 0.132,
+              "phase": "tool",
+              "covers": [
+                "resolve_scope"
+              ],
+              "output_nodes": [
+                "origin_scope"
+              ]
+            },
+            {
+              "model_hop": 2,
+              "tool_index": 1,
+              "tool_count": 1,
+              "step_id": "measure_od_event",
+              "operator": "TRIP_COUNT",
+              "tool": "get_trip_count",
+              "arguments": {
+                "scope_pickup": "scope:district:2726000000",
+                "date": "last_month",
+                "dimension": "emd",
+                "dimension_target": "pickup",
+                "limit": 2,
+                "order": "top"
+              },
+              "result": [
+                {
+                  "pickup": "두산동",
+                  "count": 20
+                }
+              ],
+              "duration_ms": 0.119,
+              "phase": "tool",
+              "covers": [
+                "measure_od_event"
+              ],
+              "output_nodes": [
+                "trip_count"
+              ]
+            }
+          ],
+          "final_node": "trip_count",
+          "final_value": [
+            {
+              "pickup": "두산동",
+              "count": 20
+            }
+          ],
+          "error": null
+        },
+        "final_answer": "대구 수성구 출발 지난달 읍면동별 승차 지역 기준 상위 2개 실차 구간 건수\n- 두산동: 20건",
+        "error": null,
+        "durations": {
+          "planner_ms": 5969.057,
+          "execution_ms": 0.393,
+          "total_ms": 5970.922
+        }
+      },
+      "repeat_index": 1
+    },
+    {
+      "id": "status-s01",
+      "question": "지난달 대구 수성구에서 출발한 실차 건수는?",
+      "agent_mode": "geoflow",
+      "hops": [
+        {
+          "model_hop": 1,
+          "tool_index": 1,
+          "tool_count": 1,
+          "step_id": "resolve_scope",
+          "operator": "RESOLVE_PLACE_SCOPE",
+          "tool": "get_place_scope",
+          "arguments": {
+            "name": "수성구",
+            "region": "대구",
+            "include_vicinity": false
+          },
+          "result": "scope:district:2726000000",
+          "duration_ms": 0.132,
+          "phase": "tool",
+          "covers": [
+            "resolve_scope"
+          ],
+          "output_nodes": [
+            "origin_scope"
+          ]
+        },
+        {
+          "model_hop": 2,
+          "tool_index": 1,
+          "tool_count": 1,
+          "step_id": "measure_od_event",
+          "operator": "TRIP_COUNT",
+          "tool": "get_trip_count",
+          "arguments": {
+            "scope_pickup": "scope:district:2726000000",
+            "date": "last_month"
+          },
+          "result": {
+            "count": 20
+          },
+          "duration_ms": 0.051,
+          "phase": "tool",
+          "covers": [
+            "measure_od_event"
+          ],
+          "output_nodes": [
+            "trip_count"
+          ]
+        }
+      ],
+      "model_calls": [
+        {
+          "event": "model_call",
+          "model_hop": 1,
+          "phase": "geoflow_planner",
+          "duration_ms": 8751.002,
+          "error": null
+        }
+      ],
+      "total_duration_ms": 8752.549,
+      "final_answer": "대구 수성구 출발 지난달 실차 구간 건수: 20건",
+      "runtime_error": null,
+      "runtime_status": "OK",
+      "cancelled": false,
+      "geoflow": {
+        "agent_mode": "geoflow",
+        "outcome": "answered",
+        "stage": "done",
+        "repair_count": 0,
+        "repairs": {},
+        "scope_labels": {},
+        "condition_audit": {
+          "reference_date": "2026-10-05",
+          "timezone": "Asia/Seoul",
+          "date": {
+            "mentions": [
+              {
+                "kind": "date",
+                "text": "지난달",
+                "status": "supported",
+                "value": "last_month",
+                "meaning": "last_month: 직전 달력 월"
+              }
+            ],
+            "llm_value": "last_month",
+            "unparsed_cues": false,
+            "value": "last_month",
+            "status": "interpreted",
+            "action": "confirmed",
+            "basis": "question_expression",
+            "interpreted_range": "20260901-20260930"
+          },
+          "taxi_type": {
+            "mentions": [],
+            "llm_value": null,
+            "value": null,
+            "stated": "not_stated",
+            "status": "absent",
+            "action": "none",
+            "basis": "no_value_no_cue"
+          },
+          "taxi_status": {
+            "mentions": [],
+            "llm_value": null,
+            "value": null,
+            "status": "absent",
+            "action": "none",
+            "basis": "status_word_not_a_condition"
+          },
+          "places": [
+            {
+              "id": "origin",
+              "text": "수성구",
+              "lookup_name": "수성구",
+              "region": "대구",
+              "od_role": "pickup",
+              "semantics": "name_evidence_only",
+              "evidence": "exact"
+            }
+          ],
+          "place_completeness": "unchecked",
+          "not_checked": [
+            "place_completeness: 질문의 장소가 모두 출력되었는지(누락 탐지 없음)",
+            "place_semantics: 장소명이 뜻하는 지역(동명 지역 구분)",
+            "od_semantics: 출발/도착 관계(모델 grounding의 몫, 보존만 함)",
+            "unsupported_grammar: 지원 문법 밖의 날짜·유형 표현(보류로 둠)"
+          ],
+          "corrections": [],
+          "held": []
+        },
+        "condition_trace": [
+          {
+            "condition": "date",
+            "text": [
+              "지난달"
+            ],
+            "value": "last_month",
+            "status": "interpreted",
+            "action": "confirmed",
+            "interpreted_range": "20260901-20260930",
+            "applied_to": [
+              "measure_od_event"
+            ],
+            "calls": [
+              {
+                "step": "measure_od_event",
+                "argument": "last_month",
+                "partition": false,
+                "lowering": "passthrough",
+                "allowed": [
+                  "last_month"
+                ]
+              }
+            ],
+            "provider": [
+              "unverified"
+            ]
+          },
+          {
+            "condition": "place",
+            "text": "수성구",
+            "value": "수성구",
+            "od_role": "pickup",
+            "evidence": "exact",
+            "semantics": "name_evidence_only",
+            "history": [],
+            "applied_to": [
+              "resolve_scope"
+            ],
+            "calls": [
+              {
+                "step": "resolve_scope",
+                "argument": "수성구"
+              }
+            ]
+          }
+        ],
+        "verification": {
+          "conditions": {
+            "date": {
+              "interpretation": "interpreted",
+              "action": "confirmed",
+              "basis": "question_expression",
+              "interpreted_range": "20260901-20260930",
+              "request": [
+                "last_month"
+              ],
+              "provider": [
+                "unverified"
+              ]
+            },
+            "taxi_type": {
+              "interpretation": "absent",
+              "action": "none",
+              "basis": "no_value_no_cue",
+              "stated": "not_stated",
+              "request": [],
+              "provider": [
+                "confirmed"
+              ]
+            },
+            "place": {
+              "interpretation": "name_evidence_only",
+              "names": [
+                "수성구"
+              ],
+              "completeness": "unchecked",
+              "provider": [
+                "unverified"
+              ]
+            }
+          },
+          "verified": [
+            "taxi_type"
+          ],
+          "contract": "tims",
+          "unverified": [
+            "date",
+            "place"
+          ],
+          "not_checked": [
+            "place_completeness: 질문의 장소가 모두 출력되었는지(누락 탐지 없음)",
+            "place_semantics: 장소명이 뜻하는 지역(동명 지역 구분)",
+            "od_semantics: 출발/도착 관계(모델 grounding의 몫, 보존만 함)",
+            "unsupported_grammar: 지원 문법 밖의 날짜·유형 표현(보류로 둠)"
+          ],
+          "complete": false
+        },
+        "execution_profile": {
+          "provider": "mock",
+          "contract": "tims",
+          "mode": "legacy",
+          "date_policy": "legacy",
+          "synthetic": false,
+          "legacy_assumptions": [
+            "relative_date_reference",
+            "range_inclusive",
+            "calendar_token_period"
+          ],
+          "delegation": true,
+          "delegated_semantics": [
+            "relative_date_reference",
+            "range_inclusive",
+            "calendar_token_period",
+            "bucket_week_start",
+            "bucket_partial",
+            "bucket_empty"
+          ],
+          "description": "mock(TIMS schema). 질문 표현을 옮긴 인자의 세부 달력 의미는 제공자에게 위임(legacy)"
+        },
+        "retrieval": null,
+        "attempts": [
+          {
+            "index": 0,
+            "template": "PLACE_TO_SCOPE+OD_EVENT_TO_MEASURE",
+            "applied_macros": [
+              "PLACE_TO_SCOPE",
+              "OD_EVENT_TO_MEASURE"
+            ],
+            "slots": {
+              "date": "last_month",
+              "origin": {
+                "name": "수성구",
+                "region": "대구"
+              },
+              "metric": "trip_count"
+            },
+            "status": "OK",
+            "tools": [
+              "get_place_scope",
+              "get_trip_count"
+            ],
+            "error": null
+          }
+        ],
+        "planner": {
+          "grounding": {
+            "concepts": [
+              {
+                "id": "origin",
+                "text": "수성구",
+                "concept": "LOCATION",
+                "subtype": "place",
+                "role": "SUBCOND",
+                "source": "user",
+                "value": {
+                  "name": "수성구",
+                  "region": "대구"
+                },
+                "attributes": {
+                  "od_role": "pickup"
+                }
+              },
+              {
+                "id": "trip",
+                "text": "",
+                "concept": "EVENT",
+                "subtype": "trip",
+                "role": "SUPPORT",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              },
+              {
+                "id": "trip_count",
+                "text": "실차 건수",
+                "concept": "AMOUNT",
+                "subtype": "trip_count",
+                "role": "MEASURE",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              }
+            ],
+            "factors": {
+              "date": "last_month"
+            },
+            "aggregation": {
+              "bucket": null,
+              "inner": null,
+              "outer": null,
+              "select": null,
+              "source": "flat"
+            }
+          },
+          "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"origin\",\n      \"text\": \"수성구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"수성구\", \"region\": \"대구\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차 건수\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_month\"\n  }\n}",
+          "duration_ms": 8751.002,
+          "model": "qwen3:8b",
+          "attempts": 1,
+          "retrieval": null
+        },
+        "template": "PLACE_TO_SCOPE+OD_EVENT_TO_MEASURE",
+        "applied_macros": [
+          "PLACE_TO_SCOPE",
+          "OD_EVENT_TO_MEASURE"
+        ],
+        "grounding": {
+          "concepts": [
+            {
+              "id": "origin",
+              "text": "수성구",
+              "concept": "LOCATION",
+              "subtype": "place",
+              "role": "SUBCOND",
+              "source": "user",
+              "value": {
+                "name": "수성구",
+                "region": "대구"
+              },
+              "attributes": {
+                "od_role": "pickup"
+              }
+            },
+            {
+              "id": "trip",
+              "text": "",
+              "concept": "EVENT",
+              "subtype": "trip",
+              "role": "SUPPORT",
+              "source": "implicit",
+              "value": null,
+              "attributes": {}
+            },
+            {
+              "id": "trip_count",
+              "text": "실차 건수",
+              "concept": "AMOUNT",
+              "subtype": "trip_count",
+              "role": "MEASURE",
+              "source": "implicit",
+              "value": null,
+              "attributes": {}
+            }
+          ],
+          "factors": {
+            "date": "last_month"
+          },
+          "aggregation": {
+            "bucket": null,
+            "inner": null,
+            "outer": null,
+            "select": null,
+            "source": "flat"
+          }
+        },
+        "slots": {
+          "date": "last_month",
+          "origin": {
+            "name": "수성구",
+            "region": "대구"
+          },
+          "metric": "trip_count"
+        },
+        "plan": {
+          "version": "1.0",
+          "question": "지난달 대구 수성구에서 출발한 실차 건수는?",
+          "template": "PLACE_TO_SCOPE+OD_EVENT_TO_MEASURE",
+          "slots": {
+            "date": "last_month",
+            "origin": {
+              "name": "수성구",
+              "region": "대구"
+            },
+            "metric": "trip_count"
+          },
+          "applied_macros": [
+            "PLACE_TO_SCOPE",
+            "OD_EVENT_TO_MEASURE"
+          ],
+          "unused_factors": {},
+          "concepts": [
+            {
+              "id": "origin",
+              "concept": "LOCATION",
+              "subtype": "place",
+              "role": "SUBCOND",
+              "source": "user",
+              "value": {
+                "name": "수성구",
+                "region": "대구"
+              },
+              "attributes": {
+                "od_role": "pickup"
+              }
+            },
+            {
+              "id": "trip",
+              "concept": "EVENT",
+              "subtype": "trip",
+              "role": "SUPPORT",
+              "source": "implicit",
+              "value": "trip",
+              "attributes": {}
+            },
+            {
+              "id": "trip_count",
+              "concept": "AMOUNT",
+              "subtype": "trip_count",
+              "role": "MEASURE",
+              "source": "tool",
+              "value": null,
+              "attributes": {}
+            },
+            {
+              "id": "origin_scope",
+              "concept": "LOCATION",
+              "subtype": "scope",
+              "role": "COND",
+              "source": "tool",
+              "value": null,
+              "attributes": {
+                "od_role": "pickup"
+              }
+            }
+          ],
+          "transformations": [
+            {
+              "id": "resolve_scope",
+              "operator": "RESOLVE_PLACE_SCOPE",
+              "inputs": {
+                "place_name": {
+                  "$ref": "origin",
+                  "field": "name"
+                },
+                "place_region": {
+                  "$ref": "origin",
+                  "field": "region"
+                }
+              },
+              "outputs": [
+                "origin_scope"
+              ],
+              "params": {
+                "include_vicinity": false
+              }
+            },
+            {
+              "id": "measure_od_event",
+              "operator": "TRIP_COUNT",
+              "inputs": {
+                "event": {
+                  "$ref": "trip",
+                  "field": null
+                },
+                "pickup": {
+                  "$ref": "origin_scope",
+                  "field": null
+                }
+              },
+              "outputs": [
+                "trip_count"
+              ],
+              "params": {
+                "date": "last_month"
+              }
+            }
+          ],
+          "final_node": "trip_count"
+        },
+        "validation": {
+          "status": "OK",
+          "template": "PLACE_TO_SCOPE+OD_EVENT_TO_MEASURE",
+          "checked_rules": [
+            "G1_ACYCLICITY",
+            "G2_ROLE_ORDERING",
+            "G3_TYPE_COMPATIBILITY",
+            "G4_EXECUTABILITY",
+            "G5_CONNECTIVITY",
+            "G6_SCOPE_PROVENANCE",
+            "G7_AGGREGATION_SEMANTICS"
+          ],
+          "failed_rules": [],
+          "errors": [],
+          "topological_order": [
+            "resolve_scope",
+            "measure_od_event"
+          ]
+        },
+        "execution_plan": {
+          "template": "PLACE_TO_SCOPE+OD_EVENT_TO_MEASURE",
+          "final_node": "trip_count",
+          "steps": [
+            {
+              "id": "resolve_scope",
+              "operator": "RESOLVE_PLACE_SCOPE",
+              "tool_name": "get_place_scope",
+              "arguments": {
+                "name": "수성구",
+                "region": "대구",
+                "include_vicinity": false
+              },
+              "output_bindings": {
+                "scope": "origin_scope"
+              },
+              "kind": "tool",
+              "covers": [
+                "resolve_scope"
+              ],
+              "argument_sources": {
+                "name": "resolve_scope.inputs.place_name",
+                "region": "resolve_scope.inputs.place_region",
+                "include_vicinity": "resolve_scope.params.include_vicinity"
+              }
+            },
+            {
+              "id": "measure_od_event",
+              "operator": "TRIP_COUNT",
+              "tool_name": "get_trip_count",
+              "arguments": {
+                "scope_pickup": {
+                  "$ref": "origin_scope",
+                  "field": null
+                },
+                "date": "last_month"
+              },
+              "output_bindings": {
+                "$": "trip_count"
+              },
+              "kind": "tool",
+              "covers": [
+                "measure_od_event"
+              ],
+              "argument_sources": {
+                "scope_pickup": "measure_od_event.inputs.pickup",
+                "date": "measure_od_event.params.date"
+              }
+            }
+          ],
+          "semantic_map": {
+            "resolve_scope": [
+              "resolve_scope"
+            ],
+            "measure_od_event": [
+              "measure_od_event"
+            ]
+          },
+          "unobserved": {},
+          "periods": {},
+          "lowering": {},
+          "date_semantics": {
+            "measure_od_event": {
+              "value": "last_month",
+              "kind": "relative",
+              "interpreted_range": "20260901-20260930",
+              "reference_date": "20261005",
+              "policy": "legacy",
+              "lowering": "passthrough",
+              "responsibility": "provider",
+              "request": [
+                "last_month"
+              ],
+              "provider": "unverified",
+              "requires": [
+                "relative_date_reference"
+              ],
+              "missing": [
+                "relative_date_reference"
+              ],
+              "interpretation": {
+                "source": "application_policy",
+                "rule": "기준일이 속한 달 바로 앞 달의 1일부터 말일까지"
+              }
+            }
+          }
+        },
+        "execution": {
+          "status": "OK",
+          "state": {
+            "origin": {
+              "name": "수성구",
+              "region": "대구"
+            },
+            "trip": "trip",
+            "origin_scope": "scope:district:2726000000",
+            "trip_count": {
+              "count": 20
+            }
+          },
+          "trace": [
+            {
+              "model_hop": 1,
+              "tool_index": 1,
+              "tool_count": 1,
+              "step_id": "resolve_scope",
+              "operator": "RESOLVE_PLACE_SCOPE",
+              "tool": "get_place_scope",
+              "arguments": {
+                "name": "수성구",
+                "region": "대구",
+                "include_vicinity": false
+              },
+              "result": "scope:district:2726000000",
+              "duration_ms": 0.132,
+              "phase": "tool",
+              "covers": [
+                "resolve_scope"
+              ],
+              "output_nodes": [
+                "origin_scope"
+              ]
+            },
+            {
+              "model_hop": 2,
+              "tool_index": 1,
+              "tool_count": 1,
+              "step_id": "measure_od_event",
+              "operator": "TRIP_COUNT",
+              "tool": "get_trip_count",
+              "arguments": {
+                "scope_pickup": "scope:district:2726000000",
+                "date": "last_month"
+              },
+              "result": {
+                "count": 20
+              },
+              "duration_ms": 0.051,
+              "phase": "tool",
+              "covers": [
+                "measure_od_event"
+              ],
+              "output_nodes": [
+                "trip_count"
+              ]
+            }
+          ],
+          "final_node": "trip_count",
+          "final_value": {
+            "count": 20
+          },
+          "error": null
+        },
+        "final_answer": "대구 수성구 출발 지난달 실차 구간 건수: 20건",
+        "error": null,
+        "durations": {
+          "planner_ms": 8751.002,
+          "execution_ms": 0.303,
+          "total_ms": 8752.51
+        }
+      },
+      "repeat_index": 1
+    },
+    {
+      "id": "status-s27",
+      "question": "어제 동대구역에서 실차 택시가 태운 손님은 몇 건이야?",
+      "agent_mode": "geoflow",
+      "hops": [],
+      "model_calls": [
+        {
+          "event": "model_call",
+          "model_hop": 1,
+          "phase": "geoflow_planner",
+          "duration_ms": 19762.17,
+          "error": null
+        }
+      ],
+      "total_duration_ms": 19763.183,
+      "final_answer": null,
+      "runtime_error": "composition 단계 실패: 질문의 조건을 받는 변환이 없습니다: taxi_status",
+      "runtime_status": "ERROR",
+      "cancelled": false,
+      "geoflow": {
+        "agent_mode": "geoflow",
+        "outcome": "unsupported",
+        "stage": "composition",
+        "repair_count": 0,
+        "repairs": {},
+        "scope_labels": {},
+        "condition_audit": {
+          "reference_date": "2026-10-05",
+          "timezone": "Asia/Seoul",
+          "date": {
+            "mentions": [
+              {
+                "kind": "date",
+                "text": "어제",
+                "status": "supported",
+                "value": "20261004",
+                "meaning": "yesterday: 기준일 하루 전"
+              }
+            ],
+            "llm_value": "last_day",
+            "unparsed_cues": false,
+            "value": "20261004",
+            "status": "conflict",
+            "action": "corrected",
+            "basis": "question_expression_over_llm_value",
+            "interpreted_range": "20261004"
+          },
+          "taxi_type": {
+            "mentions": [],
+            "llm_value": null,
+            "value": null,
+            "stated": "not_stated",
+            "status": "absent",
+            "action": "none",
+            "basis": "no_value_no_cue"
+          },
+          "taxi_status": {
+            "mentions": [
+              {
+                "kind": "taxi_status",
+                "text": "실차",
+                "status": "supported",
+                "value": "occupied",
+                "meaning": ""
+              }
+            ],
+            "llm_value": null,
+            "value": "occupied",
+            "status": "interpreted",
+            "action": "filled",
+            "basis": "question_expression"
+          },
+          "places": [
+            {
+              "id": "origin",
+              "text": "동대구역",
+              "lookup_name": "동대구역",
+              "region": "",
+              "od_role": "pickup",
+              "semantics": "name_evidence_only",
+              "evidence": "exact"
+            }
+          ],
+          "place_completeness": "unchecked",
+          "not_checked": [
+            "place_completeness: 질문의 장소가 모두 출력되었는지(누락 탐지 없음)",
+            "place_semantics: 장소명이 뜻하는 지역(동명 지역 구분)",
+            "od_semantics: 출발/도착 관계(모델 grounding의 몫, 보존만 함)",
+            "unsupported_grammar: 지원 문법 밖의 날짜·유형 표현(보류로 둠)"
+          ],
+          "corrections": [
+            {
+              "condition": "date",
+              "from": "last_day",
+              "to": "20261004",
+              "action": "corrected",
+              "basis": "question_expression_over_llm_value",
+              "evidence": [
+                {
+                  "text": "어제"
+                }
+              ]
+            },
+            {
+              "condition": "taxi_status",
+              "from": null,
+              "to": "occupied",
+              "action": "filled",
+              "basis": "question_expression",
+              "evidence": [
+                {
+                  "text": "실차"
+                }
+              ]
+            }
+          ],
+          "held": []
+        },
+        "condition_trace": null,
+        "verification": null,
+        "execution_profile": null,
+        "retrieval": null,
+        "attempts": [
+          {
+            "index": 0,
+            "stage": "composition",
+            "status": "planning_failed",
+            "error_code": "UNCONSUMED_CONDITION",
+            "error": {
+              "stage": "composition",
+              "code": "UNCONSUMED_CONDITION",
+              "detail": "질문의 조건을 받는 변환이 없습니다: taxi_status",
+              "user_message": "질문의 조건 중 현재 분석이 반영할 수 없는 것이 있습니다: 운행 상태",
+              "context": {
+                "unconsumed": [
+                  "taxi_status"
+                ],
+                "values": {
+                  "taxi_status": "occupied"
+                },
+                "aggregation": {
+                  "bucket": null,
+                  "inner": null,
+                  "outer": null,
+                  "select": null,
+                  "source": "flat"
+                },
+                "macro_failures": [
+                  {
+                    "macro": "OD_EVENT_TO_MEASURE",
+                    "code": "UNCONSUMED_CONDITION",
+                    "context": {
+                      "unconsumed": [
+                        "taxi_status"
+                      ],
+                      "values": {
+                        "taxi_status": "occupied"
+                      },
+                      "aggregation": {
+                        "bucket": null,
+                        "inner": null,
+                        "outer": null,
+                        "select": null,
+                        "source": "flat"
+                      }
+                    }
+                  },
+                  {
+                    "macro": "EVENT_TO_MEASURE",
+                    "code": "UNUSED_CONCEPT",
+                    "context": {
+                      "unused": [
+                        "origin"
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            "repairable": false,
+            "repair_kind": null,
+            "repair_reason": "다시 물어서 복구할 수 있는 실패가 아닙니다.",
+            "repair_attempted": false,
+            "repair_result": null,
+            "reason": "다시 물어서 복구할 수 있는 실패가 아닙니다."
+          }
+        ],
+        "planner": {
+          "grounding": {
+            "concepts": [
+              {
+                "id": "origin",
+                "text": "동대구역",
+                "concept": "LOCATION",
+                "subtype": "place",
+                "role": "SUBCOND",
+                "source": "user",
+                "value": {
+                  "name": "동대구역",
+                  "region": ""
+                },
+                "attributes": {
+                  "od_role": "pickup"
+                }
+              },
+              {
+                "id": "trip",
+                "text": "",
+                "concept": "EVENT",
+                "subtype": "trip",
+                "role": "SUPPORT",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              },
+              {
+                "id": "trip_count",
+                "text": "실차 택시가 태운 손님",
+                "concept": "AMOUNT",
+                "subtype": "trip_count",
+                "role": "MEASURE",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              }
+            ],
+            "factors": {
+              "date": "20261004",
+              "taxi_status": "occupied"
+            },
+            "aggregation": {
+              "bucket": null,
+              "inner": null,
+              "outer": null,
+              "select": null,
+              "source": "flat"
+            }
+          },
+          "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"origin\",\n      \"text\": \"동대구역\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"동대구역\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차 택시가 태운 손님\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_day\"\n  }\n}",
+          "duration_ms": 19762.17,
+          "model": "qwen3:8b",
+          "attempts": 1,
+          "retrieval": null
+        },
+        "template": null,
+        "applied_macros": [],
+        "grounding": {
+          "concepts": [
+            {
+              "id": "origin",
+              "text": "동대구역",
+              "concept": "LOCATION",
+              "subtype": "place",
+              "role": "SUBCOND",
+              "source": "user",
+              "value": {
+                "name": "동대구역",
+                "region": ""
+              },
+              "attributes": {
+                "od_role": "pickup"
+              }
+            },
+            {
+              "id": "trip",
+              "text": "",
+              "concept": "EVENT",
+              "subtype": "trip",
+              "role": "SUPPORT",
+              "source": "implicit",
+              "value": null,
+              "attributes": {}
+            },
+            {
+              "id": "trip_count",
+              "text": "실차 택시가 태운 손님",
+              "concept": "AMOUNT",
+              "subtype": "trip_count",
+              "role": "MEASURE",
+              "source": "implicit",
+              "value": null,
+              "attributes": {}
+            }
+          ],
+          "factors": {
+            "date": "20261004",
+            "taxi_status": "occupied"
+          },
+          "aggregation": {
+            "bucket": null,
+            "inner": null,
+            "outer": null,
+            "select": null,
+            "source": "flat"
+          }
+        },
+        "slots": {},
+        "plan": null,
+        "validation": null,
+        "execution_plan": null,
+        "execution": null,
+        "final_answer": null,
+        "error": {
+          "stage": "composition",
+          "code": "UNCONSUMED_CONDITION",
+          "detail": "질문의 조건을 받는 변환이 없습니다: taxi_status",
+          "user_message": "질문의 조건 중 현재 분석이 반영할 수 없는 것이 있습니다: 운행 상태",
+          "context": {
+            "unconsumed": [
+              "taxi_status"
+            ],
+            "values": {
+              "taxi_status": "occupied"
+            },
+            "aggregation": {
+              "bucket": null,
+              "inner": null,
+              "outer": null,
+              "select": null,
+              "source": "flat"
+            },
+            "macro_failures": [
+              {
+                "macro": "OD_EVENT_TO_MEASURE",
+                "code": "UNCONSUMED_CONDITION",
+                "context": {
+                  "unconsumed": [
+                    "taxi_status"
+                  ],
+                  "values": {
+                    "taxi_status": "occupied"
+                  },
+                  "aggregation": {
+                    "bucket": null,
+                    "inner": null,
+                    "outer": null,
+                    "select": null,
+                    "source": "flat"
+                  }
+                }
+              },
+              {
+                "macro": "EVENT_TO_MEASURE",
+                "code": "UNUSED_CONCEPT",
+                "context": {
+                  "unused": [
+                    "origin"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "durations": {
+          "planner_ms": 19762.17,
+          "execution_ms": 0.0,
+          "total_ms": 19763.137
+        }
+      },
+      "repeat_index": 1
+    },
+    {
+      "id": "measure-m05",
+      "question": "이번 달 택시 수입이 가장 많은 요일은 언제야?",
+      "agent_mode": "geoflow",
+      "hops": [],
+      "model_calls": [
+        {
+          "event": "model_call",
+          "model_hop": 1,
+          "phase": "geoflow_planner",
+          "duration_ms": 5699.665,
+          "error": "answer 조건을 쓰려면 bucket 조건도 함께 필요합니다. 답 대상(값/구간)은 구간을 나눌 때만 적습니다."
+        }
+      ],
+      "total_duration_ms": 24238.616,
+      "final_answer": null,
+      "runtime_error": "planner 단계 실패: answer 조건을 쓰려면 bucket 조건도 함께 필요합니다. 답 대상(값/구간)은 구간을 나눌 때만 적습니다.",
+      "runtime_status": "ERROR",
+      "cancelled": false,
+      "geoflow": {
+        "agent_mode": "geoflow",
+        "outcome": "failed",
+        "stage": "composition",
+        "repair_count": 0,
+        "repairs": {
+          "factor_correction": {
+            "attempted": 1,
+            "succeeded": 0
+          }
+        },
+        "scope_labels": {},
+        "condition_audit": {
+          "reference_date": "2026-10-05",
+          "timezone": "Asia/Seoul",
+          "date": {
+            "mentions": [
+              {
+                "kind": "date",
+                "text": "이번 달",
+                "status": "supported",
+                "value": "this_month",
+                "meaning": "this_month: 기준일이 속한 달력 월(1일부터 기준일까지)"
+              }
+            ],
+            "llm_value": "this_month",
+            "unparsed_cues": false,
+            "value": "this_month",
+            "status": "interpreted",
+            "action": "confirmed",
+            "basis": "question_expression",
+            "interpreted_range": "20261001-20261005"
+          },
+          "taxi_type": {
+            "mentions": [],
+            "llm_value": null,
+            "value": null,
+            "stated": "not_stated",
+            "status": "absent",
+            "action": "none",
+            "basis": "no_value_no_cue"
+          },
+          "taxi_status": {
+            "mentions": [],
+            "llm_value": null,
+            "value": null,
+            "status": "absent",
+            "action": "none",
+            "basis": "no_value_no_cue"
+          },
+          "places": [],
+          "place_completeness": "unchecked",
+          "not_checked": [
+            "place_completeness: 질문의 장소가 모두 출력되었는지(누락 탐지 없음)",
+            "place_semantics: 장소명이 뜻하는 지역(동명 지역 구분)",
+            "od_semantics: 출발/도착 관계(모델 grounding의 몫, 보존만 함)",
+            "unsupported_grammar: 지원 문법 밖의 날짜·유형 표현(보류로 둠)"
+          ],
+          "corrections": [],
+          "held": []
+        },
+        "condition_trace": null,
+        "verification": null,
+        "execution_profile": null,
+        "retrieval": null,
+        "attempts": [
+          {
+            "index": 0,
+            "stage": "planner",
+            "status": "planning_failed",
+            "error_code": "INVALID_FACTOR_COMBINATION",
+            "error": {
+              "stage": "planner",
+              "code": "INVALID_FACTOR_COMBINATION",
+              "detail": "answer 조건을 쓰려면 bucket 조건도 함께 필요합니다. 답 대상(값/구간)은 구간을 나눌 때만 적습니다.",
+              "user_message": "답 대상(값/구간)은 구간을 나눌 때만 적습니다.",
+              "context": {
+                "raw_text": "",
+                "factor": "answer",
+                "missing": [
+                  "bucket"
+                ],
+                "present": [
+                  "aggregation",
+                  "answer",
+                  "date",
+                  "dimension",
+                  "limit",
+                  "order",
+                  "rollup"
+                ],
+                "factors": {
+                  "date": "this_month",
+                  "dimension": "dayofweek",
+                  "order": "top",
+                  "limit": 1,
+                  "aggregation": "sum",
+                  "rollup": "max",
+                  "answer": "bucket"
+                }
+              }
+            },
+            "repairable": true,
+            "repair_kind": "factor_correction",
+            "repair_reason": "계약 위반을 고치는 데 필요한 조건만 수정 범위로 엽니다.",
+            "repair_attempted": true,
+            "repair_result": "repair_failed",
+            "reason": null,
+            "repair_error": {
+              "stage": "planner",
+              "code": "REPAIR_OUT_OF_SCOPE",
+              "detail": "재계획이 허용된 범위를 벗어났습니다: 바뀐 조건이 없습니다.",
+              "user_message": "질문을 분석 계획으로 해석하지 못했습니다.",
+              "context": {
+                "raw_text": "{\"factors\": {\"dimension\": \"dayofweek\", \"aggregation\": \"sum\", \"rollup\": \"max\", \"answer\": \"bucket\"}}",
+                "repair_kind": "factor_correction",
+                "correction": {
+                  "scope": {
+                    "issues": [
+                      {
+                        "kind": "missing_companion",
+                        "factor": "answer",
+                        "missing": [
+                          "bucket"
+                        ]
+                      },
+                      {
+                        "kind": "missing_companion",
+                        "factor": "rollup",
+                        "missing": [
+                          "bucket"
+                        ]
+                      }
+                    ],
+                    "permissions": {
+                      "answer": [
+                        "remove"
+                      ],
+                      "rollup": [
+                        "remove"
+                      ]
+                    },
+                    "reasons": {
+                      "answer": [
+                        "answer는 bucket 없이 성립하지 않습니다"
+                      ],
+                      "rollup": [
+                        "rollup는 bucket 없이 성립하지 않습니다"
+                      ]
+                    },
+                    "unrepairable": []
+                  },
+                  "applied": {
+                    "added": {},
+                    "changed": {},
+                    "removed": {}
+                  },
+                  "kept_omitted": [
+                    "limit",
+                    "order"
+                  ],
+                  "blocked": [],
+                  "before": {
+                    "aggregation": "sum",
+                    "rollup": "max",
+                    "answer": "bucket",
+                    "dimension": "dayofweek",
+                    "order": "top",
+                    "limit": 1
+                  },
+                  "proposed": {
+                    "dimension": "dayofweek",
+                    "aggregation": "sum",
+                    "rollup": "max",
+                    "answer": "bucket"
+                  },
+                  "evidence": null,
+                  "stage_values": {
+                    "carried": {
+                      "aggregation": "aggregation",
+                      "rollup": "rollup"
+                    },
+                    "new": []
+                  },
+                  "roles": {
+                    "before": {
+                      "grouping": "dayofweek",
+                      "grouping_field": "dimension",
+                      "direction": "top",
+                      "limit": 1,
+                      "answer": "bucket",
+                      "aggregation": "sum",
+                      "rollup": "max"
+                    },
+                    "after": {
+                      "grouping": "dayofweek",
+                      "grouping_field": "dimension",
+                      "direction": "top",
+                      "limit": 1,
+                      "answer": "bucket",
+                      "aggregation": "sum",
+                      "rollup": "max"
+                    }
+                  },
+                  "after": {
+                    "aggregation": "sum",
+                    "rollup": "max",
+                    "answer": "bucket",
+                    "dimension": "dayofweek",
+                    "order": "top",
+                    "limit": 1
+                  }
+                }
+              }
+            },
+            "correction": {
+              "scope": {
+                "issues": [
+                  {
+                    "kind": "missing_companion",
+                    "factor": "answer",
+                    "missing": [
+                      "bucket"
+                    ]
+                  },
+                  {
+                    "kind": "missing_companion",
+                    "factor": "rollup",
+                    "missing": [
+                      "bucket"
+                    ]
+                  }
+                ],
+                "permissions": {
+                  "answer": [
+                    "remove"
+                  ],
+                  "rollup": [
+                    "remove"
+                  ]
+                },
+                "reasons": {
+                  "answer": [
+                    "answer는 bucket 없이 성립하지 않습니다"
+                  ],
+                  "rollup": [
+                    "rollup는 bucket 없이 성립하지 않습니다"
+                  ]
+                },
+                "unrepairable": []
+              },
+              "applied": {
+                "added": {},
+                "changed": {},
+                "removed": {}
+              },
+              "kept_omitted": [
+                "limit",
+                "order"
+              ],
+              "blocked": [],
+              "before": {
+                "aggregation": "sum",
+                "rollup": "max",
+                "answer": "bucket",
+                "dimension": "dayofweek",
+                "order": "top",
+                "limit": 1
+              },
+              "proposed": {
+                "dimension": "dayofweek",
+                "aggregation": "sum",
+                "rollup": "max",
+                "answer": "bucket"
+              },
+              "evidence": null,
+              "stage_values": {
+                "carried": {
+                  "aggregation": "aggregation",
+                  "rollup": "rollup"
+                },
+                "new": []
+              },
+              "roles": {
+                "before": {
+                  "grouping": "dayofweek",
+                  "grouping_field": "dimension",
+                  "direction": "top",
+                  "limit": 1,
+                  "answer": "bucket",
+                  "aggregation": "sum",
+                  "rollup": "max"
+                },
+                "after": {
+                  "grouping": "dayofweek",
+                  "grouping_field": "dimension",
+                  "direction": "top",
+                  "limit": 1,
+                  "answer": "bucket",
+                  "aggregation": "sum",
+                  "rollup": "max"
+                }
+              },
+              "after": {
+                "aggregation": "sum",
+                "rollup": "max",
+                "answer": "bucket",
+                "dimension": "dayofweek",
+                "order": "top",
+                "limit": 1
+              }
+            }
+          }
+        ],
+        "planner": {
+          "grounding": {
+            "concepts": [
+              {
+                "id": "operation",
+                "text": "",
+                "concept": "EVENT",
+                "subtype": "operation",
+                "role": "SUPPORT",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              },
+              {
+                "id": "revenue",
+                "text": "",
+                "concept": "AMOUNT",
+                "subtype": "revenue",
+                "role": "MEASURE",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              }
+            ],
+            "factors": {
+              "date": "this_month",
+              "dimension": "dayofweek",
+              "order": "top",
+              "limit": 1,
+              "aggregation": "sum",
+              "rollup": "max",
+              "answer": "bucket"
+            },
+            "aggregation": {
+              "bucket": null,
+              "inner": "sum",
+              "outer": null,
+              "select": null,
+              "source": "flat"
+            }
+          },
+          "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"operation\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"revenue\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"revenue\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"this_month\",\n    \"dimension\": \"dayofweek\",\n    \"order\": \"top\",\n    \"limit\": 1,\n    \"aggregation\": \"sum\",\n    \"rollup\": \"max\",\n    \"answer\": \"bucket\"\n  }\n}",
+          "duration_ms": 5699.665,
+          "model": "qwen3:8b",
+          "attempts": 1,
+          "retrieval": null
+        },
+        "template": null,
+        "applied_macros": [],
+        "grounding": {
+          "concepts": [
+            {
+              "id": "operation",
+              "text": "",
+              "concept": "EVENT",
+              "subtype": "operation",
+              "role": "SUPPORT",
+              "source": "implicit",
+              "value": null,
+              "attributes": {}
+            },
+            {
+              "id": "revenue",
+              "text": "",
+              "concept": "AMOUNT",
+              "subtype": "revenue",
+              "role": "MEASURE",
+              "source": "implicit",
+              "value": null,
+              "attributes": {}
+            }
+          ],
+          "factors": {
+            "date": "this_month",
+            "dimension": "dayofweek",
+            "order": "top",
+            "limit": 1,
+            "aggregation": "sum",
+            "rollup": "max",
+            "answer": "bucket"
+          },
+          "aggregation": {
+            "bucket": null,
+            "inner": "sum",
+            "outer": null,
+            "select": null,
+            "source": "flat"
+          }
+        },
+        "slots": {},
+        "plan": null,
+        "validation": null,
+        "execution_plan": null,
+        "execution": null,
+        "final_answer": null,
+        "error": {
+          "stage": "planner",
+          "code": "INVALID_FACTOR_COMBINATION",
+          "detail": "answer 조건을 쓰려면 bucket 조건도 함께 필요합니다. 답 대상(값/구간)은 구간을 나눌 때만 적습니다.",
+          "user_message": "답 대상(값/구간)은 구간을 나눌 때만 적습니다.",
+          "context": {
+            "raw_text": "",
+            "factor": "answer",
+            "missing": [
+              "bucket"
+            ],
+            "present": [
+              "aggregation",
+              "answer",
+              "date",
+              "dimension",
+              "limit",
+              "order",
+              "rollup"
+            ],
+            "factors": {
+              "date": "this_month",
+              "dimension": "dayofweek",
+              "order": "top",
+              "limit": 1,
+              "aggregation": "sum",
+              "rollup": "max",
+              "answer": "bucket"
+            }
+          }
+        },
+        "durations": {
+          "planner_ms": 5699.665,
+          "execution_ms": 0.0,
+          "total_ms": 24238.567
+        }
+      },
+      "repeat_index": 1
+    },
+    {
+      "id": "measure-m13",
+      "question": "지난주 대구 중구의 실차 택시 통행량을 읍면동별로 많은 순서로 두 곳 알려줘.",
+      "agent_mode": "geoflow",
+      "hops": [],
+      "model_calls": [
+        {
+          "event": "model_call",
+          "model_hop": 1,
+          "phase": "geoflow_planner",
+          "duration_ms": 15581.367,
+          "error": null
+        }
+      ],
+      "total_duration_ms": 15582.571,
+      "final_answer": null,
+      "runtime_error": "composition 단계 실패: 질문의 조건을 받는 변환이 없습니다: taxi_status",
+      "runtime_status": "ERROR",
+      "cancelled": false,
+      "geoflow": {
+        "agent_mode": "geoflow",
+        "outcome": "unsupported",
+        "stage": "composition",
+        "repair_count": 1,
+        "repairs": {
+          "relation_qualifier": {
+            "attempted": 1,
+            "succeeded": 1
+          }
+        },
+        "scope_labels": {},
+        "condition_audit": {
+          "reference_date": "2026-10-05",
+          "timezone": "Asia/Seoul",
+          "date": {
+            "mentions": [
+              {
+                "kind": "date",
+                "text": "지난주",
+                "status": "supported",
+                "value": "last_week",
+                "meaning": "last_week: 직전 달력 주(월~일)"
+              }
+            ],
+            "llm_value": "last_week",
+            "unparsed_cues": false,
+            "value": "last_week",
+            "status": "interpreted",
+            "action": "confirmed",
+            "basis": "question_expression",
+            "interpreted_range": "20260928-20261004"
+          },
+          "taxi_type": {
+            "mentions": [],
+            "llm_value": null,
+            "value": null,
+            "stated": "not_stated",
+            "status": "absent",
+            "action": "none",
+            "basis": "no_value_no_cue"
+          },
+          "taxi_status": {
+            "mentions": [
+              {
+                "kind": "taxi_status",
+                "text": "실차",
+                "status": "supported",
+                "value": "occupied",
+                "meaning": ""
+              }
+            ],
+            "llm_value": null,
+            "value": "occupied",
+            "status": "interpreted",
+            "action": "filled",
+            "basis": "question_expression"
+          },
+          "places": [
+            {
+              "id": "location",
+              "text": "대구 중구",
+              "lookup_name": "중구",
+              "region": "대구",
+              "od_role": null,
+              "semantics": "name_evidence_only",
+              "evidence": "exact"
+            }
+          ],
+          "place_completeness": "unchecked",
+          "not_checked": [
+            "place_completeness: 질문의 장소가 모두 출력되었는지(누락 탐지 없음)",
+            "place_semantics: 장소명이 뜻하는 지역(동명 지역 구분)",
+            "od_semantics: 출발/도착 관계(모델 grounding의 몫, 보존만 함)",
+            "unsupported_grammar: 지원 문법 밖의 날짜·유형 표현(보류로 둠)"
+          ],
+          "corrections": [
+            {
+              "condition": "taxi_status",
+              "from": null,
+              "to": "occupied",
+              "action": "filled",
+              "basis": "question_expression",
+              "evidence": [
+                {
+                  "text": "실차"
+                }
+              ]
+            }
+          ],
+          "held": []
+        },
+        "condition_trace": null,
+        "verification": null,
+        "execution_profile": null,
+        "retrieval": null,
+        "attempts": [
+          {
+            "index": 0,
+            "stage": "composition",
+            "status": "planning_failed",
+            "error_code": "MISSING_RELATION_QUALIFIER",
+            "error": {
+              "stage": "composition",
+              "code": "MISSING_RELATION_QUALIFIER",
+              "detail": "이 분석은 역할이 구분된 장소만 받는데 구분이 없는 장소가 있습니다: location (필요한 구분: od_role)",
+              "user_message": "질문의 장소가 분석에서 어떤 역할인지 구분되지 않았습니다.",
+              "context": {
+                "locations": [
+                  "location"
+                ],
+                "location_count": 1,
+                "unqualified": [
+                  "location"
+                ],
+                "unqualified_capacity": 0,
+                "required_qualifiers": [
+                  "od_role"
+                ],
+                "candidate_operators": [
+                  "TRIP_COUNT"
+                ],
+                "candidate_ports": [
+                  "dropoff",
+                  "pickup"
+                ],
+                "goal": "AMOUNT/trip_count"
+              }
+            },
+            "repairable": true,
+            "repair_kind": "relation_qualifier",
+            "repair_reason": "장소의 역할을 나타내는 속성이 계약에 이미 있고, 기존 개념에 그 속성만 덧붙이면 됩니다.",
+            "repair_attempted": true,
+            "repair_result": "OK",
+            "reason": null,
+            "correction": null,
+            "repair_raw_text": "{\"updates\": [{\"concept_id\": \"location\", \"attribute\": \"od_role\", \"value\": \"both\"}]}",
+            "repaired_factors": {
+              "date": "last_week",
+              "dimension": "emd",
+              "dimension_target": "both",
+              "order": "top",
+              "limit": 2,
+              "taxi_status": "occupied"
+            }
+          },
+          {
+            "index": 1,
+            "stage": "composition",
+            "status": "planning_failed",
+            "error_code": "UNCONSUMED_CONDITION",
+            "error": {
+              "stage": "composition",
+              "code": "UNCONSUMED_CONDITION",
+              "detail": "질문의 조건을 받는 변환이 없습니다: taxi_status",
+              "user_message": "질문의 조건 중 현재 분석이 반영할 수 없는 것이 있습니다: 운행 상태",
+              "context": {
+                "unconsumed": [
+                  "taxi_status"
+                ],
+                "values": {
+                  "taxi_status": "occupied"
+                },
+                "aggregation": {
+                  "bucket": null,
+                  "inner": null,
+                  "outer": null,
+                  "select": null,
+                  "source": "flat"
+                },
+                "macro_failures": [
+                  {
+                    "macro": "OD_EVENT_TO_MEASURE",
+                    "code": "UNCONSUMED_CONDITION",
+                    "context": {
+                      "unconsumed": [
+                        "taxi_status"
+                      ],
+                      "values": {
+                        "taxi_status": "occupied"
+                      },
+                      "aggregation": {
+                        "bucket": null,
+                        "inner": null,
+                        "outer": null,
+                        "select": null,
+                        "source": "flat"
+                      }
+                    }
+                  },
+                  {
+                    "macro": "EVENT_TO_MEASURE",
+                    "code": "UNUSED_CONCEPT",
+                    "context": {
+                      "unused": [
+                        "location"
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            "repairable": false,
+            "repair_kind": null,
+            "repair_reason": "다시 물어서 복구할 수 있는 실패가 아닙니다.",
+            "repair_attempted": false,
+            "repair_result": null,
+            "reason": "다시 물어서 복구할 수 있는 실패가 아닙니다."
+          }
+        ],
+        "planner": {
+          "grounding": {
+            "concepts": [
+              {
+                "id": "location",
+                "text": "대구 중구",
+                "concept": "LOCATION",
+                "subtype": "place",
+                "role": "SUBCOND",
+                "source": "user",
+                "value": {
+                  "name": "중구",
+                  "region": "대구"
+                },
+                "attributes": {
+                  "od_role": "both"
+                }
+              },
+              {
+                "id": "trip",
+                "text": "",
+                "concept": "EVENT",
+                "subtype": "trip",
+                "role": "SUPPORT",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              },
+              {
+                "id": "trip_count",
+                "text": "실차 택시 통행량",
+                "concept": "AMOUNT",
+                "subtype": "trip_count",
+                "role": "MEASURE",
+                "source": "implicit",
+                "value": null,
+                "attributes": {}
+              }
+            ],
+            "factors": {
+              "date": "last_week",
+              "dimension": "emd",
+              "dimension_target": "both",
+              "order": "top",
+              "limit": 2,
+              "taxi_status": "occupied"
+            },
+            "aggregation": {
+              "bucket": null,
+              "inner": null,
+              "outer": null,
+              "select": null,
+              "source": "flat"
+            }
+          },
+          "raw_text": "{\"updates\": [{\"concept_id\": \"location\", \"attribute\": \"od_role\", \"value\": \"both\"}]}",
+          "duration_ms": 6697.616,
+          "model": "qwen3:8b",
+          "attempts": 1,
+          "retrieval": null
+        },
+        "template": null,
+        "applied_macros": [],
+        "grounding": {
+          "concepts": [
+            {
+              "id": "location",
+              "text": "대구 중구",
+              "concept": "LOCATION",
+              "subtype": "place",
+              "role": "SUBCOND",
+              "source": "user",
+              "value": {
+                "name": "중구",
+                "region": "대구"
+              },
+              "attributes": {
+                "od_role": "both"
+              }
+            },
+            {
+              "id": "trip",
+              "text": "",
+              "concept": "EVENT",
+              "subtype": "trip",
+              "role": "SUPPORT",
+              "source": "implicit",
+              "value": null,
+              "attributes": {}
+            },
+            {
+              "id": "trip_count",
+              "text": "실차 택시 통행량",
+              "concept": "AMOUNT",
+              "subtype": "trip_count",
+              "role": "MEASURE",
+              "source": "implicit",
+              "value": null,
+              "attributes": {}
+            }
+          ],
+          "factors": {
+            "date": "last_week",
+            "dimension": "emd",
+            "dimension_target": "both",
+            "order": "top",
+            "limit": 2,
+            "taxi_status": "occupied"
+          },
+          "aggregation": {
+            "bucket": null,
+            "inner": null,
+            "outer": null,
+            "select": null,
+            "source": "flat"
+          }
+        },
+        "slots": {},
+        "plan": null,
+        "validation": null,
+        "execution_plan": null,
+        "execution": null,
+        "final_answer": null,
+        "error": {
+          "stage": "composition",
+          "code": "UNCONSUMED_CONDITION",
+          "detail": "질문의 조건을 받는 변환이 없습니다: taxi_status",
+          "user_message": "질문의 조건 중 현재 분석이 반영할 수 없는 것이 있습니다: 운행 상태",
+          "context": {
+            "unconsumed": [
+              "taxi_status"
+            ],
+            "values": {
+              "taxi_status": "occupied"
+            },
+            "aggregation": {
+              "bucket": null,
+              "inner": null,
+              "outer": null,
+              "select": null,
+              "source": "flat"
+            },
+            "macro_failures": [
+              {
+                "macro": "OD_EVENT_TO_MEASURE",
+                "code": "UNCONSUMED_CONDITION",
+                "context": {
+                  "unconsumed": [
+                    "taxi_status"
+                  ],
+                  "values": {
+                    "taxi_status": "occupied"
+                  },
+                  "aggregation": {
+                    "bucket": null,
+                    "inner": null,
+                    "outer": null,
+                    "select": null,
+                    "source": "flat"
+                  }
+                }
+              },
+              {
+                "macro": "EVENT_TO_MEASURE",
+                "code": "UNUSED_CONCEPT",
+                "context": {
+                  "unused": [
+                    "location"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "durations": {
+          "planner_ms": 15581.367,
+          "execution_ms": 0.0,
+          "total_ms": 15582.535
+        }
+      },
+      "repeat_index": 1
+    }
+  ]
+}

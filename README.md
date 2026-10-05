@@ -197,10 +197,9 @@ python assistant_cli.py \
   --model qwen3:8b \
   --query-file stub_query.yaml
 
-# GeoFlow planning 모드
+# GeoFlow planning 모드(기본 모델 qwen3.8:27b = 검증한 조합. "실행 기본값" 절 참고)
 python assistant_cli.py \
   --agent-mode geoflow \
-  --model qwen3:8b \
   --query-file stub_query.yaml
 ```
 
@@ -1008,6 +1007,23 @@ development가 되었다.
 > grounding 층이 업체 100에서 98/100이었다. 정답 grounding 기반 실행은 양쪽 모두 100/100, 41+2/43로 같다(차이는 모두 grounding에서 옴).
 `evaluate_v2.py`는 사전 등록한 설정(condition_check 끔)을 그대로 쓴다.
 
+### 고정 후보의 제품 비교와 채택 grounding_v13 (2026-10-05)
+
+**T2PC 조합(qwen3.8:27b + prompt 87048d0c + 조건 계층 수정)을 GeoFlow 기본으로 채택했다(b62f6dc).** v11·v12의 미채택 기록은
+그대로 두고, 그 결과를 본 뒤 별도 평가로 진행했다. 설계·결과: `evaluation/grounding_v13/analysis.md`.
+
+* 라벨 점검: m05("수입이 가장 많은 요일")의 정답(집계 생략 = avg)은 질문이 아니라 schema 기본값과 모델에 알린 정책에 기댄다.
+  자연어로는 합계도 성립한다. 라벨은 유지하고 "정책 라벨(의미 모호)"로 표시했다. v12의 근거 문자열 계약 주장은 정정했다.
+* 고정 후보 셋(현재 기본값 B, T2PC, T3PC)을 같은 428문항에서 비교했다. 새 문구 후보는 만들지 않았다.
+  * B 대비 두 후보 모두 정상 +85 이상(p < 0.0001), 조용한 오답 37 → 3·5, 용납할 수 없는 실패 21 → 0·1.
+  * T2PC와 T3PC의 차이는 유의하지 않았다. 사전 등록한 동점 처리 규칙(U 문항 수 0 대 1)으로 T2PC를 골랐다.
+* 최종 검증(v12 최종 셋 56, 첫 사용): T2PC 정상 43 / 조용한 오답 1 / U 1, B 25 / 6 / 5. 사전 등록 기준 F1–F4를 충족했다.
+  * 새 회귀: f03에서 승차 기준(dimension_target)을 빠뜨려 both로 답함.
+* 사람이 정해야 할 기본 해석(업체·서비스 담당자):
+  * "수입이 가장 많은 요일"이 기간 합계인지 일 평균인지.
+  * "한 달 동안 활성 택시 몇 대"의 뜻.
+  * 지역 없는 "중구".
+
 ### 조건 계층 공통 코드와 측정값 추출 grounding_v12 (2026-10-05)
 
 **채택하지 않고 종료했다. 기본 조합(qwen3:8b + prompt 522aa3b1 + 현재 코드)을 유지한다.** 설계·결과: `evaluation/grounding_v12/analysis.md`.
@@ -1043,14 +1059,28 @@ development가 되었다.
   * 조건 계층 수정은 측정값 오독을 우연히 막던 효과를 없앤다(qwen3:8b 기록에서 조용한 오답 2).
   * "공차 운행 건수"를 통행량으로 읽는 오독, 장소를 측정값으로 읽는 오독.
 
-### 실행 기본값 (2026-10-05)
+### 실행 기본값 (2026-10-05, grounding_v13에서 갱신)
 
-* 평가 기준 조합: `--agent-mode geoflow --model qwen3:8b`, prompt 522aa3b1, 조건 계층 켬, temperature 0, think 미지정, timeout 300초.
-* CLI 모델 선택: `--model` > `OLLAMA_MODEL` > 모드 기본값. GeoFlow 모드 기본값은 평가 기준과 같은 `qwen3:8b`·300초
-  (`GEOFLOW_DEFAULT_MODEL_NAME`, `GEOFLOW_DEFAULT_CHAT_TIMEOUT`).
-* react 모드 기본값은 `qwen3-coder:30b`·120초로 GeoFlow 평가와 무관하다.
-* CLI 실행 모드의 기본값은 react다. GeoFlow 평가 경로는 `--agent-mode geoflow`로 실행한다.
-* 실행 머리말에 모델의 출처(`--model`·`OLLAMA_MODEL`·`default`)를 표시한다.
+* GeoFlow 기본 조합(검증한 조합): `--agent-mode geoflow`, 모델 `qwen3.8:27b`, prompt 87048d0c, 현재 코드(조건 계층 켬,
+  `inherent_conditions`), temperature 0, think 미지정, timeout 300초. 평가: `evaluation/grounding_v13/analysis.md`.
+* CLI 모델 선택: `--model` > `OLLAMA_MODEL` > 모드 기본값(`GEOFLOW_DEFAULT_MODEL_NAME`). 실행 머리말에 모델의 출처를 표시한다.
+* 검증한 모델은 `GEOFLOW_VERIFIED_MODELS`에 적는다. 목록 밖의 모델도 사용자가 지정하면 실행하지만, 머리말에 "현재 코드·prompt와
+  검증하지 않은 조합"을 표시한다. prompt가 바뀌면 `tests/test_cli_run_settings.py`가 실패해 재검증을 요구한다.
+
+| 조합 | 상태 | 근거(같은 문항) |
+|---|---|---|
+| qwen3.8:27b + prompt 87048d0c + 현재 코드 | **검증, 기본값** | 개발 428: 정상 373, 조용한 오답 3, 용납할 수 없는 실패 0. 최종 56: 43 / 1 / 1 |
+| qwen3:8b + prompt 522aa3b1 + `grounding-v12-baseline` 코드 | 검증(이전 기본값, 되돌리기 대상) | 개발 428: 288 / 37 / 21. 최종 56: 25 / 6 / 5 |
+| qwen3:8b + 현재 코드·prompt(모델 이름만 바꿈) | **검증하지 않은 조합, 회귀 확인** | 136문항: 정상 77(이전 기본값과 같음), 조용한 오답 22(12), 용납할 수 없는 실패 16(7) |
+| 그 밖의 모델 | 검증하지 않음 | – |
+
+* **되돌리기:** `git revert -m 1 b62f6dc`. 코드·prompt·CLI 기본 모델이 함께 `grounding-v12-baseline` 상태(qwen3:8b,
+  prompt 522aa3b1)로 돌아간다. 모델 이름만 qwen3:8b로 바꾸는 것은 되돌리기가 아니다(위 표 셋째 줄).
+* **재현:** `evaluation/grounding_v13/run_set.sh MODEL TAG CODE_ROOT final`, `evaluation/grounding_v13/report.py`.
+  평가 harness는 기준일을 2026-09-25로 고정하고 문항마다 모델을 내린 뒤 실행한다. CLI도 문항마다 모델을 내리면 평가 기록을
+  재현한다(6/6). 모델을 올린 채 연속 실행하면 출력이 달라질 수 있다. 확인한 6문항에서 qwen3:8b는 2문항의 결과가 달라졌고,
+  qwen3.8:27b는 결과가 달라진 문항이 없었다(`evaluation/grounding_v13/analysis.md` 5절).
+* react 모드 기본값은 `qwen3-coder:30b`·120초로 GeoFlow 평가와 무관하다. CLI 실행 모드의 기본값은 react다.
 
 ### 실차 구간과 운행 상태 조건 구분 grounding_v10 (2026-10-04)
 
