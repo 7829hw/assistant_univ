@@ -5,9 +5,11 @@ import argparse
 import hashlib
 import json
 import os
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
+
+import httpx
 
 from assistant_runtime import (
     AGENT_MODE_GEOFLOW,
@@ -54,11 +56,31 @@ DEFAULT_MODEL_NAME = "qwen3-coder:30b"
 #: 사용자가 --model·OLLAMA_MODEL·--chat-timeout·OLLAMA_CHAT_TIMEOUT으로 지정한 값이 언제나 우선한다.
 GEOFLOW_DEFAULT_MODEL_NAME = "qwen3.8:27b"
 GEOFLOW_DEFAULT_CHAT_TIMEOUT = 300.0
-#: GeoFlow 모드에서 현재 코드·prompt와 함께 검증한 모델(evaluation/grounding_v13). 모델·prompt·코드를 한 조합으로
-#: 검증했으므로 prompt가 바뀌면 이 목록도 다시 검증해야 한다(tests/test_cli_run_settings.py가 hash를 확인한다).
-#: 목록 밖의 모델도 사용자가 지정하면 그대로 실행하고, 실행 머리말에 검증하지 않은 조합임을 표시한다.
-GEOFLOW_VERIFIED_MODELS = ("qwen3.8:27b",)
-GEOFLOW_VERIFIED_PROMPT_SHA256_PREFIX = "87048d0c"
+#: GeoFlow 모드에서 검증한 실행 명세(evaluation/grounding_v13 품질 평가, evaluation/grounding_v14 운영 조건).
+#: 모델·prompt·코드·실행 설정을 한 조합으로 검증했다. 확인 방법은 항목마다 다르다.
+#: - model, model_digest, settings: 실행할 때 비교해 머리말과 저장 기록에 다른 항목을 적는다(실행은 막지 않는다).
+#: - prompt_sha256_prefix: tests/test_cli_run_settings.py가 현재 prompt와 대조한다(prompt가 바뀌면 테스트 실패).
+#: - 코드: 실행 중에는 확인하지 않는다. 검증한 코드는 code_commit이며, geoflow/ 변경은 재검증 대상이다.
+#: - 기준일과 모델 적재 상태(연속 실행)는 명세에 넣지 않는다. 운영 조건 검증 범위는 grounding_v14 문서에 있다.
+GEOFLOW_VERIFIED_SPEC = {
+    "model": "qwen3.8:27b",
+    "model_digest": "aaee06c39dcf2437cde036998d960e1fc1494b8191be7cc9657d01e509097813",
+    "ollama_version": "0.34.4",
+    "prompt_sha256_prefix": "87048d0c",
+    "code_commit": "b62f6dc",
+    "settings": {
+        "options": {"temperature": 0},
+        "think": None,
+        "chat_timeout_s": 300.0,
+        "aggregation_grounding": "flat",
+        "condition_check": True,
+        "example_retrieval": "off",
+        "provider": "mock",
+        "tims_execution": "legacy",
+    },
+}
+GEOFLOW_VERIFIED_MODELS = (GEOFLOW_VERIFIED_SPEC["model"],)
+GEOFLOW_VERIFIED_PROMPT_SHA256_PREFIX = GEOFLOW_VERIFIED_SPEC["prompt_sha256_prefix"]
 MAX_TOOL_HOPS = 10
 OLLAMA_OPTIONS = {"temperature": 0}
 
@@ -80,6 +102,9 @@ TIMS_EXECUTION = "legacy"
 #: structured grounding에 검토된 질문–graph 예시를 붙이는 선택 기능. off(기본) | lexical.
 #: lexical은 문자 n-gram 검색이며 임베딩 검색이 아니다(geoflow/retrieval.py).
 EXAMPLE_RETRIEVAL = "off"
+#: GeoFlow의 상대 날짜를 풀 기준일. None이면 실제 날짜(Asia/Seoul)를 쓴다(기존 동작). 지정하면 조건 계층과 컴파일에
+#: 같은 날짜가 들어간다. planner prompt에는 넣지 않는다(의미 추출 조건을 바꾸지 않는다).
+REFERENCE_DATE = None
 
 ARRAY_PREVIEW_LIMIT = 3
 INLINE_RESULT_LIMIT = 8
@@ -528,6 +553,46 @@ def _print_result_footer(result):
     ))
 
 
+def reference_clock():
+    """GeoFlow pipeline에 넘길 기준일 함수. 지정하지 않았으면 None(pipeline 기본값 = 실제 날짜)."""
+    if REFERENCE_DATE is None:
+        return None
+    fixed = REFERENCE_DATE
+    return lambda: fixed
+
+
+def geoflow_run_settings():
+    """GeoFlow 실행 결과에 영향을 주는 설정. 저장 기록과 검증 조합 비교에 쓴다."""
+    client = get_ollama_client()
+    return {
+        "model": MODEL_NAME,
+        "reference_date": REFERENCE_DATE.isoformat() if REFERENCE_DATE else None,
+        "reference_date_source": "--reference-date" if REFERENCE_DATE else "system_date_asia_seoul",
+        "options": dict(client.options),
+        "think": client.think,
+        "chat_timeout_s": CHAT_TIMEOUT,
+        "aggregation_grounding": AGGREGATION_GROUNDING,
+        "condition_check": CONDITION_CHECK,
+        "condition_notes": CONDITION_NOTES,
+        "example_retrieval": EXAMPLE_RETRIEVAL,
+        "provider": selected_provider(),
+        "tims_execution": TIMS_EXECUTION,
+        "model_state": "kept_loaded_by_server",
+    }
+
+
+def geoflow_verification():
+    """현재 설정과 서버 사실을 검증 명세와 비교한 결과. 실행 머리말과 저장 기록에 쓴다."""
+    facts = model_server_facts(get_ollama_client())
+    return {**facts, "differences": verification_differences(geoflow_run_settings(), facts)}
+
+
+def reference_date_label():
+    if REFERENCE_DATE is None:
+        return "실제 날짜(Asia/Seoul)"
+    return f"{REFERENCE_DATE.isoformat()}(--reference-date)"
+
+
 def _new_runtime(tools, system_prompt, *, tool_handlers=None, agent_mode=None):
     """현재 CLI 설정과 YAML Config로 UI 독립 Runtime을 만든다."""
     selected_handlers = (
@@ -554,6 +619,7 @@ def _new_runtime(tools, system_prompt, *, tool_handlers=None, agent_mode=None):
                 aggregation_grounding=AGGREGATION_GROUNDING,
                 condition_check=CONDITION_CHECK,
                 condition_notes=CONDITION_NOTES,
+                clock=reference_clock(),
                 execution_profile=providers.profile_for(provider_name, TIMS_EXECUTION),
                 example_selector=selector,
             )
@@ -861,6 +927,8 @@ def _save_query_run(
         "repeat": repeat,
         "requested_attempt_count": len(requested_query_ids) * repeat,
         "tool_provider": tool_provider,
+        "geoflow_settings": geoflow_run_settings() if AGENT_MODE == AGENT_MODE_GEOFLOW else None,
+        "geoflow_verification": geoflow_verification() if AGENT_MODE == AGENT_MODE_GEOFLOW else None,
         "config_hash": config_hash,
         "queries": records,
     }
@@ -962,6 +1030,13 @@ def run_query_suite(
     return {"records": records, "run_dir": run_dir}
 
 
+def _iso_date(value):
+    try:
+        return date.fromisoformat(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("YYYY-MM-DD 형식이어야 합니다.") from error
+
+
 def positive_int(value):
     parsed = int(value)
     if parsed < 1:
@@ -990,6 +1065,12 @@ def parse_args(argv=None):
         "--ollama-host",
         default=os.environ.get("OLLAMA_HOST", DEFAULT_OLLAMA_HOST),
         help=f"Ollama 주소(기본: {DEFAULT_OLLAMA_HOST})",
+    )
+    parser.add_argument(
+        "--reference-date",
+        type=_iso_date,
+        default=None,
+        help="GeoFlow 상대 날짜(어제·지난달 등)를 풀 기준일 YYYY-MM-DD. 지정하지 않으면 실제 날짜(Asia/Seoul)",
     )
     parser.add_argument(
         "--list-models",
@@ -1106,6 +1187,43 @@ def geoflow_combination_note(model):
     return ", 현재 코드·prompt와 검증하지 않은 조합"
 
 
+def model_server_facts(client):
+    """선택 모델의 digest와 Ollama 버전. 확인하지 못하면 None."""
+    facts = {"model_digest": None, "ollama_version": None}
+    try:
+        for item in client.list_models():
+            if item.get("name") == client.model or item.get("model") == client.model:
+                facts["model_digest"] = item.get("digest")
+        response = httpx.get(f"{client.host}/api/version", timeout=5.0)
+        facts["ollama_version"] = response.json().get("version")
+    except Exception:  # noqa: BLE001 - 확인 실패는 실행을 막지 않고 "확인 불가"로 남긴다
+        pass
+    return facts
+
+
+def verification_differences(settings, facts, spec=GEOFLOW_VERIFIED_SPEC):
+    """현재 GeoFlow 실행이 검증한 실행 명세와 다른 항목. 확인하지 못한 항목은 "(확인 불가)"를 붙인다."""
+    differences = []
+    if settings.get("model") != spec["model"]:
+        differences.append("model")
+    for key in ("model_digest", "ollama_version"):
+        if facts.get(key) is None:
+            differences.append(f"{key}(확인 불가)")
+        elif facts[key] != spec[key]:
+            differences.append(key)
+    for key, value in spec["settings"].items():
+        if settings.get(key) != value:
+            differences.append(key)
+    return differences
+
+
+def verification_line(differences):
+    if not differences:
+        return "검증 — 검증한 실행 명세와 같음(GeoFlow, grounding_v13·v14)"
+    return ("검증 — 검증하지 않은 조합. 다른 항목: " + ", ".join(differences)
+            + " (실행은 그대로 진행한다. 검증 범위: README '실행 기본값')")
+
+
 def resolve_run_settings(args, environ=None):
     """모델과 chat timeout을 정한다: CLI 인자 > 환경변수 > 실행 모드의 기본값. 출처를 args에 남긴다."""
     environment = os.environ if environ is None else environ
@@ -1155,6 +1273,7 @@ def main(argv=None):
 
     configure_agent_mode(args.agent_mode)
     global AGGREGATION_GROUNDING, CONDITION_CHECK, CONDITION_NOTES, TIMS_EXECUTION, EXAMPLE_RETRIEVAL
+    global REFERENCE_DATE
     if args.example_retrieval != "off" and args.aggregation_grounding != structured_grounding.STRUCTURED:
         raise SystemExit("--example-retrieval은 --aggregation-grounding structured에서만 쓸 수 있습니다.")
     EXAMPLE_RETRIEVAL = args.example_retrieval
@@ -1164,6 +1283,7 @@ def main(argv=None):
     CONDITION_CHECK = not args.no_condition_check
     CONDITION_NOTES = args.condition_check
     TIMS_EXECUTION = args.tims_execution
+    REFERENCE_DATE = args.reference_date
     configure_ollama_client(
         args.ollama_host,
         args.model,
@@ -1176,6 +1296,7 @@ def main(argv=None):
         f"/ condition check: {'on' if CONDITION_CHECK else 'off'} "
         f"/ example retrieval: {EXAMPLE_RETRIEVAL} "
         f"/ provider: {selected_provider()} "
+        f"/ 기준일: {reference_date_label()} "
         f"/ tims execution: "
         f"{TIMS_EXECUTION if selected_provider() == providers.MOCK else '해당 없음'} "
         if AGENT_MODE == AGENT_MODE_GEOFLOW else ""
@@ -1189,6 +1310,8 @@ def main(argv=None):
         f"/ num_predict: {args.num_predict or '모델 기본값'}"
     )
     check_ollama_connection()
+    if AGENT_MODE == AGENT_MODE_GEOFLOW:
+        print(verification_line(geoflow_verification()["differences"]))
     try:
         tools, system_prompt, config_sources = _build_with_config_snapshot()
     except (OSError, RuntimeError) as error:

@@ -73,6 +73,45 @@ XLSX_FILE = VENDOR_DIR / "질문 결과 및 정답 설명_100문항.xlsx"
 QUESTIONS_FILE = HERE / "assistant_univ_questions_100_v3.yaml"
 VARIANTS_FILE = VENDOR_DIR / "stated_variants.yaml"
 REFERENCE_DATE = date(2026, 9, 25)
+#: 모델 적재 방식. 앞의 것이 기본값이다(grounding_v1부터의 평가 조건).
+MODEL_STATES = ("unload_per_question", "keep_loaded")
+
+
+def order_items(items, order):
+    """문항 순서를 정한다. file은 파일 순서 그대로다."""
+    import random
+    items = list(items)
+    if order == "file":
+        return items
+    if order == "reverse":
+        return items[::-1]
+    if order.startswith("shuffle:"):
+        rng = random.Random(int(order.split(":", 1)[1]))
+        rng.shuffle(items)
+        return items
+    raise SystemExit(f"알 수 없는 --order: {order}")
+
+
+def load_partial_rows(partial, settings):
+    """이어 실행할 기존 행. 다른 실행 조건의 행이 섞이지 않게 조건이 다르면 멈춘다."""
+    done = {}
+    if not partial.is_file():
+        return done
+    for line in partial.read_text(encoding="utf-8").splitlines():
+        row = json.loads(line)
+        # 예전 기록에는 run_settings가 없다. 그때의 조건은 기본값과 같다.
+        previous = row.get("run_settings") or {"reference_date": "2026-09-25",
+                                               "model_state": MODEL_STATES[0], "order": "file"}
+        if previous != settings:
+            raise SystemExit(f"{partial}의 기존 행은 다른 실행 조건({previous})이다. 지금 조건: {settings}")
+        done[row["id"]] = row
+    return done
+
+
+def run_settings(args):
+    """결과에 영향을 주는 실행 조건. 행마다 남기고, 이어 실행할 때 같은지 확인한다."""
+    return {"reference_date": args.reference_date.isoformat(), "model_state": args.model_state,
+            "order": args.order}
 PROTOCOL = "vendor100_v1"
 #: 평가 문항 파일(--gold). None이면 업체 gold.yaml.
 GOLD_PATH = None
@@ -971,15 +1010,14 @@ def cmd_llm(args):
                           chat_timeout=args.chat_timeout, think=resolve_think("auto"))
     version, digest, details = A._server_details(args.host, args.model)
     document = load_gold(GOLD_PATH)
-    items = [item for item in document["items"]
-             if not args.only or item["id"] in args.only.split(",")]
+    global REFERENCE_DATE
+    REFERENCE_DATE = args.reference_date
+    settings = run_settings(args)
+    items = order_items([item for item in document["items"]
+                         if not args.only or item["id"] in args.only.split(",")], args.order)
     out = Path(args.out)
     partial = out.with_suffix(".jsonl")
-    done = {}
-    if partial.is_file():
-        for line in partial.read_text(encoding="utf-8").splitlines():
-            row = json.loads(line)
-            done[row["id"]] = row
+    done = load_partial_rows(partial, settings)
     cache = load_replay_cache(args.replay_from) if args.replay_from else None
     if cache is None:
         A.unload_all_models(args.host)
@@ -993,15 +1031,17 @@ def cmd_llm(args):
                 continue
             item_started = datetime.now(ZoneInfo("Asia/Seoul"))
             replayed = cache is not None and (prompt_sha, item["question"]) in cache
+            keep = args.model_state == "keep_loaded"
             if not replayed:
-                state = reset.reset()
+                state = type("Kept", (), {"succeeded": None})() if keep else reset.reset()
                 replay = _ReplayClient(client, cache) if cache is not None else None
             else:
                 # 첫 계획은 기록을 돌려준다. 재질의 같은 실제 호출이 생기면 그 직전에 모델을 내린다.
                 state = type("Deferred", (), {"succeeded": True})()
 
                 def _reset_before_live(state=state):
-                    state.succeeded = reset.reset().succeeded
+                    if not keep:
+                        state.succeeded = reset.reset().succeeded
                 replay = _ReplayClient(client, cache, before_live=_reset_before_live)
             recorder = _RecordingClient(replay or client)
             # 기준 코드(--code-root)에는 없는 인자다. 기본값이 아닐 때만 넘긴다.
@@ -1026,6 +1066,7 @@ def cmd_llm(args):
             row = {"id": item["id"], "question": item["question"],
                    "vendor_verdict": item["vendor_verdict"], "category": category,
                    "checks": checks, "reset_ok": state.succeeded,
+                   "run_settings": settings, "sequence_index": len(done) + 1,
                    "grounding_ok": grounding_ok, "grounding_diffs": grounding_diffs,
                    "llm_calls": recorder.calls,
                    # 모델 unload(격리)와 실행을 포함한 문항 경과 시간. 전체 경과 시간은 첫 started_at부터
@@ -1063,7 +1104,9 @@ def cmd_llm(args):
                                                  "semantic_reinterpretation": not args.no_semantic,
                                                  "provider": "mock", "tims_execution": "legacy",
                                                  "temperature": 0, "think": "auto",
-                                                 "isolation": "unload_per_question"},
+                                                 "isolation": args.model_state},
+                                    "run_settings": settings,
+                                    "item_order": [item["id"] for item in items],
                                     "chat_timeout_s": args.chat_timeout,
                                     "finished_at": datetime.now(ZoneInfo("Asia/Seoul")).isoformat(),
                                     "scorer_version": SCORER_VERSION}),
@@ -1737,7 +1780,7 @@ def _print_summary(result):
               f"{variant['observed_outcome']} {variant['error_code']}")
 
 
-def main(argv=None):
+def build_parser():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--code-root", default=None, help="평가할 코드 디렉터리(기본: 이 저장소)")
     parser.add_argument("--gold", default=None,
@@ -1764,6 +1807,13 @@ def main(argv=None):
     llm.add_argument("--no-semantic", action="store_true",
                      help="조건 계층의 의미 재해석(측정값·관계·집계 다시 읽기)을 끈다. 날짜·유형·상태 보존과 "
                           "장소 근거 확인은 그대로다")
+    llm.add_argument("--reference-date", type=date.fromisoformat, default=REFERENCE_DATE,
+                     help="상대 날짜를 풀 기준일(조건 계층·컴파일·채점에 같이 쓴다). 기본 2026-09-25(정답 셋의 기준일)")
+    llm.add_argument("--model-state", choices=MODEL_STATES, default=MODEL_STATES[0],
+                     help="unload_per_question: 문항마다 모델을 내리고 실행(기존 평가 조건). "
+                          "keep_loaded: 시작할 때만 내리고 모델을 올린 채 연속 실행(CLI 연속 사용과 같은 서버 조건)")
+    llm.add_argument("--order", default="file",
+                     help="문항 순서: file(기본), reverse, shuffle:SEED")
     llm.add_argument("--replay-from", default=None,
                      help="이전 llm 결과의 계획 응답을 prompt hash가 같을 때 재생(나머지는 실제 호출)")
     rerun = sub.add_parser("rerun")
@@ -1796,6 +1846,11 @@ def main(argv=None):
                         metavar=("NAME", "BEFORE", "AFTER"))
     report.add_argument("--items", action="store_true", help="문항별 표를 덧붙인다")
     report.add_argument("--out", default="")
+    return parser
+
+
+def main(argv=None):
+    parser = build_parser()
     args = parser.parse_args(argv)
     global GOLD_PATH
     GOLD_PATH = Path(args.gold).resolve() if args.gold else None
