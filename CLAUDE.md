@@ -19,3 +19,32 @@ matched its own command line with `pgrep -f`, never exited, and the GPU sat idle
    log modification time, output line count, `curl -s localhost:11434/api/ps`.
 5. Do not make other model calls (e.g. live repair calls from replay experiments) while an isolated
    measurement is running. They break the per-observation model unload (`OllamaStateReset`).
+
+## SFT/DPO work branch rules (geoflow/sft-dpo-t2pc)
+
+These rules apply to all SFT/DPO work on this branch, in this and later sessions.
+
+1. The work branch is `geoflow/sft-dpo-t2pc`. Do not commit or push to `geoflow/dev-v2` or
+   `geoflow/sft-dpo-thor`. Read thor only through `git show` or a temporary worktree.
+2. After each work unit, in this order: verify → review the diff and the staged diff → make a logical
+   commit → `git push origin geoflow/sft-dpo-t2pc` → report the SHA.
+   - The first push sets upstream with `-u`.
+   - No force push, merge/rebase or history rewrite.
+   - If a push fails, report the cause; do not work around it.
+3. Never commit model/adapter weights, checkpoints, caches, temporary files or ignored artifacts. Never use
+   `git add -f`.
+4. Ollama: use the existing Docker server on GPU 3 (`localhost:11434`) as is.
+   - Do not restart or reconfigure the container or change its GPU assignment.
+   - Do not start another Ollama server and do not pull models. If something is needed, stop and report.
+5. GPU work outside Ollama (training, HF inference) uses only CUDA GPU 2.
+   - Run with `CUDA_VISIBLE_DEVICES=2`; inside the process it appears as `cuda:0`.
+   - Do not change `CUDA_DEVICE_ORDER`.
+6. Before GPU work, confirm by UUID that the training GPU and the Ollama GPU are different physical GPUs.
+   - Compare host `nvidia-smi -L`, `nvidia-smi -L` inside the Ollama container, and the torch device UUID
+     under `CUDA_VISIBLE_DEVICES=2`.
+   - If they are the same or cannot be confirmed, stop and report. Also check memory already in use on GPU 2.
+7. While an isolated Ollama measurement runs, make no other Ollama calls (rule 5 above). Do not run HF and
+   Ollama measurements at the same time; run them in sequence.
+8. Keep the existing data policies: protected dev/validation/diagnostic data never becomes training input,
+   and annotation recommendations or validator PASS are not human approval. Vendor 100 results are
+   evaluation-only (never used for training, checkpoint selection or annotation candidates).
