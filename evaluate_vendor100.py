@@ -541,6 +541,17 @@ def run_item(pipeline, question):
     }
 
 
+def _crashed(error):
+    """평가 대상 코드가 GeoFlowError가 아닌 예외로 멈춘 문항. run_item과 같은 key를 갖는 실패 기록."""
+    import traceback
+    return {"planner_trace": {"exception": f"{type(error).__name__}: {error}"[:500],
+                              "traceback_tail": traceback.format_exc().splitlines()[-6:]},
+            "outcome": "failed", "error_code": "UNHANDLED_EXCEPTION",
+            "error_user_message": None, "error_context": {}, "calls": [], "final_answer": None,
+            "grounding": None, "condition_corrections": None, "condition_actions": {},
+            "lowering": {}, "date_semantics": {}, "plan_calendar": None, "execution_profile": None}
+
+
 # -- 채점 ------------------------------------------------------------------------------
 
 #: schema 기본값. 생략과 같다(업체도 이런 생략을 정상으로 판정했다: 14, 15, 17, 43).
@@ -1134,7 +1145,11 @@ def cmd_llm(args):
                 clock=lambda: REFERENCE_DATE, condition_check=args.condition_check,
                 execution_profile=providers.profile_for(providers.MOCK, providers.LEGACY),
                 **options)
-            observed = run_item(pipeline, item["question"])
+            try:
+                observed = run_item(pipeline, item["question"])
+            except Exception as error:  # noqa: BLE001 - 평가 대상 코드의 미처리 예외도 문항 결과로 남긴다
+                # 이전에는 run 전체가 멈췄다. 모델 응답(llm_calls)과 예외를 남기고 실패(답 없음)로 센다.
+                observed = _crashed(error)
             category, checks = score(item, observed)
             grounding_ok, grounding_diffs = grounding_check(item, observed["grounding"])
             row = {"id": item["id"], "question": item["question"],
