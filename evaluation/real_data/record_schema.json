@@ -2,102 +2,471 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "evaluation/real_data/record_schema.json",
   "title": "실제 질문 검증 기록(한 질문)",
-  "description": "실제 질문 원문·기준일, 사람이 검토한 의미와 기대 동작, 라벨 근거, provider 계약 버전, GeoFlow 실행과 실제 응답, 비교 결과를 한 기록으로 잇는다. 합성 문항을 이 형식으로 넣어 실제 자료처럼 쓰지 않는다(question.source).",
+  "description": "수집(question) → 의미 검토(review) → 실행(runs: GeoFlow CLI 또는 업체 대행 호출) → 범위별 판정(judgments)을 한 기록으로 잇는다. 단계마다 필요한 부분만 채운다. 형식과 내부 일관성은 validate.py가 검사하고, 자료 출처의 진위는 사람이 확인한다(README 3절).",
   "type": "object",
-  "required": ["record_id", "question", "review"],
+  "required": [
+    "record_id",
+    "question",
+    "review"
+  ],
   "additionalProperties": false,
-  "properties": {
-    "record_id": {"type": "string", "minLength": 1},
-    "question": {
+  "$defs": {
+    "verification": {
       "type": "object",
-      "required": ["text", "reference_date", "source"],
+      "description": "CLI 저장 기록의 geoflow_verification을 그대로 옮긴다(compared_to·matched·different·unchecked·outside_spec)",
+      "required": [
+        "compared_to",
+        "different",
+        "unchecked"
+      ],
+      "properties": {
+        "compared_to": {
+          "type": "string"
+        },
+        "matched": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "different": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unchecked": {
+          "type": "object"
+        },
+        "outside_spec": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "call": {
+      "type": "object",
+      "required": [
+        "tool",
+        "args"
+      ],
+      "properties": {
+        "tool": {
+          "type": "string"
+        },
+        "args": {
+          "type": "object"
+        }
+      }
+    },
+    "response": {
+      "type": "object",
+      "required": [
+        "call_index",
+        "response_ref",
+        "data_source",
+        "received_at"
+      ],
       "additionalProperties": false,
       "properties": {
-        "text": {"type": "string", "minLength": 1, "description": "사용자가 실제로 입력한 원문(개인정보는 지운 뒤)"},
-        "asked_at": {"type": "string", "format": "date-time"},
-        "timezone": {"type": "string", "default": "Asia/Seoul"},
-        "reference_date": {"type": "string", "format": "date", "description": "상대 날짜(어제·지난달)를 풀 기준일. CLI --reference-date에 그대로 넣는다"},
-        "source": {"enum": ["real_user", "service_staff", "vendor"], "description": "실제 사용자 질문 / 서비스 담당자가 작성 / 업체가 작성. 합성(Claude 작성) 문항은 이 형식에 넣지 않는다"},
-        "anonymized": {"type": "boolean"}
+        "call_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "response_ref": {
+          "type": "string",
+          "minLength": 1,
+          "description": "실제 응답 원본의 보관 위치"
+        },
+        "data_source": {
+          "type": "string",
+          "minLength": 1,
+          "description": "응답을 만든 시스템과 전달 경로(예: TIMS 운영 API 직접 호출, 업체 담당자가 실행 후 전달)"
+        },
+        "received_at": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    }
+  },
+  "properties": {
+    "record_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "question": {
+      "type": "object",
+      "required": [
+        "text",
+        "reference_date",
+        "source"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "description": "사용자가 실제로 입력한 원문(개인정보는 지운 뒤)"
+        },
+        "asked_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "timezone": {
+          "type": "string",
+          "default": "Asia/Seoul"
+        },
+        "reference_date": {
+          "type": "string",
+          "format": "date",
+          "description": "상대 날짜를 풀 기준일. CLI --reference-date에 그대로 넣는다"
+        },
+        "source": {
+          "enum": [
+            "real_user",
+            "service_staff",
+            "vendor"
+          ],
+          "description": "실제 사용자 질문 / 서비스 담당자 작성 / 업체 작성. 합성 문항은 넣지 않는다"
+        },
+        "anonymized": {
+          "type": "boolean"
+        },
+        "provenance": {
+          "type": "object",
+          "description": "자료를 넘겨준 쪽과 받은 날짜·원본 위치. 진위 확인은 사람이 한다",
+          "required": [
+            "provided_by_role",
+            "received_at"
+          ],
+          "properties": {
+            "provided_by_role": {
+              "type": "string"
+            },
+            "received_at": {
+              "type": "string",
+              "format": "date"
+            },
+            "original_ref": {
+              "type": "string"
+            }
+          }
+        }
       }
     },
     "review": {
       "type": "object",
-      "required": ["status"],
+      "required": [
+        "status"
+      ],
       "additionalProperties": false,
       "properties": {
-        "status": {"enum": ["unreviewed", "reviewed", "disputed"]},
-        "reviewer_role": {"type": "string", "description": "검토자의 역할(예: 업체 담당자, 서비스 담당자). 이름은 적지 않는다"},
-        "reviewed_at": {"type": "string", "format": "date"},
-        "meaning": {"type": "string", "description": "검토자가 확인한 질문의 의미(무엇을 세나, 조건, 묶는 기준, 돌려줄 대상)"},
-        "expected_behavior": {"enum": ["answer", "clarify", "unsupported"]},
-        "expected_call": {"type": ["string", "null"], "description": "기대하는 Tool 호출(gold_text 표기). 답하지 않는 경우 null"},
-        "required_conditions": {"type": "object", "description": "버리면 안 되는 조건(지원 불가·확인 요청의 근거)"},
+        "status": {
+          "enum": [
+            "unreviewed",
+            "reviewed",
+            "disputed"
+          ]
+        },
+        "reviewer_role": {
+          "type": "string",
+          "description": "검토자의 역할. 이름은 적지 않는다"
+        },
+        "reviewed_at": {
+          "type": "string",
+          "format": "date"
+        },
+        "meaning": {
+          "type": "string",
+          "description": "무엇을 세나, 조건, 묶는 기준, 돌려줄 대상"
+        },
+        "expected_behavior": {
+          "enum": [
+            "answer",
+            "clarify",
+            "unsupported"
+          ]
+        },
+        "expected_call": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "기대 Tool 호출(gold_text 표기). 답하지 않는 경우 null"
+        },
+        "expected_stop_basis": {
+          "type": "string",
+          "description": "확인 요청·지원 불가가 기대일 때 멈춰야 하는 근거(예: 연도 없는 날짜, 표현할 수 없는 시간대별 묶음)"
+        },
+        "required_conditions": {
+          "type": "object"
+        },
         "label_basis": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["kind", "ref"],
+            "required": [
+              "kind",
+              "ref"
+            ],
             "additionalProperties": false,
             "properties": {
-              "kind": {"enum": ["question_explicit", "vendor_contract", "project_policy", "vendor_decision"]},
-              "ref": {"type": "string", "minLength": 1, "description": "근거 위치(질문의 표현, schema 경로, 정책 문서, 결정표 D1–D4와 결정 기록)"}
+              "kind": {
+                "enum": [
+                  "question_explicit",
+                  "vendor_contract",
+                  "project_policy",
+                  "vendor_decision"
+                ]
+              },
+              "ref": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           }
         },
-        "decision_refs": {"type": "array", "items": {"type": "string", "pattern": "^D[0-9]+$"}, "description": "decisions.md의 결정 항목"},
-        "notes": {"type": "string"}
+        "decision_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^D[0-9]+$"
+          }
+        },
+        "notes": {
+          "type": "string"
+        }
       },
       "allOf": [
-        {"if": {"properties": {"status": {"const": "reviewed"}}},
-         "then": {"required": ["reviewer_role", "reviewed_at", "meaning", "expected_behavior", "label_basis"]}}
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "reviewed"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "reviewer_role",
+              "reviewed_at",
+              "meaning",
+              "expected_behavior",
+              "label_basis"
+            ],
+            "properties": {
+              "meaning": {
+                "minLength": 1
+              },
+              "label_basis": {
+                "minItems": 1
+              }
+            }
+          }
+        }
       ]
     },
-    "provider": {
-      "type": "object",
-      "required": ["name", "contract_version"],
-      "additionalProperties": false,
-      "properties": {
-        "name": {"enum": ["tims"], "description": "실제 자료 검증은 실제 TIMS만. mock·reference 실행은 이 형식의 실제 비교로 쓰지 않는다"},
-        "contract_version": {"type": "string", "description": "TIMS Tool 계약(schema)·API 문서의 버전"},
-        "endpoint_version": {"type": ["string", "null"]}
+    "runs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "run_id",
+          "kind",
+          "question_text",
+          "reference_date",
+          "provider"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "geoflow_cli",
+              "vendor_relay"
+            ],
+            "description": "geoflow_cli: GeoFlow CLI가 질문을 처리한 실행. vendor_relay: 업체가 정해진 Tool 호출을 대신 실행해 응답만 전달(GeoFlow end-to-end가 아님)"
+          },
+          "question_text": {
+            "type": "string",
+            "description": "이 실행이 처리한 질문 원문. question.text와 같아야 한다"
+          },
+          "reference_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "source_run_id": {
+            "type": "string",
+            "description": "vendor_relay가 전달한 호출의 출처 GeoFlow 실행"
+          },
+          "provider": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "enum": [
+                  "mock",
+                  "tims"
+                ],
+                "description": "mock은 의미·호출 구성 검토에만 쓴다. 값·provider·전체 실행 판정에는 tims만"
+              },
+              "contract_version": {
+                "type": "string"
+              },
+              "mode": {
+                "enum": [
+                  "direct",
+                  "vendor_relay"
+                ]
+              }
+            }
+          },
+          "geoflow_verification": {
+            "$ref": "#/$defs/verification"
+          },
+          "geoflow_settings": {
+            "type": "object"
+          },
+          "cli_record": {
+            "type": "string",
+            "description": "CLI query_raw.json 경로와 질문 id"
+          },
+          "outcome": {
+            "enum": [
+              "answered",
+              "needs_clarification",
+              "unsupported",
+              "failed"
+            ]
+          },
+          "error_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "grounding": {
+            "type": "object"
+          },
+          "calls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/call"
+            }
+          },
+          "responses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/response"
+            }
+          },
+          "answer_text": {
+            "type": "string"
+          }
+        }
       }
     },
-    "run": {
-      "type": "object",
-      "required": ["geoflow_verification", "cli_record"],
-      "additionalProperties": false,
-      "properties": {
-        "geoflow_verification": {"type": "object", "description": "CLI 저장 기록의 geoflow_verification(비교 대상·일치·다름·확인 안 함)"},
-        "geoflow_settings": {"type": "object", "description": "CLI 저장 기록의 geoflow_settings(기준일 포함)"},
-        "cli_record": {"type": "string", "description": "CLI query_raw.json 경로와 질문 id"}
-      }
-    },
-    "actual": {
-      "type": "object",
-      "required": ["outcome"],
-      "additionalProperties": false,
-      "properties": {
-        "outcome": {"enum": ["answered", "needs_clarification", "unsupported", "failed"]},
-        "calls": {"type": "array", "items": {"type": "object"}},
-        "tims_responses_ref": {"type": "string", "description": "실제 TIMS 응답 원본의 보관 위치"},
-        "answer_text": {"type": "string"}
-      }
-    },
-    "comparison": {
-      "type": "object",
-      "required": ["result"],
-      "additionalProperties": false,
-      "properties": {
-        "result": {"enum": ["correct", "silent_wrong", "correct_refusal", "wrong_refusal", "failure", "not_compared"]},
-        "unacceptable": {"type": "array", "items": {"enum": ["U1_condition_dropped", "U2_wrong_scope", "U3_wrong_measure", "U4_condition_added", "R2_unrepresentable_dropped", "R3_undetermined_filled", "R4_default_od_end"]}},
-        "value_check": {"enum": ["matches_tims", "differs", "not_checked"], "description": "답변 값이 실제 TIMS 응답·독립 계산과 맞는가"},
-        "notes": {"type": "string"}
+    "judgments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "scope",
+          "run_id",
+          "result",
+          "combination",
+          "judged_by_role",
+          "judged_at",
+          "evidence"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "scope": {
+            "enum": [
+              "meaning",
+              "provider_contract",
+              "response_interpretation",
+              "end_to_end"
+            ]
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "combination": {
+            "type": "string",
+            "description": "결과를 귀속할 검증 조합(T2PC·B) 또는 unverified"
+          },
+          "basis": {
+            "enum": [
+              "calls",
+              "grounding_only"
+            ],
+            "description": "meaning 판정에서만: calls = 실행 호출 또는 CLI 저장 기록의 컴파일된 execution_plan(scope 참조 포함)과 기대 호출 비교, grounding_only = mock에 없는 장소 등으로 호출 구성까지 가지 못해 grounding만 판정"
+          },
+          "result": {
+            "enum": [
+              "correct",
+              "wrong_meaning",
+              "correct_refusal",
+              "wrong_refusal",
+              "failure",
+              "silent_wrong",
+              "conforms",
+              "violates",
+              "unclear",
+              "wrong"
+            ]
+          },
+          "value_check": {
+            "enum": [
+              "matches_tims",
+              "differs",
+              "not_checked"
+            ]
+          },
+          "unacceptable": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "U1_condition_dropped",
+                "U2_wrong_scope",
+                "U3_wrong_measure",
+                "U4_condition_added",
+                "R2_unrepresentable_dropped",
+                "R3_undetermined_filled",
+                "R4_default_od_end"
+              ]
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "judged_by_role": {
+            "type": "string"
+          },
+          "judged_at": {
+            "type": "string",
+            "format": "date"
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
       }
     }
-  },
-  "allOf": [
-    {"if": {"required": ["comparison"], "properties": {"comparison": {"properties": {"result": {"not": {"const": "not_compared"}}}}}},
-     "then": {"required": ["provider", "run", "actual"], "properties": {"review": {"properties": {"status": {"const": "reviewed"}}}}}}
-  ]
+  }
 }
