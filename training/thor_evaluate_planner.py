@@ -1,0 +1,1032 @@
+# training-side copy of thor ``evaluate_planner.py`` (geoflow/sft-dpo-thor b314904).
+# thor는 production ``evaluate_planner.py``를 고쳐 첫 응답 지표(score_raw_grounding 등)·raw_text 기록·execution_profile을
+# 추가했다. production 파일을 바꾸지 않으려고 thor 판을 이 경로에 그대로 두고 training 코드만 이것을 import한다.
+# 바꾼 것은 ``geoflow.aggregation.to_flat``(thor 전용) 대신 ``training.data.aggregation_flat.to_flat``을 쓰는 것뿐이다.
+# -*- coding: utf-8 -*-
+"""GeoFlow Planner의 concept grounding 품질을 모델별로 측정한다.
+
+예전에는 "질문에 맞는 template을 골랐는가" 하나를 쟀다. 지금 Planner는
+template을 고르지 않으므로, 대신 논문의 단계 구분을 따라 나눠서 잰다.
+
+    concept / subtype / role 정확도   grounding 단계
+    macro coverage / recall           macro retrieval + composition 단계
+    graph validation pass rate        G1~G6
+    operator mapping 정확도           factorization 단계
+    execution success                 실제 Tool 실행(--execute)
+
+Tool 실행은 기본적으로 하지 않으므로 gazetteer의 NOT_FOUND 같은 잡음을 섞지
+않고 semantic parsing 품질만 잴 수 있다.
+
+사용법:
+    python evaluate_planner.py --model qwen3:8b --model gemma4:12b
+    python evaluate_planner.py --all-models --repeat 3 --execute
+
+정답 라벨은 Query YAML의 expected_concepts / expected_macros /
+expected_operators에서 읽는다.
+"""
+
+import argparse
+import json
+import os
+import time
+from collections import Counter
+from datetime import datetime
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+from agent_graph import extract_scopes
+import paraphrase_corpus as P
+from build import build
+from geoflow import validator as geoflow_validator
+from geoflow import analysis_ops
+from geoflow import aggregation as grounding_aggregation
+from training.data.aggregation_flat import to_flat as _training_to_flat
+from geoflow.compiler import compile_plan
+from geoflow.composer import MacroComposer
+from geoflow.errors import GeoFlowError
+from geoflow.grounding import OD_ROLE, drop_unsupported_regions, parse_grounding
+from geoflow.executor import STATUS_OK, execute_plan
+from geoflow.macros import MacroLibrary
+from geoflow.planner import NO_TEMPLATE, IGNORABLE_KEYS, GeoFlowPlanner, parse_planner_json
+from geoflow.repair import decide as decide_repair
+from geoflow.types import CoreConcept
+from ollama_client import (
+    THINK_CHOICES,
+    OllamaClient,
+    chat_options,
+    resolve_chat_timeout,
+    resolve_think,
+)
+from query_loader import QueryValidationError, load_queries
+from tool_executor import ToolExecutor
+from tool_handlers import get_tool_handlers
+
+BASE_DIR = Path(__file__).resolve().parent
+RESULT_DIR = BASE_DIR / "evaluation" / "planner_accuracy"
+DEFAULT_OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+OLLAMA_OPTIONS = {"temperature": 0}
+
+#: 지원 범위 밖이라 Planner가 거부해야 하는 질의의 정답 라벨.
+#: 틀린 계획을 만드는 것보다 거부가 낫다는 설계 주장을 측정한다.
+NO_TEMPLATE_LABEL = NO_TEMPLATE
+
+#: 계획을 만들지 않고 물러선 경우의 오류 코드.
+#: Planner가 스스로 밝힌 경우와, 합성 단계에서 근거가 모자라 만들지 못한
+#: 경우를 모두 포함한다. 둘 다 "틀린 계획을 만들지 않았다"는 같은 결과다.
+REFUSAL_CODES = frozenset({
+    "UNSUPPORTED_QUESTION",
+    "UNSUPPORTED_MEASURE",
+    "NO_MEASURE",
+    "NO_MACRO",
+    "NO_OPERATOR",
+    # 후보 operator는 있지만 필수 input 개념이 질문에 없음. d454988 이전
+    # 결과에서는 같은 경우가 NO_OPERATOR로 기록되어 있다.
+    "MISSING_REQUIRED_INPUT",
+    "AMBIGUOUS_PORT",
+    "AMBIGUOUS_OPERATOR",
+    "UNUSED_CONCEPT",
+    # 질문의 조건이나 집계를 계획이 온전히 표현할 수 없어 합성을 포기한 경우.
+    "UNCONSUMED_CONDITION",
+    "AMBIGUOUS_INNER_AGGREGATION",
+    "UNSUPPORTED_AGGREGATION",
+    "UNSUPPORTED_GROUPED_MEASURE",
+    "UNSUPPORTED_AGGREGATION_COMBINATION",
+    "MISSING_OUTER_AGGREGATION",
+    # 측정값에 뜻이 없는 집계(비율의 합계 등). geoflow/measures.py.
+    "UNDEFINED_MEASURE_AGGREGATION",
+})
+
+
+def _now_local():
+    return datetime.now(ZoneInfo("Asia/Seoul"))
+
+
+def _place_name(value):
+    if isinstance(value, dict):
+        return (value.get("name") or "").strip()
+    return str(value or "").strip()
+
+
+def check_concept_roles(question, grounding):
+    """승차/하차 개념이 발화 순서와 뒤바뀌지 않았는지 확인한다.
+
+    논문이 지적한 대표적 실패 모드다. 판정할 근거가 없으면 ``None``.
+    """
+    by_role = {}
+    for concept in grounding.concepts:
+        role = concept.attributes.get(OD_ROLE)
+        if role in ("pickup", "dropoff"):
+            by_role.setdefault(role, concept)
+    if len(by_role) < 2:
+        return None
+    pickup = _place_name(by_role["pickup"].value)
+    dropoff = _place_name(by_role["dropoff"].value)
+    if not pickup or not dropoff:
+        return None
+    pickup_at = question.find(pickup)
+    dropoff_at = question.find(dropoff)
+    if pickup_at < 0 or dropoff_at < 0 or pickup_at == dropoff_at:
+        return None
+    return pickup_at < dropoff_at
+
+
+# -- 채점 -------------------------------------------------------------------
+
+
+def concept_keys(grounding):
+    """grounding 개념을 (concept, subtype, role) 문자열로 편다.
+
+    id는 모델이 정하는 이름이라 정답과 맞출 수 없으므로 의미만 비교한다.
+    """
+    return [
+        f"{item.concept.value}/{item.subtype}:{item.role.value}"
+        for item in grounding.concepts
+    ]
+
+
+def _levels(key):
+    """채점 단계별로 잘라 낸 key. 상위 단계가 맞으면 하위도 비교한다."""
+    types, _, role = key.partition(":")
+    concept, _, subtype = types.partition("/")
+    return concept, f"{concept}/{subtype}", key
+
+
+def score_concepts(predicted, expected):
+    """concept / subtype / role 각각의 일치 개수를 센다.
+
+    같은 개념이 여러 개인 질문(출발지·도착지)이 있으므로 집합이 아니라
+    다중집합으로 비교한다.
+    """
+    result = {}
+    for index, name in enumerate(("concept", "subtype", "role")):
+        predicted_counter = Counter(_levels(key)[index] for key in predicted)
+        expected_counter = Counter(_levels(key)[index] for key in expected)
+        matched = sum((predicted_counter & expected_counter).values())
+        result[name] = {
+            "matched": matched,
+            "expected": sum(expected_counter.values()),
+            "predicted": sum(predicted_counter.values()),
+        }
+    return result
+
+
+def score_sequence(predicted, expected):
+    """macro/operator 목록의 재현율과 완전 일치 여부."""
+    predicted_counter = Counter(predicted)
+    expected_counter = Counter(expected)
+    matched = sum((predicted_counter & expected_counter).values())
+    return {
+        "matched": matched,
+        "expected": sum(expected_counter.values()),
+        "predicted": sum(predicted_counter.values()),
+        "exact": predicted_counter == expected_counter,
+    }
+
+
+def _empty_score():
+    return {"matched": 0, "expected": 0, "predicted": 0}
+
+
+def evaluate_model(model, queries, *, host, chat_timeout, repeat, verbose,
+                   think=None, num_predict=None, execute=False,
+                   tool_executor=None):
+    """모델 하나로 전체 Query의 grounding과 합성을 측정한다."""
+    client = OllamaClient(
+        host,
+        model,
+        chat_options(OLLAMA_OPTIONS, num_predict),
+        chat_timeout=chat_timeout,
+        think=think,
+    )
+    planner = GeoFlowPlanner(client=client)
+    system_prompt_chars = len(planner.system_prompt())
+    composer = MacroComposer(MacroLibrary.from_directory())
+    available_tools = None if tool_executor is None else tool_executor.tool_names
+
+    records = []
+    records = []
+    for item in queries:
+        for attempt in range(1, repeat + 1):
+            record = evaluate_once(
+                planner, composer, item, attempt=attempt,
+                available_tools=available_tools, execute=execute,
+                tool_executor=tool_executor,
+                system_prompt_chars=system_prompt_chars,
+            )
+            records.append(record)
+            if verbose:
+                mark = "O" if record["correct"] else "X"
+                shown = " + ".join(record["macros"]) or record["status"]
+                print(
+                    f"  {mark} {item['id']:<36} "
+                    f"{shown[:34]:<36} "
+                    f"{record['duration_ms']:7.0f}ms"
+                )
+    return records
+
+
+def evaluate_once(planner, composer, item, *, attempt=1,
+                  available_tools=None, execute=False, tool_executor=None,
+                  system_prompt_chars=0, variant=None, execution_profile=None):
+    """질문 하나를 한 번 측정해 record를 돌려준다.
+
+    한 번의 측정을 함수로 떼어 둔 이유는, prompt A/B처럼 질문 단위로
+    조건을 번갈아 실행해야 하는 측정이 있기 때문이다. 모델은 시간에 따라
+    흔들리므로 조건별로 몰아서 돌리면 그 변동과 섞인다.
+    """
+    expected_concepts = list(item.get("expected_concepts") or [])
+    expected_macros = list(item.get("expected_macros") or [])
+    expected_operators = list(item.get("expected_operators") or [])
+    refusal_expected = NO_TEMPLATE_LABEL in expected_macros
+    started_at = time.perf_counter()
+    record = {
+        "id": item["id"],
+        "repeat_index": attempt,
+        "status": "OK",
+        "error": None,
+        "stage": "planner",
+        "concepts": [],
+        "factors": {},
+        "macros": [],
+        "operators": [],
+        "concept_score": {
+            name: _empty_score()
+            for name in ("concept", "subtype", "role")
+        },
+        "macro_score": _empty_score(),
+        "operator_score": _empty_score(),
+        "validated": False,
+        "composed": False,
+        "validation_codes": [],
+        "checked_rules": [],
+        "executed": None,
+        # 실행 실패가 재계획으로 복구 가능한 종류였는지. 장소 조회
+        # 실패는 런타임이 한 번 고쳐 다시 시도하지만, 이 측정은
+        # 첫 계획을 그대로 실행하므로 여기서 구분해 둔다.
+        "execution_retryable": None,
+        "refused": False,
+        "role_order_ok": None,
+        # 계획 단계 재질의. 파이프라인과 같은 1회 규칙을 따른다.
+        "od_qualified_initial": None,
+        "repair_kind": None,
+        "repair_attempted": False,
+        "repair_succeeded": False,
+        "repair_error": None,
+        "unsupported_relation": False,
+        # 지연을 단계별로 나눠 본다. 총합만 보면 한 건의 이상치가
+        # 전체 평균을 지배하는 것을 알 수 없다.
+        "initial_planner_ms": 0.0,
+        "repair_planner_ms": 0.0,
+        "planner_calls": 0,
+        "output_chars": 0,
+        # 초기 grounding 응답 원문과, 재질의 전의 첫 오류 코드.
+        "raw_text": "",
+        "initial_error": None,
+        "duration_ms": 0.0,
+    }
+    # Factor/schema errors can omit raw_text in their exception context. Observe
+    # the existing client calls without changing inference or retry behavior.
+    original_client = getattr(planner, "client", None)
+    captured_calls = []
+    if original_client is not None:
+        original_chat = original_client.chat
+        local_chat = vars(original_client).get("chat")
+        had_local_chat = "chat" in vars(original_client)
+
+        def observed_chat(*args, **kwargs):
+            call = {"raw_text": ""}
+            captured_calls.append(call)
+            started = time.perf_counter()
+            try:
+                response = original_chat(*args, **kwargs)
+                call["raw_text"] = (response.get("message") or {}).get("content", "")
+                return response
+            finally:
+                call["duration_ms"] = (time.perf_counter() - started) * 1000
+        # Preserve client identity/type: the existing A/B harness identifies
+        # RecordingClient by isinstance when annotating repair calls.
+        original_client.chat = observed_chat
+    try:
+        output = planner.plan(item["question"])
+        record["initial_planner_ms"] = output.duration_ms
+        record["planner_calls"] = 1
+        record["output_chars"] = len(output.raw_text)
+        record["raw_text"] = output.raw_text
+        grounding = output.grounding
+        record["concepts"] = concept_keys(grounding)
+        record["factors"] = dict(grounding.factors)
+        record["role_order_ok"] = check_concept_roles(
+            item["question"], grounding,
+        )
+        record["concept_score"] = score_concepts(
+            record["concepts"], expected_concepts,
+        )
+        record["od_qualified_initial"] = _od_qualified(grounding)
+
+        record["stage"] = "composition"
+        plan = _compose_with_repair(
+            composer, planner, item["question"], output, record,
+        )
+        record["composed"] = True
+        record["semantic_macros"] = list(plan.applied_macros)
+        record["semantic_operators"] = [
+            item.operator for item in plan.transformations
+        ]
+        record["macros"], record["operators"] = corpus_labels(plan)
+        record["macro_score"] = score_sequence(
+            record["macros"], expected_macros,
+        )
+        record["operator_score"] = score_sequence(
+            record["operators"], expected_operators,
+        )
+
+        record["stage"] = "validation"
+        report = geoflow_validator.validate(
+            plan, available_tools=available_tools,
+        )
+        record["validated"] = report.ok
+        record["validation_codes"] = report.failed_rules()
+        record["checked_rules"] = list(report.checked_rules)
+        if not report.ok:
+            record["status"] = "VALIDATION_FAILED"
+            record["error"] = "; ".join(
+                error["message"] for error in report.errors
+            )
+        elif execute and tool_executor is not None:
+            record["stage"] = "execution"
+            # 사용자가 발화에 적은 scope는 실행 시점에도 known scope로
+            # 넘겨야 한다. 파이프라인이 하는 것과 같은 처리이며,
+            # 빠뜨리면 provenance gate가 정상 질의를 막는다.
+            compile_kwargs = {"reference_date": P.EVALUATION_REFERENCE_DATE}
+            if execution_profile is not None:
+                compile_kwargs.update(contract=execution_profile.contract,
+                                      date_policy=execution_profile.date_policy,
+                                      delegation=execution_profile.delegation)
+                record["execution_profile"] = execution_profile.to_dict()
+            result = execute_plan(
+                compile_plan(plan, **compile_kwargs),
+                tool_executor,
+                known_scopes=set(extract_scopes(item["question"])),
+            )
+            record["executed"] = result.status == STATUS_OK
+            if not record["executed"]:
+                record["status"] = result.status
+                error = result.error or {}
+                record["error"] = error.get("detail")
+                record["execution_retryable"] = bool(
+                    (error.get("context") or {}).get("retryable")
+                )
+        else:
+            record["stage"] = "done"
+    except GeoFlowError as error:
+        record["status"] = error.code
+        record["error"] = error.detail
+        # grounding 단계에서 거부되면 plan()이 값을 돌려주지 않으므로 원문이
+        # 비어 있다. 원인을 사후에 읽으려면 오류가 들고 있는 것을 써야 한다.
+        if not record["raw_text"]:
+            record["raw_text"] = (error.context or {}).get("raw_text", "")
+        if error.code in REFUSAL_CODES:
+            # 지원 범위 밖임을 스스로 인정한 경우도 하나의 판정 결과다.
+            record["refused"] = True
+            record["macros"] = [NO_TEMPLATE_LABEL]
+            record["macro_score"] = score_sequence(
+                record["macros"], expected_macros,
+            )
+    except Exception as error:  # noqa: BLE001 - 모델 오류도 기록 대상
+        record["status"] = "CLIENT_ERROR"
+        record["error"] = f"{type(error).__name__}: {error}"
+    finally:
+        if original_client is not None:
+            if had_local_chat:
+                original_client.chat = local_chat
+            else:
+                del original_client.chat
+    if captured_calls:
+        record["raw_text"] = captured_calls[0]["raw_text"]
+        record["planner_calls"] = len(captured_calls)
+        record["output_chars"] = len(record["raw_text"])
+        if not record["initial_planner_ms"]:
+            record["initial_planner_ms"] = captured_calls[0]["duration_ms"]
+    # Failed planning must still contribute gold denominators. Otherwise an
+    # invalid grounding disappears from concept/macro/operator recall.
+    record["concept_score"] = score_concepts(record["concepts"], expected_concepts)
+    record["macro_score"] = score_sequence(record["macros"], expected_macros)
+    record["operator_score"] = score_sequence(record["operators"], expected_operators)
+    record["duration_ms"] = round(
+        (time.perf_counter() - started_at) * 1000, 3
+    )
+    # 종합 판정은 "실행 가능한 올바른 그래프가 나왔는가"만 본다.
+    # concept/subtype/role 정확도를 여기에 다시 곱하지 않는 이유는
+    # 설계상 질문에 드러나지 않아도 되는 개념이 있기 때문이다.
+    # "평균 속도"라는 질문에 passage를 적지 않아도 registry가 유일하게
+    # 결정할 수 있으므로 합성은 성공한다. 그것을 틀렸다고 셀 수 없다.
+    # grounding 품질은 별도 지표로 따로 본다.
+    record["correct"] = bool(
+        record["macro_score"].get("exact")
+        and record["operator_score"].get("exact")
+        and record["validated"]
+    )
+    if refusal_expected:
+        # 라벨이 NONE이면 "실행 가능한 계획이 만들어지지 않는 것"이
+        # 정답이다. Planner가 거부했든 합성이 포기했든 같다.
+        record["correct"] = not record["validated"]
+    record["system_prompt_chars"] = system_prompt_chars
+    record["variant"] = variant
+    record.update(score_raw_grounding(record["raw_text"], item))
+    _annotate_record(record)
+    return record
+
+
+def _factor_view(grounding):
+    factors = dict(grounding.factors)
+    if grounding.aggregation_plan is not None:
+        factors = {k: v for k, v in factors.items() if k not in grounding_aggregation.FLAT_KEYS}
+        factors.update(_training_to_flat(grounding.aggregation))
+    return factors
+
+
+def _grounding_signature(grounding):
+    """Meaning equality: ignore local IDs/text/order, retain role/source/value/OD."""
+    concepts = sorted(json.dumps({"concept": c.concept.value, "subtype": c.subtype,
+                                  "role": c.role.value, "source": c.source.value,
+                                  "value": c.value, "attributes": c.attributes},
+                                 ensure_ascii=False, sort_keys=True) for c in grounding.concepts)
+    return concepts, _factor_view(grounding)
+
+
+def score_raw_grounding(text, item):
+    """Additional first-response metrics; no model calls, training imports or repairs.
+
+    JSON rate uses production's tolerant JSON extractor. Contract rate checks
+    accepted raw keys and the production grounding parser. Gold-dependent metrics
+    are None if an evaluation corpus supplies labels but no complete grounding.
+    """
+    result = {"json_parse_ok": False, "planner_contract_ok": False, "predicted_unsupported": False,
+              "expected_unsupported": NO_TEMPLATE in (item.get("expected_macros") or []),
+              "grounding_exact": None, "factor_exact": None, "factor_score": None}
+    golden = item.get("golden") or item.get("grounding")
+    expected = None
+    if isinstance(golden, dict):
+        result["expected_unsupported"] = golden.get("unsupported") is True
+        result["grounding_exact"] = False
+        result["factor_exact"] = False if not golden.get("unsupported") else None
+        if not golden.get("unsupported"):
+            try:
+                expected = parse_grounding(golden, item["question"], structured_aggregation=True)
+                expected_count = len(_factor_view(expected))
+            except (GeoFlowError, ValueError, TypeError, KeyError):
+                # Do not turn invalid gold into an apparent model miss.
+                result["grounding_exact"] = result["factor_exact"] = None
+                expected_count = None
+            if expected_count is not None:
+                result["factor_score"] = {"matched": 0, "expected": expected_count, "predicted": 0}
+    try:
+        payload = parse_planner_json(text)
+        result["json_parse_ok"] = True
+        result["predicted_unsupported"] = payload.get("unsupported") is True
+        if set(payload) - {"concepts", "factors", "unsupported"} - IGNORABLE_KEYS:
+            return result
+        if payload.get("unsupported"):
+            result["planner_contract_ok"] = payload.get("unsupported") is True and not ({"concepts", "factors"} & set(payload))
+            if isinstance(golden, dict):
+                result["grounding_exact"] = result["planner_contract_ok"] and golden.get("unsupported") is True
+            return result
+        predicted = parse_grounding(payload, item["question"])
+        drop_unsupported_regions(predicted)
+        result["planner_contract_ok"] = True
+        if expected is not None:
+            expected_factors, predicted_factors = _factor_view(expected), _factor_view(predicted)
+            result["factor_score"] = {"matched": sum(key in predicted_factors and predicted_factors[key] == value
+                                                     for key, value in expected_factors.items()),
+                                      "expected": len(expected_factors), "predicted": len(predicted_factors)}
+            result["factor_exact"] = expected_factors == predicted_factors
+            result["grounding_exact"] = _grounding_signature(predicted) == _grounding_signature(expected)
+    except (GeoFlowError, ValueError, TypeError, KeyError):
+        pass
+    return result
+
+
+#: 집계 단계를 잘못 고른 대표 실패. rollup은 합치는 방식이지 시간 단위가
+#: 아니므로, 여기에 구간 단위가 들어오면 두 단계를 뒤섞은 것이다.
+_BUCKET_UNITS = frozenset({"week", "month"})
+
+#: 의미 실패가 아니라 전송/모델 지연으로 끝난 경우. 정확도와 분리해 센다.
+_TIMEOUT_MARKERS = ("Timeout", "timed out", "ReadTimeout")
+
+
+#: 구간별 조각이 생기기 전의 라벨. corpus의 expected_macros/operators는
+#: EVENT_TO_MEASURE 하나가 bucket·rollup 인자로 두 단계 집계를 맡던 때 적었다.
+_LEGACY_MACRO_LABELS = {"EVENT_TO_GROUPED_MEASURE": "EVENT_TO_MEASURE"}
+
+
+def corpus_labels(plan):
+    """계획을 corpus 라벨의 어휘로 옮긴 ``(macros, operators)``.
+
+    예전 library가 표현할 수 있던 계획만 옮긴다. 구간별 값을 REDUCE_GROUPS 하나로
+    합치는 계획은 TIMS 호출 하나(bucket·aggregation·rollup)와 같은 계산이고, 예전
+    라벨은 바로 그 호출을 가리켰다. 구간을 고르는 SELECT_GROUP이나 다른 로컬
+    연산이 있는 계획은 옮기지 않는다. 예전 라벨로는 표현할 수 없던 계산이다.
+    Tool 인자 비교(strict)는 이 투영과 무관하게 실제 호출로 한다.
+    """
+    macros = list(plan.applied_macros)
+    operators = [item.operator for item in plan.transformations]
+    local = [name for name in operators if analysis_ops.is_analysis_operator(name)]
+    if local != [analysis_ops.REDUCE_GROUPS]:
+        return macros, operators
+    return (
+        [_LEGACY_MACRO_LABELS.get(name, name) for name in macros],
+        [name for name in operators if name != analysis_ops.REDUCE_GROUPS],
+    )
+
+
+def _annotate_record(record):
+    """비교에 쓰는 파생 필드를 채운다."""
+    factors = record.get("factors") or {}
+    for name in ("bucket", "aggregation", "rollup"):
+        record[name] = factors.get(name)
+    record["bucket_unit_as_rollup"] = factors.get("rollup") in _BUCKET_UNITS
+    text = f"{record.get('status')} {record.get('error') or ''}"
+    record["timeout"] = any(mark in text for mark in _TIMEOUT_MARKERS)
+
+
+#: 측정용 prompt 변형. 제품 Planner는 건드리지 않는다.
+_SEMANTICS_HEADING = "\n\n[조건이 뜻하는 것]\n"
+_CONSTRAINTS_HEADING = "\n\n[짝을 이루는 factor]\n"
+
+
+def _without_semantics(prompt):
+    """factor 의미 절만 들어낸 prompt. 나머지 문구는 그대로 둔다."""
+    start = prompt.find(_SEMANTICS_HEADING)
+    end = prompt.find(_CONSTRAINTS_HEADING)
+    if start < 0 or end < start:
+        raise ValueError("factor 의미 절을 찾지 못했다")
+    return prompt[:start] + prompt[end:]
+
+
+class PromptVariantPlanner(GeoFlowPlanner):
+    """system prompt 구성만 바꿔 A/B를 재는 측정용 Planner.
+
+    제품 Planner를 그대로 두고 여기서만 갈아 끼운다. ``D``는 제품 prompt와
+    글자 하나까지 같아야 하며, 테스트가 hash로 그것을 확인한다. 이전 측정에서
+    harness가 제품과 다른 prompt를 D라고 부른 적이 있어 그 사고를 막는다.
+    """
+
+    #: 재질의 prompt는 두 변형이 공유한다. 이번 측정 대상은 grounding prompt다.
+    variant = "D"
+
+    def system_prompt(self):
+        full = super().system_prompt()
+        if self.variant == "D":
+            return full
+        if self.variant == "C":
+            return _without_semantics(full)
+        raise ValueError(f"모르는 prompt variant: {self.variant}")
+
+
+def make_variant_planner(variant, client):
+    planner = PromptVariantPlanner(client=client)
+    planner.variant = variant
+    return planner
+
+
+
+
+def _od_qualified(grounding):
+    """초기 grounding의 장소에 승하차 구분이 붙어 있었는지.
+
+    장소가 없으면 판정 대상이 아니므로 ``None``.
+    """
+    locations = [
+        concept for concept in grounding.concepts
+        if concept.concept == CoreConcept.LOCATION
+        and concept.role.value != "MEASURE"
+    ]
+    if not locations:
+        return None
+    return all(OD_ROLE in concept.attributes for concept in locations)
+
+
+def _compose_with_repair(composer, planner, question, output, record):
+    """합성이 실패하면 파이프라인과 같은 규칙으로 한 번만 다시 묻는다.
+
+    복구 가능 여부 판정과 허용 범위 검사는 런타임과 같은 코드를 쓴다.
+    측정이 실제 동작과 어긋나지 않게 하기 위해서다.
+    """
+    try:
+        return composer.compose(output.grounding)
+    except GeoFlowError as error:
+        record["initial_error"] = error.code
+        decision = decide_repair(error)
+        record["repair_kind"] = decision.kind
+        if error.code == "AMBIGUOUS_LOCATION_RELATION" and not (
+            decision.repairable
+        ):
+            record["unsupported_relation"] = True
+        if not decision.repairable:
+            raise
+        record["repair_attempted"] = True
+        try:
+            repaired = planner.repair_planning_error(
+                question, output, error=error, decision=decision,
+            )
+            record["repair_planner_ms"] = repaired.duration_ms
+            record["planner_calls"] += 1
+            record["output_chars"] += len(repaired.raw_text)
+        except GeoFlowError as repair_error:
+            record["repair_error"] = repair_error.code
+            raise error from repair_error
+        plan = composer.compose(repaired.grounding)
+        record["repair_succeeded"] = True
+        record["concepts_after_repair"] = concept_keys(repaired.grounding)
+        record["factors_after_repair"] = dict(repaired.grounding.factors)
+        return plan
+
+
+def _median(values):
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[middle]
+    return (ordered[middle - 1] + ordered[middle]) / 2
+
+
+def _ratio(matched, expected):
+    return round(matched / expected, 4) if expected else 0.0
+
+
+def summarize(records):
+    total = len(records)
+    correct = sum(1 for item in records if item["correct"])
+    refused = sum(1 for item in records if item["refused"])
+    failed = sum(
+        1 for item in records
+        if item["status"] not in ("OK", *REFUSAL_CODES)
+    )
+    roles = [
+        item["role_order_ok"] for item in records
+        if item["role_order_ok"] is not None
+    ]
+    executed = [item["executed"] for item in records if item["executed"] is not None]
+    retryable = sum(1 for item in records if item["execution_retryable"])
+
+    def level(name):
+        matched = sum(item["concept_score"][name]["matched"] for item in records)
+        expected = sum(
+            item["concept_score"][name]["expected"] for item in records
+        )
+        return _ratio(matched, expected)
+
+    macro_matched = sum(item["macro_score"]["matched"] for item in records)
+    macro_expected = sum(item["macro_score"]["expected"] for item in records)
+    operator_matched = sum(item["operator_score"]["matched"] for item in records)
+    operator_expected = sum(
+        item["operator_score"]["expected"] for item in records
+    )
+    extra = summarize_grounding_metrics(records)
+    return {
+        **extra,
+        "total": total,
+        "correct": correct,
+        "accuracy": _ratio(correct, total),
+        "concept_accuracy": level("concept"),
+        "subtype_accuracy": level("subtype"),
+        "role_accuracy": level("role"),
+        "macro_recall": _ratio(macro_matched, macro_expected),
+        "macro_exact": _ratio(
+            sum(1 for item in records if item["macro_score"].get("exact")),
+            total,
+        ),
+        "operator_accuracy": _ratio(operator_matched, operator_expected),
+        "validation_pass_rate": _ratio(
+            sum(1 for item in records if item["validated"]), total,
+        ),
+        "execution_success_rate": (
+            _ratio(sum(1 for item in executed if item), len(executed))
+            if executed else None
+        ),
+        # 장소 조회 실패처럼 런타임이 재계획으로 복구하는 실패.
+        # 이 측정은 첫 계획을 그대로 실행하므로 복구를 포함하지 않는다.
+        "execution_retryable_failures": retryable,
+        "refused": refused,
+        "planner_error": failed,
+        "repair_attempted": sum(
+            1 for item in records if item["repair_attempted"]
+        ),
+        "repair_succeeded": sum(
+            1 for item in records if item["repair_succeeded"]
+        ),
+        "relation_repair_attempted": sum(
+            1 for item in records
+            if item["repair_kind"] == "relation_qualifier"
+            and item["repair_attempted"]
+        ),
+        "relation_repair_succeeded": sum(
+            1 for item in records
+            if item["repair_kind"] == "relation_qualifier"
+            and item["repair_succeeded"]
+        ),
+        "factor_repair_attempted": sum(
+            1 for item in records
+            if item["repair_kind"] in ("factor_completion", "factor_correction")
+            and item["repair_attempted"]
+        ),
+        "factor_repair_succeeded": sum(
+            1 for item in records
+            if item["repair_kind"] in ("factor_completion", "factor_correction")
+            and item["repair_succeeded"]
+        ),
+        "unsupported_relations": sum(
+            1 for item in records if item["unsupported_relation"]
+        ),
+        "role_order_checked": len(roles),
+        "role_order_ok": sum(1 for item in roles if item),
+        "mean_duration_ms": round(
+            sum(item["duration_ms"] for item in records) / total, 1
+        ) if total else 0.0,
+        "median_initial_planner_ms": round(_median(
+            [item["initial_planner_ms"] for item in records]
+        ), 1),
+        "mean_initial_planner_ms": round(
+            sum(item["initial_planner_ms"] for item in records) / total, 1
+        ) if total else 0.0,
+        "total_repair_planner_ms": round(
+            sum(item["repair_planner_ms"] for item in records), 1
+        ),
+        "planner_calls": sum(item["planner_calls"] for item in records),
+        "mean_output_chars": round(
+            sum(item["output_chars"] for item in records) / total, 1
+        ) if total else 0.0,
+        "system_prompt_chars": (
+            records[0].get("system_prompt_chars", 0) if records else 0
+        ),
+    }
+
+
+def summarize_grounding_metrics(records):
+    """Only new metrics; existing concept/macro/execution scoring stays above."""
+    total = len(records)
+    exact = [r.get("grounding_exact") for r in records if r.get("grounding_exact") is not None]
+    factors = [r.get("factor_exact") for r in records if r.get("factor_exact") is not None]
+    scores = [r["factor_score"] for r in records if r.get("factor_score") is not None]
+    tp = sum(r.get("predicted_unsupported", False) and r.get("expected_unsupported", False) for r in records)
+    attempted = sum(r.get("repair_attempted", False) for r in records)
+    checked = [r for r in records if r.get("checked_rules")]
+    return {
+        "json_parse_rate": _ratio(sum(r.get("json_parse_ok", False) for r in records), total),
+        "planner_contract_pass_rate": _ratio(sum(r.get("planner_contract_ok", False) for r in records), total),
+        "grounding_exact_match": _ratio(sum(exact), len(exact)) if exact else None,
+        "grounding_labeled_count": len(exact),
+        "factor_precision": _ratio(sum(s["matched"] for s in scores), sum(s["predicted"] for s in scores)) if scores else None,
+        "factor_recall": _ratio(sum(s["matched"] for s in scores), sum(s["expected"] for s in scores)) if scores else None,
+        "factor_exact_match": _ratio(sum(factors), len(factors)) if factors else None,
+        "factor_labeled_count": len(factors),
+        "unsupported_precision": _ratio(tp, sum(r.get("predicted_unsupported", False) for r in records)),
+        "unsupported_recall": _ratio(tp, sum(r.get("expected_unsupported", False) for r in records)),
+        "composition_success_rate": _ratio(sum(r.get("composed", False) for r in records), total),
+        "g1_g7_pass_rates": {rule: _ratio(sum(rule not in r.get("validation_codes", []) for r in checked), len(checked))
+                            if checked else None for rule in geoflow_validator.ALL_RULES},
+        "validation_checked_count": len(checked),
+        "repair_attempted_rate": _ratio(attempted, total),
+        "repair_success_rate": _ratio(sum(r.get("repair_succeeded", False) for r in records), attempted) if attempted else None,
+    }
+
+
+def print_report(results, query_ids):
+    ids = list(query_ids)
+    models = list(results)
+    width = max((len(name) for name in ids), default=10) + 2
+
+    print("\n" + "=" * 78)
+    print("Macro 합성 정확도")
+    print("=" * 78)
+    header = "query".ljust(width) + "".join(
+        name[:14].ljust(16) for name in models
+    )
+    print(header)
+    print("-" * len(header))
+    for query_id in ids:
+        row = query_id.ljust(width)
+        for model in models:
+            picks = [
+                item for item in results[model]["records"]
+                if item["id"] == query_id
+            ]
+            hit = sum(1 for item in picks if item["correct"])
+            if picks and hit == len(picks):
+                cell = "O"
+            elif hit == 0:
+                shown = (
+                    "+".join(picks[0]["macros"]) or picks[0]["status"]
+                ) if picks else "-"
+                cell = f"X {str(shown)[:12]}"
+            else:
+                cell = f"~ {hit}/{len(picks)}"
+            row += cell.ljust(16)
+        print(row)
+
+    print("-" * len(header))
+    print(
+        "\n" + "모델".ljust(20) + "종합".ljust(12) + "concept".ljust(10)
+        + "subtype".ljust(10) + "role".ljust(10) + "macro".ljust(10)
+        + "operator".ljust(10) + "G1~G6".ljust(10) + "평균 지연"
+    )
+    print("-" * 100)
+    for model in models:
+        summary = results[model]["summary"]
+        print(
+            model.ljust(20)
+            + f"{summary['correct']}/{summary['total']}".ljust(12)
+            + f"{summary['concept_accuracy'] * 100:.0f}%".ljust(10)
+            + f"{summary['subtype_accuracy'] * 100:.0f}%".ljust(10)
+            + f"{summary['role_accuracy'] * 100:.0f}%".ljust(10)
+            + f"{summary['macro_recall'] * 100:.0f}%".ljust(10)
+            + f"{summary['operator_accuracy'] * 100:.0f}%".ljust(10)
+            + f"{summary['validation_pass_rate'] * 100:.0f}%".ljust(10)
+            + f"{summary['mean_duration_ms']:.0f} ms"
+        )
+    for model in models:
+        summary = results[model]["summary"]
+        if summary["execution_success_rate"] is not None:
+            print(
+                f"  {model}: 실행 성공률 "
+                f"{summary['execution_success_rate'] * 100:.0f}% "
+                f"(재계획으로 복구 가능한 실패 "
+                f"{summary['execution_retryable_failures']}건 포함)"
+            )
+
+
+def load_latest_runs():
+    """모델별로 가장 최근 실행 결과만 모은다.
+
+    모델마다 지연 특성이 달라 한 번에 측정하기 어려우므로, 따로 실행한
+    결과를 하나의 표로 다시 합칠 수 있게 한다.
+    """
+    latest = {}
+    paths = sorted(
+        RESULT_DIR.glob("*/planner_accuracy.json"),
+        key=lambda item: item.stat().st_mtime,
+    )
+    for path in paths:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        for model, value in payload.get("models", {}).items():
+            latest[model] = value
+    return latest
+
+
+def installed_models(host):
+    client = OllamaClient(host, "", dict(OLLAMA_OPTIONS))
+    return [
+        item.get("name") or item.get("model")
+        for item in client.list_models()
+        if item.get("name") or item.get("model")
+    ]
+
+
+def check_labels(queries, library):
+    """정답 라벨이 현재 macro library와 어긋나지 않는지 확인한다."""
+    unlabeled = [
+        item["id"] for item in queries if not item.get("expected_macros")
+    ]
+    if unlabeled:
+        raise SystemExit(
+            "expected_macros 라벨이 없는 Query가 있습니다: "
+            + ", ".join(unlabeled)
+        )
+    unknown = sorted({
+        name
+        for item in queries
+        for name in item["expected_macros"]
+        if name not in library and name != NO_TEMPLATE_LABEL
+    })
+    if unknown:
+        raise SystemExit(
+            f"등록되지 않은 expected_macros입니다: {', '.join(unknown)}"
+        )
+
+
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(
+        description="GeoFlow Planner concept grounding 정확도 측정",
+    )
+    parser.add_argument(
+        "--model", action="append", help="측정할 모델(여러 번 지정 가능)",
+    )
+    parser.add_argument(
+        "--all-models", action="store_true", help="설치된 모든 모델을 측정",
+    )
+    parser.add_argument("--ollama-host", default=DEFAULT_OLLAMA_HOST)
+    parser.add_argument("--query-file", default=str(BASE_DIR / "stub_query.yaml"))
+    parser.add_argument("--repeat", type=int, default=1)
+    parser.add_argument("--chat-timeout", type=float, default=None)
+    parser.add_argument(
+        "--model-think",
+        choices=THINK_CHOICES,
+        default="auto",
+        help="모델 thinking 사용 여부(기본: auto=모델 기본값)",
+    )
+    parser.add_argument(
+        "--num-predict",
+        type=int,
+        default=None,
+        help="Planner 응답 1회의 생성 토큰 상한(기본: 모델 기본값)",
+    )
+    parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="합성된 계획을 실제로 실행해 성공률까지 측정",
+    )
+    parser.add_argument("--quiet", action="store_true")
+    parser.add_argument(
+        "--aggregate",
+        action="store_true",
+        help="새로 측정하지 않고 저장된 모델별 최신 결과를 하나의 표로 출력",
+    )
+    args = parser.parse_args(argv)
+    if not args.aggregate and not args.model and not args.all_models:
+        parser.error("--model, --all-models 또는 --aggregate가 필요합니다.")
+    if args.repeat < 1:
+        parser.error("--repeat는 1 이상이어야 합니다.")
+    return args
+
+
+def main(argv=None):
+    args = parse_args(argv)
+
+    if args.aggregate:
+        results = load_latest_runs()
+        if not results:
+            raise SystemExit(f"저장된 측정 결과가 없습니다: {RESULT_DIR}")
+        ids = list(dict.fromkeys(
+            record["id"]
+            for value in results.values()
+            for record in value["records"]
+        ))
+        print_report(results, ids)
+        return results
+
+    chat_timeout = resolve_chat_timeout(args.chat_timeout)
+
+    try:
+        queries = load_queries(args.query_file)
+    except QueryValidationError as error:
+        raise SystemExit(str(error)) from error
+
+    library = MacroLibrary.from_directory()
+    check_labels(queries, library)
+
+    # registry ↔ Tool 계약은 Tool을 실행하지 않더라도 여기서 확인해 둔다.
+    tools, _prompt = build()
+    tool_executor = ToolExecutor(tools=tools, handlers=get_tool_handlers())
+
+    models = args.model or installed_models(args.ollama_host)
+    results = {}
+    for model in models:
+        print(f"\n[{model}] Query {len(queries)}개 × repeat {args.repeat}")
+        records = evaluate_model(
+            model,
+            queries,
+            host=args.ollama_host,
+            chat_timeout=chat_timeout,
+            repeat=args.repeat,
+            verbose=not args.quiet,
+            think=resolve_think(args.model_think),
+            num_predict=args.num_predict,
+            execute=args.execute,
+            tool_executor=tool_executor,
+        )
+        results[model] = {
+            "records": records,
+            "summary": summarize(records),
+        }
+
+    print_report(results, [item["id"] for item in queries])
+
+    RESULT_DIR.mkdir(parents=True, exist_ok=True)
+    run_dir = RESULT_DIR / _now_local().strftime("%Y%m%d_%H%M%S")
+    run_dir.mkdir()
+    payload = {
+        "timestamp": _now_local().isoformat(),
+        "query_file": str(args.query_file),
+        "query_count": len(queries),
+        "repeat": args.repeat,
+        "executed": args.execute,
+        "macros": list(library.names),
+        "models": {
+            model: {
+                "summary": value["summary"],
+                "records": value["records"],
+            }
+            for model, value in results.items()
+        },
+    }
+    (run_dir / "planner_accuracy.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8",
+    )
+    print(f"\n결과 파일: {run_dir}")
+    return results
+
+
+if __name__ == "__main__":
+    main()

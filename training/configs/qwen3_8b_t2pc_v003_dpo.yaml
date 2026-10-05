@@ -1,0 +1,76 @@
+# T2PC v003 profile (prompt 87048d0c). thor qwen3_8b_thor_pilot_003_dpo.yaml에서 데이터·출력 경로, token 한도,
+# safety.unified_memory만 바꿨다. 한도는 sft_dpo_inventory/README.md 3.4절의 실측 최소값(SFT 7519, DPO 7520 / prompt 7331 /
+# completion 188) 이상을 128 단위로 올린 값이다. 이 profile로 학습·memory smoke를 실행하지 않았다(GPU 2 RTX 6000 Ada 48GB에서
+# 메모리 적합성 미확인). 단계 수·LR 등 학습 설정은 thor pilot003 그대로이며 실행 전에 다시 정한다.
+model:
+  name_or_path: Qwen/Qwen3-8B
+  revision: b968826d9c46dd6066d109eabc6255188de91218
+  initial_mode: sft
+  trust_remote_code: false
+  load_in_4bit: false
+  attn_implementation: sdpa
+  adapter_path: SELECTED_T2PC_V003_SFT_REQUIRED
+reference:
+  mode: initial_policy
+  strategy: shared_adapter
+data:
+  train: training/generated/reviewed_gold_v003_t2pc/dpo_train.jsonl
+  valid: training/generated/reviewed_gold_v003_t2pc/dpo_valid.jsonl
+  manifest: training/generated/reviewed_gold_v003_t2pc/manifest.json
+chat_template_kwargs:
+  enable_thinking: false
+training:
+  output_dir: training/experiments/t2pc_v003/checkpoints/dpo
+  num_train_epochs: 1
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 1
+  learning_rate: 1.0e-05
+  warmup_ratio: 0
+  beta: 0.1
+  max_prompt_length: 7424
+  max_completion_length: 256
+  max_length: 7552
+  bf16: true
+  fp16: false
+  gradient_checkpointing: true
+  eval_strategy: steps
+  save_strategy: steps
+  save_total_limit: 6
+  logging_steps: 1
+  report_to: none
+  seed: 42
+  use_logits_to_keep: true
+  precompute_ref_log_probs: false
+  optim: adamw_torch
+  dataloader_num_workers: 0
+  dataloader_pin_memory: false
+  torch_compile: false
+  gradient_checkpointing_kwargs:
+    use_reentrant: false
+  max_steps: 8
+  eval_steps: 2
+  save_steps: 2
+  warmup_steps: 1
+  disable_tqdm: true
+lora:
+  enabled: true
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+safety:
+  unified_memory: false
+  reserve_fraction: 0.2
+  reserve_gib: 16
+  min_disk_gib: 20
+profiling:
+  enabled: true
+  output: training/experiments/t2pc_v003/metrics/dpo_profile.json
