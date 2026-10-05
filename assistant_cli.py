@@ -52,8 +52,13 @@ DEFAULT_MODEL_NAME = "qwen3-coder:30b"
 #: GeoFlow 모드의 기본 grounding 모델과 chat timeout. 평가(evaluate_vendor100.py llm)에서 검증한 조합과 같아야 한다.
 #: 바꾸면 README의 "실행 기본값" 절과 evaluation/grounding_v11/analysis.md를 함께 고친다.
 #: 사용자가 --model·OLLAMA_MODEL·--chat-timeout·OLLAMA_CHAT_TIMEOUT으로 지정한 값이 언제나 우선한다.
-GEOFLOW_DEFAULT_MODEL_NAME = "qwen3:8b"
+GEOFLOW_DEFAULT_MODEL_NAME = "qwen3.8:27b"
 GEOFLOW_DEFAULT_CHAT_TIMEOUT = 300.0
+#: GeoFlow 모드에서 현재 코드·prompt와 함께 검증한 모델(evaluation/grounding_v13). 모델·prompt·코드를 한 조합으로
+#: 검증했으므로 prompt가 바뀌면 이 목록도 다시 검증해야 한다(tests/test_cli_run_settings.py가 hash를 확인한다).
+#: 목록 밖의 모델도 사용자가 지정하면 그대로 실행하고, 실행 머리말에 검증하지 않은 조합임을 표시한다.
+GEOFLOW_VERIFIED_MODELS = ("qwen3.8:27b",)
+GEOFLOW_VERIFIED_PROMPT_SHA256_PREFIX = "87048d0c"
 MAX_TOOL_HOPS = 10
 OLLAMA_OPTIONS = {"temperature": 0}
 
@@ -1094,6 +1099,13 @@ def parse_args(argv=None):
     return args
 
 
+def geoflow_combination_note(model):
+    """GeoFlow 모드에서 검증하지 않은 모델이면 머리말에 붙일 표시. 실행은 막지 않는다."""
+    if AGENT_MODE != AGENT_MODE_GEOFLOW or model in GEOFLOW_VERIFIED_MODELS:
+        return ""
+    return ", 현재 코드·prompt와 검증하지 않은 조합"
+
+
 def resolve_run_settings(args, environ=None):
     """모델과 chat timeout을 정한다: CLI 인자 > 환경변수 > 실행 모드의 기본값. 출처를 args에 남긴다."""
     environment = os.environ if environ is None else environ
@@ -1169,7 +1181,8 @@ def main(argv=None):
         if AGENT_MODE == AGENT_MODE_GEOFLOW else ""
     )
     print(
-        f"설정 — 모델: {MODEL_NAME}({getattr(args, 'model_source', '-')}) / 주소: {OLLAMA_HOST} "
+        f"설정 — 모델: {MODEL_NAME}({getattr(args, 'model_source', '-')}{geoflow_combination_note(MODEL_NAME)})"
+        f" / 주소: {OLLAMA_HOST} "
         f"/ chat timeout: {CHAT_TIMEOUT:g}초 / agent mode: {AGENT_MODE} "
         f"{grounding_note}"
         f"/ think: {args.model_think} "

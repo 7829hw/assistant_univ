@@ -445,7 +445,11 @@ def reconcile_taxi_status(factors, question, raw_text="", concepts=None):
                      "운행 상태를 제외하는 표현은 지원하지 않습니다.",
                      context={"taxi_status": record}, raw_text=raw_text)
     cue = bool(re.search(_STATUS_CUES, question))
-    if values:
+    if values and llm_value is None and next(iter(values)) == fixed_by_measure(concepts, "taxi_status"):
+        # 질문의 상태 표현이 측정값의 정의(예: 실차 구간)를 다시 말한 것이다. 별도 조건으로 채우지 않는다.
+        record.update(value=None, status=STATUS_ABSENT, action="not_filled",
+                      basis="value_fixed_by_measure_definition")
+    elif values:
         (value,) = values
         record.update(value=value, status=STATUS_INTERPRETED if llm_value in (None, value)
                       else STATUS_CONFLICT,
@@ -487,7 +491,10 @@ def reconcile_taxi_type(factors, question, raw_text="", concepts=None):
                      + ", ".join(m.text for m in mentions),
                      context={"taxi_type": record}, raw_text=raw_text)
     cue = bool(re.search(_TAXI_CUES, question))
-    if values:
+    if values and llm_value is None and next(iter(values)) == fixed_by_measure(concepts, "taxi_type"):
+        record.update(value=None, stated="fixed_by_measure", status=STATUS_ABSENT, action="not_filled",
+                      basis="value_fixed_by_measure_definition")
+    elif values:
         (value,) = values
         # "전체 택시"(all)와 LLM의 생략은 실행 의미가 같다(계약 taxi_type_all_unrestricted).
         # 값은 질문 표현대로 all로 두고, 사용자가 명시했다는 사실을 stated에 남긴다.
@@ -549,6 +556,28 @@ def consumable(concepts, factor):
     except ValueError:
         return True
     return not candidates or any(factor in spec.params for spec in candidates)
+
+
+def fixed_by_measure(concepts, factor):
+    """grounding의 측정값을 만드는 operator들이 정의로 고정한 ``factor`` 값. 모두 같은 값일 때만 돌려준다.
+
+    조건 계층의 채움 권한: 질문 표현으로 조건을 채우는 것은 그 값이 측정값을 실제로 제한할 때다. 측정값의 정의가
+    이미 그 값이면(operator 계약 ``inherent_conditions``) 채워도 제한이 늘지 않고, Tool 계약에 없는 조건만 하나
+    더 생겨 합성이 멈춘다. 이 경우 채우지 않고 근거를 기록한다. 모델이 적은 값은 지우지 않는다.
+    """
+    from geoflow import operator_mapping
+    from geoflow.types import CoreConcept
+
+    measure = _measure(concepts)
+    if measure is None:
+        return None
+    try:
+        candidates = operator_mapping.candidates_for(CoreConcept(measure.get("concept")),
+                                                     measure.get("subtype"))
+    except ValueError:
+        return None
+    values = {spec.inherent_conditions.get(factor) for spec in candidates}
+    return next(iter(values)) if candidates and len(values) == 1 else None
 
 
 def _compact(text):
