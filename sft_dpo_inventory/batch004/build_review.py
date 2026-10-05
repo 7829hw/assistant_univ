@@ -218,12 +218,25 @@ GUIDE_ROWS = [
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--xlsx-only", action="store_true",
+                        help="커밋된 queue·manifest를 바꾸지 않고 XLSX(ignored)만 다시 만든다")
+    args = parser.parse_args()
     checked = json.loads((HERE / "candidates_checked.json").read_text(encoding="utf-8"))
     hf = json.loads((HERE / "hf_outputs.json").read_text(encoding="utf-8"))
     REVIEW.mkdir(exist_ok=True)
     rows = queue_rows(checked, hf)
-    write_jsonl(REVIEW / "review_queue.jsonl", rows)
     flags = v003_rows()
+    if args.xlsx_only:
+        from training.data.common import read_jsonl
+        if rows != read_jsonl(REVIEW / "review_queue.jsonl") or flags != read_jsonl(REVIEW / "v003_flag_items.jsonl"):
+            raise SystemExit("커밋된 queue와 다시 만든 행이 다르다. 입력이 바뀌었는지 확인한다")
+        manifest = json.loads((REVIEW / "manifest.json").read_text(encoding="utf-8"))
+        write_sheet(rows, flags)
+        print(json.dumps(manifest["counts"], ensure_ascii=False))
+        return
+    write_jsonl(REVIEW / "review_queue.jsonl", rows)
     write_jsonl(REVIEW / "v003_flag_items.jsonl", flags)
     write_jsonl(REVIEW / "decision_requests.jsonl", DECISION_REQUESTS)
     sources = [HERE / "candidates_draft.yaml", HERE / "candidates_checked.json", HERE / "hf_outputs.json"]
@@ -243,6 +256,11 @@ def main():
     manifest["protection"].pop("fingerprints", None)   # 지문 목록은 크다. source_hashes로 대조한다
     (REVIEW / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
+    write_sheet(rows, flags)
+    print(json.dumps(manifest["counts"], ensure_ascii=False))
+
+
+def write_sheet(rows, flags):
     blank = ["", "", "", "", ""]
     tail_cols = ["결정(승인/수정/보류/제외)", "수정 grounding(JSON)", "메모", "검토자", "검토일"]
     gold_rows = [r for r in rows if r["record_type"] == "sft_gold"]
@@ -271,7 +289,6 @@ def main():
                         "결정", "메모", "검토자", "검토일"], sheet_v003),
         ("결정요청", ["항목 id", "질문", "선택지", "설명", "영향", "결정", "메모", "검토자", "검토일"], sheet_req),
     ])
-    print(json.dumps(manifest["counts"], ensure_ascii=False))
 
 
 if __name__ == "__main__":

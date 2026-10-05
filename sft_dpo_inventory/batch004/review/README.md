@@ -11,7 +11,7 @@
 
 | 파일 | 내용 |
 |---|---|
-| `batch004_review.xlsx` | 검토 화면. 시트: 안내, batch004(후보 18), hf_outputs(초안과 다른 모델 출력 15쌍), v003_flags(21), 결정요청(1) |
+| `batch004_review.xlsx`(커밋하지 않음) | 검토 화면. 시트: 안내, batch004(후보 18), hf_outputs(초안과 다른 모델 출력 15쌍), v003_flags(21), 결정요청(1). 저장소의 `*.xlsx` ignore 규칙과 thor 관례(XLSX view는 ignored binary)에 따라 커밋하지 않는다. `python sft_dpo_inventory/batch004/build_review.py --xlsx-only`로 커밋된 JSON에서 다시 만든다(queue·manifest는 바꾸지 않고, 다시 만든 행이 커밋된 queue와 같은지 확인한다) |
 | `review_queue.jsonl`, `manifest.json` | thor `training.annotations.workflow` queue 형식(33행: SFT gold 18 + DPO 쌍 15). 권위 있는 기록 |
 | `v003_flag_items.jsonl` | reviewed_gold_v003_t2pc 표시 항목(compile 정지 SFT 17, DPO 4쌍). workflow로 가져오지 않는다 |
 | `decision_requests.jsonl` | 지원 불가 target 형식 결정 요청 |
