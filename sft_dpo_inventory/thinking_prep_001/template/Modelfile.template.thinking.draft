@@ -1,0 +1,31 @@
+{{- /* 미검증 초안(thinking 켬). 근거: pilot_prep_001/template/ollama_qwen3_8b.template(Ollama 0.34.4 qwen3:8b).
+     목표: HF Qwen3 chat template의 렌더링과 같은 문자열.
+     - think 켬 또는 미지정: enable_thinking=True와 같다(생성 자리 "<|im_start|>assistant\n", " /think" 없음).
+     - think=false를 명시: enable_thinking=False와 같다(빈 think block).
+     - system 앞에 줄바꿈을 더하지 않는다(라이브러리 template과 다름).
+     - .Thinking·.IsThinkSet·.Think를 참조해 Ollama가 thinking 지원 모델로 인식하게 하려는 것이다(미검증).
+     - 이전 assistant 턴: 마지막 메시지일 때만 thinking을 넣는다. 재질의 요청의 이전 턴은 내용만(HF와 같음).
+     미검증: (1) think 미지정이 thinking 켬으로 렌더링되는지 (2) 응답의 thinking과 본문이 분리되는지. */ -}}
+{{- if .System }}<|im_start|>system
+{{ .System }}<|im_end|>
+{{ end }}
+{{- range $i, $_ := .Messages }}
+{{- $last := eq (len (slice $.Messages $i)) 1 -}}
+{{- if eq .Role "user" }}<|im_start|>user
+{{ .Content }}<|im_end|>
+{{ else if eq .Role "assistant" }}<|im_start|>assistant
+{{ if and $last .Thinking }}<think>
+{{ .Thinking }}
+</think>
+
+{{ end }}{{ .Content }}{{ if not $last }}<|im_end|>
+{{ end }}
+{{- end }}
+{{- if and (ne .Role "assistant") $last }}<|im_start|>assistant
+{{ if and $.IsThinkSet (not $.Think) }}<think>
+
+</think>
+
+{{ end }}
+{{- end }}
+{{- end }}

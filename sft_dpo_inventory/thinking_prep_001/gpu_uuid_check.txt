@@ -1,0 +1,16 @@
+## 2026-10-06T12:49:03+09:00 host
+GPU 0: NVIDIA RTX 6000 Ada Generation (UUID: GPU-2445b100-70d8-e384-3a24-0249eeefc64d)
+GPU 1: NVIDIA RTX 6000 Ada Generation (UUID: GPU-a5ce83d0-6ca2-5e3a-276c-4c965ea9c555)
+GPU 2: NVIDIA RTX 6000 Ada Generation (UUID: GPU-a644de12-2a2c-ca3d-4822-b80f704b0b21)
+GPU 3: NVIDIA RTX 6000 Ada Generation (UUID: GPU-48f798cc-9437-50ac-d604-448bbad7b311)
+## ollama container nvidia-smi -L
+Failed to initialize NVML: Unknown Error
+## 대체 근거(사용자가 pilot_prep_001에서 승인한 방법)
+DeviceRequests: [{"Driver":"nvidia","Count":0,"DeviceIDs":["3"],"Capabilities":[["gpu"]],"Options":null}]
+container devices: /dev/nvidia3 
+host PCI: 0, 00000000:2A:00.0, GPU-2445b100-70d8-e384-3a24-0249eeefc64d;1, 00000000:3D:00.0, GPU-a5ce83d0-6ca2-5e3a-276c-4c965ea9c555;2, 00000000:AB:00.0, GPU-a644de12-2a2c-ca3d-4822-b80f704b0b21;3, 00000000:BD:00.0, GPU-48f798cc-9437-50ac-d604-448bbad7b311;
+## torch CUDA_VISIBLE_DEVICES=2
+uuid GPU-a644de12-2a2c-ca3d-4822-b80f704b0b21 NVIDIA RTX 6000 Ada Generation pci 171
+## GPU2 used
+GPU-a644de12-2a2c-ca3d-4822-b80f704b0b21, 2 MiB
+- 판정: Ollama는 /dev/nvidia3(host GPU 3, PCI BD), torch GPU 2는 PCI 0xAB(=171, host GPU 2). 서로 다른 GPU. 컨테이너 nvidia-smi 실패는 계속됨.
