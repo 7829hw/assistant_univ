@@ -1,0 +1,939 @@
+{
+ "rule": "- 대상: reviewed corpus v003_t2pc(``sft_train``·``sft_valid``)와 batch004 후보(``candidates_checked.json``의 18개).\n  gold(또는 batch004 초안) grounding의 장소를 쓴다. 질문·gold는 고치지 않는다.\n- 장소 조회는 pipeline의 RESOLVE_PLACE_SCOPE와 같은 인자다: subtype ``place``인 LOCATION 개념마다\n  ``get_place_scope(name, region, include_vicinity)``. ``include_vicinity``는 factors.vicinity를 따른다.\n  subtype ``scope``(사용자가 준 scope 값, 예: scope:edge:2607)는 조회하지 않으므로 provider와 무관하다.\n- 분류:\n  - ``no_lookup``: 조회할 장소가 없음.\n  - ``mock``: mock으로 모든 장소가 풀림(reference로도 풀리면 ``mock_and_reference``).\n  - ``reference_only``: reference로만 모든 장소가 풀림.\n  - ``neither``: 어느 provider로도 모든 장소가 풀리지 않음.\n- 평가 provider: ``reference_only``만 reference, 나머지는 mock(결정 11). ``neither``는 보고만 한다.",
+ "counts": {
+  "v003_t2pc_train": {
+   "mock": 5,
+   "reference_only": 4,
+   "no_lookup": 2,
+   "neither": 8
+  },
+  "v003_t2pc_valid": {
+   "mock": 1,
+   "no_lookup": 4,
+   "reference_only": 1,
+   "neither": 10
+  },
+  "batch004_candidate": {
+   "neither": 7,
+   "no_lookup": 8,
+   "mock": 3
+  }
+ },
+ "rows": [
+  {
+   "source": "v003_t2pc_train",
+   "id": "ann-d983889cf8c496178106",
+   "question": "지난달 수성구 개인택시의 주별 운행일수 합계를 평균 내면?",
+   "class": "mock",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c3",
+     "name": "수성구",
+     "region": "",
+     "include_vicinity": false,
+     "mock": true,
+     "reference": false,
+     "mock_error": null,
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_train",
+   "id": "ann-cc38d74754ba7eab68a8",
+   "question": "2026년 상반기 동구 법인택시 월별 매출 평균 중 가장 큰 값은?",
+   "class": "mock",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c3",
+     "name": "동구",
+     "region": "",
+     "include_vicinity": false,
+     "mock": true,
+     "reference": false,
+     "mock_error": null,
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_train",
+   "id": "ann-da98b3941dfa1c7ce800",
+   "question": "2026년 8월 나래구 개인택시 주별 매출 합계 중 가장 작은 값은?",
+   "class": "reference_only",
+   "eval_provider": "reference",
+   "places": [
+    {
+     "id": "c3",
+     "name": "나래구",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": true,
+     "mock_error": "NOT_FOUND",
+     "reference_error": null
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_train",
+   "id": "ann-77e9dacb0b34a3273630",
+   "question": "2026년 8월 나래구 개인택시 매출 평균이 가장 낮았던 주는 언제야?",
+   "class": "reference_only",
+   "eval_provider": "reference",
+   "places": [
+    {
+     "id": "c3",
+     "name": "나래구",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": true,
+     "mock_error": "NOT_FOUND",
+     "reference_error": null
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_train",
+   "id": "ann-89f3d036b2d43dd431f0",
+   "question": "지난달 동구 법인택시 주별 운행일수 평균 중 가장 작은 값은?",
+   "class": "mock",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c3",
+     "name": "동구",
+     "region": "",
+     "include_vicinity": false,
+     "mock": true,
+     "reference": false,
+     "mock_error": null,
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_train",
+   "id": "ann-aa1d7fd59c1d3d2ea97b",
+   "question": "지난달 동구 법인택시의 운행일수 평균이 가장 적었던 주는?",
+   "class": "mock",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c3",
+     "name": "동구",
+     "region": "",
+     "include_vicinity": false,
+     "mock": true,
+     "reference": false,
+     "mock_error": null,
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_train",
+   "id": "ann-f8d44f2cfa96200b5a95",
+   "question": "지난달 달서구 개인택시 주별 운행일수 평균들의 평균은?",
+   "class": "mock",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c3",
+     "name": "달서구",
+     "region": "",
+     "include_vicinity": false,
+     "mock": true,
+     "reference": false,
+     "mock_error": null,
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_train",
+   "id": "ann-f78087861d0826ae8a7f",
+   "question": "2026년 9월 10일 개인택시 매출 평균이 높은 시도 3곳은?",
+   "class": "no_lookup",
+   "eval_provider": "mock",
+   "places": []
+  },
+  {
+   "source": "v003_t2pc_train",
+   "id": "ann-e645cbc11600d7348d68",
+   "question": "2026년 9월 솔빛동에서 승차한 실차 구간을 읍면동 하차지별로 세면 건수가 많은 4곳은?",
+   "class": "neither",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c1",
+     "name": "솔빛동",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_train",
+   "id": "ann-9b222bf86273d158269e",
+   "question": "2026년 9월 솔빛동에서 하차한 실차 구간을 읍면동 승차지별로 세면 건수가 많은 4곳은?",
+   "class": "neither",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c1",
+     "name": "솔빛동",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_train",
+   "id": "ann-a27c59659681a481ac2c",
+   "question": "2026년 9월 가람구 소속 택시의 요금을 주마다 합산한 뒤, 주별 합계 중 가장 작은 값은?",
+   "class": "reference_only",
+   "eval_provider": "reference",
+   "places": [
+    {
+     "id": "c3",
+     "name": "가람구",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": true,
+     "mock_error": "NOT_FOUND",
+     "reference_error": null
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_train",
+   "id": "ann-914c48dad91bc9a62ab4",
+   "question": "2026년 9월 가람구에서 기록된 도로 통행 속도의 주별 최댓값들 중 가장 작은 값은?",
+   "class": "reference_only",
+   "eval_provider": "reference",
+   "places": [
+    {
+     "id": "c3",
+     "name": "가람구",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": true,
+     "mock_error": "NOT_FOUND",
+     "reference_error": null
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_train",
+   "id": "ann-5229788ca1f31d50214f",
+   "question": "2026년 7월과 8월 하늘구 소속 택시의 실차 구간별 요금을 주마다 최솟값으로 요약한 뒤, 그 주별 최솟값들 중 가장 큰 숫자는?",
+   "class": "neither",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c3",
+     "name": "하늘구",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_train",
+   "id": "ann-b6af75820db1d74d6e15",
+   "question": "2026년 7월과 8월 하늘동 안에서 관측된 도로 통행 속도의 주별 최솟값들 중 가장 큰 숫자는?",
+   "class": "neither",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c3",
+     "name": "하늘동",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_train",
+   "id": "ann-b33f24e179cb6f5d84fd",
+   "question": "2026년 7월과 8월 사용자가 지정한 도로 범위 scope:edge:2607 안에서 관측된 RPM을 주마다 평균한 뒤, 그 주별 평균 중 가장 큰 숫자는?",
+   "class": "no_lookup",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c3",
+     "literal": "scope:edge:2607",
+     "subtype": "scope"
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_train",
+   "id": "ann-2b2cbf79d7247f63e67a",
+   "question": "2026년 7월과 8월 하늘구 소속 택시의 실차 구간 요금을 주마다 평균한 뒤, 그 주별 평균 중 가장 큰 숫자는?",
+   "class": "neither",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c3",
+     "name": "하늘구",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_train",
+   "id": "ann-8b23b657f1c671df4b6d",
+   "question": "2026년 7월과 8월 해온시에서 승차하고 솔빛시에서 하차한 실차 구간만 대상으로, 시군구 승차지별 건수를 세어 기록이 있는 그룹 중 많은 2개 그룹은?",
+   "class": "neither",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c1",
+     "name": "솔빛시",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    },
+    {
+     "id": "c2",
+     "name": "해온시",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_train",
+   "id": "ann-51491e86fd619f6c5d12",
+   "question": "2026년 7월과 8월 해온시에서 승차하고 솔빛시에서 하차한 실차 구간만 대상으로, 시군구 하차지별 건수를 세어 기록이 있는 그룹 중 많은 2개 그룹은?",
+   "class": "neither",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c1",
+     "name": "솔빛시",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    },
+    {
+     "id": "c2",
+     "name": "해온시",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_train",
+   "id": "ann-ea359d5569ef6070f9e4",
+   "question": "2026년 4월부터 6월까지 하늘구 소속 법인택시의 택시·일 매출 기록을 월마다 중앙값으로 요약한 뒤, 그 월별 중앙값 중 가장 작은 숫자는?",
+   "class": "neither",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c3",
+     "name": "하늘구",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_valid",
+   "id": "ann-9d8392a4f8ca9ff8cfc2",
+   "question": "2026년 상반기 중구 개인택시 운행일수 합계가 가장 많았던 달은?",
+   "class": "mock",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c3",
+     "name": "중구",
+     "region": "",
+     "include_vicinity": false,
+     "mock": true,
+     "reference": false,
+     "mock_error": null,
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_valid",
+   "id": "ann-0e4edbda1cb1bec194c1",
+   "question": "2026년 9월 읍면동 승차지별 실차 구간 건수가 적은 4개 그룹은?",
+   "class": "no_lookup",
+   "eval_provider": "mock",
+   "places": []
+  },
+  {
+   "source": "v003_t2pc_valid",
+   "id": "ann-0d51b49a28500bb47b0d",
+   "question": "2026년 9월 읍면동 하차지별 실차 구간 건수가 적은 4개 그룹은?",
+   "class": "no_lookup",
+   "eval_provider": "mock",
+   "places": []
+  },
+  {
+   "source": "v003_t2pc_valid",
+   "id": "ann-2d254560f2214204db4b",
+   "question": "2026년 9월 읍면동 승차지와 하차지 조합별 실차 구간 건수가 적은 4개 그룹은?",
+   "class": "no_lookup",
+   "eval_provider": "mock",
+   "places": []
+  },
+  {
+   "source": "v003_t2pc_valid",
+   "id": "ann-4cafcbdd3b76a67f42db",
+   "question": "2026년 9월 15일 가람구에서 관측된 도로 통행의 엔진 회전수 최솟값은?",
+   "class": "reference_only",
+   "eval_provider": "reference",
+   "places": [
+    {
+     "id": "c3",
+     "name": "가람구",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": true,
+     "mock_error": "NOT_FOUND",
+     "reference_error": null
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_valid",
+   "id": "ann-56366f545130c8b38940",
+   "question": "지난달 하늘동에서 관측된 도로 통행 RPM을 주마다 중앙값으로 요약한 뒤, 그 주별 중앙값들을 동일 가중으로 평균하면?",
+   "class": "neither",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c3",
+     "name": "하늘동",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_valid",
+   "id": "ann-5c88583c249cfeba80ef",
+   "question": "2026년 7월 6일부터 8월 30일까지 하늘동에서 관측된 도로 통행 RPM을 주마다 중앙값으로 요약한 뒤, 그 주별 중앙값들을 동일 가중으로 평균하면?",
+   "class": "neither",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c3",
+     "name": "하늘동",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_valid",
+   "id": "ann-fb7938d64ca0888db425",
+   "question": "2026년 4월부터 6월까지 하늘구 소속 택시의 실차 구간별 요금 최댓값을 월마다 구하고, 그 월별 최댓값들의 동일 가중 평균은?",
+   "class": "neither",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c3",
+     "name": "하늘구",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_valid",
+   "id": "ann-f2cd5753e5bbdc07eef9",
+   "question": "2026년 4월부터 6월까지 하늘동 안에서 관측된 도로 통행 속도를 월마다 산술평균하고, 그 월별 평균 중 가장 큰 숫자는?",
+   "class": "neither",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c3",
+     "name": "하늘동",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_valid",
+   "id": "ann-0d74b3178a8697d4e028",
+   "question": "2026년 4월부터 6월까지 사용자가 지정한 도로 범위 scope:edge:2608 안에서 기록된 통행 속도를 월별 최댓값으로 요약한 뒤, 그 월별 최댓값들을 동일 가중 평균하면?",
+   "class": "no_lookup",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c3",
+     "literal": "scope:edge:2608",
+     "subtype": "scope"
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_valid",
+   "id": "ann-206f99f94e6aeb1e3e65",
+   "question": "2026년 4월부터 6월까지 하늘동에서 관측된 통행 속도를 월별 최댓값으로 요약한 뒤, 그 월별 최댓값들을 동일 가중 평균하면?",
+   "class": "neither",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c3",
+     "name": "하늘동",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_valid",
+   "id": "ann-dbfd9d05c726d18cfb4c",
+   "question": "2026년 7월과 8월 해온시에서 승차하고 솔빛시에서 하차한 실차 구간만 대상으로, 읍면동 승차지별 건수를 세어 기록이 있는 그룹 중 적은 2개 그룹은?",
+   "class": "neither",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c1",
+     "name": "솔빛시",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    },
+    {
+     "id": "c2",
+     "name": "해온시",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_valid",
+   "id": "ann-dd838f31807ef8546525",
+   "question": "2026년 7월과 8월 해온시에서 승차하고 솔빛시에서 하차한 실차 구간만 대상으로, 읍면동 하차지별 건수를 세어 기록이 있는 그룹 중 적은 2개 그룹은?",
+   "class": "neither",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c1",
+     "name": "솔빛시",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    },
+    {
+     "id": "c2",
+     "name": "해온시",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_valid",
+   "id": "ann-7fae41a3ed86d08a23f0",
+   "question": "2026년 7월과 8월 해온시에서 승차하고 솔빛시에서 하차한 실차 구간만 대상으로, 읍면동 승차지와 하차지의 조합별 건수를 세어 기록이 있는 그룹 중 적은 2개 그룹은?",
+   "class": "neither",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c1",
+     "name": "솔빛시",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    },
+    {
+     "id": "c2",
+     "name": "해온시",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_valid",
+   "id": "ann-3584f62adae959f2eff1",
+   "question": "2026년 4월부터 6월까지 하늘구 소속 택시의 실차 구간 요금 최솟값을 월마다 구했을 때, 가장 큰 숫자는?",
+   "class": "neither",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c3",
+     "name": "하늘구",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "v003_t2pc_valid",
+   "id": "ann-29dcb56f51da6d6a361f",
+   "question": "2026년 4월부터 6월까지 하늘구 소속 택시의 실차 구간 요금 최솟값을 월마다 구했을 때, 가장 큰 최솟값이 나온 달은?",
+   "class": "neither",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c3",
+     "name": "하늘구",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "batch004_candidate",
+   "id": "b004-05",
+   "question": "지난주 부산 강서구에서 읍면동별 택시 통행량이 가장 많은 세 곳은?",
+   "class": "neither",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c3",
+     "name": "강서구",
+     "region": "부산",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "batch004_candidate",
+   "id": "b004-06",
+   "question": "지난주 부산 강서구 읍면동 가운데 택시가 가장 많이 지나간 세 곳은?",
+   "class": "neither",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c3",
+     "name": "강서구",
+     "region": "부산",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "batch004_candidate",
+   "id": "b004-15",
+   "question": "2026년 8월 20일 새벽 2시에서 4시 사이 성남 판교역 근처의 평균 속도는?",
+   "class": "neither",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c3",
+     "name": "판교역",
+     "region": "성남",
+     "include_vicinity": true,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "UNSUPPORTED_BY_PROVIDER"
+    }
+   ]
+  },
+  {
+   "source": "batch004_candidate",
+   "id": "b004-18",
+   "question": "2026년 9월 1일부터 7일까지 실차 승차가 가장 많은 시군구 세 곳은?",
+   "class": "no_lookup",
+   "eval_provider": "mock",
+   "places": []
+  },
+  {
+   "source": "batch004_candidate",
+   "id": "b004-19",
+   "question": "2026년 9월 1일부터 7일까지 손님을 가장 많이 태운 시군구 상위 3곳은?",
+   "class": "no_lookup",
+   "eval_provider": "mock",
+   "places": []
+  },
+  {
+   "source": "batch004_candidate",
+   "id": "b004-20",
+   "question": "2026년 9월 1일부터 7일까지 실차 하차가 가장 많은 시군구 세 곳은?",
+   "class": "no_lookup",
+   "eval_provider": "mock",
+   "places": []
+  },
+  {
+   "source": "batch004_candidate",
+   "id": "b004-21",
+   "question": "2026년 9월 1일부터 7일까지 시군구 기준 출발지-도착지 조합별 실차 건수가 가장 많은 다섯 노선은?",
+   "class": "no_lookup",
+   "eval_provider": "mock",
+   "places": []
+  },
+  {
+   "source": "batch004_candidate",
+   "id": "b004-22",
+   "question": "2026년 8월 한 달 동안 대전역에서 출발한 실차를 도착 읍면동별로 세면 가장 적은 두 곳은?",
+   "class": "neither",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c1",
+     "name": "대전역",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "batch004_candidate",
+   "id": "b004-23",
+   "question": "2026년 8월 한 달 동안 대전역에 도착한 실차를 출발 읍면동별로 세면 가장 적은 두 곳은?",
+   "class": "neither",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c1",
+     "name": "대전역",
+     "region": "",
+     "include_vicinity": false,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "batch004_candidate",
+   "id": "b004-24",
+   "question": "2026년 9월 대구 수성구 안에서 오간 실차 구간을 읍면동 출발지-도착지 조합별로 세면 가장 많은 세 개는?",
+   "class": "mock",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c1",
+     "name": "수성구",
+     "region": "대구",
+     "include_vicinity": false,
+     "mock": true,
+     "reference": false,
+     "mock_error": null,
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "batch004_candidate",
+   "id": "b004-27",
+   "question": "2026년 9월 3일 서울 강남역 근처 택시 속도는?",
+   "class": "neither",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c3",
+     "name": "강남역",
+     "region": "서울",
+     "include_vicinity": true,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "UNSUPPORTED_BY_PROVIDER"
+    }
+   ]
+  },
+  {
+   "source": "batch004_candidate",
+   "id": "b004-28",
+   "question": "2026년 9월 3일 서울 강남역 주변 차량 운행 속도를 알려줘",
+   "class": "neither",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c3",
+     "name": "강남역",
+     "region": "서울",
+     "include_vicinity": true,
+     "mock": false,
+     "reference": false,
+     "mock_error": "NOT_FOUND",
+     "reference_error": "UNSUPPORTED_BY_PROVIDER"
+    }
+   ]
+  },
+  {
+   "source": "batch004_candidate",
+   "id": "b004-30",
+   "question": "2026년 7월 시도별 평균 수입이 가장 높은 세 곳은?",
+   "class": "no_lookup",
+   "eval_provider": "mock",
+   "places": []
+  },
+  {
+   "source": "batch004_candidate",
+   "id": "b004-31",
+   "question": "2026년 7월 수입 평균이 높은 시도 상위 3곳을 알려줘",
+   "class": "no_lookup",
+   "eval_provider": "mock",
+   "places": []
+  },
+  {
+   "source": "batch004_candidate",
+   "id": "b004-34",
+   "question": "2026년 8월 요일별 평균 속도가 가장 낮은 요일은?",
+   "class": "no_lookup",
+   "eval_provider": "mock",
+   "places": []
+  },
+  {
+   "source": "batch004_candidate",
+   "id": "b004-35",
+   "question": "2026년 8월에 평균 속도가 제일 느렸던 요일은?",
+   "class": "no_lookup",
+   "eval_provider": "mock",
+   "places": []
+  },
+  {
+   "source": "batch004_candidate",
+   "id": "b004-40",
+   "question": "지난달 대구 시군구별 공차율이 가장 높은 곳은?",
+   "class": "mock",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c2",
+     "name": "대구",
+     "region": "",
+     "include_vicinity": false,
+     "mock": true,
+     "reference": false,
+     "mock_error": null,
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  },
+  {
+   "source": "batch004_candidate",
+   "id": "b004-41",
+   "question": "지난달 대구에서 공차율이 제일 높았던 시군구는 어디야?",
+   "class": "mock",
+   "eval_provider": "mock",
+   "places": [
+    {
+     "id": "c2",
+     "name": "대구",
+     "region": "",
+     "include_vicinity": false,
+     "mock": true,
+     "reference": false,
+     "mock_error": null,
+     "reference_error": "NOT_FOUND"
+    }
+   ]
+  }
+ ]
+}
