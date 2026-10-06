@@ -1,0 +1,69 @@
+# T2PC thinking profile(prompt 87048d0c, enable_thinking true). qwen3_8b_t2pc_v003_sft.yaml에서 데이터·출력 경로,
+# chat_template_kwargs, thinking.loss_scope, token 한도만 바꿨다. 한도는 sft_dpo_inventory/thinking_prep_001/token_lengths_*.json
+# (v003_t2pc 학습 split의 trace 후보: SFT 42, DPO 204)의 최대값을 128 단위로 올린 값이다. 새 trace(batch004 등)는 더 길 수 있다.
+# thinking.loss_scope는 기본값을 정하지 않았다. 실행 전에 full_response 또는 json_only로 바꾸지 않으면 trainer가 멈춘다.
+# 학습·memory smoke는 이 profile로 하지 않았다(memory_probe_thinking.py 결과 참고).
+model:
+  name_or_path: Qwen/Qwen3-8B
+  revision: b968826d9c46dd6066d109eabc6255188de91218
+  trust_remote_code: false
+  load_in_4bit: false
+  attn_implementation: sdpa
+data:
+  train: training/generated/thinking_v003_t2pc_train/sft_train.jsonl
+  valid: training/generated/thinking_v003_t2pc_train/sft_valid.jsonl
+  manifest: training/generated/thinking_v003_t2pc_train/manifest.json
+chat_template_kwargs:
+  enable_thinking: true
+training:
+  output_dir: training/experiments/t2pc_thinking/checkpoints/sft
+  num_train_epochs: 1
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 1
+  learning_rate: 5.0e-05
+  warmup_ratio: 0
+  max_seq_length: 9216
+  bf16: true
+  fp16: false
+  gradient_checkpointing: true
+  eval_strategy: steps
+  save_strategy: steps
+  save_total_limit: 6
+  logging_steps: 1
+  report_to: none
+  seed: 42
+  optim: adamw_torch
+  dataloader_num_workers: 0
+  dataloader_pin_memory: false
+  torch_compile: false
+  gradient_checkpointing_kwargs:
+    use_reentrant: false
+  max_steps: 12
+  eval_steps: 2
+  save_steps: 2
+  warmup_steps: 1
+  disable_tqdm: true
+lora:
+  enabled: true
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+safety:
+  unified_memory: false
+  reserve_fraction: 0.2
+  reserve_gib: 16
+  min_disk_gib: 20
+profiling:
+  enabled: true
+  output: training/experiments/t2pc_thinking/metrics/sft_profile.json
+thinking:
+  loss_scope: SELECT_full_response_OR_json_only
