@@ -1,0 +1,77 @@
+# pipeline_pilot_001 DPO(DECISIONS.md 2026-10-06). qwen3_8b_t2pc_thinking_dpo.yaml에서 데이터 경로, reference 방식
+# (결정 9: precompute — 고정 SFT reference의 log-prob을 학습 전에 계산), 출력 위치(저장소 밖)만 바꿨다.
+# adapter_path는 SFT checkpoint를 고른 뒤 실행 명령에서 지정한다. 학습률·beta·step·LoRA·seed는 thor pilot_003 profile 그대로다.
+model:
+  name_or_path: Qwen/Qwen3-8B
+  revision: b968826d9c46dd6066d109eabc6255188de91218
+  initial_mode: sft
+  trust_remote_code: false
+  load_in_4bit: false
+  attn_implementation: sdpa
+  adapter_path: SELECTED_PIPELINE_PILOT_001_SFT_REQUIRED
+reference:
+  mode: initial_policy
+  strategy: precompute
+data:
+  train: training/generated/thinking_v003_t2pc_pilot/dpo_train.jsonl
+  valid: training/generated/thinking_v003_t2pc_pilot/dpo_valid.jsonl
+  manifest: training/generated/thinking_v003_t2pc_pilot/manifest.json
+chat_template_kwargs:
+  enable_thinking: true
+training:
+  output_dir: /home/hwkim/sftdpo_work/pipeline_pilot_001/checkpoints/dpo
+  num_train_epochs: 1
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 1
+  learning_rate: 1.0e-05
+  warmup_ratio: 0
+  beta: 0.1
+  max_prompt_length: 7424
+  max_completion_length: 1920
+  max_length: 9216
+  bf16: true
+  fp16: false
+  gradient_checkpointing: true
+  eval_strategy: steps
+  save_strategy: steps
+  save_total_limit: 6
+  logging_steps: 1
+  report_to: none
+  seed: 42
+  use_logits_to_keep: true
+  precompute_ref_log_probs: true
+  optim: adamw_torch
+  dataloader_num_workers: 0
+  dataloader_pin_memory: false
+  torch_compile: false
+  gradient_checkpointing_kwargs:
+    use_reentrant: false
+  max_steps: 8
+  eval_steps: 2
+  save_steps: 2
+  warmup_steps: 1
+  disable_tqdm: true
+lora:
+  enabled: true
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+safety:
+  unified_memory: false
+  reserve_fraction: 0.2
+  reserve_gib: 16
+  min_disk_gib: 20
+profiling:
+  enabled: true
+  output: /home/hwkim/sftdpo_work/pipeline_pilot_001/metrics/dpo_profile.json
+thinking:
+  loss_scope: full_response
