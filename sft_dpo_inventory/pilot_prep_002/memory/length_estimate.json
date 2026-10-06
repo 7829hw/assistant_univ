@@ -1,0 +1,42 @@
+{
+ "assumptions": {
+  "gpu_total_mib": 49140,
+  "safety_margin_mib": 1024,
+  "budget_mib": 48116,
+  "sft_base_allocated_mib": 15789,
+  "dpo_base_allocated_mib": 15956,
+  "sft_measured": {
+   "longest_total_tokens": 9132,
+   "nvidia_peak_mib": 38696,
+   "max_allocated_gib": 33.92
+  },
+  "dpo_longest_pair_estimate": {
+   "padded_len_per_sequence": 9132,
+   "allocated_mib(precompute probe)": 35840.0,
+   "slack_mib(expandable run reserved-allocated)": 819,
+   "context_overhead_mib(expandable run nvidia-reserved)": 527,
+   "nvidia_estimate_mib": 37186
+  }
+ },
+ "formula": "L_max = L_meas + (budget - peak_meas) / k;  k = (peak_meas - base) / L_meas (A, 보수적) 또는 (allocated_meas - base) / L_meas (B)",
+ "sft_max_total_tokens": {
+  "A": 12887,
+  "B": 13673
+ },
+ "dpo_max_padded_len_per_sequence(prompt+max(chosen,rejected))": {
+  "A": 13833,
+  "B": 14152
+ },
+ "prompt_tokens_max_now": 7314,
+ "implied_max_completion_tokens": {
+  "sft": {
+   "A": 5572,
+   "B": 6358
+  },
+  "dpo": {
+   "A": 6519,
+   "B": 6838
+  }
+ },
+ "note": "추정이다. 길이에 선형이라고 가정했고, expandable_segments 켬, batch 1, gradient checkpointing, 같은 LoRA·정밀도 조건이다. 9,133 token을 넘는 길이는 측정하지 않았다. 학습 한도(9216/7424/1920)를 넘는 레코드는 지금 config가 거부한다."
+}
