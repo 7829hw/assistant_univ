@@ -1,0 +1,65 @@
+{
+ "template_sha256": "ae370d884f108d16e7cc8fd5259ebc5773a0afa6e078b11f4ed7e39a27e0dfc4",
+ "record_checks": {
+  "F(87048d0c, think=false)": {
+   "items": 100,
+   "emulated_ollama_token_count_equals_record": 100,
+   "ollama_minus_hf_enable_thinking_false": {
+    "4": 100
+   }
+  },
+  "E(87048d0c, think 미지정)": {
+   "items": 100,
+   "emulated_ollama_token_count_equals_record": 0,
+   "emulated_as_think_true_equals_record": 100,
+   "ollama_minus_hf_enable_thinking_false": {
+    "-2": 100
+   }
+  }
+ },
+ "sample_diffs": {
+  "plan": {
+   "ollama_think_false_tokens": 7293,
+   "hf_tokens": 7289,
+   "unified_diff": [
+    "--- hf",
+    "+++ ollama",
+    "@@ -1,7 +1,8 @@",
+    " <|im_start|>system",
+    "+",
+    " <SYSTEM><|im_end|>",
+    " <|im_start|>user",
+    "-2026년 9월 1일부터 7일까지 실차 승차가 가장 많은 시군구 세 곳은?<|im_end|>",
+    "+2026년 9월 1일부터 7일까지 실차 승차가 가장 많은 시군구 세 곳은? /no_think<|im_end|>",
+    " <|im_start|>assistant",
+    " <think>",
+    " "
+   ],
+   "draft_equals_hf_bytes": true
+  },
+  "repair": {
+   "ollama_think_false_tokens": 7319,
+   "hf_tokens": 7315,
+   "unified_diff": [
+    "--- hf",
+    "+++ ollama",
+    "@@ -1,11 +1,12 @@",
+    " <|im_start|>system",
+    "+",
+    " <SYSTEM><|im_end|>",
+    " <|im_start|>user",
+    " 2026년 9월 1일부터 7일까지 실차 승차가 가장 많은 시군구 세 곳은?<|im_end|>",
+    " <|im_start|>assistant",
+    " {\"concepts\": [], \"factors\": {}}<|im_end|>",
+    " <|im_start|>user",
+    "-수정 요청 문구<|im_end|>",
+    "+수정 요청 문구 /no_think<|im_end|>",
+    " <|im_start|>assistant",
+    " <think>",
+    " "
+   ],
+   "draft_equals_hf_bytes": true
+  }
+ },
+ "draft_status": "미검증: Python 옮김에서만 HF와 같다. 실제 Ollama 렌더링은 ollama create 뒤 prompt_eval_count와 출력으로 확인해야 한다"
+}

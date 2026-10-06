@@ -1,0 +1,30 @@
+# 미검증 초안. ollama create는 사용자 승인 뒤에만 실행한다.
+# - FROM: gguf_convert.sh로 만든 Q4_K_M(저장소 밖). 학습 모델도 같은 변환·양자화를 쓴다.
+# - TEMPLATE: HF Qwen3 chat template enable_thinking=False 렌더링과 같도록 쓴 초안(template_compare.py의 Python 옮김에서만 확인).
+# - PARAMETER: 라이브러리 qwen3:8b의 Modelfile 값과 같게 둔다(평가 harness는 temperature 0을 요청에 넣는다).
+FROM /home/hwkim/sftdpo_work/gguf/<TRAINED_NAME>-Q4_K_M.gguf
+TEMPLATE """{{- if .System }}<|im_start|>system
+{{ .System }}<|im_end|>
+{{ end }}
+{{- range $i, $_ := .Messages }}
+{{- $last := eq (len (slice $.Messages $i)) 1 -}}
+{{- if eq .Role "user" }}<|im_start|>user
+{{ .Content }}<|im_end|>
+{{ else if eq .Role "assistant" }}<|im_start|>assistant
+{{ .Content }}{{ if not $last }}<|im_end|>
+{{ end }}
+{{- end }}
+{{- if and (ne .Role "assistant") $last }}<|im_start|>assistant
+<think>
+
+</think>
+
+{{ end }}
+{{- end }}
+"""
+PARAMETER stop "<|im_start|>"
+PARAMETER stop "<|im_end|>"
+PARAMETER temperature 0.6
+PARAMETER top_k 20
+PARAMETER top_p 0.95
+PARAMETER repeat_penalty 1

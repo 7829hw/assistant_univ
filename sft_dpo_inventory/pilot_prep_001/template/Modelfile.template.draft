@@ -1,0 +1,25 @@
+{{- /* 미검증 초안. HF Qwen3 chat template의 enable_thinking=False 렌더링과 같은 문자열을 내도록 쓴 TEMPLATE.
+     - system: "<|im_start|>system\n{system}<|im_end|>\n" (Ollama qwen3:8b template은 system 앞에 "\n"을 하나 더 넣는다)
+     - user: 내용 뒤에 " /think"·" /no_think"를 붙이지 않는다(Ollama qwen3:8b template은 think 지정 시 붙인다)
+     - 마지막 생성 자리: think 설정과 관계없이 "<|im_start|>assistant\n<think>\n\n</think>\n\n"(학습 렌더링과 같다)
+     - 이전 assistant 턴(재질의): "<|im_start|>assistant\n{content}<|im_end|>\n"
+     - tools는 다루지 않는다(GeoFlow planner는 tools를 보내지 않는다)
+     실제 Ollama가 이렇게 렌더링하는지는 ollama create 뒤 prompt_eval_count·출력 비교로 확인해야 한다. */ -}}
+{{- if .System }}<|im_start|>system
+{{ .System }}<|im_end|>
+{{ end }}
+{{- range $i, $_ := .Messages }}
+{{- $last := eq (len (slice $.Messages $i)) 1 -}}
+{{- if eq .Role "user" }}<|im_start|>user
+{{ .Content }}<|im_end|>
+{{ else if eq .Role "assistant" }}<|im_start|>assistant
+{{ .Content }}{{ if not $last }}<|im_end|>
+{{ end }}
+{{- end }}
+{{- if and (ne .Role "assistant") $last }}<|im_start|>assistant
+<think>
+
+</think>
+
+{{ end }}
+{{- end }}
