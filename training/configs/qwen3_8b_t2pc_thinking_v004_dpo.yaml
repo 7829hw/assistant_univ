@@ -1,0 +1,79 @@
+# 진짜 pilot(v004) DPO config 초안(pilot_prep_003). qwen3_8b_t2pc_thinking_pilot_dpo.yaml에서 데이터 경로(thinking_v004_t2pc)와
+# 출력 위치(저장소 밖)를 바꿨다. 학습률·LoRA·seed·loss_scope·reference는 그대로다. 길이 한도는 결정 18로 데이터 최대(SFT total 11,326,
+# DPO prompt 7,327·completion 4,050)를 128 단위로 올린 값이고, pilot_prep_002 추정 안전 한도(SFT 12,887, DPO 문장당 13,833) 아래다.
+# max_steps·save_steps는 아직 정하지 않았다(사용자 결정: 저장 시점, 단계마다 4개 이하). 지금 값은 pilot 001 profile 그대로인 자리값이다.
+# 학습은 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True로 돌린다(결정 17, CLAUDE.md 11번).
+model:
+  name_or_path: Qwen/Qwen3-8B
+  revision: b968826d9c46dd6066d109eabc6255188de91218
+  initial_mode: sft
+  trust_remote_code: false
+  load_in_4bit: false
+  attn_implementation: sdpa
+  adapter_path: SELECTED_PILOT_V004_SFT_REQUIRED
+reference:
+  mode: initial_policy
+  strategy: precompute
+data:
+  train: training/generated/thinking_v004_t2pc/dpo_train.jsonl
+  valid: training/generated/thinking_v004_t2pc/dpo_valid.jsonl
+  manifest: training/generated/thinking_v004_t2pc/manifest.json
+chat_template_kwargs:
+  enable_thinking: true
+training:
+  output_dir: /home/hwkim/sftdpo_work/pilot_v004/checkpoints/dpo
+  num_train_epochs: 1
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 1
+  learning_rate: 1.0e-05
+  warmup_ratio: 0
+  beta: 0.1
+  max_prompt_length: 7424
+  max_completion_length: 4096
+  max_length: 11392
+  bf16: true
+  fp16: false
+  gradient_checkpointing: true
+  eval_strategy: steps
+  save_strategy: steps
+  save_total_limit: 6
+  logging_steps: 1
+  report_to: none
+  seed: 42
+  use_logits_to_keep: true
+  precompute_ref_log_probs: true
+  optim: adamw_torch
+  dataloader_num_workers: 0
+  dataloader_pin_memory: false
+  torch_compile: false
+  gradient_checkpointing_kwargs:
+    use_reentrant: false
+  max_steps: 8
+  eval_steps: 2
+  save_steps: 2
+  warmup_steps: 1
+  disable_tqdm: true
+lora:
+  enabled: true
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+safety:
+  unified_memory: false
+  reserve_fraction: 0.2
+  reserve_gib: 16
+  min_disk_gib: 20
+profiling:
+  enabled: true
+  output: /home/hwkim/sftdpo_work/pilot_v004/metrics/dpo_profile.json
+thinking:
+  loss_scope: full_response
