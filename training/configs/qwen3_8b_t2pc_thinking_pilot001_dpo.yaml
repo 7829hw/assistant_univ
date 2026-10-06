@@ -1,0 +1,76 @@
+# 진짜 pilot(pilot_001) DPO. qwen3_8b_t2pc_thinking_v004_dpo.yaml에서 바꾼 것: 데이터(thinking_v004_t2pc_r1, 결정 27),
+# 1 epoch·25%마다 저장(결정 28, max_steps 자리값 삭제), 출력 위치. loss_scope full_response(결정 26), reference 미리 계산(결정 9).
+# adapter_path는 고른 SFT checkpoint로 실행 때 채운다(resolved 사본). PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True로 돌린다.
+model:
+  name_or_path: Qwen/Qwen3-8B
+  revision: b968826d9c46dd6066d109eabc6255188de91218
+  initial_mode: sft
+  trust_remote_code: false
+  load_in_4bit: false
+  attn_implementation: sdpa
+  adapter_path: SELECTED_PILOT_001_SFT_REQUIRED
+reference:
+  mode: initial_policy
+  strategy: precompute
+data:
+  train: training/generated/thinking_v004_t2pc_r1/dpo_train.jsonl
+  valid: training/generated/thinking_v004_t2pc_r1/dpo_valid.jsonl
+  manifest: training/generated/thinking_v004_t2pc_r1/manifest.json
+chat_template_kwargs:
+  enable_thinking: true
+training:
+  output_dir: /home/hwkim/sftdpo_work/pilot_001/checkpoints/dpo
+  num_train_epochs: 1
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 1
+  learning_rate: 1.0e-05
+  warmup_ratio: 0
+  beta: 0.1
+  max_prompt_length: 7424
+  max_completion_length: 4096
+  max_length: 11392
+  bf16: true
+  fp16: false
+  gradient_checkpointing: true
+  eval_strategy: steps
+  save_strategy: steps
+  save_total_limit: 6
+  logging_steps: 1
+  report_to: none
+  seed: 42
+  use_logits_to_keep: true
+  precompute_ref_log_probs: true
+  optim: adamw_torch
+  dataloader_num_workers: 0
+  dataloader_pin_memory: false
+  torch_compile: false
+  gradient_checkpointing_kwargs:
+    use_reentrant: false
+  eval_steps: 2
+  save_steps: 0.25
+  warmup_steps: 1
+  disable_tqdm: true
+lora:
+  enabled: true
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+safety:
+  unified_memory: false
+  reserve_fraction: 0.2
+  reserve_gib: 16
+  min_disk_gib: 20
+profiling:
+  enabled: true
+  output: /home/hwkim/sftdpo_work/pilot_001/metrics/dpo_profile.json
+thinking:
+  loss_scope: full_response
