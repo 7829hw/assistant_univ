@@ -16,7 +16,8 @@ matched its own command line with `pgrep -f`, never exited, and the GPU sat idle
    itself, so the loop never ends, or the kill takes down its own shell. If a process check is needed, use
    a bracket pattern such as `'[b]0_holdout'` or exclude your own PID.
 4. If a wait runs longer than the job's expected duration, check the actual state instead of assuming:
-   log modification time, output line count, `curl -s localhost:11434/api/ps`.
+   log modification time, output line count, `curl -s localhost:11434/api/ps`. (Not while Ollama calls are
+   prohibited, e.g. SFT/DPO branch rule 5 below; use host `nvidia-smi` instead.)
 5. Do not make other model calls (e.g. live repair calls from replay experiments) while an isolated
    measurement is running. They break the per-observation model unload (`OllamaStateReset`).
 
@@ -36,12 +37,20 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
 4. Ollama: use the existing Docker server on GPU 3 (`localhost:11434`) as is.
    - Do not restart or reconfigure the container or change its GPU assignment.
    - Do not start another Ollama server and do not pull models. If something is needed, stop and report.
-5. GPU work outside Ollama (training, HF inference) uses only CUDA GPU 2.
+5. GPU work outside Ollama (training, HF inference) uses CUDA GPU 2 by default (decided 2026-10-06).
    - Run with `CUDA_VISIBLE_DEVICES=2`; inside the process it appears as `cuda:0`.
    - Do not change `CUDA_DEVICE_ORDER`.
+   - GPU 3 (the Ollama GPU) may be used only for additional work while Ollama is not in use
+     (`CUDA_VISIBLE_DEVICES=3`). Before each use, confirm with host `nvidia-smi` that no Ollama model is loaded
+     on GPU 3 (memory in use and processes). If anything is loaded, do not use GPU 3.
+   - Never unload Ollama models yourself and never touch the container to free GPU 3.
+   - If an Ollama measurement or Ollama use is scheduled, finish or stop GPU 3 work before it starts.
+   - These checks never call the Ollama API. Until the NVML error inside the Ollama container is resolved,
+     do not call Ollama at all (no generation and no read calls such as `/api/ps` or `/api/show`).
 6. Before GPU work, confirm by UUID that the training GPU and the Ollama GPU are different physical GPUs.
-   - Compare host `nvidia-smi -L`, `nvidia-smi -L` inside the Ollama container, and the torch device UUID
-     under `CUDA_VISIBLE_DEVICES=2`.
+   - Compare host `nvidia-smi -L`, the Ollama container's GPU, and the torch device UUID under
+     `CUDA_VISIBLE_DEVICES=2`. While `nvidia-smi` inside the container fails with the NVML error, the
+     container's GPU is shown by its device request (`docker inspect` DeviceRequests) and its `/dev/nvidia*` node.
    - If they are the same or cannot be confirmed, stop and report. Also check memory already in use on GPU 2.
 7. While an isolated Ollama measurement runs, make no other Ollama calls (rule 5 above). Do not run HF and
    Ollama measurements at the same time; run them in sequence.
@@ -56,3 +65,5 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
      training configs or evaluation cells. Ask the user first if a task seems to need them.
    - Existing nonthinking records (F, HF-F, the nonthinking `reviewed_gold_v003_t2pc` exports and configs) stay
      as records. Do not delete or rewrite them.
+10. Later decisions (data selection, loss scope, rendering, DPO reference, checkpoint selection) are recorded with
+    dates in `sft_dpo_inventory/DECISIONS.md`. Read it before SFT/DPO work and follow it.
