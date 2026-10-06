@@ -1,0 +1,36 @@
+# pilot_prep_003: base 변환본(B-conv) 등록용 Modelfile(결정 5·20). 실제 등록은 register_base.py가 같은 내용을 Ollama API로 보낸다
+# (컨테이너가 이 GGUF 경로를 볼 수 없어 blob 업로드 + /api/create를 쓴다. ollama create와 같은 결과).
+# - FROM: base Qwen3-8B@b968826d Q4_K_M 변환본(sha256 f060d7cb…, pilot_prep_001/gguf receipt).
+# - TEMPLATE: thinking_prep_001/template/Modelfile.template.thinking.draft에서 앞 설명 주석만 뺀 것(HF enable_thinking=True 형식).
+# - PARAMETER: 라이브러리 qwen3:8b의 Modelfile 값과 같다(평가 요청은 temperature 0을 넣는다).
+FROM /home/hwkim/sftdpo_work/gguf/qwen3-8b-b968826d-base-Q4_K_M.gguf
+TEMPLATE """{{- if .System }}<|im_start|>system
+{{ .System }}<|im_end|>
+{{ end }}
+{{- range $i, $_ := .Messages }}
+{{- $last := eq (len (slice $.Messages $i)) 1 -}}
+{{- if eq .Role "user" }}<|im_start|>user
+{{ .Content }}<|im_end|>
+{{ else if eq .Role "assistant" }}<|im_start|>assistant
+{{ if and $last .Thinking }}<think>
+{{ .Thinking }}
+</think>
+
+{{ end }}{{ .Content }}{{ if not $last }}<|im_end|>
+{{ end }}
+{{- end }}
+{{- if and (ne .Role "assistant") $last }}<|im_start|>assistant
+{{ if and $.IsThinkSet (not $.Think) }}<think>
+
+</think>
+
+{{ end }}
+{{- end }}
+{{- end }}
+"""
+PARAMETER stop "<|im_start|>"
+PARAMETER stop "<|im_end|>"
+PARAMETER temperature 0.6
+PARAMETER top_k 20
+PARAMETER top_p 0.95
+PARAMETER repeat_penalty 1
