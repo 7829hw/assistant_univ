@@ -71,3 +71,8 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - 개선 기준: 주 비교에서 McNemar 양측 p<0.05, U 순증 ≤ 0, 조용한 오답 순증 ≤ 0.
     - 지연: 운영 셀의 지연 중앙값이 기준의 1.5배를 넘으면 악화로 본다.
     - 보조 보고: 결정 15의 family별 분리.
+16-1. (2026-10-06, 사용자) v004를 합칠 때 thor 보호 검사(`Protection.current`: 이전 corpus 판의 validation family는 판이 바뀌어도
+     풀지 않는다)가 v003_t2pc valid 16문항을 막았다. 결정 16에 따라 **이 16문항만 명시 해제**한다.
+     - 해제는 `pilot_prep_003/import/merge_v004.py`의 목록(16개 source_record_id)으로만 한다. 이전 validation 출처를 빼고 다시 대조해
+       다른 보호(평가 셋 질문·id·template·family)에 걸리지 않는 것을 확인한 경우에만 푼다.
+     - thor 보호 규칙 자체와 다른 보호 대상은 바꾸지 않는다.
