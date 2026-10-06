@@ -9,12 +9,13 @@ import yaml
 from training.data.canonicalize import semantic_key, serialize_planner_target
 from training.data.common import check_expected_prompt, production_prompt, read_jsonl, sha256
 from training.data.split import check_split
+from training.data import thinking
 from training.data.validation import assess, chosen_ok
 
 
 def load_config(path, stage):
     config = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-    if not isinstance(config, dict) or set(config) - {"model", "data", "training", "lora", "reference", "chat_template_kwargs", "safety", "profiling"}:
+    if not isinstance(config, dict) or set(config) - {"model", "data", "training", "lora", "reference", "chat_template_kwargs", "safety", "profiling", "thinking"}:
         raise ValueError("Invalid configuration sections")
     for name in ("model", "data", "training"):
         if not isinstance(config.get(name), dict):
@@ -81,6 +82,9 @@ def load_records(config, stage):
     if not records["train"]:
         raise ValueError("Empty training dataset")
     check_split(records["train"], records["valid"])
+    if manifest.get("format") == thinking.FORMAT:
+        _check_thinking_records(records, stage)
+        return records, manifest
     for split in records.values():
         for record in split:
             messages = record["messages"] if stage == "sft" else record["prompt"] + record["chosen"]
@@ -104,6 +108,30 @@ def load_records(config, stage):
     return records, manifest
 
 
+def _check_thinking_records(records, stage):
+    """Thinking corpus: answer JSON passes the existing (thor) contract check; chosen != rejected answer."""
+    for split in records.values():
+        for record in split:
+            if not thinking.is_thinking(record):
+                raise ValueError("Thinking manifest must not mix nonthinking records")
+            messages = record["messages"] if stage == "sft" else record["prompt"] + record["chosen"]
+            if [m.get("role") for m in messages] != ["system", "user", "assistant"]:
+                raise ValueError("Expected system/user/assistant chat")
+            if messages[0]["content"] != production_prompt():
+                raise ValueError("Record system prompt drift")
+            target = thinking.response_json(messages[-1]["content"])
+            if not chosen_ok(assess(target, messages[1]["content"])):
+                raise ValueError("Invalid chosen grounding in thinking response")
+            if stage == "dpo":
+                if [m.get("role") for m in record["rejected"]] != ["assistant"]:
+                    raise ValueError("Rejected must contain one assistant message")
+                rejected = thinking.response_json(record["rejected"][0]["content"])
+                if semantic_key(target, infer_events=True) == semantic_key(rejected, infer_events=True):
+                    raise ValueError("Chosen/rejected identical")
+                if record["metadata"].get("negative_category") not in {"semantic", "constraint"}:
+                    raise ValueError("Missing DPO negative category")
+
+
 def render_prompt(tokenizer, messages, config):
     if not tokenizer.chat_template:
         raise ValueError("Tokenizer requires a chat template")
@@ -124,6 +152,10 @@ def render_records(tokenizer, records, config, stage):
         raise ValueError("Tokenizer requires EOS")
     for record in records:
         prompt = render_prompt(tokenizer, record.get("messages", record.get("prompt"))[:2], config)
+        if thinking.is_thinking(record):
+            pids = tokenizer(prompt, add_special_tokens=False)["input_ids"]
+            result.append(thinking.render_thinking(tokenizer, record, config, stage, prompt, pids, args))
+            continue
         row = {"prompt": prompt}
         fields = {"completion": record["messages"][-1]["content"]} if stage == "sft" else {
             key: record[key][0]["content"] for key in ("chosen", "rejected")}
