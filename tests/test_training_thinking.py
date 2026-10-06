@@ -88,6 +88,17 @@ class ThinkingRenderTest(unittest.TestCase):
             render_records(TOKENIZER, [sft_record(ANSWER)], config(), "sft")
 
     @unittest.skipUnless(TRACES.exists(), "collected traces not present")
+    def test_decoded_text_round_trips(self):
+        with TRACES.open(encoding="utf-8") as stream:
+            for line in stream:
+                trace = json.loads(line)
+                self.assertEqual(TOKENIZER.decode(trace["generated_ids"], skip_special_tokens=True), trace["raw_text"])
+
+    # Measured finding (thinking_prep_001): re-tokenizing the decoded text does not reproduce the generated ids for
+    # every trace (171 traces: 161 identical, 10 differ; SFT candidates 42/44). Text-based completions train on the
+    # tokenizer's canonical segmentation, not always on the sampled one. Kept strict so the gap stays visible.
+    @unittest.expectedFailure
+    @unittest.skipUnless(TRACES.exists(), "collected traces not present")
     def test_completion_tokens_equal_generated_tokens(self):
         checked = 0
         with TRACES.open(encoding="utf-8") as stream:

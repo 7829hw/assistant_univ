@@ -4,7 +4,9 @@
         --corpus training/generated/reviewed_gold_v003_t2pc --split train \
         --output training/generated/thinking_v003_t2pc_train
 
-- SFT: every unique judged-correct trace (thinking + JSON exactly as generated) for its reviewed-gold question.
+- SFT: every unique judged-correct trace (thinking + JSON exactly as generated) for its reviewed-gold question whose
+  answer also passes the existing contract check (``grounding_check`` alone does not check the contract); traces
+  failing it are excluded and counted, and DPO pairs using them as chosen are excluded too.
 - DPO: (correct, wrong) trace pairs of the same question. Wrong traces without a parseable answer (truncated,
   no JSON) are excluded: syntax-only failures are not preference negatives (thor policy). Category is constraint
   when the wrong answer fails the existing contract check, else semantic.
@@ -30,14 +32,24 @@ def build(traces_path, candidates_path, corpus, split, output):
     traces = {row["trace_id"]: row for row in read_jsonl(traces_path)}
     candidates = json.loads(Path(candidates_path).read_text(encoding="utf-8"))
     gold = {r["metadata"]["source_record_id"]: r for r in read_jsonl(Path(corpus) / f"sft_{split}.jsonl")}
-    sft, dpo, excluded = [], [], Counter()
+    sft, dpo, excluded, sft_excluded = [], [], Counter(), Counter()
+    contract_failed = set()
     for cand in candidates["sft"]:
         trace = traces[cand["trace_id"]]
+        question = gold[cand["source_record_id"]]["messages"][1]["content"]
+        # grounding_check는 측정값·장소·factor 값만 본다. 학습 target은 기존 계약 판정(thor assess)도 통과해야 한다.
+        if not chosen_ok(assess(thinking.response_json(trace["raw_text"]), question)):
+            contract_failed.add(cand["trace_id"])
+            sft_excluded["chosen_contract_failure"] += 1
+            continue
         record = thinking.sft_record(trace, gold[cand["source_record_id"]], source=str(traces_path))
         record["metadata"]["v003_flags"] = cand.get("v003_flags", [])
         sft.append(record)
     for cand in candidates["dpo"]:
         chosen, rejected = traces[cand["chosen"]], traces[cand["rejected"]]
+        if cand["chosen"] in contract_failed:
+            excluded["chosen_contract_failure"] += 1
+            continue
         if cand["rejected_parse"] not in ("ok",):
             excluded[f"rejected_{cand['rejected_parse']}"] += 1
             continue
@@ -67,7 +79,7 @@ def build(traces_path, candidates_path, corpus, split, output):
                            "train_count": len(rows) if split == "train" else 0,
                            "validation_count": len(rows) if split == "valid" else 0,
                            "questions": len({r["metadata"]["source_record_id"] for r in rows}),
-                           "excluded": dict(excluded) if stage == "dpo" else {},
+                           "excluded": dict(excluded) if stage == "dpo" else dict(sft_excluded),
                            "negative_category": dict(Counter(r["metadata"]["negative_category"] for r in rows))
                            if stage == "dpo" else {},
                            "issues": [], "output_hashes": {f"{stage}_{s}.jsonl": sha256(output / f"{stage}_{s}.jsonl")
