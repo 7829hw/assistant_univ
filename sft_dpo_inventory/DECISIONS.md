@@ -14,7 +14,7 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
 2. 지금 v003_t2pc thinking 데이터만으로 파이프라인 pilot을 돌린다.
    - 목적은 학습 → checkpoint 선택 → 평가가 끝까지 도는지 확인하는 것이다. 결과는 채택 판단에 쓰지 않는다.
    - 업체 100은 쓰지 않는다.
-3. SFT loss 범위는 `full_response`(thinking과 JSON 전체)다.
+3. SFT loss 범위는 `full_response`(thinking과 JSON 전체)다. **결정 24로 대체됨(SFT 한정).**
 4. 생성 token과 다시 tokenize한 결과가 다른 trace 10개(`thinking_prep_001/traces/tokenization_check.json`)는
    제외한다.
 5. 학습 렌더링은 HF `enable_thinking=True` 형식을 유지한다. 나중에 등록할 모델의 TEMPLATE을 이 형식에 맞춘다.
@@ -76,3 +76,34 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
      - 해제는 `pilot_prep_003/import/merge_v004.py`의 목록(16개 source_record_id)으로만 한다. 이전 validation 출처를 빼고 다시 대조해
        다른 보호(평가 셋 질문·id·template·family)에 걸리지 않는 것을 확인한 경우에만 푼다.
      - thor 보호 규칙 자체와 다른 보호 대상은 바꾸지 않는다.
+
+## 2026-10-06 — 진짜 pilot(`pilot_001`)
+
+23. 추론 표본 10개 검토 결과(`training/generated/thinking_traces/v003_t2pc_train/human_review_10.md`, sha256 `7dd14274…`).
+    사용자가 Claude의 검토 의견을 확인하고 확정했다. 판정표는 `reasoning_review_001/VERDICTS.md`.
+    - 판정 기준: 채점(`grounding_check`)이 보는 핵심 필드(측정값·사건, 집계 구조, 조건, 장소 값)에서 추론이 틀렸는데 JSON만
+      맞으면 "우연히 정답"이다. 채점이 보지 않는 필드(role, answer, source, id, text)의 오류는 "경미"로 둔다.
+    - 타당 3, 타당(경미) 5, 우연히 정답 2(`ann-d983889cf8c496178106:sample:7`, `ann-ea359d5569ef6070f9e4:sample:3`).
+24. SFT의 loss 범위는 `json_only`다. 결정 3(`full_response`)을 대체한다. 결정 23의 규칙대로라면 `full_response` 유지였지만,
+    판정이 경계선이라 사용자가 보수적으로 골랐다.
+25. trace 선별 기준은 바꾸지 않는다. 채점 기준과 같게 두고, role이 gold와 달라도 채택한다.
+26. DPO는 `full_response`로 유지하고, PROTOCOL(결정 22)은 바꾸지 않는다. DPO는 `json_only`를 지원하지 않으므로, 최종 모델은
+    DPO 단계에서 추론 문장까지 학습한다.
+27. 결정 23에서 "우연히 정답"으로 판정한 trace 2개를 학습에서 뺀다. 이 trace가 chosen인 DPO 쌍도 뺀다. 검토하지 않은 다른
+    trace는 그대로 둔다.
+28. 학습 길이와 저장 시점. 나머지 학습 설정은 pipeline pilot과 같은 thor profile을 쓰고, 탐색하지 않는다.
+    - SFT: 2 epoch, 0.5 epoch마다 저장(4개).
+    - DPO: 1 epoch, 25%마다 저장(4개). 고른 SFT checkpoint에서 시작한다.
+    - 선택 규칙: valid98 grounding_ok가 가장 높은 checkpoint. 동점이면 더 이른 쪽.
+29. checkpoint 선택용 valid는 결정 16의 100문항에서 h03과 `heldout_v8/t10`을 뺀 98문항(valid98)이다.
+    - h03: gold는 "출발·도착 둘 다 수성구"를 장소 두 개로 적었지만, 현재 계약은 이 경우를 "C 하나에 od_role both"로 적게 한다.
+      (사용자 문장에는 `heldout_v8/h03`으로 적혔다. 이 내용의 문항은 `heldout_v9/h03`이다. heldout_v8에는 h03이 없다.)
+    - t10: gold도 조건 계층에서 멈춘다.
+    - 평가 라벨 원본은 고치지 않는다.
+30. PROTOCOL의 판정은 그대로 둔다. 업체 100에서 평가하는 고른 SFT와 최종(SFT+DPO) 각각에 대해, 운영 경로의 E·B-conv·학습
+    모델 삼자 비교를 보조 분석으로 한다(`vendor100_protocol/ADDENDUM_three_way.md`). 판정에 쓰지 않는다.
+31. 운영 측정의 안전장치. 판정 규칙은 바꾸지 않고, 실행 조건만 맞춘다.
+    - 학습 모델을 등록할 때마다 base 때와 같은 렌더링 확인 10문항(token 수, think 미지정 시 thinking 켬, thinking·본문 분리)을
+      통과해야 업체 100을 잰다. 통과하지 못하면 그 모델의 Ollama 측정은 하지 않고 보고한다.
+    - 학습 모델 측정 직전에 Ollama 버전을 확인한다. E·B-conv를 잰 버전(0.35.1)과 같으면 기존 기록을 쓴다. 다르면 E와 B-conv를
+      같은 버전에서 다시 잰 뒤 학습 모델을 잰다. 판정과 삼자 비교에는 같은 버전의 값을 쓰고, 이전 값도 함께 기록한다.
