@@ -26,3 +26,12 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - v003_t2pc valid 16문항을 HF-E와 같은 조건으로 잰다.
     - grounding_ok가 가장 높은 checkpoint를 고른다.
     - 동점이면 더 이른 checkpoint를 고른다(규칙은 `pipeline_pilot_001/PLAN.md`에 고정).
+
+## 2026-10-06 — pilot 전 준비(`pilot_prep_002`)
+
+11. valid 채점은 질문을 만들 때 쓴 장소를 아는 provider로 한다.
+    - 학습 corpus의 합성 장소(가람구, 나래구 등)는 reference provider를 쓴다.
+    - 업체 100은 지금처럼 mock을 쓴다.
+    - pipeline 코드와 채점 코드는 같다.
+12. 메모리 대책으로 `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`를 확인한다. 학습 설정(데이터, 길이, 정밀도, LoRA)은
+    바꾸지 않는다.
