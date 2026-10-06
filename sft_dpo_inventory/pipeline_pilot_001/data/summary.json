@@ -1,0 +1,98 @@
+{
+ "inputs": {
+  "traces": "training/generated/thinking_traces/v003_t2pc_train/traces.jsonl",
+  "traces_sha256": "23b9c8cdf923f0174ca214fc750bae76f7fc684a9e5b94c137d8b41ba8a4bddd",
+  "candidates": "sft_dpo_inventory/thinking_prep_001/traces/candidates.json",
+  "corpus": "training/generated/reviewed_gold_v003_t2pc",
+  "split": "train",
+  "reference_date": "2026-09-25"
+ },
+ "decisions_applied": [
+  "4 tokenization mismatch traces excluded",
+  "6 DPO operational re-judgment",
+  "7 compile_stop kept",
+  "8 no-correct questions excluded"
+ ],
+ "candidates_before": {
+  "sft": 44,
+  "dpo": 214
+ },
+ "filter_steps": {
+  "sft": {
+   "decision4_tokenization_mismatch": 2
+  },
+  "dpo": {
+   "decision6_dropped_condition_layer_fixed": 135,
+   "decision6_kept_operational_wrong": 54,
+   "decision6_dropped_other": 10,
+   "decision4_tokenization_mismatch": 15
+  }
+ },
+ "candidates_after_filters": {
+  "sft": 42,
+  "dpo": 54
+ },
+ "dpo_rejudgment": {
+  "pairs_judged": 199,
+  "unique_rejected_traces": 61,
+  "pairs_by_category": {
+   "dropped_condition_layer_fixed": 135,
+   "kept_operational_wrong": 54,
+   "dropped_other": 10
+  },
+  "pairs_by_reason": {
+   "dropped_condition_layer_fixed:equal_to_gold_after_condition_layer": 135,
+   "kept_operational_wrong:first_response_needs_contract_repair": 12,
+   "dropped_other:equal_to_gold_without_condition_correction": 10,
+   "kept_operational_wrong:final_grounding_differs": 14,
+   "kept_operational_wrong:no_final_grounding": 28
+  },
+  "pairs_by_outcome": {
+   "dropped_condition_layer_fixed:answered:None": 53,
+   "kept_operational_wrong:failed:INVALID_FACTOR": 10,
+   "dropped_other:failed:NOT_FOUND": 1,
+   "dropped_condition_layer_fixed:failed:NOT_FOUND": 19,
+   "dropped_other:answered:None": 9,
+   "dropped_condition_layer_fixed:unsupported:UNVERIFIED_TIMS_CONTRACT": 63,
+   "kept_operational_wrong:failed:INVALID_FACTOR_COMBINATION": 2,
+   "kept_operational_wrong:answered:None": 1,
+   "kept_operational_wrong:failed:VALUELESS_CONCEPT": 12,
+   "kept_operational_wrong:failed:INVALID_CONCEPT": 16,
+   "kept_operational_wrong:unsupported:UNVERIFIED_TIMS_CONTRACT": 5,
+   "kept_operational_wrong:unsupported:UNCONSUMED_CONDITION": 4,
+   "kept_operational_wrong:failed:NOT_FOUND": 4
+  },
+  "prep_condition_flag_vs_operational": {
+   "prep_fixed=False->dropped_condition_layer_fixed": 21,
+   "prep_fixed=False->dropped_other": 10,
+   "prep_fixed=False->kept_operational_wrong": 38,
+   "prep_fixed=True->dropped_condition_layer_fixed": 114,
+   "prep_fixed=True->kept_operational_wrong": 16
+  }
+ },
+ "build": {
+  "sft": {
+   "train_count": 40,
+   "validation_count": 0,
+   "questions": 12,
+   "excluded": {
+    "chosen_contract_failure": 2
+   },
+   "negative_category": {}
+  },
+  "dpo": {
+   "train_count": 48,
+   "validation_count": 0,
+   "questions": 9,
+   "excluded": {
+    "chosen_contract_failure": 6
+   },
+   "negative_category": {
+    "constraint": 38,
+    "semantic": 10
+   }
+  }
+ },
+ "output": "training/generated/thinking_v003_t2pc_pilot",
+ "manifest_sha256": "d6c1bb74b5d4adbd91bdc92e067e880b94681927db0144036bcd8883daabfdf0"
+}
