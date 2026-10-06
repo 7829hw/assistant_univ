@@ -48,3 +48,11 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
 8. Keep the existing data policies: protected dev/validation/diagnostic data never becomes training input,
    and annotation recommendations or validator PASS are not human approval. Vendor 100 results are
    evaluation-only (never used for training, checkpoint selection or annotation candidates).
+9. Thinking condition (decided 2026-10-06): the training target is qwen3:8b + T2PC code and prompt 87048d0c with
+   thinking ON, for both training and evaluation.
+   - Comparison baselines: Ollama path = cell E (think unspecified, which Ollama 0.34.4 renders as thinking on;
+     grounding_ok 79). HF path = HF-E (base Qwen3-8B@b968826d, `enable_thinking=True`).
+   - Do not go back to nonthinking settings (`enable_thinking: false`, `--model-think off`) for new training data,
+     training configs or evaluation cells. Ask the user first if a task seems to need them.
+   - Existing nonthinking records (F, HF-F, the nonthinking `reviewed_gold_v003_t2pc` exports and configs) stay
+     as records. Do not delete or rewrite them.
