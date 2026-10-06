@@ -19,6 +19,7 @@ from training.data.build_sft import sft_record
 from training.data.canonicalize import canonical_json, flatten_source, semantic_key
 from training.data.common import provenance, read_jsonl, sha256, write_jsonl, write_manifest
 from training.data.split import question_key, split_records, template_key
+from training.data.validation import STOP_TARGET
 
 CHECKS = ('source_role_value', 'factor_evidence', 'aggregation_stages', 'od_direction',
           'support_boundary', 'paraphrase_lineage')
@@ -272,7 +273,9 @@ def import_reviewed(queue, decisions, output, *, version, seed=42, valid_fractio
         if row['expected_outcome'] == 'answered' and raw.get('unsupported'):
             raise ValueError('Answered boundary outcome mismatch; revise proposal in a new queue')
         annotation = dict(id=row['candidate_id'], version=version, question=row['question'], grounding=raw,
-                          parent_intent=row['parent_intent'], family=row['semantic_family'], tags=[row['candidate_type']],
+                          parent_intent=row['parent_intent'], family=row['semantic_family'],
+                          # 결정 14: 정지 target으로 다시 낸 queue의 행은 표시를 달아 sft_record가 정지를 대조하게 한다.
+                          tags=[row['candidate_type']] + ([STOP_TARGET] if row['expected_outcome'] == STOP_TARGET else []),
                           reviewed_by=decision['reviewer'], review_decision_hash=decision['decision_hash'])
         record = sft_record(annotation, source=str(output / 'reviewed_annotations.yaml'), source_representation='flat')
         record['metadata'].update(corpus_version=version, candidate_hash=row['candidate_hash'],

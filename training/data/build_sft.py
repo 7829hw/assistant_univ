@@ -12,7 +12,7 @@ from training.data.canonicalize import check_shape, flatten_source, semantic_key
 from training.data.common import (check_expected_prompt, check_source, production_prompt, protected_questions, provenance,
                                  write_jsonl, write_manifest)
 from training.data.split import question_key, split_records
-from training.data.validation import assess, chosen_ok
+from training.data.validation import STOP_TARGET, assess, chosen_ok, stop_signature
 
 
 def sft_record(raw, *, source, source_representation, prompt=None):
@@ -25,7 +25,12 @@ def sft_record(raw, *, source, source_representation, prompt=None):
         payload = flatten_source(payload)
     target = serialize_planner_target(payload)
     result = assess(json.loads(target), question, normalize=False)
-    if not chosen_ok(result):
+    # 결정 14: 사람이 정지 target으로 승인한 gold(tag)는 parse되고 계약 오류로 멈춰야 한다. 그 정지를 기록하고 뒤에서 대조한다.
+    stop_target = STOP_TARGET in (raw.get("tags") or [])
+    expected_stop = stop_signature(result) if stop_target else None
+    if stop_target and expected_stop is None:
+        raise ValueError(f"Stop target does not parse-and-stop under the contract: {result}")
+    if not stop_target and not chosen_ok(result):
         raise ValueError(f"Gold parse/compose/validate failed: {result}")
     if not payload.get("unsupported"):
         effective = parse_grounding(json.loads(target), question)
@@ -33,7 +38,9 @@ def sft_record(raw, *, source, source_representation, prompt=None):
         if semantic_key(effective) != semantic_key(json.loads(target)):
             raise ValueError("Gold requires runtime normalization; correct annotation explicitly before training")
     runtime = assess(json.loads(target), question)
-    if not chosen_ok(runtime):
+    if stop_target and stop_signature(runtime) != expected_stop:
+        raise ValueError(f"Stop target stops differently on the production path: {runtime}")
+    if not stop_target and not chosen_ok(runtime):
         raise ValueError(f"Gold production pipeline failed: {runtime}")
     return {"messages": [{"role": "system", "content": prompt or production_prompt()},
                          {"role": "user", "content": question},
@@ -43,7 +50,8 @@ def sft_record(raw, *, source, source_representation, prompt=None):
                          "family": raw.get("family"), "tags": raw.get("tags", []),
                          "reviewed_by": raw.get("reviewed_by"), "source_version": raw.get("version"),
                          "source_representation": source_representation, "representation": "flat",
-                         "output_schema_version": "geoflow-planner-flat-training-v1", "chosen_quality": runtime}}
+                         "output_schema_version": "geoflow-planner-flat-training-v1", "chosen_quality": runtime,
+                         **({"target_kind": STOP_TARGET, "expected_stop": expected_stop} if stop_target else {})}}
 
 
 def build(input_path, output, *, seed=42, valid_fraction=0.2, source_representation="structured", strict=False):

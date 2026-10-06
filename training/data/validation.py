@@ -39,6 +39,30 @@ def chosen_ok(result):
     return result["parse_ok"] and (result["outcome"] == "unsupported" or result["validation_ok"] is True)
 
 
+#: 결정 14(2026-10-06): 지원 불가 질문의 학습 target은 T2PC식 정지 grounding이다. 측정값·조건을 계약으로 적을 수 있으면
+#: 실행할 수 없어도 grounding을 적고 코드가 계약 오류로 멈춘다. 사람이 이 형식으로 승인한 gold에만 붙는 표시다.
+STOP_TARGET = "t2pc_stop_grounding"
+
+
+def stop_signature(result):
+    """계약 정지의 식별값: [error_code, validation_codes]. parse가 실패했거나 멈추지 않았으면 None."""
+    if not result["parse_ok"] or chosen_ok(result):
+        return None
+    codes = list(result.get("validation_codes") or [])
+    if not result.get("error_code") and not codes:
+        return None
+    return [result.get("error_code"), codes]
+
+
+def target_ok(result, metadata=None):
+    """학습 target으로 쓸 수 있는가: ``chosen_ok``이거나, 결정 14로 승인된 정지 target이 기록된 같은 정지로 멈춘다."""
+    if chosen_ok(result):
+        return True
+    metadata = metadata or {}
+    return (metadata.get("target_kind") == STOP_TARGET and metadata.get("expected_stop") is not None
+            and stop_signature(result) == metadata["expected_stop"])
+
+
 # -- T2PC 판정(조건 계층을 거치는 운영 경로) ---------------------------------------------------------------
 # thor의 ``assess``는 parse_grounding → compose → validate만 본다(조건 계층 없음). 현재 운영 조합(T2PC)은 planner가
 # 조건 계층(conditions.reconcile_payload)을 먼저 거친다. 아래 판정은 학습 target 문자열을 그대로 돌려주는 stub client로

@@ -21,7 +21,7 @@ from pathlib import Path
 
 from training.data import thinking
 from training.data.common import check_expected_prompt, provenance, read_jsonl, sha256, write_jsonl
-from training.data.validation import assess, chosen_ok
+from training.data.validation import assess, chosen_ok, target_ok
 
 
 def build(traces_path, candidates_path, corpus, split, output):
@@ -38,7 +38,9 @@ def build(traces_path, candidates_path, corpus, split, output):
         trace = traces[cand["trace_id"]]
         question = gold[cand["source_record_id"]]["messages"][1]["content"]
         # grounding_check는 측정값·장소·factor 값만 본다. 학습 target은 기존 계약 판정(thor assess)도 통과해야 한다.
-        if not chosen_ok(assess(thinking.response_json(trace["raw_text"]), question)):
+        # 결정 14의 정지 target은 gold와 같은 계약 정지로 멈추면 통과한다(``target_ok``).
+        if not target_ok(assess(thinking.response_json(trace["raw_text"]), question),
+                         gold[cand["source_record_id"]]["metadata"]):
             contract_failed.add(cand["trace_id"])
             sft_excluded["chosen_contract_failure"] += 1
             continue

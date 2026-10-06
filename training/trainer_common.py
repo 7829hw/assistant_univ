@@ -10,7 +10,7 @@ from training.data.canonicalize import semantic_key, serialize_planner_target
 from training.data.common import check_expected_prompt, production_prompt, read_jsonl, sha256
 from training.data.split import check_split
 from training.data import thinking
-from training.data.validation import assess, chosen_ok
+from training.data.validation import assess, target_ok
 
 
 def load_config(path, stage):
@@ -93,7 +93,7 @@ def load_records(config, stage):
             if messages[0]["content"] != production_prompt():
                 raise ValueError("Record system prompt drift")
             target = json.loads(messages[-1]["content"])
-            if serialize_planner_target(target) != messages[-1]["content"] or not chosen_ok(assess(target, messages[1]["content"])):
+            if serialize_planner_target(target) != messages[-1]["content"] or not target_ok(assess(target, messages[1]["content"]), record.get("metadata")):
                 raise ValueError("Invalid/noncanonical chosen grounding")
             if stage == "dpo":
                 if [m.get("role") for m in record["rejected"]] != ["assistant"]:
@@ -120,7 +120,7 @@ def _check_thinking_records(records, stage):
             if messages[0]["content"] != production_prompt():
                 raise ValueError("Record system prompt drift")
             target = thinking.response_json(messages[-1]["content"])
-            if not chosen_ok(assess(target, messages[1]["content"])):
+            if not target_ok(assess(target, messages[1]["content"]), record.get("metadata")):
                 raise ValueError("Invalid chosen grounding in thinking response")
             if stage == "dpo":
                 if [m.get("role") for m in record["rejected"]] != ["assistant"]:

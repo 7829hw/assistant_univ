@@ -8,7 +8,7 @@ from training.data.canonicalize import semantic_key, serialize_planner_target
 from training.data.common import (check_expected_prompt, production_prompt, provenance, read_jsonl, sha256, write_jsonl, write_manifest)
 from training.data.negative_mutations import mutations
 from training.data.split import check_split, question_key
-from training.data.validation import assess, chosen_ok
+from training.data.validation import assess, chosen_ok, target_ok
 
 
 def dpo_pair(gold, rejected, *, negative_type, mutation_source="synthetic", negative_details=None):
@@ -18,7 +18,7 @@ def dpo_pair(gold, rejected, *, negative_type, mutation_source="synthetic", nega
         raise ValueError("Chosen/rejected identical or semantically equivalent")
     question = gold["messages"][1]["content"]
     good = assess(chosen, question)
-    if not chosen_ok(good):
+    if not target_ok(good, gold["metadata"]):
         raise ValueError(f"Chosen downstream failure: {good}")
     bad = assess(json.loads(rejected_text), question)
     category = "semantic" if chosen_ok(bad) else "constraint"
@@ -59,7 +59,7 @@ def build(gold_path, output, *, predictions=None, seed=42, max_negatives=8, stri
             if record["messages"][0]["content"] != production_prompt():
                 raise ValueError("Gold record system prompt drift")
             payload = json.loads(record["messages"][-1]["content"])
-            if record["messages"][-1]["content"] != serialize_planner_target(payload) or not chosen_ok(assess(payload, record["messages"][1]["content"])):
+            if record["messages"][-1]["content"] != serialize_planner_target(payload) or not target_ok(assess(payload, record["messages"][1]["content"]), record["metadata"]):
                 raise ValueError(f"Invalid chosen SFT record: {pid}")
             derived_seed = seed + int(hashlib.sha256(pid.encode()).hexdigest()[:8], 16)
             candidates = mutations(payload, seed=derived_seed)[:max_negatives]
