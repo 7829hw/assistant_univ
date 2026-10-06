@@ -1,0 +1,2382 @@
+{
+ "meta": {
+  "label": "dpo_step8",
+  "set": "reviewed_gold_v003_t2pc/sft_valid.jsonl",
+  "set_sha256": "49983205dcd4b40a4ddc65dd5563b3a0d1757b8eabcc70928ce04045cbe35639",
+  "model": "hf:Qwen/Qwen3-8B@b968826d9c46dd6066d109eabc6255188de91218",
+  "adapter": "/home/hwkim/sftdpo_work/pipeline_pilot_001/checkpoints/dpo/checkpoint-8/policy",
+  "adapter_sha256": "813d11a812db94f292833a865de581790e9e23ef40e0feb72ebda4a8a3491cee",
+  "dtype": "torch.bfloat16",
+  "attention": "sdpa",
+  "chat_template_kwargs": {
+   "enable_thinking": true
+  },
+  "decoding": {
+   "do_sample": false,
+   "max_new_tokens": 8192,
+   "seed": 42
+  },
+  "torch": "2.11.0+cu128",
+  "device": "NVIDIA RTX 6000 Ada Generation",
+  "device_uuid": "GPU-a644de12-2a2c-ca3d-4822-b80f704b0b21",
+  "load_seconds": 6.6,
+  "peak_allocated_bytes": 19394273280,
+  "raw_out": "/home/hwkim/assistant_univ/training/generated/pipeline_pilot_001/dpo_step8_raw.jsonl",
+  "raw_out_sha256": "dc2b5eecd090d2383d95ae16ea5b60ad33a9f3698e15dcb7b7c0494594989131",
+  "planner_prompt_sha256": "87048d0c554c365e0e7994d09a4515c1cc646785708ce6dc9d1f120b4b5e8c2c",
+  "code_fingerprint": "791c4a68a59647131321e3efad2325e549a46bc522230b25b2954a88c42eac6e",
+  "reference_date": "2026-09-25",
+  "pipeline": {
+   "aggregation_grounding": "flat",
+   "condition_check": true,
+   "condition_notes": false,
+   "provider": "mock",
+   "tims_execution": "legacy",
+   "client": "hf",
+   "think": "on(enable_thinking=True)"
+  },
+  "scorer": "evaluate_vendor100.grounding_check(final grounding) against reviewed gold",
+  "finished_at": "2026-10-06T17:14:54.998366+09:00"
+ },
+ "summary": {
+  "items": 16,
+  "grounding_ok": 11,
+  "first_raw_ok": 10,
+  "outcomes": {
+   "unsupported:UNVERIFIED_TIMS_CONTRACT": 8,
+   "answered:None": 3,
+   "failed:NOT_FOUND": 3,
+   "needs_clarification:AMBIGUOUS_AGGREGATION_STAGE": 1,
+   "needs_clarification:PLACE_NOT_IN_QUESTION": 1
+  },
+  "model_calls": 21,
+  "place_repair_calls": 2,
+  "other_repair_calls": 3,
+  "truncated_calls": 0,
+  "seconds": 695.3
+ },
+ "rows": [
+  {
+   "id": "ann-9d8392a4f8ca9ff8cfc2",
+   "question": "2026년 상반기 중구 개인택시 운행일수 합계가 가장 많았던 달은?",
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "first_raw_ok": true,
+   "outcome": "unsupported",
+   "error_code": "UNVERIFIED_TIMS_CONTRACT",
+   "model_calls": 1,
+   "place_repair_calls": 0,
+   "other_repair_calls": 0,
+   "generated_tokens": [
+    1369
+   ],
+   "done_reasons": [
+    "stop"
+   ],
+   "thinking_chars_first_plan": 4279,
+   "raw_sha256": [
+    "de1db45a2c77b29178ef69bae691dc7c88c2d56f5bb318fcb6883cd9e81f21fb"
+   ],
+   "seconds": 45.1,
+   "grounding": {
+    "concepts": [
+     {
+      "id": "location",
+      "text": "중구",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "중구",
+       "region": ""
+      },
+      "attributes": {}
+     },
+     {
+      "id": "operation",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "operation",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "operating_days",
+      "text": "운행일수 합계",
+      "concept": "AMOUNT",
+      "subtype": "operating_days",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "20260101-20260630",
+     "bucket": "month",
+     "aggregation": "sum",
+     "rollup": "max",
+     "answer": "bucket",
+     "taxi_type": "private"
+    },
+    "aggregation": {
+     "bucket": "month",
+     "inner": "sum",
+     "outer": null,
+     "select": "max",
+     "source": "flat"
+    }
+   },
+   "condition_corrections": [],
+   "planner_trace": {
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"location\",\n      \"text\": \"중구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"중구\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"operation\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"operation\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"operating_days\",\n      \"text\": \"운행일수 합계\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"operating_days\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"20260101-20260630\",\n    \"bucket\": \"month\",\n    \"aggregation\": \"sum\",\n    \"rollup\": \"max\",\n    \"answer\": \"bucket\",\n    \"taxi_type\": \"private\"\n  }\n}",
+    "error_stage": "compiler",
+    "error_detail": "measure_groups: 구간별 집계를 정확히 계산할 수 있는 호출 방법이 확인되지 않았습니다. fused_bucket_rollup: Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다; range_partition: 확인되지 않은 계약: range_inclusive; daily_partition: 확인되지 않은 계약: day_records:get_billing_metrics",
+    "error_context": {
+     "template": "PLACE_TO_SCOPE+EVENT_TO_GROUPED_MEASURE",
+     "rejected": [
+      {
+       "strategy": "fused_bucket_rollup",
+       "path": "provider_delegated",
+       "reason": "Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다"
+      },
+      {
+       "strategy": "range_partition",
+       "path": "local_recomputation",
+       "reason": "확인되지 않은 계약: range_inclusive"
+      },
+      {
+       "strategy": "daily_partition",
+       "path": "local_recomputation",
+       "reason": "확인되지 않은 계약: day_records:get_billing_metrics"
+      }
+     ]
+    },
+    "attempts": [
+     {
+      "index": 0,
+      "stage": "compiler",
+      "status": "planning_failed",
+      "error_code": "UNVERIFIED_TIMS_CONTRACT",
+      "repair_kind": null,
+      "repair_attempted": false,
+      "repair_result": null,
+      "reason": "다시 물어서 복구할 수 있는 실패가 아닙니다.",
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": null,
+      "detail": "measure_groups: 구간별 집계를 정확히 계산할 수 있는 호출 방법이 확인되지 않았습니다. fused_bucket_rollup: Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다; range_partition: 확인되지 않은 계약: range_inclusive; daily_partition: 확인되지 않은 계약: day_records:get_billing_metrics",
+      "raw_text": null,
+      "repair_error": null
+     }
+    ],
+    "repairs": {},
+    "durations": {
+     "planner_ms": 45068.604,
+     "execution_ms": 0.0,
+     "total_ms": 45070.386
+    }
+   }
+  },
+  {
+   "id": "ann-0e4edbda1cb1bec194c1",
+   "question": "2026년 9월 읍면동 승차지별 실차 구간 건수가 적은 4개 그룹은?",
+   "grounding_ok": false,
+   "grounding_diffs": [
+    [
+     "factor:aggregation_spec",
+     null,
+     [
+      null,
+      "sum",
+      null,
+      null
+     ]
+    ]
+   ],
+   "first_raw_ok": false,
+   "outcome": "answered",
+   "error_code": null,
+   "model_calls": 2,
+   "place_repair_calls": 0,
+   "other_repair_calls": 1,
+   "generated_tokens": [
+    816,
+    1765
+   ],
+   "done_reasons": [
+    "stop",
+    "stop"
+   ],
+   "thinking_chars_first_plan": 2331,
+   "raw_sha256": [
+    "4e92edbf19fef4480c30760dc9fa8c62f3aaa0e611999c01a9d56957227d749a",
+    "886ca14553d21f7aaff746a58a76c0d944923ca37f105a012299242c2dec7d06"
+   ],
+   "seconds": 82.7,
+   "grounding": {
+    "concepts": [
+     {
+      "id": "trip",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "trip",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "trip_count",
+      "text": "실차 구간 건수",
+      "concept": "AMOUNT",
+      "subtype": "trip_count",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "20260901-20260930",
+     "dimension": "emd",
+     "dimension_target": "pickup",
+     "order": "bottom",
+     "limit": 4,
+     "aggregation": "sum"
+    },
+    "aggregation": {
+     "bucket": null,
+     "inner": "sum",
+     "outer": null,
+     "select": null,
+     "source": "flat"
+    }
+   },
+   "condition_corrections": [
+    {
+     "condition": "date",
+     "from": "202609",
+     "to": "20260901-20260930",
+     "action": "corrected",
+     "basis": "question_expression_over_llm_value",
+     "evidence": [
+      {
+       "text": "2026년 9월"
+      }
+     ]
+    }
+   ],
+   "planner_trace": {
+    "raw_text": "{\"factors\": {\"aggregation\": \"sum\", \"dimension\": \"emd\", \"dimension_target\": \"pickup\", \"order\": \"bottom\", \"limit\": 4}}",
+    "error_stage": null,
+    "error_detail": null,
+    "error_context": {},
+    "attempts": [
+     {
+      "index": 0,
+      "stage": "planner",
+      "status": "planning_failed",
+      "error_code": "INVALID_FACTOR_COMBINATION",
+      "repair_kind": "factor_correction",
+      "repair_attempted": true,
+      "repair_result": "OK",
+      "reason": null,
+      "repair_raw_text": "{\"factors\": {\"aggregation\": \"sum\", \"dimension\": \"emd\", \"dimension_target\": \"pickup\", \"order\": \"bottom\", \"limit\": 4}}",
+      "repaired_factors": {
+       "date": "20260901-20260930",
+       "dimension": "emd",
+       "dimension_target": "pickup",
+       "order": "bottom",
+       "limit": 4,
+       "aggregation": "sum"
+      },
+      "correction": {
+       "scope": {
+        "issues": [
+         {
+          "kind": "missing_companion",
+          "factor": "answer",
+          "missing": [
+           "bucket"
+          ]
+         }
+        ],
+        "permissions": {
+         "answer": [
+          "remove"
+         ]
+        },
+        "reasons": {
+         "answer": [
+          "answer는 bucket 없이 성립하지 않습니다"
+         ]
+        },
+        "unrepairable": []
+       },
+       "applied": {
+        "added": {},
+        "changed": {},
+        "removed": {
+         "answer": "bucket"
+        }
+       },
+       "kept_omitted": [],
+       "blocked": [],
+       "before": {
+        "aggregation": "sum",
+        "answer": "bucket",
+        "dimension": "emd",
+        "dimension_target": "pickup",
+        "order": "bottom",
+        "limit": 4
+       },
+       "proposed": {
+        "aggregation": "sum",
+        "dimension": "emd",
+        "dimension_target": "pickup",
+        "order": "bottom",
+        "limit": 4
+       },
+       "evidence": null,
+       "stage_values": {
+        "carried": {
+         "aggregation": "aggregation"
+        },
+        "new": []
+       },
+       "roles": {
+        "before": {
+         "grouping": "emd",
+         "grouping_field": "dimension",
+         "direction": "bottom",
+         "limit": 4,
+         "answer": "bucket",
+         "aggregation": "sum",
+         "rollup": null
+        },
+        "after": {
+         "grouping": "emd",
+         "grouping_field": "dimension",
+         "direction": "bottom",
+         "limit": 4,
+         "answer": "value",
+         "aggregation": "sum",
+         "rollup": null
+        }
+       },
+       "after": {
+        "aggregation": "sum",
+        "dimension": "emd",
+        "dimension_target": "pickup",
+        "order": "bottom",
+        "limit": 4
+       }
+      },
+      "detail": "answer 조건을 쓰려면 bucket 조건도 함께 필요합니다. 답 대상(값/구간)은 구간을 나눌 때만 적습니다.",
+      "raw_text": "",
+      "repair_error": null
+     },
+     {
+      "index": 1,
+      "stage": null,
+      "status": "OK",
+      "error_code": null,
+      "repair_kind": null,
+      "repair_attempted": null,
+      "repair_result": null,
+      "reason": null,
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": null,
+      "detail": null,
+      "raw_text": null,
+      "repair_error": null
+     }
+    ],
+    "repairs": {
+     "factor_correction": {
+      "attempted": 1,
+      "succeeded": 1
+     }
+    },
+    "durations": {
+     "planner_ms": 82641.092,
+     "execution_ms": 0.251,
+     "total_ms": 82642.722
+    }
+   }
+  },
+  {
+   "id": "ann-0d51b49a28500bb47b0d",
+   "question": "2026년 9월 읍면동 하차지별 실차 구간 건수가 적은 4개 그룹은?",
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "first_raw_ok": false,
+   "outcome": "answered",
+   "error_code": null,
+   "model_calls": 1,
+   "place_repair_calls": 0,
+   "other_repair_calls": 0,
+   "generated_tokens": [
+    883
+   ],
+   "done_reasons": [
+    "stop"
+   ],
+   "thinking_chars_first_plan": 2530,
+   "raw_sha256": [
+    "1d65ac26bd8de75a6924dba1a92562275209c68dfe928998205f16843a651efd"
+   ],
+   "seconds": 28.8,
+   "grounding": {
+    "concepts": [
+     {
+      "id": "trip",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "trip",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "trip_count",
+      "text": "실차 구간 건수",
+      "concept": "AMOUNT",
+      "subtype": "trip_count",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "20260901-20260930",
+     "dimension": "emd",
+     "dimension_target": "dropoff",
+     "order": "bottom",
+     "limit": 4
+    },
+    "aggregation": {
+     "bucket": null,
+     "inner": null,
+     "outer": null,
+     "select": null,
+     "source": "flat"
+    },
+    "normalizations": [
+     {
+      "concept": "dropoff_location",
+      "rule": "non_place_word_dropped",
+      "before": {
+       "name": "읍면동",
+       "region": ""
+      }
+     }
+    ]
+   },
+   "condition_corrections": [
+    {
+     "condition": "date",
+     "from": "202609",
+     "to": "20260901-20260930",
+     "action": "corrected",
+     "basis": "question_expression_over_llm_value",
+     "evidence": [
+      {
+       "text": "2026년 9월"
+      }
+     ]
+    }
+   ],
+   "planner_trace": {
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"dropoff_location\",\n      \"text\": \"읍면동\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"읍면동\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"202609\",\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"dropoff\",\n    \"order\": \"bottom\",\n    \"limit\": 4\n  }\n}",
+    "error_stage": null,
+    "error_detail": null,
+    "error_context": {},
+    "attempts": [
+     {
+      "index": 0,
+      "stage": null,
+      "status": "OK",
+      "error_code": null,
+      "repair_kind": null,
+      "repair_attempted": null,
+      "repair_result": null,
+      "reason": null,
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": null,
+      "detail": null,
+      "raw_text": null,
+      "repair_error": null
+     }
+    ],
+    "repairs": {},
+    "durations": {
+     "planner_ms": 28704.088,
+     "execution_ms": 0.247,
+     "total_ms": 28705.095
+    }
+   }
+  },
+  {
+   "id": "ann-2d254560f2214204db4b",
+   "question": "2026년 9월 읍면동 승차지와 하차지 조합별 실차 구간 건수가 적은 4개 그룹은?",
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "first_raw_ok": false,
+   "outcome": "answered",
+   "error_code": null,
+   "model_calls": 1,
+   "place_repair_calls": 0,
+   "other_repair_calls": 0,
+   "generated_tokens": [
+    1234
+   ],
+   "done_reasons": [
+    "stop"
+   ],
+   "thinking_chars_first_plan": 4378,
+   "raw_sha256": [
+    "17c11478eb2764edee273e5dcc8cacb9946040ce1375f7767b126b338f009851"
+   ],
+   "seconds": 39.5,
+   "grounding": {
+    "concepts": [
+     {
+      "id": "trip",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "trip",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "trip_count",
+      "text": "",
+      "concept": "AMOUNT",
+      "subtype": "trip_count",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "20260901-20260930",
+     "dimension": "emd",
+     "dimension_target": "both",
+     "order": "bottom",
+     "limit": 4
+    },
+    "aggregation": {
+     "bucket": null,
+     "inner": null,
+     "outer": null,
+     "select": null,
+     "source": "flat"
+    }
+   },
+   "condition_corrections": [
+    {
+     "condition": "date",
+     "from": "202609",
+     "to": "20260901-20260930",
+     "action": "corrected",
+     "basis": "question_expression_over_llm_value",
+     "evidence": [
+      {
+       "text": "2026년 9월"
+      }
+     ]
+    }
+   ],
+   "planner_trace": {
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"202609\",\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"both\",\n    \"order\": \"bottom\",\n    \"limit\": 4\n  }\n}",
+    "error_stage": null,
+    "error_detail": null,
+    "error_context": {},
+    "attempts": [
+     {
+      "index": 0,
+      "stage": null,
+      "status": "OK",
+      "error_code": null,
+      "repair_kind": null,
+      "repair_attempted": null,
+      "repair_result": null,
+      "reason": null,
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": null,
+      "detail": null,
+      "raw_text": null,
+      "repair_error": null
+     }
+    ],
+    "repairs": {},
+    "durations": {
+     "planner_ms": 39472.768,
+     "execution_ms": 0.153,
+     "total_ms": 39473.499
+    }
+   }
+  },
+  {
+   "id": "ann-4cafcbdd3b76a67f42db",
+   "question": "2026년 9월 15일 가람구에서 관측된 도로 통행의 엔진 회전수 최솟값은?",
+   "grounding_ok": false,
+   "grounding_diffs": [
+    [
+     "places",
+     [
+      [
+       "가람구",
+       "",
+       null
+      ]
+     ],
+     [
+      [
+       "가람",
+       "",
+       null
+      ]
+     ]
+    ]
+   ],
+   "first_raw_ok": true,
+   "outcome": "failed",
+   "error_code": "NOT_FOUND",
+   "model_calls": 2,
+   "place_repair_calls": 1,
+   "other_repair_calls": 0,
+   "generated_tokens": [
+    680,
+    474
+   ],
+   "done_reasons": [
+    "stop",
+    "stop"
+   ],
+   "thinking_chars_first_plan": 2021,
+   "raw_sha256": [
+    "d7b745ac03bae13860a490eb1bec70c86c96ddc02a13b54b54fc70fd6503bcef",
+    "79f474a0c64c813668d487bc80b394f0682147468180c38583c101ea94d8ee33"
+   ],
+   "seconds": 38.9,
+   "grounding": {
+    "concepts": [
+     {
+      "id": "location",
+      "text": "가람구",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "가람",
+       "region": ""
+      },
+      "attributes": {}
+     },
+     {
+      "id": "passage",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "passage",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "rpm",
+      "text": "엔진 회전수",
+      "concept": "AMOUNT",
+      "subtype": "rpm",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "20260915",
+     "aggregation": "min"
+    },
+    "aggregation": {
+     "bucket": null,
+     "inner": "min",
+     "outer": null,
+     "select": null,
+     "source": "flat"
+    }
+   },
+   "condition_corrections": [],
+   "planner_trace": {
+    "raw_text": "{\"concept_id\": \"location\", \"name\": \"가람\", \"region\": \"\"}",
+    "error_stage": "execution",
+    "error_detail": "Tool 오류(get_place_scope/NOT_FOUND): 일치하는 장소 또는 행정구역을 찾을 수 없습니다.",
+    "error_context": {
+     "tool_name": "get_place_scope",
+     "step_id": "resolve_scope",
+     "retryable": true
+    },
+    "attempts": [
+     {
+      "index": 0,
+      "stage": null,
+      "status": "TOOL_ERROR",
+      "error_code": null,
+      "repair_kind": null,
+      "repair_attempted": null,
+      "repair_result": null,
+      "reason": null,
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": null,
+      "detail": "Tool 오류(get_place_scope/NOT_FOUND): 일치하는 장소 또는 행정구역을 찾을 수 없습니다.",
+      "raw_text": null,
+      "repair_error": null
+     },
+     {
+      "index": 1,
+      "stage": null,
+      "status": "TOOL_ERROR",
+      "error_code": null,
+      "repair_kind": null,
+      "repair_attempted": null,
+      "repair_result": null,
+      "reason": null,
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": null,
+      "detail": "Tool 오류(get_place_scope/NOT_FOUND): 일치하는 장소 또는 행정구역을 찾을 수 없습니다.",
+      "raw_text": null,
+      "repair_error": null
+     },
+     {
+      "index": 2,
+      "stage": null,
+      "status": "repair_skipped",
+      "error_code": null,
+      "repair_kind": null,
+      "repair_attempted": null,
+      "repair_result": null,
+      "reason": "재계획 시도 횟수 소진",
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": null,
+      "detail": null,
+      "raw_text": null,
+      "repair_error": null
+     }
+    ],
+    "repairs": {
+     "place_value": {
+      "attempted": 1,
+      "succeeded": 1
+     }
+    },
+    "durations": {
+     "planner_ms": 38811.051,
+     "execution_ms": 0.248,
+     "total_ms": 38812.494
+    }
+   }
+  },
+  {
+   "id": "ann-56366f545130c8b38940",
+   "question": "지난달 하늘동에서 관측된 도로 통행 RPM을 주마다 중앙값으로 요약한 뒤, 그 주별 중앙값들을 동일 가중으로 평균하면?",
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "first_raw_ok": true,
+   "outcome": "unsupported",
+   "error_code": "UNVERIFIED_TIMS_CONTRACT",
+   "model_calls": 1,
+   "place_repair_calls": 0,
+   "other_repair_calls": 0,
+   "generated_tokens": [
+    777
+   ],
+   "done_reasons": [
+    "stop"
+   ],
+   "thinking_chars_first_plan": 2419,
+   "raw_sha256": [
+    "050b341dfcda162c43e0db6d8c9a243fc3574e9d11ab69a70e99614b8a212673"
+   ],
+   "seconds": 25.5,
+   "grounding": {
+    "concepts": [
+     {
+      "id": "place_1",
+      "text": "하늘동",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "COND",
+      "source": "user",
+      "value": {
+       "name": "하늘동",
+       "region": ""
+      },
+      "attributes": {}
+     },
+     {
+      "id": "passage",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "passage",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "rpm",
+      "text": "",
+      "concept": "AMOUNT",
+      "subtype": "rpm",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "last_month",
+     "bucket": "week",
+     "aggregation": "med",
+     "rollup": "avg"
+    },
+    "aggregation": {
+     "bucket": "week",
+     "inner": "med",
+     "outer": "avg",
+     "select": null,
+     "source": "flat"
+    }
+   },
+   "condition_corrections": [],
+   "planner_trace": {
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"place_1\",\n      \"text\": \"하늘동\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"COND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"하늘동\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"rpm\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"rpm\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"last_month\",\n    \"bucket\": \"week\",\n    \"aggregation\": \"med\",\n    \"rollup\": \"avg\"\n  }\n}",
+    "error_stage": "compiler",
+    "error_detail": "measure_groups: 구간별 집계를 정확히 계산할 수 있는 호출 방법이 확인되지 않았습니다. fused_bucket_rollup: Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다; range_partition: 확인되지 않은 계약: range_inclusive; daily_partition: 구간 안 집계 med는 하루 값들로 정확히 다시 만들 수 없습니다; 확인되지 않은 계약: day_records:get_passage_metrics",
+    "error_context": {
+     "template": "PLACE_TO_SCOPE+EVENT_TO_GROUPED_MEASURE",
+     "rejected": [
+      {
+       "strategy": "fused_bucket_rollup",
+       "path": "provider_delegated",
+       "reason": "Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다"
+      },
+      {
+       "strategy": "range_partition",
+       "path": "local_recomputation",
+       "reason": "확인되지 않은 계약: range_inclusive"
+      },
+      {
+       "strategy": "daily_partition",
+       "path": "local_recomputation",
+       "reason": "구간 안 집계 med는 하루 값들로 정확히 다시 만들 수 없습니다; 확인되지 않은 계약: day_records:get_passage_metrics"
+      }
+     ]
+    },
+    "attempts": [
+     {
+      "index": 0,
+      "stage": "compiler",
+      "status": "planning_failed",
+      "error_code": "UNVERIFIED_TIMS_CONTRACT",
+      "repair_kind": null,
+      "repair_attempted": false,
+      "repair_result": null,
+      "reason": "다시 물어서 복구할 수 있는 실패가 아닙니다.",
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": null,
+      "detail": "measure_groups: 구간별 집계를 정확히 계산할 수 있는 호출 방법이 확인되지 않았습니다. fused_bucket_rollup: Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다; range_partition: 확인되지 않은 계약: range_inclusive; daily_partition: 구간 안 집계 med는 하루 값들로 정확히 다시 만들 수 없습니다; 확인되지 않은 계약: day_records:get_passage_metrics",
+      "raw_text": null,
+      "repair_error": null
+     }
+    ],
+    "repairs": {},
+    "durations": {
+     "planner_ms": 25467.184,
+     "execution_ms": 0.0,
+     "total_ms": 25467.728
+    }
+   }
+  },
+  {
+   "id": "ann-5c88583c249cfeba80ef",
+   "question": "2026년 7월 6일부터 8월 30일까지 하늘동에서 관측된 도로 통행 RPM을 주마다 중앙값으로 요약한 뒤, 그 주별 중앙값들을 동일 가중으로 평균하면?",
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "first_raw_ok": true,
+   "outcome": "unsupported",
+   "error_code": "UNVERIFIED_TIMS_CONTRACT",
+   "model_calls": 1,
+   "place_repair_calls": 0,
+   "other_repair_calls": 0,
+   "generated_tokens": [
+    794
+   ],
+   "done_reasons": [
+    "stop"
+   ],
+   "thinking_chars_first_plan": 2284,
+   "raw_sha256": [
+    "903eb3602c8486462999f935562ecee8b120a1e220d56aacb6ccd6adf0e702bf"
+   ],
+   "seconds": 25.9,
+   "grounding": {
+    "concepts": [
+     {
+      "id": "place_1",
+      "text": "하늘동",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "하늘동",
+       "region": ""
+      },
+      "attributes": {}
+     },
+     {
+      "id": "passage",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "passage",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "rpm",
+      "text": "",
+      "concept": "AMOUNT",
+      "subtype": "rpm",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "20260706-20260830",
+     "bucket": "week",
+     "aggregation": "med",
+     "rollup": "avg"
+    },
+    "aggregation": {
+     "bucket": "week",
+     "inner": "med",
+     "outer": "avg",
+     "select": null,
+     "source": "flat"
+    }
+   },
+   "condition_corrections": [],
+   "planner_trace": {
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"place_1\",\n      \"text\": \"하늘동\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"하늘동\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"rpm\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"rpm\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"20260706-20260830\",\n    \"bucket\": \"week\",\n    \"aggregation\": \"med\",\n    \"rollup\": \"avg\"\n  }\n}",
+    "error_stage": "compiler",
+    "error_detail": "measure_groups: 구간별 집계를 정확히 계산할 수 있는 호출 방법이 확인되지 않았습니다. fused_bucket_rollup: Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다; range_partition: 확인되지 않은 계약: range_inclusive; daily_partition: 구간 안 집계 med는 하루 값들로 정확히 다시 만들 수 없습니다; 확인되지 않은 계약: day_records:get_passage_metrics",
+    "error_context": {
+     "template": "PLACE_TO_SCOPE+EVENT_TO_GROUPED_MEASURE",
+     "rejected": [
+      {
+       "strategy": "fused_bucket_rollup",
+       "path": "provider_delegated",
+       "reason": "Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다"
+      },
+      {
+       "strategy": "range_partition",
+       "path": "local_recomputation",
+       "reason": "확인되지 않은 계약: range_inclusive"
+      },
+      {
+       "strategy": "daily_partition",
+       "path": "local_recomputation",
+       "reason": "구간 안 집계 med는 하루 값들로 정확히 다시 만들 수 없습니다; 확인되지 않은 계약: day_records:get_passage_metrics"
+      }
+     ]
+    },
+    "attempts": [
+     {
+      "index": 0,
+      "stage": "compiler",
+      "status": "planning_failed",
+      "error_code": "UNVERIFIED_TIMS_CONTRACT",
+      "repair_kind": null,
+      "repair_attempted": false,
+      "repair_result": null,
+      "reason": "다시 물어서 복구할 수 있는 실패가 아닙니다.",
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": null,
+      "detail": "measure_groups: 구간별 집계를 정확히 계산할 수 있는 호출 방법이 확인되지 않았습니다. fused_bucket_rollup: Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다; range_partition: 확인되지 않은 계약: range_inclusive; daily_partition: 구간 안 집계 med는 하루 값들로 정확히 다시 만들 수 없습니다; 확인되지 않은 계약: day_records:get_passage_metrics",
+      "raw_text": null,
+      "repair_error": null
+     }
+    ],
+    "repairs": {},
+    "durations": {
+     "planner_ms": 25843.108,
+     "execution_ms": 0.0,
+     "total_ms": 25843.598
+    }
+   }
+  },
+  {
+   "id": "ann-fb7938d64ca0888db425",
+   "question": "2026년 4월부터 6월까지 하늘구 소속 택시의 실차 구간별 요금 최댓값을 월마다 구하고, 그 월별 최댓값들의 동일 가중 평균은?",
+   "grounding_ok": false,
+   "grounding_diffs": [
+    "no_grounding"
+   ],
+   "first_raw_ok": false,
+   "outcome": "needs_clarification",
+   "error_code": "AMBIGUOUS_AGGREGATION_STAGE",
+   "model_calls": 2,
+   "place_repair_calls": 0,
+   "other_repair_calls": 1,
+   "generated_tokens": [
+    2274,
+    749
+   ],
+   "done_reasons": [
+    "stop",
+    "stop"
+   ],
+   "thinking_chars_first_plan": 8703,
+   "raw_sha256": [
+    "9094cc1287c49c3b1a31f2ba7c271b3ef61d15f343d89a60f6fcd72069590929",
+    "d9ca630db9d0365586e55626bb8727476edbe97025118d851e41785d4ad4e5da"
+   ],
+   "seconds": 96.3,
+   "grounding": null,
+   "condition_corrections": null,
+   "planner_trace": {
+    "raw_text": null,
+    "error_stage": "planner",
+    "error_detail": "재질의가 적은 집계 값의 근거 표현을 질문에서 확인하지 못했습니다",
+    "error_context": {
+     "needs_clarification": true,
+     "clarify": [
+      "rollup"
+     ],
+     "from": "INVALID_FACTOR",
+     "reason": "repair_stage_value_unverified"
+    },
+    "attempts": [
+     {
+      "index": 0,
+      "stage": "planner",
+      "status": "planning_failed",
+      "error_code": "INVALID_FACTOR",
+      "repair_kind": "factor_correction",
+      "repair_attempted": true,
+      "repair_result": "repair_failed",
+      "reason": null,
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": {
+       "scope": {
+        "issues": [
+         {
+          "kind": "invalid_value",
+          "factor": "rollup",
+          "value": "weighted_avg"
+         },
+         {
+          "kind": "missing_companion",
+          "factor": "rollup",
+          "missing": [
+           "bucket"
+          ]
+         }
+        ],
+        "permissions": {
+         "rollup": [
+          "change",
+          "remove"
+         ],
+         "bucket": [
+          "add"
+         ],
+         "order": [
+          "add"
+         ],
+         "limit": [
+          "add"
+         ],
+         "dimension": [
+          "add"
+         ]
+        },
+        "reasons": {
+         "rollup": [
+          "rollup='weighted_avg'는 허용값이 아닙니다",
+          "rollup='weighted_avg'는 허용값이 아닙니다"
+         ],
+         "bucket": [
+          "rollup의 짝입니다"
+         ],
+         "order": [
+          "rollup가 맡은 역할을 order로 적는 후보입니다(같은 계산이라는 뜻은 아닙니다)"
+         ],
+         "limit": [
+          "rollup가 맡은 역할을 limit로 적는 후보입니다(같은 계산이라는 뜻은 아닙니다)"
+         ],
+         "dimension": [
+          "order의 짝입니다"
+         ]
+        },
+        "unrepairable": []
+       },
+       "applied": {
+        "added": {
+         "bucket": "month"
+        },
+        "changed": {
+         "rollup": {
+          "from": "weighted_avg",
+          "to": "avg"
+         }
+        },
+        "removed": {}
+       },
+       "kept_omitted": [],
+       "blocked": [],
+       "before": {
+        "aggregation": "max",
+        "rollup": "weighted_avg"
+       },
+       "proposed": {
+        "bucket": "month",
+        "aggregation": "max",
+        "rollup": "avg"
+       },
+       "evidence": null,
+       "stage_values": {
+        "carried": {
+         "aggregation": "aggregation"
+        },
+        "new": [
+         "rollup"
+        ]
+       },
+       "evidence_check": {
+        "needed": [
+         "rollup"
+        ],
+        "unverified": [
+         "rollup"
+        ],
+        "note": "문자열이 질문에 있는지만 확인했다. 그 표현의 뜻은 확인하지 않았다."
+       },
+       "roles": {
+        "before": {
+         "grouping": null,
+         "grouping_field": null,
+         "direction": null,
+         "limit": null,
+         "answer": "value",
+         "aggregation": "max",
+         "rollup": "weighted_avg"
+        },
+        "after": {
+         "grouping": "month",
+         "grouping_field": "bucket",
+         "direction": null,
+         "limit": null,
+         "answer": "value",
+         "aggregation": "max",
+         "rollup": "avg"
+        }
+       },
+       "after": {
+        "bucket": "month",
+        "aggregation": "max",
+        "rollup": "avg"
+       },
+       "terminal": {
+        "code": "AMBIGUOUS_AGGREGATION_STAGE",
+        "unverified_stages": [
+         "rollup"
+        ],
+        "reason": "재질의가 적은 집계 값의 근거 표현을 질문에서 확인하지 못했습니다"
+       }
+      },
+      "detail": "factor rollup의 허용된 값이 아닙니다: 'weighted_avg' (허용: avg, max, med, min, sum)",
+      "raw_text": null,
+      "repair_error": {
+       "code": "REPAIR_OUT_OF_SCOPE",
+       "detail": "재계획이 허용된 범위를 벗어났습니다: 새로 적은 집계 값의 근거를 질문에서 확인하지 못했습니다: rollup"
+      }
+     }
+    ],
+    "repairs": {
+     "factor_correction": {
+      "attempted": 1,
+      "succeeded": 0
+     }
+    },
+    "durations": {
+     "planner_ms": 0.0,
+     "total_ms": 96267.021
+    }
+   }
+  },
+  {
+   "id": "ann-f2cd5753e5bbdc07eef9",
+   "question": "2026년 4월부터 6월까지 하늘동 안에서 관측된 도로 통행 속도를 월마다 산술평균하고, 그 월별 평균 중 가장 큰 숫자는?",
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "first_raw_ok": true,
+   "outcome": "unsupported",
+   "error_code": "UNVERIFIED_TIMS_CONTRACT",
+   "model_calls": 1,
+   "place_repair_calls": 0,
+   "other_repair_calls": 0,
+   "generated_tokens": [
+    741
+   ],
+   "done_reasons": [
+    "stop"
+   ],
+   "thinking_chars_first_plan": 2121,
+   "raw_sha256": [
+    "b205a7c1e59dd3bd34074bacf9a55de8f87b29efbe20f46c51a0eaffa34e0fa1"
+   ],
+   "seconds": 24.4,
+   "grounding": {
+    "concepts": [
+     {
+      "id": "place_1",
+      "text": "하늘동",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "하늘동",
+       "region": ""
+      },
+      "attributes": {}
+     },
+     {
+      "id": "passage",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "passage",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "speed",
+      "text": "",
+      "concept": "AMOUNT",
+      "subtype": "speed",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "20260401-20260630",
+     "aggregation": "avg",
+     "rollup": "max",
+     "bucket": "month",
+     "answer": "value"
+    },
+    "aggregation": {
+     "bucket": "month",
+     "inner": "avg",
+     "outer": "max",
+     "select": null,
+     "source": "flat"
+    }
+   },
+   "condition_corrections": [],
+   "planner_trace": {
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"place_1\",\n      \"text\": \"하늘동\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"하늘동\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"speed\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"speed\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"20260401-20260630\",\n    \"aggregation\": \"avg\",\n    \"rollup\": \"max\",\n    \"bucket\": \"month\",\n    \"answer\": \"value\"\n  }\n}",
+    "error_stage": "compiler",
+    "error_detail": "measure_groups: 구간별 집계를 정확히 계산할 수 있는 호출 방법이 확인되지 않았습니다. fused_bucket_rollup: Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다; range_partition: 확인되지 않은 계약: range_inclusive; daily_partition: 구간 안 집계 avg는 하루 값들로 정확히 다시 만들 수 없습니다; 확인되지 않은 계약: day_records:get_passage_metrics",
+    "error_context": {
+     "template": "PLACE_TO_SCOPE+EVENT_TO_GROUPED_MEASURE",
+     "rejected": [
+      {
+       "strategy": "fused_bucket_rollup",
+       "path": "provider_delegated",
+       "reason": "Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다"
+      },
+      {
+       "strategy": "range_partition",
+       "path": "local_recomputation",
+       "reason": "확인되지 않은 계약: range_inclusive"
+      },
+      {
+       "strategy": "daily_partition",
+       "path": "local_recomputation",
+       "reason": "구간 안 집계 avg는 하루 값들로 정확히 다시 만들 수 없습니다; 확인되지 않은 계약: day_records:get_passage_metrics"
+      }
+     ]
+    },
+    "attempts": [
+     {
+      "index": 0,
+      "stage": "compiler",
+      "status": "planning_failed",
+      "error_code": "UNVERIFIED_TIMS_CONTRACT",
+      "repair_kind": null,
+      "repair_attempted": false,
+      "repair_result": null,
+      "reason": "다시 물어서 복구할 수 있는 실패가 아닙니다.",
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": null,
+      "detail": "measure_groups: 구간별 집계를 정확히 계산할 수 있는 호출 방법이 확인되지 않았습니다. fused_bucket_rollup: Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다; range_partition: 확인되지 않은 계약: range_inclusive; daily_partition: 구간 안 집계 avg는 하루 값들로 정확히 다시 만들 수 없습니다; 확인되지 않은 계약: day_records:get_passage_metrics",
+      "raw_text": null,
+      "repair_error": null
+     }
+    ],
+    "repairs": {},
+    "durations": {
+     "planner_ms": 24341.161,
+     "execution_ms": 0.0,
+     "total_ms": 24341.866
+    }
+   }
+  },
+  {
+   "id": "ann-0d74b3178a8697d4e028",
+   "question": "2026년 4월부터 6월까지 사용자가 지정한 도로 범위 scope:edge:2608 안에서 기록된 통행 속도를 월별 최댓값으로 요약한 뒤, 그 월별 최댓값들을 동일 가중 평균하면?",
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "first_raw_ok": true,
+   "outcome": "unsupported",
+   "error_code": "UNVERIFIED_TIMS_CONTRACT",
+   "model_calls": 1,
+   "place_repair_calls": 0,
+   "other_repair_calls": 0,
+   "generated_tokens": [
+    826
+   ],
+   "done_reasons": [
+    "stop"
+   ],
+   "thinking_chars_first_plan": 2479,
+   "raw_sha256": [
+    "1df6af414e4b12249c87a8e0642994e7db501dda97589aa40ed66146e687cbff"
+   ],
+   "seconds": 26.8,
+   "grounding": {
+    "concepts": [
+     {
+      "id": "user_scope",
+      "text": "scope:edge:2608",
+      "concept": "LOCATION",
+      "subtype": "scope",
+      "role": "COND",
+      "source": "user",
+      "value": "scope:edge:2608",
+      "attributes": {}
+     },
+     {
+      "id": "passage",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "passage",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "speed",
+      "text": "통행 속도",
+      "concept": "AMOUNT",
+      "subtype": "speed",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "20260401-20260630",
+     "bucket": "month",
+     "aggregation": "max",
+     "rollup": "avg"
+    },
+    "aggregation": {
+     "bucket": "month",
+     "inner": "max",
+     "outer": "avg",
+     "select": null,
+     "source": "flat"
+    }
+   },
+   "condition_corrections": [],
+   "planner_trace": {
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"user_scope\",\n      \"text\": \"scope:edge:2608\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"scope\",\n      \"role\": \"COND\",\n      \"source\": \"user\",\n      \"value\": \"scope:edge:2608\"\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"speed\",\n      \"text\": \"통행 속도\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"speed\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"20260401-20260630\",\n    \"bucket\": \"month\",\n    \"aggregation\": \"max\",\n    \"rollup\": \"avg\"\n  }\n}",
+    "error_stage": "compiler",
+    "error_detail": "measure_groups: 구간별 집계를 정확히 계산할 수 있는 호출 방법이 확인되지 않았습니다. fused_bucket_rollup: Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다; range_partition: 확인되지 않은 계약: range_inclusive; daily_partition: 확인되지 않은 계약: day_records:get_passage_metrics",
+    "error_context": {
+     "template": "EVENT_TO_GROUPED_MEASURE",
+     "rejected": [
+      {
+       "strategy": "fused_bucket_rollup",
+       "path": "provider_delegated",
+       "reason": "Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다"
+      },
+      {
+       "strategy": "range_partition",
+       "path": "local_recomputation",
+       "reason": "확인되지 않은 계약: range_inclusive"
+      },
+      {
+       "strategy": "daily_partition",
+       "path": "local_recomputation",
+       "reason": "확인되지 않은 계약: day_records:get_passage_metrics"
+      }
+     ]
+    },
+    "attempts": [
+     {
+      "index": 0,
+      "stage": "compiler",
+      "status": "planning_failed",
+      "error_code": "UNVERIFIED_TIMS_CONTRACT",
+      "repair_kind": null,
+      "repair_attempted": false,
+      "repair_result": null,
+      "reason": "다시 물어서 복구할 수 있는 실패가 아닙니다.",
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": null,
+      "detail": "measure_groups: 구간별 집계를 정확히 계산할 수 있는 호출 방법이 확인되지 않았습니다. fused_bucket_rollup: Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다; range_partition: 확인되지 않은 계약: range_inclusive; daily_partition: 확인되지 않은 계약: day_records:get_passage_metrics",
+      "raw_text": null,
+      "repair_error": null
+     }
+    ],
+    "repairs": {},
+    "durations": {
+     "planner_ms": 26720.097,
+     "execution_ms": 0.0,
+     "total_ms": 26720.554
+    }
+   }
+  },
+  {
+   "id": "ann-206f99f94e6aeb1e3e65",
+   "question": "2026년 4월부터 6월까지 하늘동에서 관측된 통행 속도를 월별 최댓값으로 요약한 뒤, 그 월별 최댓값들을 동일 가중 평균하면?",
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "first_raw_ok": true,
+   "outcome": "unsupported",
+   "error_code": "UNVERIFIED_TIMS_CONTRACT",
+   "model_calls": 1,
+   "place_repair_calls": 0,
+   "other_repair_calls": 0,
+   "generated_tokens": [
+    870
+   ],
+   "done_reasons": [
+    "stop"
+   ],
+   "thinking_chars_first_plan": 2702,
+   "raw_sha256": [
+    "232e789914289a5b3ed508f2cd8063e174027cbc0da9b5a7665a1b397724cb83"
+   ],
+   "seconds": 28.5,
+   "grounding": {
+    "concepts": [
+     {
+      "id": "place_1",
+      "text": "하늘동",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "COND",
+      "source": "user",
+      "value": {
+       "name": "하늘동",
+       "region": ""
+      },
+      "attributes": {}
+     },
+     {
+      "id": "passage",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "passage",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "speed",
+      "text": "통행 속도",
+      "concept": "AMOUNT",
+      "subtype": "speed",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "20260401-20260630",
+     "bucket": "month",
+     "aggregation": "max",
+     "rollup": "avg"
+    },
+    "aggregation": {
+     "bucket": "month",
+     "inner": "max",
+     "outer": "avg",
+     "select": null,
+     "source": "flat"
+    }
+   },
+   "condition_corrections": [],
+   "planner_trace": {
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"place_1\",\n      \"text\": \"하늘동\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"COND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"하늘동\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"passage\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"passage\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"speed\",\n      \"text\": \"통행 속도\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"speed\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"20260401-20260630\",\n    \"bucket\": \"month\",\n    \"aggregation\": \"max\",\n    \"rollup\": \"avg\"\n  }\n}",
+    "error_stage": "compiler",
+    "error_detail": "measure_groups: 구간별 집계를 정확히 계산할 수 있는 호출 방법이 확인되지 않았습니다. fused_bucket_rollup: Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다; range_partition: 확인되지 않은 계약: range_inclusive; daily_partition: 확인되지 않은 계약: day_records:get_passage_metrics",
+    "error_context": {
+     "template": "PLACE_TO_SCOPE+EVENT_TO_GROUPED_MEASURE",
+     "rejected": [
+      {
+       "strategy": "fused_bucket_rollup",
+       "path": "provider_delegated",
+       "reason": "Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다"
+      },
+      {
+       "strategy": "range_partition",
+       "path": "local_recomputation",
+       "reason": "확인되지 않은 계약: range_inclusive"
+      },
+      {
+       "strategy": "daily_partition",
+       "path": "local_recomputation",
+       "reason": "확인되지 않은 계약: day_records:get_passage_metrics"
+      }
+     ]
+    },
+    "attempts": [
+     {
+      "index": 0,
+      "stage": "compiler",
+      "status": "planning_failed",
+      "error_code": "UNVERIFIED_TIMS_CONTRACT",
+      "repair_kind": null,
+      "repair_attempted": false,
+      "repair_result": null,
+      "reason": "다시 물어서 복구할 수 있는 실패가 아닙니다.",
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": null,
+      "detail": "measure_groups: 구간별 집계를 정확히 계산할 수 있는 호출 방법이 확인되지 않았습니다. fused_bucket_rollup: Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다; range_partition: 확인되지 않은 계약: range_inclusive; daily_partition: 확인되지 않은 계약: day_records:get_passage_metrics",
+      "raw_text": null,
+      "repair_error": null
+     }
+    ],
+    "repairs": {},
+    "durations": {
+     "planner_ms": 28501.157,
+     "execution_ms": 0.0,
+     "total_ms": 28501.816
+    }
+   }
+  },
+  {
+   "id": "ann-dbfd9d05c726d18cfb4c",
+   "question": "2026년 7월과 8월 해온시에서 승차하고 솔빛시에서 하차한 실차 구간만 대상으로, 읍면동 승차지별 건수를 세어 기록이 있는 그룹 중 적은 2개 그룹은?",
+   "grounding_ok": false,
+   "grounding_diffs": [
+    [
+     "places",
+     [
+      [
+       "솔빛시",
+       "",
+       "dropoff"
+      ],
+      [
+       "해온시",
+       "",
+       "pickup"
+      ]
+     ],
+     [
+      [
+       "솔빛시",
+       "",
+       "dropoff"
+      ],
+      [
+       "해온",
+       "",
+       "pickup"
+      ]
+     ]
+    ]
+   ],
+   "first_raw_ok": true,
+   "outcome": "failed",
+   "error_code": "NOT_FOUND",
+   "model_calls": 2,
+   "place_repair_calls": 1,
+   "other_repair_calls": 0,
+   "generated_tokens": [
+    768,
+    482
+   ],
+   "done_reasons": [
+    "stop",
+    "stop"
+   ],
+   "thinking_chars_first_plan": 1746,
+   "raw_sha256": [
+    "0b30720b3b757fb5494de6866866863677a533172e74251ff48f69ed30531d55",
+    "0ed14e1beea4329cb733c62d9ad2eac2238c2e41e2e7b903616318eeaf3311cd"
+   ],
+   "seconds": 41.9,
+   "grounding": {
+    "concepts": [
+     {
+      "id": "origin_city",
+      "text": "해온시",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "해온",
+       "region": ""
+      },
+      "attributes": {
+       "od_role": "pickup"
+      }
+     },
+     {
+      "id": "destination_city",
+      "text": "솔빛시",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "솔빛시",
+       "region": ""
+      },
+      "attributes": {
+       "od_role": "dropoff"
+      }
+     },
+     {
+      "id": "trip",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "trip",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "trip_count",
+      "text": "실차 구간 건수",
+      "concept": "AMOUNT",
+      "subtype": "trip_count",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "20260701-20260831",
+     "dimension": "emd",
+     "dimension_target": "pickup",
+     "order": "bottom",
+     "limit": 2
+    },
+    "aggregation": {
+     "bucket": null,
+     "inner": null,
+     "outer": null,
+     "select": null,
+     "source": "flat"
+    }
+   },
+   "condition_corrections": [],
+   "planner_trace": {
+    "raw_text": "{\"concept_id\": \"origin_city\", \"name\": \"해온\", \"region\": \"\"}",
+    "error_stage": "execution",
+    "error_detail": "Tool 오류(get_place_scope/NOT_FOUND): 일치하는 장소 또는 행정구역을 찾을 수 없습니다.",
+    "error_context": {
+     "tool_name": "get_place_scope",
+     "step_id": "resolve_scope",
+     "retryable": true
+    },
+    "attempts": [
+     {
+      "index": 0,
+      "stage": null,
+      "status": "TOOL_ERROR",
+      "error_code": null,
+      "repair_kind": null,
+      "repair_attempted": null,
+      "repair_result": null,
+      "reason": null,
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": null,
+      "detail": "Tool 오류(get_place_scope/NOT_FOUND): 일치하는 장소 또는 행정구역을 찾을 수 없습니다.",
+      "raw_text": null,
+      "repair_error": null
+     },
+     {
+      "index": 1,
+      "stage": null,
+      "status": "TOOL_ERROR",
+      "error_code": null,
+      "repair_kind": null,
+      "repair_attempted": null,
+      "repair_result": null,
+      "reason": null,
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": null,
+      "detail": "Tool 오류(get_place_scope/NOT_FOUND): 일치하는 장소 또는 행정구역을 찾을 수 없습니다.",
+      "raw_text": null,
+      "repair_error": null
+     },
+     {
+      "index": 2,
+      "stage": null,
+      "status": "repair_skipped",
+      "error_code": null,
+      "repair_kind": null,
+      "repair_attempted": null,
+      "repair_result": null,
+      "reason": "재계획 시도 횟수 소진",
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": null,
+      "detail": null,
+      "raw_text": null,
+      "repair_error": null
+     }
+    ],
+    "repairs": {
+     "place_value": {
+      "attempted": 1,
+      "succeeded": 1
+     }
+    },
+    "durations": {
+     "planner_ms": 41818.629,
+     "execution_ms": 0.221,
+     "total_ms": 41820.321
+    }
+   }
+  },
+  {
+   "id": "ann-dd838f31807ef8546525",
+   "question": "2026년 7월과 8월 해온시에서 승차하고 솔빛시에서 하차한 실차 구간만 대상으로, 읍면동 하차지별 건수를 세어 기록이 있는 그룹 중 적은 2개 그룹은?",
+   "grounding_ok": false,
+   "grounding_diffs": [
+    "no_grounding"
+   ],
+   "first_raw_ok": false,
+   "outcome": "needs_clarification",
+   "error_code": "PLACE_NOT_IN_QUESTION",
+   "model_calls": 1,
+   "place_repair_calls": 0,
+   "other_repair_calls": 0,
+   "generated_tokens": [
+    768
+   ],
+   "done_reasons": [
+    "stop"
+   ],
+   "thinking_chars_first_plan": 1889,
+   "raw_sha256": [
+    "c311395ecf7505fdf9d05b5e89cb674e579a8feb9d8a54863a3dbe0ca499aa33"
+   ],
+   "seconds": 25.3,
+   "grounding": null,
+   "condition_corrections": null,
+   "planner_trace": {
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"pickup_place\",\n      \"text\": \"해양시\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"해양시\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"dropoff_place\",\n      \"text\": \"솔빛시\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"솔빛시\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"202607-202608\",\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"dropoff\",\n    \"order\": \"bottom\",\n    \"limit\": 2\n  }\n}",
+    "error_stage": "planner",
+    "error_detail": "질문에서 장소 '해양시'의 근거를 찾지 못했습니다.",
+    "error_context": {
+     "condition_error": true,
+     "needs_clarification": true,
+     "clarify": "place",
+     "place": {
+      "id": "pickup_place",
+      "text": "해양시",
+      "lookup_name": "해양시",
+      "region": "",
+      "od_role": "pickup",
+      "semantics": "name_evidence_only"
+     }
+    },
+    "attempts": [
+     {
+      "index": 0,
+      "stage": "planner",
+      "status": "planning_failed",
+      "error_code": "PLACE_NOT_IN_QUESTION",
+      "repair_kind": null,
+      "repair_attempted": false,
+      "repair_result": null,
+      "reason": "다시 물어서 복구할 수 있는 실패가 아닙니다.",
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": null,
+      "detail": "질문에서 장소 '해양시'의 근거를 찾지 못했습니다.",
+      "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"pickup_place\",\n      \"text\": \"해양시\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"해양시\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"pickup\"}\n    },\n    {\n      \"id\": \"dropoff_place\",\n      \"text\": \"솔빛시\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"솔빛시\", \"region\": \"\"},\n      \"attributes\": {\"od_role\": \"dropoff\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"trip_count\",\n      \"text\": \"실차 구간 건수\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"trip_count\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"202607-202608\",\n    \"dimension\": \"emd\",\n    \"dimension_target\": \"dropoff\",\n    \"order\": \"bottom\",\n    \"limit\": 2\n  }\n}",
+      "repair_error": null
+     }
+    ],
+    "repairs": {},
+    "durations": {
+     "total_ms": 25304.186
+    }
+   }
+  },
+  {
+   "id": "ann-7fae41a3ed86d08a23f0",
+   "question": "2026년 7월과 8월 해온시에서 승차하고 솔빛시에서 하차한 실차 구간만 대상으로, 읍면동 승차지와 하차지의 조합별 건수를 세어 기록이 있는 그룹 중 적은 2개 그룹은?",
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "first_raw_ok": false,
+   "outcome": "failed",
+   "error_code": "NOT_FOUND",
+   "model_calls": 2,
+   "place_repair_calls": 0,
+   "other_repair_calls": 1,
+   "generated_tokens": [
+    1035,
+    605
+   ],
+   "done_reasons": [
+    "stop",
+    "stop"
+   ],
+   "thinking_chars_first_plan": 2822,
+   "raw_sha256": [
+    "b71b6831beb5bdadac755adcd013f25b8076bdfe01c35ac4c4c0c1ff6672462f",
+    "e35934bf3f28dd81b990ed90caf82dd2ad99e2db2db832976caf1c08a2cfbc40"
+   ],
+   "seconds": 54.0,
+   "grounding": {
+    "concepts": [
+     {
+      "id": "origin_city",
+      "text": "해온시",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "해온시",
+       "region": ""
+      },
+      "attributes": {
+       "od_role": "pickup"
+      }
+     },
+     {
+      "id": "destination_city",
+      "text": "솔빛시",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "솔빛시",
+       "region": ""
+      },
+      "attributes": {
+       "od_role": "dropoff"
+      }
+     },
+     {
+      "id": "trip",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "trip",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "trip_count",
+      "text": "실차 구간 건수",
+      "concept": "AMOUNT",
+      "subtype": "trip_count",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "20260701-20260831",
+     "dimension": "emd",
+     "dimension_target": "both",
+     "order": "bottom",
+     "limit": 2
+    },
+    "aggregation": {
+     "bucket": null,
+     "inner": null,
+     "outer": null,
+     "select": null,
+     "source": "flat"
+    }
+   },
+   "condition_corrections": [
+    {
+     "condition": "date",
+     "from": "202607-202608",
+     "to": "20260701-20260831",
+     "action": "corrected",
+     "basis": "question_expression_over_llm_value",
+     "evidence": [
+      {
+       "text": "2026년 7월과 8월"
+      }
+     ]
+    }
+   ],
+   "planner_trace": {
+    "raw_text": "{\"factors\": {\"date\": \"20260701-20260831\", \"dimension\": \"emd\", \"dimension_target\": \"both\", \"order\": \"bottom\", \"limit\": 2}}",
+    "error_stage": "execution",
+    "error_detail": "Tool 오류(get_place_scope/NOT_FOUND): 일치하는 장소 또는 행정구역을 찾을 수 없습니다.",
+    "error_context": {
+     "tool_name": "get_place_scope",
+     "step_id": "resolve_scope",
+     "retryable": true
+    },
+    "attempts": [
+     {
+      "index": 0,
+      "stage": "planner",
+      "status": "planning_failed",
+      "error_code": "INVALID_FACTOR_COMBINATION",
+      "repair_kind": "factor_correction",
+      "repair_attempted": true,
+      "repair_result": "OK",
+      "reason": null,
+      "repair_raw_text": "{\"factors\": {\"date\": \"20260701-20260831\", \"dimension\": \"emd\", \"dimension_target\": \"both\", \"order\": \"bottom\", \"limit\": 2}}",
+      "repaired_factors": {
+       "date": "20260701-20260831",
+       "dimension": "emd",
+       "dimension_target": "both",
+       "order": "bottom",
+       "limit": 2
+      },
+      "correction": {
+       "scope": {
+        "issues": [
+         {
+          "kind": "missing_companion",
+          "factor": "answer",
+          "missing": [
+           "bucket"
+          ]
+         }
+        ],
+        "permissions": {
+         "answer": [
+          "remove"
+         ]
+        },
+        "reasons": {
+         "answer": [
+          "answer는 bucket 없이 성립하지 않습니다"
+         ]
+        },
+        "unrepairable": []
+       },
+       "applied": {
+        "added": {},
+        "changed": {},
+        "removed": {
+         "answer": "bucket"
+        }
+       },
+       "kept_omitted": [],
+       "blocked": [],
+       "before": {
+        "answer": "bucket",
+        "dimension": "emd",
+        "dimension_target": "both",
+        "order": "bottom",
+        "limit": 2
+       },
+       "proposed": {
+        "dimension": "emd",
+        "dimension_target": "both",
+        "order": "bottom",
+        "limit": 2
+       },
+       "evidence": null,
+       "stage_values": {
+        "carried": {},
+        "new": []
+       },
+       "roles": {
+        "before": {
+         "grouping": "emd",
+         "grouping_field": "dimension",
+         "direction": "bottom",
+         "limit": 2,
+         "answer": "bucket",
+         "aggregation": null,
+         "rollup": null
+        },
+        "after": {
+         "grouping": "emd",
+         "grouping_field": "dimension",
+         "direction": "bottom",
+         "limit": 2,
+         "answer": "value",
+         "aggregation": null,
+         "rollup": null
+        }
+       },
+       "after": {
+        "dimension": "emd",
+        "dimension_target": "both",
+        "order": "bottom",
+        "limit": 2
+       }
+      },
+      "detail": "answer 조건을 쓰려면 bucket 조건도 함께 필요합니다. 답 대상(값/구간)은 구간을 나눌 때만 적습니다.",
+      "raw_text": "",
+      "repair_error": null
+     },
+     {
+      "index": 1,
+      "stage": null,
+      "status": "TOOL_ERROR",
+      "error_code": null,
+      "repair_kind": null,
+      "repair_attempted": null,
+      "repair_result": null,
+      "reason": null,
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": null,
+      "detail": "Tool 오류(get_place_scope/NOT_FOUND): 일치하는 장소 또는 행정구역을 찾을 수 없습니다.",
+      "raw_text": null,
+      "repair_error": null
+     },
+     {
+      "index": 2,
+      "stage": null,
+      "status": "repair_skipped",
+      "error_code": null,
+      "repair_kind": null,
+      "repair_attempted": null,
+      "repair_result": null,
+      "reason": "재계획 시도 횟수 소진",
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": null,
+      "detail": null,
+      "raw_text": null,
+      "repair_error": null
+     }
+    ],
+    "repairs": {
+     "factor_correction": {
+      "attempted": 1,
+      "succeeded": 1
+     }
+    },
+    "durations": {
+     "planner_ms": 53988.26299999999,
+     "execution_ms": 0.173,
+     "total_ms": 53989.573
+    }
+   }
+  },
+  {
+   "id": "ann-3584f62adae959f2eff1",
+   "question": "2026년 4월부터 6월까지 하늘구 소속 택시의 실차 구간 요금 최솟값을 월마다 구했을 때, 가장 큰 숫자는?",
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "first_raw_ok": true,
+   "outcome": "unsupported",
+   "error_code": "UNVERIFIED_TIMS_CONTRACT",
+   "model_calls": 1,
+   "place_repair_calls": 0,
+   "other_repair_calls": 0,
+   "generated_tokens": [
+    719
+   ],
+   "done_reasons": [
+    "stop"
+   ],
+   "thinking_chars_first_plan": 2021,
+   "raw_sha256": [
+    "b5701610916f73343483f0880cc2d9a3b87ede3e1865d3d0be798a9fcbb602ae"
+   ],
+   "seconds": 23.8,
+   "grounding": {
+    "concepts": [
+     {
+      "id": "district",
+      "text": "하늘구",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "하늘구",
+       "region": ""
+      },
+      "attributes": {}
+     },
+     {
+      "id": "trip",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "trip",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "fare",
+      "text": "",
+      "concept": "AMOUNT",
+      "subtype": "fare",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "20260401-20260630",
+     "bucket": "month",
+     "aggregation": "min",
+     "rollup": "max",
+     "answer": "value"
+    },
+    "aggregation": {
+     "bucket": "month",
+     "inner": "min",
+     "outer": "max",
+     "select": null,
+     "source": "flat"
+    }
+   },
+   "condition_corrections": [],
+   "planner_trace": {
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"district\",\n      \"text\": \"하늘구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"하늘구\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"fare\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"fare\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"20260401-20260630\",\n    \"bucket\": \"month\",\n    \"aggregation\": \"min\",\n    \"rollup\": \"max\",\n    \"answer\": \"value\"\n  }\n}",
+    "error_stage": "compiler",
+    "error_detail": "measure_groups: 구간별 집계를 정확히 계산할 수 있는 호출 방법이 확인되지 않았습니다. fused_bucket_rollup: Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다; range_partition: 확인되지 않은 계약: range_inclusive; daily_partition: 확인되지 않은 계약: day_records:get_trip_metrics",
+    "error_context": {
+     "template": "PLACE_TO_SCOPE+EVENT_TO_GROUPED_MEASURE",
+     "rejected": [
+      {
+       "strategy": "fused_bucket_rollup",
+       "path": "provider_delegated",
+       "reason": "Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다"
+      },
+      {
+       "strategy": "range_partition",
+       "path": "local_recomputation",
+       "reason": "확인되지 않은 계약: range_inclusive"
+      },
+      {
+       "strategy": "daily_partition",
+       "path": "local_recomputation",
+       "reason": "확인되지 않은 계약: day_records:get_trip_metrics"
+      }
+     ]
+    },
+    "attempts": [
+     {
+      "index": 0,
+      "stage": "compiler",
+      "status": "planning_failed",
+      "error_code": "UNVERIFIED_TIMS_CONTRACT",
+      "repair_kind": null,
+      "repair_attempted": false,
+      "repair_result": null,
+      "reason": "다시 물어서 복구할 수 있는 실패가 아닙니다.",
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": null,
+      "detail": "measure_groups: 구간별 집계를 정확히 계산할 수 있는 호출 방법이 확인되지 않았습니다. fused_bucket_rollup: Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다; range_partition: 확인되지 않은 계약: range_inclusive; daily_partition: 확인되지 않은 계약: day_records:get_trip_metrics",
+      "raw_text": null,
+      "repair_error": null
+     }
+    ],
+    "repairs": {},
+    "durations": {
+     "planner_ms": 23773.743,
+     "execution_ms": 0.0,
+     "total_ms": 23774.3
+    }
+   }
+  },
+  {
+   "id": "ann-29dcb56f51da6d6a361f",
+   "question": "2026년 4월부터 6월까지 하늘구 소속 택시의 실차 구간 요금 최솟값을 월마다 구했을 때, 가장 큰 최솟값이 나온 달은?",
+   "grounding_ok": true,
+   "grounding_diffs": [],
+   "first_raw_ok": true,
+   "outcome": "unsupported",
+   "error_code": "UNVERIFIED_TIMS_CONTRACT",
+   "model_calls": 1,
+   "place_repair_calls": 0,
+   "other_repair_calls": 0,
+   "generated_tokens": [
+    2802
+   ],
+   "done_reasons": [
+    "stop"
+   ],
+   "thinking_chars_first_plan": 10243,
+   "raw_sha256": [
+    "71c4537cfd8d67a60168f8c9f67e3a562dc6612254dc7631088183498ffd9312"
+   ],
+   "seconds": 87.9,
+   "grounding": {
+    "concepts": [
+     {
+      "id": "company",
+      "text": "하늘구",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "하늘구",
+       "region": ""
+      },
+      "attributes": {}
+     },
+     {
+      "id": "trip",
+      "text": "",
+      "concept": "EVENT",
+      "subtype": "trip",
+      "role": "SUPPORT",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     },
+     {
+      "id": "fare",
+      "text": "실차 구간 요금",
+      "concept": "AMOUNT",
+      "subtype": "fare",
+      "role": "MEASURE",
+      "source": "implicit",
+      "value": null,
+      "attributes": {}
+     }
+    ],
+    "factors": {
+     "date": "20260401-20260630",
+     "bucket": "month",
+     "aggregation": "min",
+     "rollup": "max",
+     "answer": "bucket"
+    },
+    "aggregation": {
+     "bucket": "month",
+     "inner": "min",
+     "outer": null,
+     "select": "max",
+     "source": "flat"
+    }
+   },
+   "condition_corrections": [],
+   "planner_trace": {
+    "raw_text": "{\n  \"concepts\": [\n    {\n      \"id\": \"company\",\n      \"text\": \"하늘구\",\n      \"concept\": \"LOCATION\",\n      \"subtype\": \"place\",\n      \"role\": \"SUBCOND\",\n      \"source\": \"user\",\n      \"value\": {\"name\": \"하늘구\", \"region\": \"\"}\n    },\n    {\n      \"id\": \"trip\",\n      \"concept\": \"EVENT\",\n      \"subtype\": \"trip\",\n      \"role\": \"SUPPORT\",\n      \"source\": \"implicit\"\n    },\n    {\n      \"id\": \"fare\",\n      \"text\": \"실차 구간 요금\",\n      \"concept\": \"AMOUNT\",\n      \"subtype\": \"fare\",\n      \"role\": \"MEASURE\",\n      \"source\": \"implicit\"\n    }\n  ],\n  \"factors\": {\n    \"date\": \"20260401-20260630\",\n    \"bucket\": \"month\",\n    \"aggregation\": \"min\",\n    \"rollup\": \"max\",\n    \"answer\": \"bucket\"\n  }\n}",
+    "error_stage": "compiler",
+    "error_detail": "measure_groups: 구간별 집계를 정확히 계산할 수 있는 호출 방법이 확인되지 않았습니다. fused_bucket_rollup: Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다; range_partition: 확인되지 않은 계약: range_inclusive; daily_partition: 확인되지 않은 계약: day_records:get_trip_metrics",
+    "error_context": {
+     "template": "PLACE_TO_SCOPE+EVENT_TO_GROUPED_MEASURE",
+     "rejected": [
+      {
+       "strategy": "fused_bucket_rollup",
+       "path": "provider_delegated",
+       "reason": "Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다"
+      },
+      {
+       "strategy": "range_partition",
+       "path": "local_recomputation",
+       "reason": "확인되지 않은 계약: range_inclusive"
+      },
+      {
+       "strategy": "daily_partition",
+       "path": "local_recomputation",
+       "reason": "확인되지 않은 계약: day_records:get_trip_metrics"
+      }
+     ]
+    },
+    "attempts": [
+     {
+      "index": 0,
+      "stage": "compiler",
+      "status": "planning_failed",
+      "error_code": "UNVERIFIED_TIMS_CONTRACT",
+      "repair_kind": null,
+      "repair_attempted": false,
+      "repair_result": null,
+      "reason": "다시 물어서 복구할 수 있는 실패가 아닙니다.",
+      "repair_raw_text": null,
+      "repaired_factors": null,
+      "correction": null,
+      "detail": "measure_groups: 구간별 집계를 정확히 계산할 수 있는 호출 방법이 확인되지 않았습니다. fused_bucket_rollup: Tool이 이 구간·집계 조합을 한 호출로 받지 않습니다; range_partition: 확인되지 않은 계약: range_inclusive; daily_partition: 확인되지 않은 계약: day_records:get_trip_metrics",
+      "raw_text": null,
+      "repair_error": null
+     }
+    ],
+    "repairs": {},
+    "durations": {
+     "planner_ms": 87817.042,
+     "execution_ms": 0.0,
+     "total_ms": 87817.748
+    }
+   }
+  }
+ ]
+}
