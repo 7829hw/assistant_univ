@@ -288,3 +288,62 @@ valid98 오류 유형(틀린 문항 수; 한 문항이 여러 유형일 수 있�
 | `device_check/run.sh`, `runs.log` | 2절 측정 실행 명세와 순서·사전 확인 기록 |
 | `device_check/E.*`, `device_check/B-conv.*` | 2절 GPU 2 측정 결과(json·jsonl·spec·log) |
 | `device_check/compare.py`, `comparison.json` | 2절 GPU 3 기록과의 비교 |
+
+## 6. 추가(2026-10-07, 결정 43): 미확인 실험 두 개
+
+위 1–5절은 고치지 않았다. 이 절은 3절 d·e의 "미확인" 항목을 잰 결과다. 업체 100은 쓰지 않았다. 파일은 `decision43/`.
+
+### a. HF 경로의 장치 일치(SFT step 124, valid98)
+
+- 실행: GPU 2(UUID `GPU-a644de12…`), 2026-10-07 21:00–22:05. 사전 확인에서 Ollama 모델이 올라가 있지 않았고 다른 프로세스가 없었다(`gpu_check.txt`, `runs.log`).
+- 비교 대상: GPU 3 기록(`pilot_001/valid98/runs/sft_step124.json`). adapter sha256, 코드 지문 791c4a68, prompt 87048d0c, torch 2.11.0+cu128이 같다.
+
+| 항목 | GPU 3(기록) | GPU 2(이번) |
+|---|---:|---:|
+| 첫 응답 원문 바이트 일치 | 98/98 | |
+| 모든 호출(재질의 포함) 일치 | 98/98 | |
+| grounding_ok | 61 | 61 (b 0, c 0) |
+| 생성 상한 호출 | 0 | 0 |
+| 결과 종류 일치 | 98/98 | |
+| 걸린 시간(초) | 3,750 | 3,991 |
+
+- **확인됨:** 이 설정(같은 torch·CUDA 빌드, bf16, sdpa, greedy)에서 HF 경로는 GPU 2와 GPU 3에서 바이트 단위로 같은 출력을 냈다.
+- 그래서 pilot_001 SFT 선택(62·186은 GPU 2, 124·248은 GPU 3)에서 장치가 선택에 섞였다는 근거는 없다. 3절 e의 "생성 상한 0은 GPU 3 run뿐"은 장치가 아니라 checkpoint의 차이로 본다. 선택 결과(step 124)는 바꾸지 않았다.
+- 한계: 한 checkpoint, 98문항에서 확인한 것이다. 같은 모델 종류의 두 RTX 6000 Ada 사이의 결과다.
+
+### b. 변환 경로(HF BF16 → Ollama Q4_K_M), valid98
+
+- 실행: Ollama 0.35.1, GPU 2, think 미지정, 문항마다 모델 내림. B-conv 22:05–22:39, Ollama-최종 22:45–23:15. 사전 확인과 Ollama-최종 시작 전 일시 정지(컨테이너 runner가 GPU를 놓는 중이었음)는 `runs.log`에 적었다. 두 셀 모두 한 번씩만 쟀다.
+- 채점: valid98의 HF 기록과 같은 `grounding_ok`(`evaluate_vendor100.py`의 정답 grounding 비교). 비교 gold `valid98_gold.yaml`은 valid98 문항을 바꾸지 않고 옮긴 것이다(sha256 `2b9283b1…`).
+
+| 쌍(같은 가중치) | HF | Ollama | 차이 | b(HF X→Ollama O) | c(HF O→Ollama X) | McNemar p | 갈린 문항 | 첫 응답 JSON 같음 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 학습 전: HF-base → B-conv | 55 | 48 | 7 | 9 | 16 | 0.23 | 25 | 11 |
+| 학습 뒤: HF-최종 → Ollama-최종 | 65 | 54 | 11 | 10 | 21 | 0.071 | 31 | 13 |
+
+같은 경로 안의 학습 효과(참고):
+
+| 경로 | 학습 전 | 학습 뒤 | b | c | McNemar p |
+|---|---:|---:|---:|---:|---:|
+| HF: base → 최종(dpo_step212) | 55 | 65 | 14 | 4 | 0.031 |
+| Ollama: B-conv → Ollama-최종 | 48 | 54 | 15 | 9 | 0.31 |
+
+- **확인됨:** valid98에서도 같은 가중치의 HF와 Ollama 결과가 크게 갈린다. 첫 응답 JSON이 같은 문항은 98개 중 11–13개뿐이다(업체 100의 21–29보다 적다).
+- **확인됨:** 학습 뒤 변환 손실이 커지는 방향이다. HF−Ollama 차이 7 → 11, 갈린 문항 25 → 31. 업체 100(3절 d)의 최종 쌍(7 → 9)과 같은 방향이다.
+  - 그러나 이 "차이의 차이"(4문항)는 검정하지 않았고, 학습 전 Ollama 셀끼리의 흔들림(업체 100에서 E와 B-conv가 22문항 갈림)보다 작다. 커졌다고 단정할 수는 없다.
+- **확인됨:** HF 경로의 학습 효과(+10, p 0.031)가 Ollama 경로에서는 +6(p 0.31)으로 줄어든다. 학습으로 얻은 것의 일부가 변환에서 사라지는 것과 맞는 결과다.
+- 생성 상한: HF-최종은 8개 호출이 8192에 걸렸고(base 4), Ollama 쪽은 0–1개다. Ollama의 num_predict 미지정과 Q4 양자화가 루프를 덜 만들거나 다르게 끊는 것으로 보이나, 원인은 확인하지 않았다.
+- 지연 중앙값(문항): HF base 28.3초·최종 32.4초, Ollama B-conv 13.3초·최종 13.8초. 경로와 장치가 달라 서로 비교하지 않는다.
+- pilot_002에 주는 뜻(판단은 사용자):
+  - 운영 판정(Ollama)은 HF에서 본 학습 효과보다 작게 나올 수 있다. HF에서 +10이 Ollama에서 +6이었다.
+  - 변환 조건(양자화 수준 등)을 바꾸는 것은 이번 작업 범위가 아니다(결정 20의 등록 승인 범위 밖).
+
+### c. 파일(`decision43/`)
+
+| 파일 | 내용 |
+|---|---|
+| `run_hf_device.sh`, `gpu_check.txt`, `sft_step124_gpu2.{json,log}` | a의 실행 명세·사전 확인·결과. 원문은 `training/generated/pilot_001_analysis/sft_step124_gpu2_raw.jsonl` |
+| `build_valid98_yaml.py`, `valid98_gold.yaml` | b의 비교 gold(valid98 98문항을 vendor 형식으로 옮김) |
+| `run_ollama.sh`, `valid98_{B-conv,Ollama-final}.{json,jsonl,spec.json,log}` | b의 실행 명세와 결과(원문 포함) |
+| `runs.log` | 실행 순서, 사전 확인, 일시 정지 메모 |
+| `compare.py`, `comparison.json` | a·b의 비교(모델을 부르지 않음) |

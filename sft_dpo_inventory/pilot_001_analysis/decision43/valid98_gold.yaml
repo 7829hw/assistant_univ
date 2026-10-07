@@ -1,0 +1,680 @@
+note: 'valid98(결정 29) 평가 전용 모음. 원본: evaluation/grounding_v7/stage_contrast_questions.yaml, evaluation/grounding_v8/heldout_questions.yaml, evaluation/grounding_v9/heldout_questions.yaml. 목록 sha256 512be78da0c1d3313a8d655502c7cbf73d44335962898297f76a945ce0080174. 학습 입력 아님.'
+items:
+- id: stage_v7/s01a
+  group: S1
+  contrast: 두 단계 모두 최댓값
+  question: 지난달 대구 소속 택시의 주별 수입 최댓값 중 가장 큰 값은?
+  gold_text: 'get_place_scope(name=대구)
+
+    get_billing_metrics(metric=revenue, scope=$resolve.scope, date=last_month, bucket=week, aggregation=max, rollup=max)'
+- id: stage_v7/s01b
+  group: S1
+  contrast: 구간별 결과의 최댓값만(구간 안 집계 없음)
+  question: 지난달 대구 소속 택시의 주별 수입 중 가장 큰 값은?
+  expected_outcome: needs_clarification
+  expected_error:
+  - AMBIGUOUS_INNER_AGGREGATION
+  - AMBIGUOUS_AGGREGATION_STAGE
+  why: 각 주 안에서 합할지 평균할지가 없다
+  gold_grounding:
+    concepts:
+    - id: place
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value:
+        name: 대구
+        region: ''
+    - id: event
+      concept: EVENT
+      subtype: operation
+      role: SUPPORT
+      source: implicit
+    - id: measure
+      concept: AMOUNT
+      subtype: revenue
+      role: MEASURE
+      source: implicit
+    factors:
+      date: last_month
+      bucket: week
+      rollup: max
+- id: stage_v7/s01c
+  group: S1
+  contrast: 두 단계 모두 평균
+  question: 지난해 부산 소속 택시의 월별 평균 수입의 평균은?
+  gold_text: 'get_place_scope(name=부산)
+
+    get_billing_metrics(metric=revenue, scope=$resolve.scope, date=last_year, bucket=month, aggregation=avg, rollup=avg)'
+- id: stage_v7/s01d
+  group: S1
+  contrast: 구간별 결과의 평균만
+  question: 지난해 부산 소속 택시의 월별 수입의 평균은?
+  expected_outcome: needs_clarification
+  expected_error:
+  - AMBIGUOUS_INNER_AGGREGATION
+  - AMBIGUOUS_AGGREGATION_STAGE
+  why: 각 달 안에서 합할지 평균할지가 없다
+  gold_grounding:
+    concepts:
+    - id: place
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value:
+        name: 부산
+        region: ''
+    - id: event
+      concept: EVENT
+      subtype: operation
+      role: SUPPORT
+      source: implicit
+    - id: measure
+      concept: AMOUNT
+      subtype: revenue
+      role: MEASURE
+      source: implicit
+    factors:
+      date: last_year
+      bucket: month
+      rollup: avg
+- id: stage_v7/s02a
+  group: S2
+  contrast: 구간 안 합계 + 구간별 평균
+  question: 지난해 부산 소속 택시의 월별 수입 합계의 평균은?
+  gold_text: 'get_place_scope(name=부산)
+
+    get_billing_metrics(metric=revenue, scope=$resolve.scope, date=last_year, bucket=month, aggregation=sum, rollup=avg)'
+- id: stage_v7/s02b
+  group: S2
+  contrast: 구간 안 합계 + 구간별 최솟값
+  question: 이번 달 대구 소속 개인택시의 주별 운행 일수 합계 중 가장 작은 값은?
+  gold_text: 'get_place_scope(name=대구)
+
+    get_billing_metrics(metric=operating_days, scope=$resolve.scope, date=this_month, taxi_type=private, bucket=week, aggregation=sum, rollup=min)'
+- id: stage_v7/s02c
+  group: S2
+  contrast: 구간 안 집계 없음
+  question: 이번 달 대구 소속 개인택시의 주별 운행 일수 중 가장 작은 값은?
+  expected_outcome: needs_clarification
+  expected_error:
+  - AMBIGUOUS_INNER_AGGREGATION
+  - AMBIGUOUS_AGGREGATION_STAGE
+  why: 각 주 안에서 합할지 평균할지가 없다
+  gold_grounding:
+    concepts:
+    - id: place
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value:
+        name: 대구
+        region: ''
+    - id: event
+      concept: EVENT
+      subtype: operation
+      role: SUPPORT
+      source: implicit
+    - id: measure
+      concept: AMOUNT
+      subtype: operating_days
+      role: MEASURE
+      source: implicit
+    factors:
+      date: this_month
+      taxi_type: private
+      bucket: week
+      rollup: min
+- id: stage_v7/s03a
+  group: S3
+  contrast: 구간별 합계 중 최댓값(값)
+  question: 지난해 대구 소속 법인택시의 월별 수입 합계 중 가장 큰 값은?
+  gold_text: 'get_place_scope(name=대구)
+
+    get_billing_metrics(metric=revenue, scope=$resolve.scope, date=last_year, taxi_type=corporate, bucket=month, aggregation=sum, rollup=max)'
+- id: stage_v7/s03b
+  group: S3
+  contrast: 그 최댓값을 가진 달(구간)
+  question: 지난해 대구 소속 법인택시의 월별 수입 합계가 가장 큰 달은?
+  expected_outcome: unsupported
+  expected_error: UNVERIFIED_TIMS_CONTRACT
+  why: 뜻은 명확하다(month, sum, 구간 선택 max). TIMS legacy에서 실행할 수 없다(provider 한계)
+  gold_grounding:
+    concepts:
+    - id: place
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value:
+        name: 대구
+        region: ''
+    - id: event
+      concept: EVENT
+      subtype: operation
+      role: SUPPORT
+      source: implicit
+    - id: measure
+      concept: AMOUNT
+      subtype: revenue
+      role: MEASURE
+      source: implicit
+    factors:
+      date: last_year
+      taxi_type: corporate
+      bucket: month
+      aggregation: sum
+      select: max
+- id: stage_v7/s03c
+  group: S3
+  contrast: 구간별 평균 중 최솟값(값)
+  question: 지난달 부산 소속 택시의 주별 평균 가동률 중 가장 낮은 값은?
+  gold_text: 'get_place_scope(name=부산)
+
+    get_billing_metrics(metric=active_taxi_ratio, scope=$resolve.scope, date=last_month, bucket=week, aggregation=avg, rollup=min)'
+- id: stage_v7/s03d
+  group: S3
+  contrast: 그 최솟값을 가진 주(구간)
+  question: 지난달 부산 소속 택시의 주별 평균 가동률이 가장 낮은 주는 언제야?
+  expected_outcome: unsupported
+  expected_error: UNVERIFIED_TIMS_CONTRACT
+  why: 뜻은 명확하다(week, avg, 구간 선택 min). TIMS legacy에서 실행할 수 없다(provider 한계)
+  gold_grounding:
+    concepts:
+    - id: place
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value:
+        name: 부산
+        region: ''
+    - id: event
+      concept: EVENT
+      subtype: operation
+      role: SUPPORT
+      source: implicit
+    - id: measure
+      concept: PROPORTION
+      subtype: active_taxi_ratio
+      role: MEASURE
+      source: implicit
+    factors:
+      date: last_month
+      bucket: week
+      aggregation: avg
+      select: min
+- id: stage_v7/s04a
+  group: S4
+  contrast: 요일 순위, 가장 높은 하나
+  question: 지난달 요일별 법인택시 평균 수입이 가장 높은 요일은?
+  gold_text: get_billing_metrics(metric=revenue, date=last_month, taxi_type=corporate, aggregation=avg, dimension=dayofweek, order=top, limit=1)
+- id: stage_v7/s04c
+  group: S4
+  contrast: 시도 순위, 가장 적은 두 곳
+  question: 지난달 시도별 개인택시 수입 합계가 가장 적은 두 곳은?
+  gold_text: get_billing_metrics(metric=revenue, date=last_month, taxi_type=private, aggregation=sum, dimension=sido, order=bottom, limit=2)
+- id: stage_v7/s04d
+  group: S4
+  contrast: 시도 순위, 그룹 안 최댓값의 최솟값
+  question: 지난달 시도마다 법인택시 하루 수입의 최댓값을 구했을 때 그 값이 가장 낮은 시도는?
+  gold_text: get_billing_metrics(metric=revenue, date=last_month, taxi_type=corporate, aggregation=max, dimension=sido, order=bottom, limit=1)
+- id: stage_v7/s04e
+  group: S4
+  contrast: 요일 순위, 그룹 안 최솟값의 최댓값
+  question: 올해 요일별로 택시 하루 수입의 최솟값을 구하면 그 값이 가장 큰 요일은?
+  gold_text: get_billing_metrics(metric=revenue, date=this_year, aggregation=min, dimension=dayofweek, order=top, limit=1)
+- id: heldout_v8/t01
+  question: 어제 동대구역에서 택시 탄 사람 몇 명이나 돼?
+  gold_text: 'get_place_scope(name=동대구역)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=20260924)'
+- id: heldout_v8/t02
+  question: 지난주 부산 광안리에서 하차한 실차 운행은 총 몇 건입니까?
+  gold_text: 'get_place_scope(name=광안리, region=부산)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, date=last_week)'
+- id: heldout_v8/t03
+  question: 이번 달 들어 수성구에서 출발한 택시 운행 건수 좀 알려줘
+  gold_text: 'get_place_scope(name=수성구)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=this_month)'
+- id: heldout_v8/t04
+  question: 주말 동안 동성로로 향한 택시 손님은 얼마나 됐나요?
+  gold_text: 'get_place_scope(name=동성로)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, date=weekend)'
+- id: heldout_v8/t05
+  question: 지난달에 출발지랑 도착지가 둘 다 달서구인 운행, 그러니까 달서구 안에서만 움직인 건 몇 건이야?
+  gold_text: 'get_place_scope(name=달서구)
+
+    get_trip_count(scope_pickup=$area.scope, scope_dropoff=$area.scope, date=last_month)'
+- id: heldout_v8/t06
+  question: 올해 부산진구 내에서 승차하고 같은 부산진구 내에서 하차한 운행 건수를 조회해 주세요.
+  gold_text: 'get_place_scope(name=부산진구)
+
+    get_trip_count(scope_pickup=$area.scope, scope_dropoff=$area.scope, date=this_year)'
+- id: heldout_v8/t07
+  question: 어제 동대구역에서 동성로까지 택시 타고 간 게 몇 번이었는지 궁금해
+  gold_text: 'get_place_scope(name=동대구역)
+
+    get_place_scope(name=동성로)
+
+    get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, date=20260924)'
+- id: heldout_v8/t08
+  question: 광안리에 도착한 손님들 가운데 초량동에서 타신 분들은 지난달 몇 건이었습니까?
+  gold_text: 'get_place_scope(name=초량동)
+
+    get_place_scope(name=광안리)
+
+    get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, date=last_month)'
+- id: heldout_v8/t09
+  question: 평일 아침 7시부터 9시 사이에 두류동 출발, 중앙로동 도착인 택시 건수
+  gold_text: 'get_place_scope(name=두류동)
+
+    get_place_scope(name=중앙로동)
+
+    get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, date=weekday, time=070000-090000)'
+- id: heldout_v8/t11
+  question: 지난달 동대구역에서 택시 탄 손님들은 주로 어느 동에서 내렸어? 많은 데 세 군데만
+  gold_text: 'get_place_scope(name=동대구역)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=last_month, dimension=emd, dimension_target=dropoff, order=top, limit=3)'
+- id: heldout_v8/t12
+  question: 대구 수성구에서 출발한 운행들이 어느 구로 갔는지 하차 구별 건수로 정리해 주세요.
+  gold_text: 'get_place_scope(name=수성구, region=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope, dimension=sigungu, dimension_target=dropoff)'
+- id: heldout_v8/t13
+  question: 올해 어린이대공원에서 승차한 건들, 도착지를 시도 단위로 나눠서 보여줘
+  gold_text: 'get_place_scope(name=어린이대공원)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=this_year, dimension=sido, dimension_target=dropoff)'
+- id: heldout_v8/t14
+  question: 광안리에서 내린 승객들은 어느 구에서 택시를 탔을까? 많은 순으로 다섯 개
+  gold_text: 'get_place_scope(name=광안리)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, dimension=sigungu, dimension_target=pickup, order=top, limit=5)'
+- id: heldout_v8/t15
+  question: 이번 주 동성로로 들어온 택시들의 승차 위치를 H3 셀 기준으로 집계해 줄래?
+  gold_text: 'get_place_scope(name=동성로)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, date=this_week, dimension=h3, dimension_target=pickup)'
+- id: heldout_v8/t16
+  question: 초량동이 목적지였던 운행 중 승차 읍면동 기준으로 가장 적은 두 곳은 어디입니까?
+  gold_text: 'get_place_scope(name=초량동)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, dimension=emd, dimension_target=pickup, order=bottom, limit=2)'
+- id: heldout_v8/t17
+  question: 대구에서 택시 제일 많이 타는 구 top 3 뽑아줘. 지난달 기준으로
+  gold_text: 'get_place_scope(name=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=last_month, dimension=sigungu, dimension_target=pickup, order=top, limit=3)'
+- id: heldout_v8/t18
+  question: 중구에 내린 운행을 하차한 동별로 나눠서 건수를 알려 주세요
+  gold_text: 'get_place_scope(name=중구)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, dimension=emd, dimension_target=dropoff)'
+- id: heldout_v8/t19
+  question: 어제 대구 중구에서 승차한 건만 놓고 보면, 승차가 가장 몰린 H3 셀은 어디야?
+  gold_text: 'get_place_scope(name=중구, region=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=20260924, dimension=h3, dimension_target=pickup, order=top, limit=1)'
+- id: heldout_v8/t20
+  question: 부산으로 도착한 실차 운행을 도착 구·군 단위로 집계하면 어떻게 됩니까?
+  gold_text: 'get_place_scope(name=부산)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, dimension=sigungu, dimension_target=dropoff)'
+- id: heldout_v8/t21
+  question: 지난주에 택시 승차가 가장 많았던 읍면동 두 곳만 알려줘
+  gold_text: get_trip_count(date=last_week, dimension=emd, dimension_target=pickup, order=top, limit=2)
+- id: heldout_v8/t22
+  question: 어제 하루 동안 택시 하차가 제일 많았던 구는 어디였나요?
+  gold_text: get_trip_count(date=20260924, dimension=sigungu, dimension_target=dropoff, order=top, limit=1)
+- id: heldout_v8/t23
+  question: 달서구 안에서 출발해서 달서구 안에서 끝난 운행을 출발동-도착동 조합별로 세어 줘
+  gold_text: 'get_place_scope(name=달서구)
+
+    get_trip_count(scope_pickup=$area.scope, scope_dropoff=$area.scope, dimension=emd, dimension_target=both)'
+- id: heldout_v8/t24
+  question: 수성구 출발 운행을 승차동·하차동 쌍으로 묶었을 때 건수 많은 상위 5개 경로를 보여 주십시오.
+  gold_text: 'get_place_scope(name=수성구)
+
+    get_trip_count(scope_pickup=$pickup.scope, dimension=emd, dimension_target=both, order=top, limit=5)'
+- id: heldout_v8/t25
+  question: 지난달 구 단위로 어디서 타서 어디서 내린 조합이 제일 많았어? 3개만
+  gold_text: get_trip_count(date=last_month, dimension=sigungu, dimension_target=both, order=top, limit=3)
+- id: heldout_v8/t26
+  question: 대구가 도착지인 운행에 대해 승차 시도와 하차 시도의 조합별 건수를 구해 주세요
+  gold_text: 'get_place_scope(name=대구)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, dimension=sido, dimension_target=both)'
+- id: heldout_v8/t27
+  question: 중구에서 출발해서 수성구로 간 택시들, 수성구 어느 동에서 내렸는지 동별로 보고 싶어
+  gold_text: 'get_place_scope(name=중구)
+
+    get_place_scope(name=수성구)
+
+    get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, dimension=emd, dimension_target=dropoff)'
+- id: heldout_v8/t28
+  question: 동구로 들어가는 운행 중 달서구에서 출발한 것만, 승차한 동 기준으로 이번 달 건수 나눠 줘
+  gold_text: 'get_place_scope(name=달서구)
+
+    get_place_scope(name=동구)
+
+    get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, date=this_month, dimension=emd, dimension_target=pickup)'
+- id: heldout_v8/t29
+  question: 부산진구에서 수영구로 이동한 운행을 출발 읍면동과 도착 읍면동 쌍별로 집계해 주시겠어요?
+  gold_text: 'get_place_scope(name=부산진구)
+
+    get_place_scope(name=수영구)
+
+    get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, dimension=emd, dimension_target=both)'
+- id: heldout_v8/t30
+  question: 대구 안에서 타고 대구 안에서 내린 운행만 보면, 내린 곳 기준으로 구별 건수가 어떻게 돼?
+  gold_text: 'get_place_scope(name=대구)
+
+    get_trip_count(scope_pickup=$area.scope, scope_dropoff=$area.scope, dimension=sigungu, dimension_target=dropoff)'
+- id: heldout_v8/r01
+  question: 지난달 대구 택시 하루 평균 수익금이 얼마야?
+  gold_text: 'get_place_scope(name=대구)
+
+    get_billing_metrics(metric=revenue, scope=$resolve.scope, date=last_month, aggregation=avg)'
+- id: heldout_v8/r02
+  question: 서울 법인택시의 지난달 운행일 평균을 알려 주세요
+  gold_text: 'get_place_scope(name=서울)
+
+    get_billing_metrics(metric=operating_days, scope=$resolve.scope, date=last_month, taxi_type=corporate, aggregation=avg)'
+- id: heldout_v8/r03
+  question: 지난달 택시 가동률이 높았던 시도 세 군데를 높은 순서대로 보여줘
+  gold_text: get_billing_metrics(metric=active_taxi_ratio, date=last_month, dimension=sido, order=top, limit=3)
+- id: heldout_v8/r04
+  question: 이번 달 요일별로 봤을 때 택시 수익금이 가장 낮은 요일은 언제입니까?
+  gold_text: get_billing_metrics(metric=revenue, date=this_month, dimension=dayofweek, order=bottom, limit=1)
+- id: heldout_v8/r05
+  question: 올해 대구 법인택시 수익금을 월별로 합산한 다음 그 월별 합계의 평균을 내 줘
+  gold_text: 'get_place_scope(name=대구)
+
+    get_billing_metrics(metric=revenue, scope=$resolve.scope, date=this_year, taxi_type=corporate, bucket=month, aggregation=sum, rollup=avg)'
+- id: heldout_v8/r06
+  question: 어제 수성구에서 공차 상태로 지나간 택시 통행량 알려줘
+  gold_text: 'get_place_scope(name=수성구)
+
+    get_passage_count(scope=$resolve.scope, date=20260924, taxi_status=vacant)'
+- id: heldout_v8/r07
+  question: 지난주 대구에서 택시 통행량이 가장 많았던 구 두 곳은 어디인가요?
+  gold_text: 'get_place_scope(name=대구)
+
+    get_passage_count(scope=$resolve.scope, date=last_week, dimension=sigungu, order=top, limit=2)'
+- id: heldout_v8/r08
+  question: 이번 주 동성로를 지나간 택시들 평균 속도가 얼마나 나와?
+  gold_text: 'get_place_scope(name=동성로)
+
+    get_passage_metrics(metric=speed, scope=$resolve.scope, date=this_week, aggregation=avg)'
+- id: heldout_v8/r09
+  question: 지난달 부산 소속 택시의 요금 중간값을 조회해 주십시오
+  gold_text: 'get_place_scope(name=부산)
+
+    get_trip_metrics(metric=fare, scope=$resolve.scope, date=last_month, aggregation=med)'
+- id: heldout_v8/r10
+  question: 주말에 대구 개인택시 공차율은 평균 몇 퍼센트였어?
+  gold_text: 'get_place_scope(name=대구)
+
+    get_drive_metrics(metric=vacant_ratio, scope=$resolve.scope, date=weekend, taxi_type=private, aggregation=avg)'
+- id: heldout_v9/h01
+  group: od
+  question: 어제 동대구역에서 택시 탄 건수 좀 알려줘.
+  gold_text: 'get_place_scope(name=동대구역)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=20260924)'
+- id: heldout_v9/h02
+  group: od
+  question: 지난주 저녁 6시부터 8시 사이에 광안리에서 하차한 실차 운행은 몇 건인가요?
+  gold_text: 'get_place_scope(name=광안리)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, date=last_week, time=180000-200000)'
+- id: heldout_v9/h04
+  group: od
+  question: 동성로에서 출발해 동대구역으로 향한 택시는 올해 몇 번 있었어?
+  gold_text: 'get_place_scope(name=동성로)
+
+    get_place_scope(name=동대구역)
+
+    get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, date=this_year)'
+- id: heldout_v9/h05
+  group: od
+  question: 주말에 어린이대공원을 출발해 광안리에 도착한 택시 운행 건수를 알려 주세요.
+  gold_text: 'get_place_scope(name=어린이대공원)
+
+    get_place_scope(name=광안리)
+
+    get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, date=weekend)'
+- id: heldout_v9/h06
+  group: od
+  question: 작년에 대구 중구로 들어온 택시 운행은 총 몇 건이었나요?
+  gold_text: 'get_place_scope(name=중구, region=대구)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, date=last_year)'
+- id: heldout_v9/h07
+  group: od
+  question: 지난달 대구 달서구에서 나간 택시들이 어느 구로 많이 갔는지 도착 구별 건수 상위 3곳만 보여줘.
+  gold_text: 'get_place_scope(name=달서구, region=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=last_month, dimension=sigungu, dimension_target=dropoff, order=top, limit=3)'
+- id: heldout_v9/h08
+  group: od
+  question: 이번 달 수성구에서 승차한 건수를 승차한 동별로 나눠서 보여줘.
+  gold_text: 'get_place_scope(name=수성구)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=this_month, dimension=emd, dimension_target=pickup)'
+- id: heldout_v9/h09
+  group: od
+  question: 어제 대구 중구에 내린 실차를 하차 읍면동 기준으로 집계해 줘.
+  gold_text: 'get_place_scope(name=중구, region=대구)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, date=20260924, dimension=emd, dimension_target=dropoff)'
+- id: heldout_v9/h10
+  group: od
+  question: 지난달 기준으로, 광안리에 도착한 택시들이 어느 구에서 출발했는지 출발 구별 건수 상위 5개를 알려줘.
+  gold_text: 'get_place_scope(name=광안리)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, date=last_month, dimension=sigungu, dimension_target=pickup, order=top, limit=5)'
+- id: heldout_v9/h11
+  group: od
+  question: 지난주 동대구역에서 탄 손님들이 내린 곳을 하차 동별로 묶어서 건수를 보여줘.
+  gold_text: 'get_place_scope(name=동대구역)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=last_week, dimension=emd, dimension_target=dropoff)'
+- id: heldout_v9/h12
+  group: od
+  question: 올해 택시 승차 건수가 가장 적은 구 세 곳은 어디인가요?
+  gold_text: get_trip_count(date=this_year, dimension=sigungu, dimension_target=pickup, order=bottom, limit=3)
+- id: heldout_v9/h13
+  group: od
+  question: 지난달 택시 하차가 제일 많았던 읍면동 한 곳은 어디야?
+  gold_text: get_trip_count(date=last_month, dimension=emd, dimension_target=dropoff, order=top, limit=1)
+- id: heldout_v9/h14
+  group: od
+  question: 어제 시군구 단위로 출발지-도착지 조합별 택시 운행 건수를 많은 순으로 10개만 뽑아 줘.
+  gold_text: get_trip_count(date=20260924, dimension=sigungu, dimension_target=both, order=top, limit=10)
+- id: heldout_v9/h15
+  group: od
+  question: 이번 주 대구 안에서 출발과 도착이 모두 이루어진 운행을 출발한 구별로 세어 줘.
+  gold_text: 'get_place_scope(name=대구)
+
+    get_trip_count(scope_pickup=$area.scope, scope_dropoff=$area.scope, date=this_week, dimension=sigungu, dimension_target=pickup)'
+- id: heldout_v9/h16
+  group: od
+  question: 평일에 부산진구 안에서 오간 택시 운행을 승차 동과 하차 동의 쌍별로 집계해 줄래?
+  gold_text: 'get_place_scope(name=부산진구)
+
+    get_trip_count(scope_pickup=$area.scope, scope_dropoff=$area.scope, date=weekday, dimension=emd, dimension_target=both)'
+- id: heldout_v9/h17
+  group: od
+  question: 지난달 중구에서 출발해 수성구로 간 택시 건수를 출발 동별로 보여줘.
+  gold_text: 'get_place_scope(name=중구)
+
+    get_place_scope(name=수성구)
+
+    get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, date=last_month, dimension=emd, dimension_target=pickup)'
+- id: heldout_v9/h18
+  group: od
+  question: 달서구에서 타서 수성구에서 내린 운행을 하차한 동 기준으로, 많은 순서대로 2곳만 알려줘.
+  gold_text: 'get_place_scope(name=달서구)
+
+    get_place_scope(name=수성구)
+
+    get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, dimension=emd, dimension_target=dropoff, order=top, limit=2)'
+- id: heldout_v9/h19
+  group: od
+  question: 지난주 수성구에 도착한 택시 운행을 출발 동과 도착 동의 짝별로 세어 줘.
+  gold_text: 'get_place_scope(name=수성구)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, date=last_week, dimension=emd, dimension_target=both)'
+- id: heldout_v9/h20
+  group: od
+  question: 올해 기준으로 대구에서 출발한 택시의 출발 구·도착 구 조합 가운데 건수가 가장 많은 다섯 개는?
+  gold_text: 'get_place_scope(name=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=this_year, dimension=sigungu, dimension_target=both, order=top, limit=5)'
+- id: heldout_v9/h21
+  group: od
+  question: 어제 오전 7시부터 9시까지 택시 승차가 많았던 H3 셀 상위 3개를 알려주세요.
+  gold_text: get_trip_count(date=20260924, time=070000-090000, dimension=h3, dimension_target=pickup, order=top, limit=3)
+- id: heldout_v9/h22
+  group: od
+  question: 작년 택시 하차 건수를 시도별로 정리해 주세요.
+  gold_text: get_trip_count(date=last_year, dimension=sido, dimension_target=dropoff)
+- id: heldout_v9/h23
+  group: od
+  question: 평일에 동대구역 주변에서 택시를 잡아 탄 건수는 얼마나 돼?
+  gold_text: 'get_place_scope(name=동대구역, include_vicinity=true)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=weekday)'
+- id: heldout_v9/h24
+  group: od
+  question: 이번 달 두류동에서 내린 택시들이 탄 구를 보면, 건수가 가장 적은 두 곳은 어디야?
+  gold_text: 'get_place_scope(name=두류동)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, date=this_month, dimension=sigungu, dimension_target=pickup, order=bottom, limit=2)'
+- id: heldout_v9/h25
+  group: general
+  question: 어제 동성로를 지나간 택시 통행량은 얼마였나요?
+  gold_text: 'get_place_scope(name=동성로)
+
+    get_passage_count(scope=$resolve.scope, date=20260924)'
+- id: heldout_v9/h26
+  group: general
+  question: 지난주 대구 중구에서 빈 차로 돌아다닌 택시 통행량을 알려줘.
+  gold_text: 'get_place_scope(name=중구, region=대구)
+
+    get_passage_count(scope=$resolve.scope, date=last_week, taxi_status=vacant)'
+- id: heldout_v9/h27
+  group: general
+  question: 이번 달 대구에서 개인택시 통행량이 가장 많은 읍면동 상위 5곳은?
+  gold_text: 'get_place_scope(name=대구)
+
+    get_passage_count(scope=$resolve.scope, date=this_month, taxi_type=private, dimension=emd, order=top, limit=5)'
+- id: heldout_v9/h28
+  group: general
+  question: 주말 밤 9시부터 11시까지 광안리 근처를 지난 택시 통행량은 얼마나 돼?
+  gold_text: 'get_place_scope(name=광안리, include_vicinity=true)
+
+    get_passage_count(scope=$resolve.scope, date=weekend, time=210000-230000)'
+- id: heldout_v9/h29
+  group: general
+  question: 어제 동대구역에서 대기영업 중이던 법인택시의 통행량을 알려 주세요.
+  gold_text: 'get_place_scope(name=동대구역)
+
+    get_passage_count(scope=$resolve.scope, date=20260924, taxi_type=corporate, taxi_status=stationary)'
+- id: heldout_v9/h30
+  group: general
+  question: 부산에서 손님을 태운 택시 통행량이 가장 적은 구 두 곳은 어디야?
+  gold_text: 'get_place_scope(name=부산)
+
+    get_passage_count(scope=$resolve.scope, taxi_status=occupied, dimension=sigungu, order=bottom, limit=2)'
+- id: heldout_v9/h31
+  group: general
+  question: 지난달 수성구를 지난 택시들의 평균 속도는 얼마였어?
+  gold_text: 'get_place_scope(name=수성구)
+
+    get_passage_metrics(metric=speed, scope=$resolve.scope, date=last_month)'
+- id: heldout_v9/h32
+  group: general
+  question: 어제 오전 7시부터 9시 사이 동성로 부근에서 택시가 낸 최고 속도는?
+  gold_text: 'get_place_scope(name=동성로, include_vicinity=true)
+
+    get_passage_metrics(metric=speed, scope=$resolve.scope, date=20260924, time=070000-090000, aggregation=max)'
+- id: heldout_v9/h33
+  group: general
+  question: 올해 부산 광안동을 지난 택시들의 rpm 중간값을 알려줘.
+  gold_text: 'get_place_scope(name=광안동, region=부산)
+
+    get_passage_metrics(metric=rpm, scope=$resolve.scope, date=this_year, aggregation=med)'
+- id: heldout_v9/h34
+  group: general
+  question: 지난주 대구 소속 택시들의 평균 요금은 얼마인가요?
+  gold_text: 'get_place_scope(name=대구)
+
+    get_trip_metrics(metric=fare, scope=$resolve.scope, date=last_week)'
+- id: heldout_v9/h35
+  group: general
+  question: 평일 저녁 6시부터 8시 사이에 수성구 소속 택시가 받은 요금 가운데 가장 높은 금액은?
+  gold_text: 'get_place_scope(name=수성구)
+
+    get_trip_metrics(metric=fare, scope=$resolve.scope, date=weekday, time=180000-200000, aggregation=max)'
+- id: heldout_v9/h36
+  group: general
+  question: scope:district:2726000000 이 어느 지역인지 이름으로 알려줘.
+  gold_text: get_scope_name(scope=scope:district:2726000000)
+- id: heldout_v9/h37
+  group: general
+  question: 지난달 달서구 택시의 공차율은 어느 정도였나요?
+  gold_text: 'get_place_scope(name=달서구)
+
+    get_drive_metrics(metric=vacant_ratio, scope=$resolve.scope, date=last_month)'
+- id: heldout_v9/h38
+  group: general
+  question: 작년 부산 개인택시 공차율의 최댓값을 알려 주세요.
+  gold_text: 'get_place_scope(name=부산)
+
+    get_drive_metrics(metric=vacant_ratio, scope=$resolve.scope, date=last_year, taxi_type=private, aggregation=max)'
+- id: heldout_v9/h39
+  group: general
+  question: 주말 오전 10시에서 12시 사이 법인택시 공차율은?
+  gold_text: get_drive_metrics(metric=vacant_ratio, date=weekend, time=100000-120000, taxi_type=corporate)
+- id: heldout_v9/h40
+  group: general
+  question: 지난달 시도별 택시 1일 평균 수익금을 비교해 줘.
+  gold_text: get_billing_metrics(metric=revenue, date=last_month, dimension=sido)
+- id: heldout_v9/h41
+  group: general
+  question: 이번 달 대구 동구 소속 택시의 가동률은 얼마야?
+  gold_text: 'get_place_scope(name=동구, region=대구)
+
+    get_billing_metrics(metric=active_taxi_ratio, scope=$resolve.scope, date=this_month)'
+- id: heldout_v9/h42
+  group: general
+  question: 올해 요일별 활성 택시 대수를 봤을 때 가장 많은 요일 하나만 알려줘.
+  gold_text: get_billing_metrics(metric=active_taxi_count, date=this_year, dimension=dayofweek, order=top, limit=1)
+- id: heldout_v9/h43
+  group: general
+  question: 올해 서울 개인택시 수익금을 월별로 합산했을 때 가장 큰 달의 합계는 얼마인가요?
+  gold_text: 'get_place_scope(name=서울)
+
+    get_billing_metrics(metric=revenue, scope=$resolve.scope, date=this_year, taxi_type=private, aggregation=sum, bucket=month, rollup=max)'
+- id: heldout_v9/h44
+  group: general
+  question: 작년 부산 택시 가동률을 주 단위로 평균 낸 다음, 그 주별 평균 중 가장 낮은 값은?
+  gold_text: 'get_place_scope(name=부산)
+
+    get_billing_metrics(metric=active_taxi_ratio, scope=$resolve.scope, date=last_year, aggregation=avg, bucket=week, rollup=min)'
+- id: heldout_v9/h45
+  group: general
+  question: 지난주 인천 법인택시의 평균 운행일을 알려줘.
+  gold_text: 'get_place_scope(name=인천)
+
+    get_billing_metrics(metric=operating_days, scope=$resolve.scope, date=last_week, taxi_type=corporate)'
