@@ -22,6 +22,16 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_0116EAU9dFUyCZgz7zW8W6EG" && git push origin geoflow/sft-dpo-t2pc >> "$HERE/runs.log" 2>&1
 }
 ollama_idle() { until [ "$(curl -s localhost:11434/api/ps | "$PY" -c 'import json,sys; print(len(json.load(sys.stdin)["models"]))')" = "0" ]; do sleep 10; done; }
+GPU3=GPU-48f798cc-9437-50ac-d604-448bbad7b311
+gpu3_quiet() {   # Ollama 모델이 내려간 상태에서 GPU 3에 다른 사용자의 프로세스가 없을 때까지 기다린다(최대 3시간, 넘으면 이탈로 기록하고 진행)
+  local waited=0
+  while [ "$(nvidia-smi -i $GPU3 --query-compute-apps=pid --format=csv,noheader | wc -l)" -gt 0 ]; do
+    [ $waited -eq 0 ] && log "GPU3 has foreign processes: $(nvidia-smi -i $GPU3 --query-compute-apps=pid,process_name,used_memory --format=csv,noheader | tr '\n' ';')"
+    sleep 60; waited=$((waited+60))
+    if [ $waited -ge 10800 ]; then log "DEVIATION: GPU3 still shared after 3h; measuring anyway"; break; fi
+  done
+  echo "   GPU3 before measurement: $(nvidia-smi -i $GPU3 --query-gpu=memory.used --format=csv,noheader); apps=$(nvidia-smi -i $GPU3 --query-compute-apps=pid --format=csv,noheader | wc -l)" >> "$HERE/runs.log"
+}
 
 # 1. HF 셀(기준 HF-E 기록과 같은 명세, GPU 2)
 for stage in sft final; do
@@ -41,7 +51,7 @@ log "ollama version $VERSION"
 if [ "$VERSION" != "0.35.1" ]; then
   for cell in E B-conv; do
     if [ $cell = E ]; then m=qwen3:8b; else m=geoflow-qwen3-8b-b968826d-base:q4km-hfthink; fi
-    ollama_idle; log "vendor100 $cell (re-measure, $VERSION) start"
+    ollama_idle; gpu3_quiet; log "vendor100 $cell (re-measure, $VERSION) start"
     "$TV" evaluate_vendor100.py --gold evaluation/vendor100/gold.yaml llm --model "$m" --reference-date 2026-09-25 \
         --condition-check --model-think auto --out "$OUT/$cell.json" > "$OUT/$cell.log" 2>&1
     rc=$?; log "vendor100 $cell exit=$rc"; [ $rc -eq 0 ] || die "$cell failed"
@@ -54,7 +64,7 @@ commit "eval(sft-dpo): pilot_001 Ollama 버전 확인($VERSION)" "$OUT/ollama_ve
 for stage in sft final; do
   model=geoflow-qwen3-8b-pilot001-$stage:q4km-hfthink
   if [ ! -e "$HERE/ollama/RENDER_OK_$stage" ]; then log "vendor100 Ollama-$stage SKIPPED: render check not passed"; continue; fi
-  ollama_idle; log "vendor100 Ollama-$stage start"
+  ollama_idle; gpu3_quiet; log "vendor100 Ollama-$stage start"
   "$TV" evaluate_vendor100.py --gold evaluation/vendor100/gold.yaml llm --model "$model" --reference-date 2026-09-25 \
       --condition-check --model-think auto --out "$OUT/Ollama-$stage.json" > "$OUT/Ollama-$stage.log" 2>&1
   rc=$?; log "vendor100 Ollama-$stage exit=$rc"; [ $rc -eq 0 ] || die "Ollama-$stage failed"
