@@ -122,5 +122,37 @@ class ThinkingSplitTest(unittest.TestCase):
             thinking.split_response("<think>\n끝나지 않음")
 
 
+class TeacherTraceTest(unittest.TestCase):
+    """결정 40-A: teacher trace(thinking·content만 있는 Ollama 기록)를 ``source=teacher``로 받는다."""
+
+    TEACHER = {"trace_id": "q:teacher:1", "source": "teacher", "model": "qwen3.8:27b", "model_digest": "aaee",
+               "thinking": "승차 끝 기준 묶음이다.", "content": ANSWER, "done_reason": "stop"}
+
+    def gold(self):
+        return {"messages": sft_record()["messages"], "metadata": {"source_record_id": "q", "source": "corpus.yaml"}}
+
+    def test_normalized_teacher_trace_has_hf_layout(self):
+        trace = thinking.normalize_trace(self.TEACHER)
+        self.assertEqual(trace["raw_text"], RESPONSE)
+        self.assertEqual(trace["kind"], "teacher")
+        hf = {"trace_id": "q:sample:0", "raw_text": RESPONSE, "raw_sha256": "x"}
+        self.assertIs(thinking.normalize_trace(hf), hf)
+
+    def test_records_are_marked_teacher(self):
+        record = thinking.sft_record(self.TEACHER, self.gold(), source="traces.jsonl")
+        self.assertEqual(record["messages"][-1]["content"], RESPONSE)
+        self.assertEqual(record["metadata"]["source"], "teacher")
+        self.assertEqual(record["metadata"]["source_path"], "traces.jsonl")
+        self.assertEqual(record["metadata"]["teacher_model"], "qwen3.8:27b")
+        hf = {"trace_id": "q:sample:0", "raw_text": RESPONSE.replace('"pickup"', '"dropoff"'), "raw_sha256": "y"}
+        pair = thinking.dpo_pair(self.TEACHER, hf, self.gold(), source="traces.jsonl", negative_category="semantic",
+                                 details={})
+        self.assertEqual(pair["metadata"]["source"], "teacher")
+        self.assertEqual(pair["metadata"]["chosen_source"], "teacher")
+        with self.assertRaises(ValueError):
+            thinking.dpo_pair(hf, self.TEACHER, self.gold(), source="traces.jsonl", negative_category="semantic",
+                              details={})
+
+
 if __name__ == "__main__":
     unittest.main()

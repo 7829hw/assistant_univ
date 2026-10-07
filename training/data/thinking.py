@@ -11,12 +11,18 @@ with ``metadata.format == "thinking"``; the trainer renders them with this modul
   - ``full_response``: completion = whole response + EOS (reasoning and JSON are supervised).
   - ``json_only``: the reasoning is appended to the prompt; completion = JSON + EOS (SFT only). DPO pairs carry
     different reasoning for chosen and rejected, so they cannot share a prompt; ``json_only`` is refused for DPO.
+- Teacher traces (decision 40-A, ``source: teacher`` rows from the Ollama teacher collector) carry ``thinking`` and
+  ``content`` but no decoded ``raw_text`` or generated token ids. ``normalize_trace`` composes the same response
+  layout as the HF traces, ``<think>\n{thinking}\n</think>\n\n{content}``; records built from them are marked
+  ``metadata.source == "teacher"`` (the trace file path moves to ``source_path``). HF traces are unchanged.
 """
+import hashlib
 import json
 
 FORMAT = "thinking"
 LOSS_SCOPES = ("full_response", "json_only")
 THINK_END = "</think>"
+TEACHER = "teacher"
 
 
 def split_response(text):
@@ -86,21 +92,51 @@ def render_thinking(tokenizer, record, config, stage, prompt, pids, args):
     return row
 
 
+def is_teacher(trace):
+    return trace.get("source") == TEACHER
+
+
+def normalize_trace(trace):
+    """A trace row as the builders use it. HF rows are returned unchanged; teacher rows get the composed response."""
+    if not is_teacher(trace):
+        return trace
+    text = "<think>\n" + trace["thinking"] + "\n" + THINK_END + "\n\n" + trace["content"]
+    if "raw_text" in trace:
+        if trace["raw_text"] != text:
+            raise ValueError(f"Teacher trace raw_text differs from its thinking/content: {trace['trace_id']}")
+        return trace
+    return {**trace, "raw_text": text, "raw_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(), "kind": TEACHER,
+            "think_closed": True}
+
+
+def _teacher_meta(trace, source):
+    return {"source": TEACHER, "source_path": source, "teacher_model": trace.get("model"),
+            "teacher_model_digest": trace.get("model_digest")}
+
+
 def sft_record(trace, gold_record, *, source):
     """SFT record from one judged-correct trace. ``trace`` needs raw_text, trace_id, raw_sha256."""
+    trace = normalize_trace(trace)
     response_json(trace["raw_text"])
     meta = dict(gold_record["metadata"])
     meta.update(format=FORMAT, source=source, trace_id=trace["trace_id"], trace_sha256=trace["raw_sha256"],
                 trace_kind=trace.get("kind"), reasoning_human_reviewed=False)
+    if is_teacher(trace):
+        meta.update(_teacher_meta(trace, source))
     return {"messages": [*gold_record["messages"][:2], {"role": "assistant", "content": trace["raw_text"]}],
             "metadata": meta}
 
 
 def dpo_pair(chosen, rejected, gold_record, *, source, negative_category, details):
+    chosen, rejected = normalize_trace(chosen), normalize_trace(rejected)
     meta = dict(gold_record["metadata"])
     meta.update(format=FORMAT, source=source, chosen_trace_id=chosen["trace_id"], rejected_trace_id=rejected["trace_id"],
                 negative_type="model_sample_disagrees_with_gold", negative_category=negative_category,
                 mutation_source="hf_base_thinking_sample", negative_details=details, reasoning_human_reviewed=False)
+    if is_teacher(rejected):
+        raise ValueError("Teacher traces are judged-correct samples; they cannot be DPO rejected responses")
+    if is_teacher(chosen):
+        meta.update(_teacher_meta(chosen, source), chosen_source=TEACHER)
     return {"prompt": gold_record["messages"][:2], "chosen": [{"role": "assistant", "content": chosen["raw_text"]}],
             "rejected": [{"role": "assistant", "content": rejected["raw_text"]}], "metadata": meta}
 

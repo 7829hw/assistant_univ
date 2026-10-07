@@ -13,6 +13,8 @@
 - Splits: the traces come from one corpus split; that split is written, the other split file is empty.
 - Flags from ``review_flags.json`` stay in metadata (``v003_flags``); nothing is filtered by them.
 - Reasoning text is model-generated and not human-reviewed (``reasoning_human_reviewed: false``).
+- Teacher traces (``source: teacher`` rows) may be in the traces file; they are normalized by
+  ``thinking.normalize_trace`` and their records are marked ``metadata.source == "teacher"`` (decision 40-A).
 """
 import argparse
 import json
@@ -29,7 +31,7 @@ def build(traces_path, candidates_path, corpus, split, output):
     if output.exists():
         raise ValueError(f"Output already exists: {output}")
     prompt_hash = check_expected_prompt()
-    traces = {row["trace_id"]: row for row in read_jsonl(traces_path)}
+    traces = {row["trace_id"]: thinking.normalize_trace(row) for row in read_jsonl(traces_path)}
     candidates = json.loads(Path(candidates_path).read_text(encoding="utf-8"))
     gold = {r["metadata"]["source_record_id"]: r for r in read_jsonl(Path(corpus) / f"sft_{split}.jsonl")}
     sft, dpo, excluded, sft_excluded = [], [], Counter(), Counter()
