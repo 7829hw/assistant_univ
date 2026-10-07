@@ -31,8 +31,10 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
    - The first push sets upstream with `-u`.
    - No force push, merge/rebase or history rewrite.
    - If a push fails, report the cause; do not work around it.
-3. Never commit model/adapter weights, checkpoints, caches, temporary files or ignored artifacts. Never use
-   `git add -f`.
+3. Commit all data (decision 33, 2026-10-07): generated training/evaluation data and raw outputs (corpora, thinking
+   and teacher traces, evaluation raw outputs under `training/generated/`, summaries). Never commit model/adapter
+   weights, checkpoints, merged models, GGUF files, caches or temporary files. Never use `git add -f`; if data is
+   ignored, change `.gitignore` instead.
 4. Ollama: use the existing Docker server on GPU 3 (`localhost:11434`) as is.
    - Do not restart or reconfigure the container or change its GPU assignment.
    - Do not start another Ollama server and do not pull models. If something is needed, stop and report.
