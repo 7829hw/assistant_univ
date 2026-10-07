@@ -35,29 +35,27 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
    and teacher traces, evaluation raw outputs under `training/generated/`, summaries). Never commit model/adapter
    weights, checkpoints, merged models, GGUF files, caches or temporary files. Never use `git add -f`; if data is
    ignored, change `.gitignore` instead.
-4. Ollama: use the existing Docker server (`localhost:11434`) as is. Since decision 32 (2026-10-07) the container runs on
-   GPU 2 for now (only `device_ids` changed from "3" to "2"; record in `sft_dpo_inventory/pilot_001/ollama/container/`).
-   GPU 2 is then shared by HF work and Ollama: never run HF work and Ollama measurements at the same time, and start HF
-   work only when no Ollama model is loaded.
-   - Do not restart or reconfigure the container or change its GPU assignment.
+4. Ollama: use the existing Docker server (`localhost:11434`) as is. Since decision 32 (2026-10-07) and, for now, decision 38
+   (2026-10-07), the container runs on host GPU 2 (UUID `GPU-a644de12-2a2c-ca3d-4822-b80f704b0b21`; only `device_ids`
+   changed from "3" to "2"; record in `sft_dpo_inventory/pilot_001/ollama/container/`).
+   - Do not move, restart or reconfigure the container or change its GPU assignment.
    - Do not start another Ollama server and do not pull models. If something is needed, stop and report.
-5. GPU work outside Ollama (training, HF inference) uses CUDA GPU 2 by default (decided 2026-10-06).
-   - Run with `CUDA_VISIBLE_DEVICES=2`; inside the process it appears as `cuda:0`.
-   - Do not change `CUDA_DEVICE_ORDER`.
-   - (Until decision 32 ends, GPU 3 is not the Ollama GPU and is shared with another user; use it only when host
-     `nvidia-smi` shows no processes on it.) Otherwise GPU 3 (the Ollama GPU) may be used only for additional work while Ollama is not in use
-     (`CUDA_VISIBLE_DEVICES=3`). Before each use, confirm with host `nvidia-smi` that no Ollama model is loaded
-     on GPU 3 (memory in use and processes). If anything is loaded, do not use GPU 3.
-   - Never unload Ollama models yourself and never touch the container to free GPU 3.
-   - If an Ollama measurement or Ollama use is scheduled, finish or stop GPU 3 work before it starts.
-   - The GPU 3 check itself uses host `nvidia-smi`, not the Ollama API.
-   - Ollama calls are allowed again (decision 19, 2026-10-06; the earlier ban while the container's NVML failed is
-     lifted). Rule 7 (isolated measurements, HF and Ollama measurements in sequence) still applies.
-6. Before GPU work, confirm by UUID that the training GPU and the Ollama GPU are different physical GPUs.
+   - Ollama calls are allowed (decision 19, 2026-10-06). Rule 7 (isolated measurements, HF and Ollama measurements in
+     sequence) still applies.
+5. GPU work outside Ollama (training, HF inference) uses host GPU 3 by default (decision 38, 2026-10-07; UUID
+   `GPU-48f798cc-9437-50ac-d604-448bbad7b311`).
+   - Run with `CUDA_VISIBLE_DEVICES=3`; inside the process it appears as `cuda:0`. Do not change `CUDA_DEVICE_ORDER`.
+   - GPU 2 (the Ollama GPU) may be used for HF work only while no Ollama model is loaded on it, and never during an
+     Ollama measurement. Never unload Ollama models yourself and never touch the container to free GPU 2. If an Ollama
+     measurement is scheduled, finish or stop HF work on GPU 2 before it starts.
+   - Before using any GPU, check host `nvidia-smi` (not the Ollama API): the UUID, memory already in use, and processes
+     of other users. If another process is on that GPU (GPU 3 is shared with another user at times), do not use it;
+     stop and report.
+6. Before GPU work, confirm by UUID that the HF/training GPU and the Ollama GPU are different physical GPUs.
    - Compare host `nvidia-smi -L`, the Ollama container's GPU (`nvidia-smi -L` inside it; if that fails with the
-     NVML error, its `docker inspect` DeviceRequests and `/dev/nvidia*` node), and the torch device UUID under
-     `CUDA_VISIBLE_DEVICES=2`.
-   - If they are the same or cannot be confirmed, stop and report. Also check memory already in use on GPU 2.
+     NVML error, its `docker inspect` DeviceRequests and `/dev/nvidia*` node), and the torch device UUID under the
+     `CUDA_VISIBLE_DEVICES` value in use.
+   - If they are the same (other than the GPU 2 exception in rule 5) or cannot be confirmed, stop and report.
 7. While an isolated Ollama measurement runs, make no other Ollama calls (rule 5 above). Do not run HF and
    Ollama measurements at the same time; run them in sequence.
 8. Keep the existing data policies: protected dev/validation/diagnostic data never becomes training input,
