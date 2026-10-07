@@ -1,0 +1,1073 @@
+# batch005 annotation 후보 초안. Claude가 2026-10-07에 새로 썼다. 사람 검토 전이며 승인이 아니다(결정 45).
+# - 배분: pilot_prep_004/type_target(결정 40-C)의 칸별 배분을 따랐다. 칸 안 세부는 보호 셋 family와 겹치지 않는 범위에서 골랐다(README 2절).
+# - 보호된 셋(evaluation/ 아래 질문과 그 부모, 업체 100, root의 질문·stub 파일, 새 선택용·보조 시험 후보)의 문장을 보거나 바꿔 쓰지 않았다.
+#   family 겹침을 피하려고 보호 셋 정답의 라벨 조합(측정값·od_role·집계·묶음 구조)만 썼다. 문장은 현재 planner prompt(87048d0c)의 계약 설명을 따랐다.
+# - D1–D4(evaluation/real_data/decisions.md)에 걸리는 질문(수입 기준 요일 순위, 운행일 지표, 기간 활성 택시 수, 지역 없는 동명 구)은 만들지 않았다.
+# - 기준일: 2026-09-25(평가 harness와 같다).
+# - type: 유형 칸(no_agg_plain=집계·묶음 없음, dim_target=dimension+dimension_target, agg_plain=집계만, dim_no_target=dimension만,
+#   agg_dim=집계+dimension). family: 의미 family(대조 묶음), intent: 같은 뜻의 표현 묶음.
+reference_date: '2026-09-25'
+candidates:
+- id: b005-01
+  type: no_agg_plain
+  family: b005-a-within
+  intent: b005-a-1
+  question: 2026년 9월 2일 대구 수성구 안에서 출발해 수성구 안에서 내린 실차 건수는?
+  rationale: 출발과 도착이 모두 수성구 안=od_role both(장소 하나). 실차 건수=trip_count. 집계어 없음→aggregation 없음.
+  gold:
+    concepts:
+    - id: area
+      text: 수성구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 수성구, region: 대구}
+      attributes: {od_role: both}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: '20260902'}
+- id: b005-02
+  type: no_agg_plain
+  family: b005-a-within
+  intent: b005-a-1
+  question: 2026년 9월 2일 출발과 도착이 모두 대구 수성구인 실차 구간은 몇 건이야?
+  rationale: b005-01과 같은 뜻. 출발·도착 모두 한 장소=both.
+  gold:
+    concepts:
+    - id: area
+      text: 수성구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 수성구, region: 대구}
+      attributes: {od_role: both}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차 구간은 몇 건, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: '20260902'}
+- id: b005-03
+  type: no_agg_plain
+  family: b005-a-within
+  intent: b005-a-2
+  question: 지난주 부산진구 안에서만 오간 택시 실차 건수를 알려줘
+  rationale: 안에서만 오간=both. 지난주=last_week. 상위 지역이 발화에 없으므로 region 빈 값.
+  gold:
+    concepts:
+    - id: area
+      text: 부산진구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 부산진구, region: ''}
+      attributes: {od_role: both}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 택시 실차 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: last_week}
+- id: b005-04
+  type: no_agg_plain
+  family: b005-a-within
+  intent: b005-a-2
+  question: 지난주 부산 부산진구 내부에서 승차하고 하차한 실차는 몇 건이었어?
+  rationale: 승차·하차 모두 부산진구 내부=both. region 부산.
+  gold:
+    concepts:
+    - id: area
+      text: 부산진구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 부산진구, region: 부산}
+      attributes: {od_role: both}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차는 몇 건, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: last_week}
+- id: b005-05
+  type: no_agg_plain
+  family: b005-a-within
+  intent: b005-a-3
+  question: 2026년 8월 대구 달서구 안에서 오간 개인택시 실차 건수는?
+  rationale: 8월=20260801-20260831. 개인택시=taxi_type private. 안에서 오간=both.
+  gold:
+    concepts:
+    - id: area
+      text: 달서구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 달서구, region: 대구}
+      attributes: {od_role: both}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 개인택시 실차 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: 20260801-20260831, taxi_type: private}
+- id: b005-06
+  type: no_agg_plain
+  family: b005-a-within
+  intent: b005-a-3
+  question: 2026년 8월 한 달간 개인택시가 대구 달서구 안에서 태우고 내린 실차 구간 수는?
+  rationale: b005-05와 같은 뜻. 태우고 내린 곳이 모두 달서구 안=both.
+  gold:
+    concepts:
+    - id: area
+      text: 달서구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 달서구, region: 대구}
+      attributes: {od_role: both}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차 구간 수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: 20260801-20260831, taxi_type: private}
+- id: b005-07
+  type: no_agg_plain
+  family: b005-a-within
+  intent: b005-a-4
+  question: 2026년 9월 12일 오후 9시부터 11시까지 부산 수영구 안에서 출발·도착한 법인택시 실차 건수는?
+  rationale: 시간 210000-230000. 법인택시=corporate. 출발·도착 모두 수영구=both.
+  gold:
+    concepts:
+    - id: area
+      text: 수영구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 수영구, region: 부산}
+      attributes: {od_role: both}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 법인택시 실차 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: '20260912', time: 210000-230000, taxi_type: corporate}
+- id: b005-08
+  type: no_agg_plain
+  family: b005-a-within
+  intent: b005-a-5
+  question: 이번 달 대구 안에서 출발해 대구 안에서 도착한 실차 건수는?
+  rationale: 이번 달=this_month. 시도 단위 장소도 출발·도착 모두 그 안이면 both.
+  gold:
+    concepts:
+    - id: area
+      text: 대구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 대구, region: ''}
+      attributes: {od_role: both}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: this_month}
+- id: b005-09
+  type: no_agg_plain
+  family: b005-a-within
+  intent: b005-a-6
+  question: 2026년 7월 1일부터 15일까지 대구 중구 안에서 오간 실차 건수는?
+  rationale: 중구는 대구로 지역을 밝혀 동명 구 문제(D4)를 피했다. 안에서 오간=both.
+  gold:
+    concepts:
+    - id: area
+      text: 중구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 중구, region: 대구}
+      attributes: {od_role: both}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: 20260701-20260715}
+- id: b005-10
+  type: no_agg_plain
+  family: b005-a-within
+  intent: b005-a-7
+  question: 2026년 9월 19일부터 20일까지 부산 수영구 안에서 출발과 도착이 모두 이뤄진 실차 건수는?
+  rationale: 날짜 범위 20260919-20260920. both.
+  gold:
+    concepts:
+    - id: area
+      text: 수영구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 수영구, region: 부산}
+      attributes: {od_role: both}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: 20260919-20260920}
+- id: b005-11
+  type: no_agg_plain
+  family: b005-a-within-vicinity
+  intent: b005-a-8
+  question: 2026년 9월 5일 동성로 주변에서 출발해 동성로 주변에서 내린 실차 건수는?
+  rationale: 주변→vicinity. 출발·도착 모두 같은 장소 주변=both.
+  gold:
+    concepts:
+    - id: area
+      text: 동성로
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 동성로, region: ''}
+      attributes: {od_role: both}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: '20260905', vicinity: true}
+- id: b005-12
+  type: no_agg_plain
+  family: b005-a-within-vicinity
+  intent: b005-a-8
+  question: 2026년 9월 5일 동성로 근처 안에서 시작하고 끝난 실차 구간은 몇 건이야?
+  rationale: b005-11과 같은 뜻. 근처→vicinity, 시작·끝 모두=both.
+  gold:
+    concepts:
+    - id: area
+      text: 동성로
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 동성로, region: ''}
+      attributes: {od_role: both}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차 구간은 몇 건, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: '20260905', vicinity: true}
+- id: b005-13
+  type: no_agg_plain
+  family: b005-a-within-vicinity
+  intent: b005-a-9
+  question: 지난달 부산 광안리 부근에서 타고 광안리 부근에서 내린 실차 건수는?
+  rationale: 부근→vicinity. 타고 내린 곳 모두 광안리 부근=both. 지난달=last_month.
+  gold:
+    concepts:
+    - id: area
+      text: 광안리
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 광안리, region: 부산}
+      attributes: {od_role: both}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: last_month, vicinity: true}
+- id: b005-14
+  type: no_agg_plain
+  family: b005-a-within-vicinity
+  intent: b005-a-9
+  question: 지난달 부산 광안리 근처 안에서만 오간 택시 실차는 몇 건이었나요?
+  rationale: b005-13과 같은 뜻.
+  gold:
+    concepts:
+    - id: area
+      text: 광안리
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 광안리, region: 부산}
+      attributes: {od_role: both}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 택시 실차는 몇 건, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: last_month, vicinity: true}
+- id: b005-15
+  type: no_agg_plain
+  family: b005-a-dropoff-vicinity
+  intent: b005-a-10
+  question: 2026년 9월 8일 동대구역 근처에 도착한 실차 건수는?
+  rationale: 도착=od_role dropoff. 근처→vicinity. 출발지는 말하지 않았으므로 만들지 않는다.
+  gold:
+    concepts:
+    - id: destination
+      text: 동대구역
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 동대구역, region: ''}
+      attributes: {od_role: dropoff}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: '20260908', vicinity: true}
+- id: b005-16
+  type: no_agg_plain
+  family: b005-a-dropoff-vicinity
+  intent: b005-a-10
+  question: 2026년 9월 8일 동대구역 주변에서 하차한 실차 구간은 몇 건이야?
+  rationale: b005-15와 같은 뜻. 하차=dropoff.
+  gold:
+    concepts:
+    - id: destination
+      text: 동대구역
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 동대구역, region: ''}
+      attributes: {od_role: dropoff}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차 구간은 몇 건, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: '20260908', vicinity: true}
+- id: b005-17
+  type: no_agg_plain
+  family: b005-a-dropoff-vicinity
+  intent: b005-a-11
+  question: 지난주 오전 7시부터 9시까지 대구 신천동 부근에 도착한 실차 건수를 알려줘
+  rationale: 시간 070000-090000. 도착=dropoff. 부근→vicinity.
+  gold:
+    concepts:
+    - id: destination
+      text: 신천동
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 신천동, region: 대구}
+      attributes: {od_role: dropoff}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: last_week, time: 070000-090000, vicinity: true}
+- id: b005-18
+  type: no_agg_plain
+  family: b005-a-dropoff-vicinity
+  intent: b005-a-12
+  question: 2026년 8월 15일 부산 초량동 근처에서 내린 개인택시 실차 건수는?
+  rationale: 내린=dropoff. 개인택시=private.
+  gold:
+    concepts:
+    - id: destination
+      text: 초량동
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 초량동, region: 부산}
+      attributes: {od_role: dropoff}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 개인택시 실차 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: '20260815', taxi_type: private, vicinity: true}
+- id: b005-19
+  type: no_agg_plain
+  family: b005-a-dropoff-vicinity
+  intent: b005-a-12
+  question: 2026년 8월 15일 부산 초량동 주변이 도착지인 개인택시 실차는 몇 건이야?
+  rationale: b005-18과 같은 뜻. 도착지=dropoff.
+  gold:
+    concepts:
+    - id: destination
+      text: 초량동
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 초량동, region: 부산}
+      attributes: {od_role: dropoff}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 개인택시 실차는 몇 건, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: '20260815', taxi_type: private, vicinity: true}
+- id: b005-20
+  type: no_agg_plain
+  family: b005-a-dropoff-vicinity
+  intent: b005-a-13
+  question: 이번 달 대구 두류동 근처에 도착한 법인택시 실차 건수는?
+  rationale: 법인택시=corporate. 도착=dropoff. 근처→vicinity.
+  gold:
+    concepts:
+    - id: destination
+      text: 두류동
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 두류동, region: 대구}
+      attributes: {od_role: dropoff}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 법인택시 실차 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: this_month, taxi_type: corporate, vicinity: true}
+- id: b005-21
+  type: no_agg_plain
+  family: b005-a-rpm-vicinity
+  intent: b005-a-14
+  question: 2026년 9월 10일 대구 동성로 근처의 택시 rpm은?
+  rationale: rpm=AMOUNT/rpm(EVENT/passage). 근처→vicinity. 집계어 없음→aggregation 없음. passage는 출발·도착이 없어 od_role 없음.
+  gold:
+    concepts:
+    - id: place
+      text: 동성로
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 동성로, region: 대구}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 택시 rpm, concept: AMOUNT, subtype: rpm, role: MEASURE, source: implicit}
+    factors: {date: '20260910', vicinity: true}
+- id: b005-22
+  type: no_agg_plain
+  family: b005-a-rpm-vicinity
+  intent: b005-a-14
+  question: 2026년 9월 10일 대구 동성로 주변 택시의 분당 회전 속도를 알려줘
+  rationale: b005-21과 같은 뜻. 분당 회전 속도=rpm.
+  gold:
+    concepts:
+    - id: place
+      text: 동성로
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 동성로, region: 대구}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 분당 회전 속도, concept: AMOUNT, subtype: rpm, role: MEASURE, source: implicit}
+    factors: {date: '20260910', vicinity: true}
+- id: b005-23
+  type: no_agg_plain
+  family: b005-a-rpm-vicinity
+  intent: b005-a-15
+  question: 지난주 동대구역 부근을 지난 택시의 rpm은?
+  rationale: 부근→vicinity. 지난=통행(passage). rpm.
+  gold:
+    concepts:
+    - id: place
+      text: 동대구역
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 동대구역, region: ''}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 택시의 rpm, concept: AMOUNT, subtype: rpm, role: MEASURE, source: implicit}
+    factors: {date: last_week, vicinity: true}
+- id: b005-24
+  type: no_agg_plain
+  family: b005-a-rpm-vicinity
+  intent: b005-a-16
+  question: 2026년 8월 22일 오후 5시부터 7시까지 부산 광안리 근처 택시 rpm은?
+  rationale: 시간 170000-190000. 근처→vicinity.
+  gold:
+    concepts:
+    - id: place
+      text: 광안리
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 광안리, region: 부산}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 택시 rpm, concept: AMOUNT, subtype: rpm, role: MEASURE, source: implicit}
+    factors: {date: '20260822', time: 170000-190000, vicinity: true}
+- id: b005-25
+  type: no_agg_plain
+  family: b005-a-rpm-vicinity
+  intent: b005-a-17
+  question: 이번 달 부산 어린이대공원 주변 개인택시 rpm은 얼마야?
+  rationale: 개인택시=private. 주변→vicinity.
+  gold:
+    concepts:
+    - id: place
+      text: 어린이대공원
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 어린이대공원, region: 부산}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 개인택시 rpm, concept: AMOUNT, subtype: rpm, role: MEASURE, source: implicit}
+    factors: {date: this_month, taxi_type: private, vicinity: true}
+- id: b005-26
+  type: no_agg_plain
+  family: b005-a-vacant-vicinity
+  intent: b005-a-18
+  question: 2026년 9월 11일 동대구역 근처 택시 공차율은?
+  rationale: 공차율=PROPORTION/vacant_ratio(EVENT/drive). 근처→vicinity. 집계어 없음.
+  gold:
+    concepts:
+    - id: place
+      text: 동대구역
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 동대구역, region: ''}
+    - {id: drive, concept: EVENT, subtype: drive, role: SUPPORT, source: implicit}
+    - {id: measure, text: 택시 공차율, concept: PROPORTION, subtype: vacant_ratio, role: MEASURE, source: implicit}
+    factors: {date: '20260911', vicinity: true}
+- id: b005-27
+  type: no_agg_plain
+  family: b005-a-vacant-vicinity
+  intent: b005-a-18
+  question: 2026년 9월 11일 동대구역 주변에서 택시가 빈 차로 다닌 비율은?
+  rationale: b005-26과 같은 뜻. 빈 차로 다닌 비율=공차율.
+  gold:
+    concepts:
+    - id: place
+      text: 동대구역
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 동대구역, region: ''}
+    - {id: drive, concept: EVENT, subtype: drive, role: SUPPORT, source: implicit}
+    - {id: measure, text: 빈 차로 다닌 비율, concept: PROPORTION, subtype: vacant_ratio, role: MEASURE, source: implicit}
+    factors: {date: '20260911', vicinity: true}
+- id: b005-28
+  type: no_agg_plain
+  family: b005-a-vacant-vicinity
+  intent: b005-a-19
+  question: 지난달 대구 동성로 부근 법인택시 공차율은?
+  rationale: 법인택시=corporate. 부근→vicinity.
+  gold:
+    concepts:
+    - id: place
+      text: 동성로
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 동성로, region: 대구}
+    - {id: drive, concept: EVENT, subtype: drive, role: SUPPORT, source: implicit}
+    - {id: measure, text: 법인택시 공차율, concept: PROPORTION, subtype: vacant_ratio, role: MEASURE, source: implicit}
+    factors: {date: last_month, taxi_type: corporate, vicinity: true}
+- id: b005-29
+  type: no_agg_plain
+  family: b005-a-vacant-vicinity
+  intent: b005-a-20
+  question: 2026년 8월 3일 오전 10시부터 정오까지 부산 광안리 근처 택시 공차율을 알려줘
+  rationale: 시간 100000-120000(정오=12시). 근처→vicinity.
+  gold:
+    concepts:
+    - id: place
+      text: 광안리
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 광안리, region: 부산}
+    - {id: drive, concept: EVENT, subtype: drive, role: SUPPORT, source: implicit}
+    - {id: measure, text: 택시 공차율, concept: PROPORTION, subtype: vacant_ratio, role: MEASURE, source: implicit}
+    factors: {date: '20260803', time: 100000-120000, vicinity: true}
+- id: b005-30
+  type: no_agg_plain
+  family: b005-a-vacant-vicinity
+  intent: b005-a-21
+  question: 지난주 대구 두류동 주변 개인택시 공차율은 얼마였어?
+  rationale: 개인택시=private. 주변→vicinity.
+  gold:
+    concepts:
+    - id: place
+      text: 두류동
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 두류동, region: 대구}
+    - {id: drive, concept: EVENT, subtype: drive, role: SUPPORT, source: implicit}
+    - {id: measure, text: 개인택시 공차율, concept: PROPORTION, subtype: vacant_ratio, role: MEASURE, source: implicit}
+    factors: {date: last_week, taxi_type: private, vicinity: true}
+- id: b005-31
+  type: dim_target
+  family: b005-b-within-by-end
+  intent: b005-b-1
+  question: 2026년 9월 대구 수성구 안에서 오간 실차를 도착 읍면동별로 세어줘
+  rationale: 안에서 오간=od_role both(장소가 제한하는 끝). 도착 읍면동별=dimension emd, dimension_target dropoff(묶는 끝). 둘은 독립.
+  gold:
+    concepts:
+    - id: area
+      text: 수성구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 수성구, region: 대구}
+      attributes: {od_role: both}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: 20260901-20260930, dimension: emd, dimension_target: dropoff}
+- id: b005-32
+  type: dim_target
+  family: b005-b-within-by-end
+  intent: b005-b-2
+  question: 2026년 9월 대구 수성구 안에서 출발·도착한 실차 가운데 도착 건수가 가장 많은 읍면동 세 곳은?
+  rationale: b005-31에 순위(top 3)를 더했다. 도착 건수 기준 읍면동=dimension_target dropoff.
+  gold:
+    concepts:
+    - id: area
+      text: 수성구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 수성구, region: 대구}
+      attributes: {od_role: both}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 도착 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: 20260901-20260930, dimension: emd, dimension_target: dropoff, order: top, limit: 3}
+- id: b005-33
+  type: dim_target
+  family: b005-b-dropoff-by-pickup
+  intent: b005-b-3
+  question: 지난주 동대구역에 도착한 실차를 출발 읍면동별로 보여줘
+  rationale: 동대구역 od_role dropoff, 묶는 끝은 출발(dimension_target pickup).
+  gold:
+    concepts:
+    - id: destination
+      text: 동대구역
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 동대구역, region: ''}
+      attributes: {od_role: dropoff}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: last_week, dimension: emd, dimension_target: pickup}
+- id: b005-34
+  type: dim_target
+  family: b005-b-dropoff-by-pickup
+  intent: b005-b-3
+  question: 지난주 동대구역이 도착지인 실차 구간을 승차 읍면동 기준으로 나눠서 세어줘
+  rationale: b005-33과 같은 뜻. 승차 읍면동 기준=dimension_target pickup.
+  gold:
+    concepts:
+    - id: destination
+      text: 동대구역
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 동대구역, region: ''}
+      attributes: {od_role: dropoff}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차 구간, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: last_week, dimension: emd, dimension_target: pickup}
+- id: b005-35
+  type: dim_target
+  family: b005-b-pickup-by-route
+  intent: b005-b-4
+  question: 2026년 8월 대구 동성로에서 출발한 실차를 읍면동 출발지-도착지 조합별로 세어줘
+  rationale: 동성로 od_role pickup. 출발지-도착지 조합=dimension_target both(명시). od_role both와 뜻이 다르다.
+  gold:
+    concepts:
+    - id: origin
+      text: 동성로
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 동성로, region: 대구}
+      attributes: {od_role: pickup}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: 20260801-20260831, dimension: emd, dimension_target: both}
+- id: b005-36
+  type: dim_target
+  family: b005-b-pickup-by-route
+  intent: b005-b-4
+  question: 2026년 8월 동성로에서 승차한 실차 건수를 승하차 읍면동 노선별로 알려줘
+  rationale: b005-35와 같은 뜻. 승하차 노선=dimension_target both. 지역이 발화에 없어 region 빈 값.
+  gold:
+    concepts:
+    - id: origin
+      text: 동성로
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 동성로, region: ''}
+      attributes: {od_role: pickup}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: 20260801-20260831, dimension: emd, dimension_target: both}
+- id: b005-37
+  type: dim_target
+  family: b005-b-no-place-route
+  intent: b005-b-5
+  question: 2026년 9월 1일부터 14일까지 시군구 출발지-도착지 조합별 실차 건수를 보여줘
+  rationale: 장소 없음. 시군구 조합=dimension sigungu, dimension_target both. 순위어 없음→order 없음.
+  gold:
+    concepts:
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: 20260901-20260914, dimension: sigungu, dimension_target: both}
+- id: b005-38
+  type: dim_target
+  family: b005-b-within-by-end
+  intent: b005-b-6
+  question: 지난달 부산 부산진구 안에서 오간 실차를 도착 읍면동별로 셀 때 가장 적은 두 곳은?
+  rationale: od_role both, dimension_target dropoff, 가장 적은 두 곳=bottom 2.
+  gold:
+    concepts:
+    - id: area
+      text: 부산진구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 부산진구, region: 부산}
+      attributes: {od_role: both}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: last_month, dimension: emd, dimension_target: dropoff, order: bottom, limit: 2}
+- id: b005-39
+  type: dim_target
+  family: b005-b-within-by-end
+  intent: b005-b-7
+  question: 2026년 9월 대구 달서구 안에서 출발과 도착이 모두 이뤄진 실차를 출발 읍면동별로 세어줘
+  rationale: od_role both, 출발 읍면동별=dimension_target pickup.
+  gold:
+    concepts:
+    - id: area
+      text: 달서구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 달서구, region: 대구}
+      attributes: {od_role: both}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: 20260901-20260930, dimension: emd, dimension_target: pickup}
+- id: b005-40
+  type: dim_target
+  family: b005-b-no-place-end
+  intent: b005-b-8
+  question: 2026년 9월 22일 읍면동별 실차 하차 건수를 알려줘
+  rationale: 장소 없음. 하차 기준 읍면동=dimension_target dropoff.
+  gold:
+    concepts:
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차 하차 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: '20260922', dimension: emd, dimension_target: dropoff}
+- id: b005-41
+  type: dim_target
+  family: b005-b-no-place-end
+  intent: b005-b-9
+  question: 2026년 9월 22일 승차 읍면동별 실차 건수는?
+  rationale: b005-40과 묶는 끝만 다르다(pickup).
+  gold:
+    concepts:
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: '20260922', dimension: emd, dimension_target: pickup}
+- id: b005-42
+  type: dim_target
+  family: b005-b-within-by-end
+  intent: b005-b-10
+  question: 이번 달 대구 안에서 오간 실차를 도착 시군구별로 세어줘
+  rationale: 대구 od_role both, 도착 시군구별=dimension sigungu, dimension_target dropoff.
+  gold:
+    concepts:
+    - id: area
+      text: 대구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 대구, region: ''}
+      attributes: {od_role: both}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: this_month, dimension: sigungu, dimension_target: dropoff}
+- id: b005-43
+  type: dim_target
+  family: b005-b-od-pair-route
+  intent: b005-b-11
+  question: 2026년 8월 대구에서 출발해 부산에 도착한 실차를 출발·도착 시군구 조합별로 세어줘
+  rationale: 대구 pickup, 부산 dropoff(장소 두 개). 시군구 조합=dimension_target both.
+  gold:
+    concepts:
+    - id: origin
+      text: 대구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 대구, region: ''}
+      attributes: {od_role: pickup}
+    - id: destination
+      text: 부산
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 부산, region: ''}
+      attributes: {od_role: dropoff}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: 20260801-20260831, dimension: sigungu, dimension_target: both}
+- id: b005-44
+  type: dim_target
+  family: b005-b-no-place-end
+  intent: b005-b-12
+  question: 지난주 법인택시의 시군구별 승차 실차 건수를 보여줘
+  rationale: 장소 없음. 법인택시=corporate. 승차 시군구별=dimension_target pickup.
+  gold:
+    concepts:
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 승차 실차 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: last_week, taxi_type: corporate, dimension: sigungu, dimension_target: pickup}
+- id: b005-45
+  type: dim_target
+  family: b005-b-dropoff-by-pickup
+  intent: b005-b-13
+  question: 2026년 7월 부산 부산진구에 도착한 실차를 출발 시군구별로 세어줘
+  rationale: 부산진구 od_role dropoff, 출발 시군구별=dimension sigungu, dimension_target pickup.
+  gold:
+    concepts:
+    - id: destination
+      text: 부산진구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 부산진구, region: 부산}
+      attributes: {od_role: dropoff}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 실차, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: 20260701-20260731, dimension: sigungu, dimension_target: pickup}
+- id: b005-46
+  type: agg_plain
+  family: b005-c-vacant-vicinity-agg
+  intent: b005-c-1
+  question: 2026년 9월 15일 동대구역 근처 택시 공차율의 평균은?
+  rationale: 평균=aggregation avg. 근처→vicinity.
+  gold:
+    concepts:
+    - id: place
+      text: 동대구역
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 동대구역, region: ''}
+    - {id: drive, concept: EVENT, subtype: drive, role: SUPPORT, source: implicit}
+    - {id: measure, text: 택시 공차율, concept: PROPORTION, subtype: vacant_ratio, role: MEASURE, source: implicit}
+    factors: {date: '20260915', vicinity: true, aggregation: avg}
+- id: b005-47
+  type: agg_plain
+  family: b005-c-vacant-vicinity-agg
+  intent: b005-c-1
+  question: 2026년 9월 15일 동대구역 주변 택시 공차율을 평균 내면 얼마야?
+  rationale: b005-46과 같은 뜻.
+  gold:
+    concepts:
+    - id: place
+      text: 동대구역
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 동대구역, region: ''}
+    - {id: drive, concept: EVENT, subtype: drive, role: SUPPORT, source: implicit}
+    - {id: measure, text: 택시 공차율, concept: PROPORTION, subtype: vacant_ratio, role: MEASURE, source: implicit}
+    factors: {date: '20260915', vicinity: true, aggregation: avg}
+- id: b005-48
+  type: agg_plain
+  family: b005-c-vacant-vicinity-agg
+  intent: b005-c-2
+  question: 지난주 부산 광안리 주변 택시 공차율 최댓값은?
+  rationale: 최댓값=aggregation max. 주변→vicinity.
+  gold:
+    concepts:
+    - id: place
+      text: 광안리
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 광안리, region: 부산}
+    - {id: drive, concept: EVENT, subtype: drive, role: SUPPORT, source: implicit}
+    - {id: measure, text: 택시 공차율, concept: PROPORTION, subtype: vacant_ratio, role: MEASURE, source: implicit}
+    factors: {date: last_week, vicinity: true, aggregation: max}
+- id: b005-49
+  type: agg_plain
+  family: b005-c-rpm-vicinity-agg
+  intent: b005-c-3
+  question: 2026년 8월 20일 오후 6시부터 8시까지 대구 동성로 부근 택시 rpm 평균은?
+  rationale: 시간 180000-200000. 평균=avg. 부근→vicinity.
+  gold:
+    concepts:
+    - id: place
+      text: 동성로
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 동성로, region: 대구}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 택시 rpm, concept: AMOUNT, subtype: rpm, role: MEASURE, source: implicit}
+    factors: {date: '20260820', time: 180000-200000, vicinity: true, aggregation: avg}
+- id: b005-50
+  type: agg_plain
+  family: b005-c-rpm-vicinity-agg
+  intent: b005-c-3
+  question: 2026년 8월 20일 18시에서 20시 사이 대구 동성로 근처를 지난 택시들의 분당 회전 속도 평균을 알려줘
+  rationale: b005-49와 같은 뜻.
+  gold:
+    concepts:
+    - id: place
+      text: 동성로
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 동성로, region: 대구}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 분당 회전 속도, concept: AMOUNT, subtype: rpm, role: MEASURE, source: implicit}
+    factors: {date: '20260820', time: 180000-200000, vicinity: true, aggregation: avg}
+- id: b005-51
+  type: agg_plain
+  family: b005-c-ratio-min
+  intent: b005-c-4
+  question: 지난달 부산 수영구 택시 가동률의 최솟값은?
+  rationale: 가동률=PROPORTION/active_taxi_ratio(EVENT/operation). 최솟값=min. 근처 표현 없음.
+  gold:
+    concepts:
+    - id: place
+      text: 수영구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 수영구, region: 부산}
+    - {id: operation, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+    - {id: measure, text: 택시 가동률, concept: PROPORTION, subtype: active_taxi_ratio, role: MEASURE, source: implicit}
+    factors: {date: last_month, aggregation: min}
+- id: b005-52
+  type: agg_plain
+  family: b005-c-ratio-med
+  intent: b005-c-5
+  question: 2026년 8월 개인택시 가동률의 중간값은?
+  rationale: 장소 없음. 중간값=med. 개인택시=private.
+  gold:
+    concepts:
+    - {id: operation, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+    - {id: measure, text: 개인택시 가동률, concept: PROPORTION, subtype: active_taxi_ratio, role: MEASURE, source: implicit}
+    factors: {date: 20260801-20260831, taxi_type: private, aggregation: med}
+- id: b005-53
+  type: dim_no_target
+  family: b005-d-passage-sigungu
+  intent: b005-d-1
+  question: 2026년 9월 4일 대구의 시군구별 택시 통행량을 알려줘
+  rationale: 통행량=passage_count. 시군구별=dimension sigungu. passage에는 묶는 끝(dimension_target)이 없다. 순위어 없음.
+  gold:
+    concepts:
+    - id: place
+      text: 대구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 대구, region: ''}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 택시 통행량, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+    factors: {date: '20260904', dimension: sigungu}
+- id: b005-54
+  type: dim_no_target
+  family: b005-d-passage-sigungu
+  intent: b005-d-2
+  question: 지난주 부산의 시군구별 공차 택시 통행량은?
+  rationale: 공차 택시 통행량=passage_count + taxi_status vacant. 시군구별=sigungu.
+  gold:
+    concepts:
+    - id: place
+      text: 부산
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 부산, region: ''}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 공차 택시 통행량, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+    factors: {date: last_week, taxi_status: vacant, dimension: sigungu}
+- id: b005-55
+  type: dim_no_target
+  family: b005-d-passage-h3
+  intent: b005-d-3
+  question: 2026년 9월 9일 대구 동성로의 H3 셀별 택시 통행량은?
+  rationale: H3 셀별=dimension h3. 근처 표현 없음→vicinity 없음.
+  gold:
+    concepts:
+    - id: place
+      text: 동성로
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 동성로, region: 대구}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 택시 통행량, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+    factors: {date: '20260909', dimension: h3}
+- id: b005-56
+  type: dim_no_target
+  family: b005-d-passage-h3-vicinity
+  intent: b005-d-4
+  question: 2026년 9월 24일 동대구역 근처 H3 셀별 통행량을 보여줘
+  rationale: 근처→vicinity. H3 셀별=h3.
+  gold:
+    concepts:
+    - id: place
+      text: 동대구역
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 동대구역, region: ''}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 통행량, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+    factors: {date: '20260924', vicinity: true, dimension: h3}
+- id: b005-57
+  type: dim_no_target
+  family: b005-d-passage-h3-vicinity
+  intent: b005-d-5
+  question: 2026년 8월 9일 오후 2시부터 4시까지 부산 광안리 주변의 H3 셀별 택시 통행량은?
+  rationale: 시간 140000-160000. 주변→vicinity. H3 셀별=h3.
+  gold:
+    concepts:
+    - id: place
+      text: 광안리
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 광안리, region: 부산}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 택시 통행량, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+    factors: {date: '20260809', time: 140000-160000, vicinity: true, dimension: h3}
+- id: b005-58
+  type: agg_dim
+  family: b005-e-revenue-sido-med
+  intent: b005-e-1
+  question: 지난달 택시 하루 수입의 중간값이 가장 높은 시도 세 곳은?
+  rationale: 수입=revenue. 중간값=med. 시도별 순위=dimension sido, top 3. 요일 순위(D1)가 아니다.
+  gold:
+    concepts:
+    - {id: operation, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+    - {id: measure, text: 택시 하루 수입, concept: AMOUNT, subtype: revenue, role: MEASURE, source: implicit}
+    factors: {date: last_month, aggregation: med, dimension: sido, order: top, limit: 3}
+- id: b005-59
+  type: agg_dim
+  family: b005-e-ratio-sido-min
+  intent: b005-e-2
+  question: 2026년 8월 시도별 택시 가동률 최솟값이 가장 낮은 두 곳은?
+  rationale: 가동률 최솟값=active_taxi_ratio min. 가장 낮은 두 곳=bottom 2.
+  gold:
+    concepts:
+    - {id: operation, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+    - {id: measure, text: 택시 가동률, concept: PROPORTION, subtype: active_taxi_ratio, role: MEASURE, source: implicit}
+    factors: {date: 20260801-20260831, aggregation: min, dimension: sido, order: bottom, limit: 2}
+- id: b005-60
+  type: agg_dim
+  family: b005-e-ratio-dow-max
+  intent: b005-e-3
+  question: 지난달 요일별 택시 가동률 최댓값이 가장 높은 요일은?
+  rationale: 요일별=dimension dayofweek. 최댓값=max. 가장 높은 요일 하나=top 1.
+  gold:
+    concepts:
+    - {id: operation, concept: EVENT, subtype: operation, role: SUPPORT, source: implicit}
+    - {id: measure, text: 택시 가동률, concept: PROPORTION, subtype: active_taxi_ratio, role: MEASURE, source: implicit}
+    factors: {date: last_month, aggregation: max, dimension: dayofweek, order: top, limit: 1}
