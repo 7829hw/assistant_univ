@@ -1,10 +1,10 @@
-# 업체 100 평가 절차 v2 (pilot_002) — **초안, 확정 보류(2026-10-07)**
+# 업체 100 평가 절차 v2 (pilot_002) — **확정(2026-10-08, 사용자)**
 
-작성: 2026-10-07(결정 44). 확정은 보류했다.
+작성: 2026-10-07(결정 44). 확정: 2026-10-08, 사용자(결정 46으로 셋 선택지 1을 고름).
 
-- 결정 44는 "학습 전에 확정한다"고 했다. 그런데 이 문서가 적어야 할 결정 42의 보조 시험 셋이 아직 없다.
-  - 작업 지시 2는 규칙대로면 남는 셋이 없어 멈췄다(`../pilot_prep_004/sets/SURVEY.md`).
-- 셋을 고르면 7절을 채우고, 상태를 "확정(날짜, 사용자)"으로 바꿔 커밋한다. 확정한 뒤에는 고치지 않는다.
+- 2026-10-07 초안은 결정 42의 보조 시험 셋이 없어 확정을 보류했다(`../pilot_prep_004/sets/SURVEY.md`).
+- 결정 46으로 두 셋을 고정하고(`../pilot_prep_005/sets/`), base HF-E 기준값을 두 셋에서 한 번씩 잰 뒤 3절과 7절을 채웠다.
+- **확정한 뒤에는 이 문서를 고치지 않는다.**
 - pilot_001의 `PROTOCOL.md`와 `ADDENDUM_three_way.md`는 고치지 않는다.
 
 ## 1. 이어받는 문서
@@ -66,6 +66,19 @@ PROTOCOL 7절의 개선 조건 2·3과 악화 조건 2·3을 다음으로 바꾼
 | Ollama | E | 79(`pilot_prep_003/ollama/E.json`, Ollama 0.35.1, GPU 3). 같은 값이 GPU 2에서도 첫 응답 100/100 바이트 일치로 재현됐다(결정 37, `pilot_001_analysis/device_check/`) | 결정 31: 버전이 0.35.1과 다르면 같은 버전에서 다시 잰다 |
 | Ollama(삼자) | B-conv | 77(`pilot_prep_003/ollama/B-conv.json`). GPU 2에서도 같음 | 같음 |
 
+**새 두 셋의 base 기준값(첫 측정, 2026-10-08)**
+
+명세: base Qwen3-8B@b968826d, HF 경로, thinking 켬(`enable_thinking=True`), greedy, max_new_tokens 8192, 기준일 2026-09-25, 조건 계층 켬, mock·legacy, prompt 87048d0c, 지문 791c4a68. 장치는 GPU 2(UUID `GPU-a644de12…`, Ollama 모델 없음, Ollama 측정 없음)다.
+
+| 셋 | 셀 | grounding_ok | 첫 응답 일치 | 생성 상한 호출 | 기록 |
+|---|---|---:|---:|---:|---|
+| 선택용 셋 `selection_v1`(100) | HF-E | 82 | 61 | 0 | `../pilot_prep_005/sets/runs/selection_base.json`(원문 sha256 `9d4ab1f3…`) |
+| 보조 시험 셋 `aux_test_v1`(51) | HF-E | 27 | 21 | 2 | `../pilot_prep_005/sets/runs/aux_test_base.json`(원문 sha256 `2d05117b…`) |
+
+- 셋 안 출처별: 선택용 old44 26/29, contrast 10/14, indepv2 12/18, indepv3 18/21, indepv4 16/18. 보조 at 10/14, final_v12 17/37.
+- 보조 시험 셋의 Ollama 셀(E, B-conv)은 이 확정 시점에 재지 않았다. 2.2절대로 학습 전에 같은 명세로 한 번 잰다(그 셋의 첫 측정).
+- 선택용 셋은 HF 경로로만 쓴다(checkpoint 선택). Ollama 셀은 재지 않는다.
+
 - 비교 셀은 pilot_002에서 고른 SFT와 최종(SFT+DPO)이다. 각각 HF와 등록 모델(Ollama)로 잰다.
 - checkpoint 선택은 결정 41의 새 선택용 셋으로 한다. valid98은 보조 기록으로만 잰다. 업체 100과 보조 시험 셋은 선택에 쓰지 않는다.
 
@@ -94,10 +107,17 @@ PROTOCOL 5절을 그대로 따른다. 보조 시험 셋에도 같은 규칙을 �
 - 삼자 비교(보조).
 - 이 문서의 확정판 sha256.
 
-## 7. 셋(확정 때 채운다)
+## 7. 셋
 
 | 셋 | 용도 | 이름·경로 | 문항 | sha256 |
 |---|---|---|---:|---|
 | 업체 100 | 판정 | `evaluation/vendor100/gold.yaml` | 100 | `f99bc5fdef623e973901e5b339ede3c7f4e36cfa133887ea933e9683a7d8b4f0` |
-| 보조 시험 셋(결정 42) | 함께 보고, 판정에 쓰지 않음 | **미정** — `../pilot_prep_004/sets/SURVEY.md`의 선택지에서 고른다 | – | – |
-| 선택용 셋(결정 41, 참고) | checkpoint 선택 | **미정** | – | – |
+| 보조 시험 셋(결정 42·46) | 함께 보고, 판정에 쓰지 않음 | `aux_test_v1` — `sft_dpo_inventory/pilot_prep_005/sets/aux_test_items.json` | 51 | `692b792fdfd1a95f9bd46c27262ed347d816076d15744070c1ca35ac25779aa0` |
+| 선택용 셋(결정 41·46, 참고) | checkpoint 선택 | `selection_v1` — `sft_dpo_inventory/pilot_prep_005/sets/selection_items.json` | 100 | `405af9c879ff2989374f6285195467793ee38a4b61fe867919e6eae8893cad25` |
+
+- 만든 방법: `../pilot_prep_005/sets/build_sets.py`(seed 20261008). 결정 46의 선택지 1(문항 family 단위 제외).
+  - 선택용: old44·contrast·indepv2–4의 후보 154에서 유형 칸 × 정지 기대로 층을 나눠 100을 뽑았다(최대 잔여 배분).
+  - 보조: at·final_v12의 51 전부.
+- 조건: mock이 아는 장소, 정책·모호 문항 제외, gold가 현재 파이프라인을 통과. 학습 데이터(`reviewed_gold_v005_t2pc`)와 family 겹침을 다시 확인했고 빠진 문항은 0이다.
+- 두 셋 사이: 문항 id 겹침 0, family 겹침 0. 거친 의미 family는 결정 46대로 나누지 않았다(겹침 16, 참고).
+- 두 셋 모두 평가 전용이다. 학습, trace 선택, annotation 후보에 쓰지 않는다. 보조 시험 셋은 checkpoint 선택에도 쓰지 않는다.
