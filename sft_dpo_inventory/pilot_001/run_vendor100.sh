@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # pilot_001 업체 100 평가(PLAN 6절, PROTOCOL 확정판, ADDENDUM). 셀마다 한 번만 잰다(재실행 없음).
-# 순서: HF 셀(SFT → 최종, GPU 2) → Ollama 버전 확인(결정 31) → [버전이 다르면 E·B-conv 재측정] → Ollama 셀(SFT → 최종).
+# 순서: HF 셀(SFT → 최종, GPU 2) → Ollama 버전 확인(결정 31) → E·B-conv 재측정(결정 32: Ollama가 GPU 2로 옮겨 장치가 바뀜)
+#       → Ollama 셀(SFT → 최종). 결정 32 뒤로 HF와 Ollama가 GPU 2를 같이 쓰므로 HF 셀은 Ollama 모델이 내려간 상태에서 시작한다.
 # Ollama 측정 중에는 다른 Ollama 호출이나 HF 측정을 하지 않는다. 셀이 끝날 때마다 결과를 커밋·push한다.
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd); REPO=$(cd "$HERE/../.." && pwd)
@@ -22,8 +23,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_0116EAU9dFUyCZgz7zW8W6EG" && git push origin geoflow/sft-dpo-t2pc >> "$HERE/runs.log" 2>&1
 }
 ollama_idle() { until [ "$(curl -s localhost:11434/api/ps | "$PY" -c 'import json,sys; print(len(json.load(sys.stdin)["models"]))')" = "0" ]; do sleep 10; done; }
-GPU3=GPU-48f798cc-9437-50ac-d604-448bbad7b311
-gpu3_quiet() {   # Ollama 모델이 내려간 상태에서 GPU 3에 다른 사용자의 프로세스가 없을 때까지 기다린다(최대 3시간, 넘으면 이탈로 기록하고 진행)
+GPU3=GPU-a644de12-2a2c-ca3d-4822-b80f704b0b21   # 결정 32: Ollama 장치는 이제 host GPU 2(변수 이름은 그대로 둔다)
+gpu3_quiet() {   # Ollama 모델이 내려간 상태에서 Ollama 장치에 다른 프로세스(HF 작업·다른 사용자)가 없을 때까지 기다린다(최대 3시간, 넘으면 이탈로 기록하고 진행)
   local waited=0
   while [ "$(nvidia-smi -i $GPU3 --query-compute-apps=pid --format=csv,noheader | wc -l)" -gt 0 ]; do
     [ $waited -eq 0 ] && log "GPU3 has foreign processes: $(nvidia-smi -i $GPU3 --query-compute-apps=pid,process_name,used_memory --format=csv,noheader | tr '\n' ';')"
@@ -37,7 +38,7 @@ gpu3_quiet() {   # Ollama 모델이 내려간 상태에서 GPU 3에 다른 사�
 for stage in sft final; do
   if [ $stage = sft ]; then sel=selection_sft.json; else sel=selection_dpo.json; fi
   adapter=$("$PY" -c "import json; print(json.load(open('$HERE/$sel'))['selected']['adapter'])")
-  log "vendor100 HF-$stage start ($adapter)"
+  ollama_idle; log "vendor100 HF-$stage start ($adapter)"
   CUDA_VISIBLE_DEVICES=2 "$PY" sft_dpo_inventory/thinking_prep_001/hf_eval_thinking.py --condition-check --adapter "$adapter" \
       --out "$OUT/HF-$stage.json" --raw-out "$RAW/HF-${stage}_raw.jsonl" > "$OUT/HF-$stage.log" 2>&1
   rc=$?; log "vendor100 HF-$stage exit=$rc"; [ $rc -eq 0 ] || die "HF-$stage failed"
@@ -48,14 +49,15 @@ done
 VERSION=$(curl -s localhost:11434/api/version | "$PY" -c 'import json,sys; print(json.load(sys.stdin)["version"])')
 echo "{\"checked_at\": \"$(date -Is)\", \"ollama_version\": \"$VERSION\", \"e_bconv_version\": \"0.35.1\", \"same\": $([ "$VERSION" = 0.35.1 ] && echo true || echo false)}" > "$OUT/ollama_version_check.json"
 log "ollama version $VERSION"
-if [ "$VERSION" != "0.35.1" ]; then
+# 결정 32: 장치가 GPU 3 → 2로 바뀌었으므로 버전과 관계없이 E·B-conv를 같은 장치에서 다시 잰다(결정 31도 같은 처리).
+if true; then
   for cell in E B-conv; do
     if [ $cell = E ]; then m=qwen3:8b; else m=geoflow-qwen3-8b-b968826d-base:q4km-hfthink; fi
-    ollama_idle; gpu3_quiet; log "vendor100 $cell (re-measure, $VERSION) start"
+    ollama_idle; gpu3_quiet; log "vendor100 $cell (re-measure on GPU 2, Ollama $VERSION) start"
     "$TV" evaluate_vendor100.py --gold evaluation/vendor100/gold.yaml llm --model "$m" --reference-date 2026-09-25 \
         --condition-check --model-think auto --out "$OUT/$cell.json" > "$OUT/$cell.log" 2>&1
     rc=$?; log "vendor100 $cell exit=$rc"; [ $rc -eq 0 ] || die "$cell failed"
-    commit "eval(sft-dpo): Ollama $VERSION에서 $cell 재측정(결정 31)" "$OUT/$cell.json" "$OUT/$cell.jsonl" "$OUT/$cell.spec.json" "$OUT/$cell.log" "$HERE/runs.log"
+    commit "eval(sft-dpo): GPU 2(결정 32)·Ollama $VERSION에서 $cell 재측정" "$OUT/$cell.json" "$OUT/$cell.jsonl" "$OUT/$cell.spec.json" "$OUT/$cell.log" "$HERE/runs.log"
   done
 fi
 commit "eval(sft-dpo): pilot_001 Ollama 버전 확인($VERSION)" "$OUT/ollama_version_check.json" "$HERE/runs.log"

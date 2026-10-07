@@ -35,13 +35,17 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
    and teacher traces, evaluation raw outputs under `training/generated/`, summaries). Never commit model/adapter
    weights, checkpoints, merged models, GGUF files, caches or temporary files. Never use `git add -f`; if data is
    ignored, change `.gitignore` instead.
-4. Ollama: use the existing Docker server on GPU 3 (`localhost:11434`) as is.
+4. Ollama: use the existing Docker server (`localhost:11434`) as is. Since decision 32 (2026-10-07) the container runs on
+   GPU 2 for now (only `device_ids` changed from "3" to "2"; record in `sft_dpo_inventory/pilot_001/ollama/container/`).
+   GPU 2 is then shared by HF work and Ollama: never run HF work and Ollama measurements at the same time, and start HF
+   work only when no Ollama model is loaded.
    - Do not restart or reconfigure the container or change its GPU assignment.
    - Do not start another Ollama server and do not pull models. If something is needed, stop and report.
 5. GPU work outside Ollama (training, HF inference) uses CUDA GPU 2 by default (decided 2026-10-06).
    - Run with `CUDA_VISIBLE_DEVICES=2`; inside the process it appears as `cuda:0`.
    - Do not change `CUDA_DEVICE_ORDER`.
-   - GPU 3 (the Ollama GPU) may be used only for additional work while Ollama is not in use
+   - (Until decision 32 ends, GPU 3 is not the Ollama GPU and is shared with another user; use it only when host
+     `nvidia-smi` shows no processes on it.) Otherwise GPU 3 (the Ollama GPU) may be used only for additional work while Ollama is not in use
      (`CUDA_VISIBLE_DEVICES=3`). Before each use, confirm with host `nvidia-smi` that no Ollama model is loaded
      on GPU 3 (memory in use and processes). If anything is loaded, do not use GPU 3.
    - Never unload Ollama models yourself and never touch the container to free GPU 3.
