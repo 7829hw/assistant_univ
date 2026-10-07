@@ -141,3 +141,31 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - HF 작업이나 학습에는 GPU 3(UUID `GPU-48f798cc…`)을 기본으로 쓴다. GPU 2는 Ollama 모델이 올라가 있지 않을 때만 쓴다.
     - 어느 GPU든 쓰기 전에 host `nvidia-smi`로 UUID, 사용 중인 메모리, 다른 사용자의 프로세스를 확인한다. 다른 프로세스가 있으면
       그 GPU를 쓰지 않고 보고한다.
+
+## 2026-10-07 — pilot_002 준비(`pilot_prep_004`)
+
+39. 이 트랙의 목표는 소형 LLM(qwen3:8b)을 파인튜닝해서 잘 되게 하는 것이다. 트랙 보류는 선택지에서 뺀다.
+40. pilot_002의 방향은 C, A, D다(`pilot_001_analysis/REPORT.md` 4절의 선택지).
+    - C: 집계가 없는 질문과 `dimension`·`dimension_target` 유형을 새 annotation 약 60건(batch005)으로 보강한다. 학습 데이터 전체의 유형
+      비율이 보호 개발 셋 전체의 비율에 가까워지게 한다. 개발 셋은 문항 내용이 아니라 집계 통계만 쓴다.
+    - A: teacher trace 17문항을 학습 데이터에 넣는다. 출처를 `source=teacher`로 표시한다.
+    - D: 반복 루프 trace를 학습 데이터에서 뺀다. 기준은 적용하기 전에 고정한다.
+    - B(loss 범위 조정)는 하지 않는다. SFT는 `json_only`(결정 24), DPO는 `full_response`(결정 26)를 유지한다.
+41. 다음 판의 checkpoint 선택에는 새 선택용 셋(약 100문항)을 쓴다. 결정 28의 선택 규칙에서 valid98을 이 셋으로 바꾼다.
+    - 아직 분석이나 데이터 설계에 쓰지 않은 보호 개발 셋에서 만들고, 학습에는 쓰지 않는다.
+    - valid98은 보조 기록으로만 잰다.
+42. 업체 100과 함께 보고할 보조 시험 셋을 하나 더 둔다.
+    - 아직 쓰지 않은 보호 개발 셋에서 만들고, 새 선택용 셋과 family가 겹치지 않게 나눈다.
+    - 판정은 업체 100으로 하고, 보조 시험 셋은 같은 지표로 함께 보고한다.
+43. 미확인 실험은 두 개만 한다(`pilot_001_analysis/REPORT.md` 3d·3e).
+    - HF 경로의 장치 일치: pilot_001 SFT step 124를 GPU 2에서 valid98로 다시 재서 GPU 3 기록과 비교한다.
+    - 변환 경로 영향: valid98에서 B-conv와 Ollama-최종을 잰다.
+44. pilot_002에는 새 `vendor100_protocol/PROTOCOL_v2.md`를 쓴다. pilot_001의 `PROTOCOL.md`는 고치지 않는다.
+    - PROTOCOL_v2는 PROTOCOL.md(결정 22)와 `ADDENDUM_three_way.md`(결정 30)를 그대로 이어받는다. 바뀌는 것은 두 가지다.
+      - U와 조용한 오답의 악화 기준: 각각 순증 ≤ 2를 허용한다. 3 이상 늘면 악화다.
+      - 결정 42의 보조 시험 셋 보고를 추가한다.
+    - 학습 전에 확정한다.
+45. C 보강 annotation(batch005)은 batch004와 같은 절차로 한다.
+    - Claude가 질문과 초안 gold를 쓰고, HF 출력을 붙여 검토 시트를 만든다. 사용자가 검토해서 승인한다.
+      초안 gold와 validator PASS는 승인이 아니다.
+    - 학습용 trace는 승인한 뒤에 수집한다.
