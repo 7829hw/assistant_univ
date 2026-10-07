@@ -119,4 +119,7 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
 33. 앞으로 모든 데이터를 커밋한다. 범위는 생성 데이터(학습 corpus, thinking 학습 데이터)와 원문(thinking·teacher trace, 평가 원문)이다.
     weights(adapter, checkpoint, merge 모델, GGUF)와 cache는 계속 커밋하지 않는다. 이미 만든 데이터도 커밋한다.
     `.gitignore`에서 `training/generated/`를 빼고, weight 파일 형식을 명시적으로 막는다. `CLAUDE.md` 3번을 바꾼다.
+32-1. (2026-10-07, 사용자) GPU 2와 GPU 3은 동일 사양이므로 장치 변경만으로 E·B-conv를 다시 재지 않는다. pilot_prep_003에서 GPU 3으로 잰
+     E(79)·B-conv(77)를 재사용한다. 결정 32의 "E와 B-conv는 GPU 2에서 다시 잰다"를 대체한다. Ollama 버전이 0.35.1과 다를 때 다시 재는
+     결정 31은 그대로다. 학습 모델 셀은 GPU 2에서 재므로, 판정·삼자 비교에서 기준 셀과 학습 모델 셀의 장치가 다르다는 점을 결과에 적는다.
 

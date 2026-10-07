@@ -49,8 +49,9 @@ done
 VERSION=$(curl -s localhost:11434/api/version | "$PY" -c 'import json,sys; print(json.load(sys.stdin)["version"])')
 echo "{\"checked_at\": \"$(date -Is)\", \"ollama_version\": \"$VERSION\", \"e_bconv_version\": \"0.35.1\", \"same\": $([ "$VERSION" = 0.35.1 ] && echo true || echo false)}" > "$OUT/ollama_version_check.json"
 log "ollama version $VERSION"
-# 결정 32: 장치가 GPU 3 → 2로 바뀌었으므로 버전과 관계없이 E·B-conv를 같은 장치에서 다시 잰다(결정 31도 같은 처리).
-if true; then
+# 결정 32-1: 동일 사양 GPU라 장치 변경만으로는 다시 재지 않고 GPU 3에서 잰 E·B-conv(pilot_prep_003)를 쓴다.
+# 결정 31: Ollama 버전이 0.35.1과 다를 때만 E·B-conv를 같은 버전에서 다시 잰다.
+if [ "$VERSION" != "0.35.1" ]; then
   for cell in E B-conv; do
     if [ $cell = E ]; then m=qwen3:8b; else m=geoflow-qwen3-8b-b968826d-base:q4km-hfthink; fi
     ollama_idle; gpu3_quiet; log "vendor100 $cell (re-measure on GPU 2, Ollama $VERSION) start"
