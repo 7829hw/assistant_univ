@@ -198,3 +198,35 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - 질문당 최대 4개를 쓴다. 필터를 통과한 정답 trace 중에서 고정 seed로 고른다.
     - 27b chosen과 8b rejected로 만드는 교차 DPO 쌍은 쓰지 않는다.
     - 고른 teacher trace에서 표본 10개를 사용자가 결정 23과 같은 기준으로 검토한다. 결과는 결정 27과 같은 방식으로 반영한다.
+
+## 2026-10-08 — pilot_002 진행(`pilot_002`)
+
+49. teacher 표본 10개 검토 결과(`training/generated/thinking_traces/teacher/human_review_teacher_10.md`, sha256 `f50010f8…`).
+    사용자가 Claude의 검토 의견을 확인하고 확정했다. 기준은 결정 23과 같다. 판정표는 `reasoning_review_002/VERDICTS.md`.
+    - 타당 8: `ann-2d254560f2214204db4b:teacher:2`, `:teacher:6`, `ann-77e9dacb0b34a3273630:teacher:1`,
+      `ann-914c48dad91bc9a62ab4:teacher:8`, `ann-e645cbc11600d7348d68:teacher:1`, `b004-06:teacher:4`,
+      `b004-15:teacher:3`(판교역 표본, 문서 9번), `b004-31:teacher:1`.
+    - 타당(경미) 2:
+      - `ann-914c48dad91bc9a62ab4:teacher:3`: region을 잘못 말했다가 추론 안에서 근거를 들어 고침. JSON에 `answer: value`.
+      - `ann-dd838f31807ef8546525:teacher:3`: 합계 집계를 넣을지 오래 망설인 끝에 맞는 근거로 넣지 않음.
+    - 우연히 정답 0. 결정 27 방식으로 빠지는 trace가 없으므로 기존 teacher 68개를 모두 쓴다.
+    - 관찰: 추론이 8b의 주요 오류 지점(질문에 없는 집계, 묶음 기준을 장소로 만들기)을 직접 짚는다. 장소 role은 10개 모두 gold와
+      같은 SUBCOND다.
+50. batch005에서 정답 표본이 없는 27질문의 teacher trace를 학습에 넣는다.
+    - 기존 teacher와 같은 필터를 적용한다: tokenize 왕복·렌더 경계, 계약, 길이(결정 18), 루프(결정 40-D).
+    - 필터를 통과한 trace 중에서 질문당 최대 4개를 고정 seed로 고른다.
+    - 교차 DPO는 만들지 않는다(결정 48).
+51. 승인했던 검토 쌍 14개(b005-11, 12, 20, 22, 23, 25, 27, 28, 30, 46, 48, 49, 50, 57의 `-hf`)는 결정 6에 따라 DPO에서 뺀다.
+    - 이 중 13개는 모델이 vicinity를 장소 개념 안에 적은 경우다. 코드(`geoflow/grounding.py` `_hoist_structural_factors`)가
+      제자리(factors)로 옮기므로 운영 경로에서 뜻이 같다.
+    - **정정:** batch005 README(`batch005/README.md` 4절 "vicinity 18건, 모두 초안 있음 → 모델 없음")와 Claude 검토 의견에 적힌
+      "vicinity 누락"은 대부분 누락이 아니라 이 위치 차이였다. 조건 계층 전 원출력을 채점했기 때문이다. README 자체는 고치지 않는다.
+52. DPO는 질문당 최대 8쌍이다.
+    - 모든 출처(v004, batch005)에 적용한다.
+    - 고정 seed를 쓰되, rejected의 오류 유형(`grounding_diffs` 필드 종류)이 다양하게 남도록 고른다.
+53. pilot_002는 pilot_001과 같은 학습 설정을 쓴다. 바뀌는 것은 데이터와 선택용 셋뿐이다.
+    - 학습 길이와 저장 시점: 결정 28과 같다(SFT 2 epoch·0.5 epoch마다 4개, DPO 1 epoch·25%마다 4개, 고른 SFT에서 시작).
+    - SFT `json_only`(결정 24), DPO `full_response`(결정 26). reference 미리 계산, `expandable_segments`.
+    - checkpoint 선택: selection_v1(결정 46)의 grounding_ok가 가장 높은 것. 동점이면 더 이른 쪽.
+    - valid98은 선택한 SFT와 최종 모델에 대해서만 보조로 잰다(결정 41).
+    - `ollama create` 승인(결정 20)을 pilot_002의 SFT와 최종 모델 등록에도 적용한다. 새 이름으로 등록하고 기존 모델은 건드리지 않는다.
