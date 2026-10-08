@@ -23,3 +23,10 @@
 - 10:33 KST 시도는 컨테이너 CUDA 장애로 CPU에서 돌아 6문항 뒤 멈췄다(`aux_test/README.md`, `ABORTED_cpu_E.*`).
 - 사용자가 컨테이너를 복구한 뒤, 같은 명령에 결정 55 확인을 붙여 E와 B-conv를 처음부터 잰다(`aux_test/run_baselines_d55.sh`).
   측정이 아니었던 CPU 출력을 대체하는 첫 측정이다. 재실행이 아니다.
+
+## 3. merge 모델과 GGUF의 저장 위치
+
+- PLAN 2절은 merge 모델·GGUF를 `/home/hwkim/sftdpo_work/pilot_002/`·`/home/hwkim/sftdpo_work/gguf/`에 둔다고 적었다.
+- 등록 전에 확인한 루트 디스크(`/home`) 여유는 79 GB(2026-10-08 12:58)다. 필요한 양은 약 75 GB(merge 2×16 GB, GGUF bf16 2×16 GB + Q4_K_M 2×4.7 GB)라 모자랄 수 있다.
+- 그래서 pilot_002의 merge 모델과 GGUF는 `/data/hwkim/sftdpo_work/pilot_002/merged/`·`/data/hwkim/sftdpo_work/gguf/`(여유 1.5 TB, 저장소 밖)에 둔다.
+- adapter·checkpoint는 config 그대로 `/home/hwkim/sftdpo_work/pilot_002/`다. 변환 명령·양자화·등록 방식은 같다. 경로와 sha256만 기록한다.

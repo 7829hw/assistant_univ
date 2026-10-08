@@ -15,3 +15,18 @@
 - 부분 출력은 `ABORTED_cpu_E.*`로 이름을 바꿔 남겼다. 기준값으로 쓰지 않는다.
 - 같은 컨테이너의 teacher 수집(2026-10-08 05:08–05:46 KST)은 GPU에서 돌았다. 로그에 CUDA 실패가 없고, 질문당 시간도 이전과 같다.
 - 컨테이너는 재시작하지 않았다(CLAUDE.md 4번). 복구는 사용자가 정한다.
+
+## 2026-10-08 첫 측정(컨테이너 복구 뒤, 결정 55)
+
+- 사용자가 컨테이너를 복구했다. `docker exec ollama nvidia-smi -L`에 GPU 2(`GPU-a644de12…`)가 보이고, 버전은 0.35.1이다.
+- `run_baselines_d55.sh`로 E와 B-conv를 처음부터 쟀다. 명령은 `run_baselines.sh`와 같고 결정 55 확인만 붙였다.
+  위의 CPU 출력은 측정이 아니었으므로 이것이 이 셋의 첫 측정이다(`../PLAN_DEVIATIONS.md` 2번).
+
+| 셀 | 모델 | 시간(KST) | grounding_ok | U | 조용한 오답 | 지연 중앙(초) | 결정 55 확인 |
+|---|---|---|---:|---:|---:|---:|---|
+| E | `qwen3:8b` | 12:53–13:10 | 29/51 | 3 | 5 | 13.5 | 첫 문항 100% GPU, 호출 62개 최저 89.0 tok/s |
+| B-conv | `geoflow-qwen3-8b-b968826d-base:q4km-hfthink` | 13:15–13:36 | 24/51 | 3 | 8 | 11.56 | 첫 문항 100% GPU, 호출 63개 최저 89.5 tok/s |
+
+- 출처: `E.json`·`B-conv.json`(원문 `*.jsonl`), 확인 기록 `gpu_precheck_*.json`·`gpu_guard_*.json`, 비교 `comparison.json`(`compare_aux.py`).
+- 같은 셋의 HF-E(base)는 27/51이다(`../../pilot_prep_005/sets/runs/aux_test_base.json`). HF 셀은 `eval_set.py` 형식이라 U·조용한 오답을 셀 수 없다.
+- 이 셋은 보고용이고 판정에 쓰지 않는다(PROTOCOL_v2 2.2절).
