@@ -143,12 +143,83 @@ def run_settings(args):
             "order": args.order}
 
 
+#: 호출 seed 규칙(path_repeat_001 PLAN.md 3절). HF 경로(hf_eval_thinking.py)도 이 함수를 쓴다.
+SEED_RULE = 'int.from_bytes(sha256(f"{round_seed}:{item_id}:{call_index}").digest()[:4], "big") & 0x7FFFFFFF'
+
+
+def call_seed(round_seed, item_id, call_index):
+    """회차 seed·문항 id·문항 안 호출 순번(0 = 첫 plan, 1부터 repair 등)으로 정한 호출 seed."""
+    digest = hashlib.sha256(f"{round_seed}:{item_id}:{call_index}".encode("utf-8")).digest()
+    return int.from_bytes(digest[:4], "big") & 0x7FFFFFFF
+
+
+def sampling_settings(args):
+    """``--temperature/--top-p/--top-k/--seed``. 하나도 주지 않으면 None(기존 temperature 0 요청 그대로)."""
+    values = {"temperature": getattr(args, "temperature", None), "top_p": getattr(args, "top_p", None),
+              "top_k": getattr(args, "top_k", None), "seed": getattr(args, "seed", None)}
+    if all(value is None for value in values.values()):
+        return None
+    missing = [key for key, value in values.items() if value is None]
+    if missing:
+        raise SystemExit(f"sampling은 --temperature, --top-p, --top-k, --seed를 모두 지정해야 한다(빠짐: {missing})")
+    if getattr(args, "replay_from", None):
+        raise SystemExit("sampling과 --replay-from은 함께 쓰지 않는다")
+    return {"temperature": values["temperature"], "top_p": values["top_p"], "top_k": values["top_k"],
+            "round_seed": values["seed"], "seed_rule": SEED_RULE}
+
+
+class _SeededClient:
+    """sampling 요청: 호출마다 PLAN 3절 규칙의 seed를 options에 넣는다. 실패한 호출도 순번을 쓴다."""
+
+    def __init__(self, client, sampling, item_id):
+        self.client = client
+        self.model = getattr(client, "model", None)
+        self.sampling = sampling
+        self.item_id = item_id
+        self.calls = 0
+
+    def __getattr__(self, name):
+        return getattr(self.client, name)
+
+    def chat(self, messages, tools=None, **kwargs):
+        seed = call_seed(self.sampling["round_seed"], self.item_id, self.calls)
+        self.calls += 1
+        self.client.options = {"temperature": self.sampling["temperature"], "top_p": self.sampling["top_p"],
+                               "top_k": self.sampling["top_k"], "seed": seed}
+        response = self.client.chat(messages, tools=tools, **kwargs)
+        if isinstance(response, dict):
+            response = {**response, "sampling_seed": seed}
+        return response
+
+
+def environment_record(host=None):
+    """``--record-env``: 실행 장치와 소프트웨어 판. 생성에는 영향을 주지 않는다."""
+    import platform
+    import subprocess
+
+    def run(*command):
+        try:
+            return subprocess.run(command, capture_output=True, text=True, timeout=30).stdout.strip()
+        except (OSError, subprocess.SubprocessError) as error:
+            return f"error: {type(error).__name__}: {error}"
+    gpus = []
+    for line in run("nvidia-smi", "--query-gpu=name,uuid,driver_version", "--format=csv,noheader").splitlines():
+        parts = [part.strip() for part in line.split(",")]
+        if len(parts) == 3:
+            gpus.append({"name": parts[0], "uuid": parts[1], "driver": parts[2]})
+    record = {"host_gpus": gpus, "python": platform.python_version(), "hostname": platform.node()}
+    if host is not None:
+        record["ollama_container_gpus"] = run("docker", "exec", "ollama", "nvidia-smi", "-L").splitlines()
+    return record
+
+
 def run_spec(args, *, digest, version, prompt_sha, items):
     """결과에 영향을 주는 조건 전체(실행 명세). 같은 run으로 합칠 수 있는지는 이 명세의 hash로 정한다."""
     module = _execution_spec_module()
     gold = Path(GOLD_PATH or GOLD_FILE)
     replay = Path(args.replay_from) if args.replay_from else None
-    return {
+    sampling = sampling_settings(args)
+    spec = {
         "model": args.model, "model_digest": digest, "ollama_version": version,
         "planner_prompt_sha256": prompt_sha,
         "code_fingerprint": module.code_fingerprint(CODE_ROOT)["sha256"],
@@ -162,6 +233,10 @@ def run_spec(args, *, digest, version, prompt_sha, items):
         "run_settings": run_settings(args),
         "replay_from_sha256": hashlib.sha256(replay.read_bytes()).hexdigest() if replay else None,
     }
+    if sampling is not None:     # 지정하지 않으면 명세(와 그 hash)는 이전과 같다
+        spec["options"]["temperature"] = sampling["temperature"]
+        spec["options"]["sampling"] = sampling
+    return spec
 
 
 def _measurement(calls):
@@ -432,6 +507,8 @@ class _RecordingClient:
             "eval_count": (response or {}).get("eval_count"),
             "done_reason": (response or {}).get("done_reason"),
         })
+        if (response or {}).get("sampling_seed") is not None:     # sampling run에만 있다(_SeededClient)
+            self.calls[-1]["sampling_seed"] = response["sampling_seed"]
         return response
 
 
@@ -1087,8 +1164,10 @@ def cmd_llm(args):
 
     tools, _ = build()
     # think는 지정한 경우에만 payload에 들어간다(auto = 넣지 않음, 이전 기록과 같은 요청).
+    sampling = sampling_settings(args)
     client = OllamaClient(args.host, args.model, {"temperature": 0},
                           chat_timeout=args.chat_timeout, think=resolve_think(getattr(args, "model_think", "auto")))
+    environment = environment_record(args.host) if getattr(args, "record_env", False) else None
     version, digest, details = A._server_details(args.host, args.model)
     document = load_gold(GOLD_PATH)
     global REFERENCE_DATE
@@ -1128,7 +1207,8 @@ def cmd_llm(args):
                     if not keep:
                         state.succeeded = reset.reset().succeeded
                 replay = _ReplayClient(client, cache, before_live=_reset_before_live)
-            recorder = _RecordingClient(replay or client)
+            seeded = _SeededClient(client, sampling, item["id"]) if sampling is not None else None
+            recorder = _RecordingClient(replay or seeded or client)
             # 기준 코드(--code-root)에는 없는 인자다. 기본값이 아닐 때만 넘긴다.
             options = {}
             if args.condition_notes:
@@ -1195,7 +1275,10 @@ def cmd_llm(args):
                                                  "semantic_reinterpretation": not args.no_semantic,
                                                  "provider": "mock", "tims_execution": "legacy",
                                                  "temperature": 0, "think": getattr(args, "model_think", "auto"),
-                                                 "isolation": args.model_state},
+                                                 "isolation": args.model_state,
+                                                 **({"temperature": sampling["temperature"], "sampling": sampling}
+                                                    if sampling is not None else {})},
+                                    **({"environment": environment} if environment is not None else {}),
                                     "run_settings": settings,
                                     "item_order": [item["id"] for item in items],
                                     "run_spec": spec, "run_spec_sha256": spec_sha,
@@ -1914,6 +1997,14 @@ def build_parser():
                      help="문항 순서: file(기본), reverse, shuffle:SEED")
     llm.add_argument("--replay-from", default=None,
                      help="이전 llm 결과의 계획 응답을 prompt hash가 같을 때 재생(나머지는 실제 호출)")
+    llm.add_argument("--temperature", type=float, default=None,
+                     help="sampling(path_repeat_001). 지정하지 않으면 기존 temperature 0 요청. --top-p·--top-k·--seed와 함께 쓴다")
+    llm.add_argument("--top-p", type=float, default=None)
+    llm.add_argument("--top-k", type=int, default=None)
+    llm.add_argument("--seed", type=int, default=None,
+                     help="회차 seed. 호출 seed는 call_seed(회차 seed, 문항 id, 호출 순번)")
+    llm.add_argument("--record-env", action="store_true",
+                     help="meta에 host GPU 이름·UUID·드라이버와 Ollama 컨테이너 GPU를 남긴다(생성에는 영향 없음)")
     rerun = sub.add_parser("rerun")
     rerun.add_argument("source")
     rerun.add_argument("--out", required=True)

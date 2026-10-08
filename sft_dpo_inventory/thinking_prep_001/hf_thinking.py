@@ -27,6 +27,28 @@ def split_thinking(raw):
     return head.split("<think>", 1)[-1].strip(), tail.strip(), True
 
 
+def chat_response(client, messages):
+    """ThinkingClient.chat 본문. ``client.sampling_call``(``{"seed", "params"}``)이 있으면 그 seed·설정으로 표본을 뽑고,
+    없으면(기본) greedy다. 기본 동작은 이전과 같다."""
+    call = getattr(client, "sampling_call", None)
+    if call:
+        result = client.generate(messages, sample=True, seed=call["seed"], sampling=call["params"])[0]
+    else:
+        result = client.generate(messages)[0]
+    client.last = result
+    if hasattr(client, "log"):
+        entry = {k: result[k] for k in ("raw_sha256", "generated_tokens", "done_reason", "think_closed")}
+        if call:
+            entry["sampling_seed"] = call["seed"]
+        client.log.append(entry)
+    response = {"message": {"content": result["content"], "thinking": result["thinking"]},
+                "prompt_eval_count": result["prompt_tokens"], "eval_count": result["generated_tokens"],
+                "done_reason": result["done_reason"]}
+    if call:
+        response["sampling_seed"] = call["seed"]
+    return response
+
+
 def load_client(*, adapter=None, revision=REVISION, max_new_tokens=MAX_NEW_TOKENS):
     from training.inference import HFClient
 
@@ -36,7 +58,7 @@ def load_client(*, adapter=None, revision=REVISION, max_new_tokens=MAX_NEW_TOKEN
             self.config["chat_template_kwargs"] = {"enable_thinking": True}
             self.last = None
 
-        def generate(self, messages, *, sample=False, num_return_sequences=1, seed=None):
+        def generate(self, messages, *, sample=False, num_return_sequences=1, seed=None, sampling=None):
             import torch
             from training.trainer_common import render_prompt
             text = render_prompt(self.tokenizer, messages, self.config)
@@ -44,7 +66,7 @@ def load_client(*, adapter=None, revision=REVISION, max_new_tokens=MAX_NEW_TOKEN
             options = dict(max_new_tokens=self.max_new_tokens, use_cache=True, pad_token_id=self.tokenizer.pad_token_id,
                            num_return_sequences=num_return_sequences)
             if sample:
-                options.update(do_sample=True, **SAMPLING)
+                options.update(do_sample=True, **(sampling or SAMPLING))
             else:
                 options.update(do_sample=False)
             if seed is not None:
@@ -70,12 +92,6 @@ def load_client(*, adapter=None, revision=REVISION, max_new_tokens=MAX_NEW_TOKEN
             return results
 
         def chat(self, messages, tools=None, **kwargs):
-            result = self.generate(messages)[0]
-            self.last = result
-            if hasattr(self, "log"):
-                self.log.append({k: result[k] for k in ("raw_sha256", "generated_tokens", "done_reason", "think_closed")})
-            return {"message": {"content": result["content"], "thinking": result["thinking"]},
-                    "prompt_eval_count": result["prompt_tokens"], "eval_count": result["generated_tokens"],
-                    "done_reason": result["done_reason"]}
+            return chat_response(self, messages)
 
     return ThinkingClient(MODEL, adapter=adapter, revision=revision, max_new_tokens=max_new_tokens, seed=42)

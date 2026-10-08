@@ -29,6 +29,25 @@ import evaluate_vendor100 as EV  # noqa: E402
 import hf_thinking as H  # noqa: E402
 
 
+def sampling_settings(args):
+    """--do-sample이면 temperature·top_p·top_k·seed가 모두 있어야 한다. 없으면 None(greedy)."""
+    values = {"temperature": args.temperature, "top_p": args.top_p, "top_k": args.top_k, "seed": args.seed}
+    if not args.do_sample:
+        if any(value is not None for value in values.values()):
+            raise SystemExit("sampling 값은 --do-sample과 함께만 쓴다")
+        return None
+    missing = [key for key, value in values.items() if value is None]
+    if missing:
+        raise SystemExit(f"--do-sample은 --temperature, --top-p, --top-k, --seed를 모두 지정해야 한다(빠짐: {missing})")
+    return {"params": {"temperature": args.temperature, "top_p": args.top_p, "top_k": args.top_k},
+            "round_seed": args.seed}
+
+
+def transformers_version():
+    import transformers
+    return transformers.__version__
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", required=True)
@@ -37,7 +56,15 @@ def main():
     parser.add_argument("--condition-check", action="store_true")
     parser.add_argument("--reference-date", type=date.fromisoformat, default=date(2026, 9, 25))
     parser.add_argument("--only", default="")
+    # sampling(path_repeat_001 PLAN.md). 주지 않으면 이전과 같은 greedy다.
+    parser.add_argument("--do-sample", action="store_true")
+    parser.add_argument("--temperature", type=float, default=None)
+    parser.add_argument("--top-p", type=float, default=None)
+    parser.add_argument("--top-k", type=int, default=None)
+    parser.add_argument("--seed", type=int, default=None, help="회차 seed. 호출 seed는 EV.call_seed(회차 seed, 문항 id, 호출 순번)")
+    parser.add_argument("--record-env", action="store_true", help="meta에 GPU·드라이버·소프트웨어 판을 남긴다(생성에는 영향 없음)")
     args = parser.parse_args()
+    sampling = sampling_settings(args)
     if ROOT in Path(args.raw_out).resolve().parents and "generated" not in Path(args.raw_out).parts:
         raise SystemExit("--raw-out은 저장소 밖이나 ignore 경로(generated)여야 한다")
 
@@ -67,11 +94,20 @@ def main():
                 clock=lambda: EV.REFERENCE_DATE, condition_check=args.condition_check,
                 execution_profile=providers.profile_for(providers.MOCK, providers.LEGACY), **options)
             raws = []
+            calls = [0]     # 문항 안 호출 순번(실패한 호출도 센다)
             original_chat = client.chat
 
-            def chat(messages, tools=None, **kwargs):
-                response = original_chat(messages, tools=tools, **kwargs)
-                raws.append(client.last)
+            def chat(messages, tools=None, item_id=item["id"], **kwargs):
+                seed = None
+                if sampling is not None:    # repair 등 문항 안의 모든 호출에 같은 설정과 seed 규칙
+                    seed = EV.call_seed(sampling["round_seed"], item_id, calls[0])
+                    client.sampling_call = {"seed": seed, "params": sampling["params"]}
+                calls[0] += 1
+                try:
+                    response = original_chat(messages, tools=tools, **kwargs)
+                finally:
+                    client.sampling_call = None
+                raws.append(client.last if seed is None else {**client.last, "sampling_seed": seed})
                 return response
             client.chat = chat
             try:
@@ -83,9 +119,11 @@ def main():
             category, checks = EV.score(item, observed)
             grounding_ok, grounding_diffs = EV.grounding_check(item, observed["grounding"])
             for index, raw in enumerate(raws):
-                raw_stream.write(json.dumps({"id": item["id"], "call": index, **{k: raw[k] for k in (
-                    "raw_text", "raw_sha256", "generated_tokens", "done_reason", "think_closed")}},
-                    ensure_ascii=False) + "\n")
+                record = {"id": item["id"], "call": index, **{k: raw[k] for k in (
+                    "raw_text", "raw_sha256", "generated_tokens", "done_reason", "think_closed")}}
+                if sampling is not None:
+                    record["sampling_seed"] = raw["sampling_seed"]
+                raw_stream.write(json.dumps(record, ensure_ascii=False) + "\n")
             rows.append({"id": item["id"], "question": item["question"], "vendor_verdict": item["vendor_verdict"],
                          "category": category, "checks": checks, "reset_ok": None,
                          "grounding_ok": grounding_ok, "grounding_diffs": grounding_diffs,
@@ -100,12 +138,17 @@ def main():
         "hf": {"model": H.MODEL, "revision": H.REVISION, "adapter": args.adapter,
                "dtype": str(next(client.policy.parameters()).dtype), "attention": client.policy.config._attn_implementation,
                "chat_template_kwargs": client.config["chat_template_kwargs"],
-               "decoding": {"do_sample": False, "max_new_tokens": H.MAX_NEW_TOKENS, "seed": 42},
+               "decoding": ({"do_sample": False, "max_new_tokens": H.MAX_NEW_TOKENS, "seed": 42} if sampling is None else
+                            {"do_sample": True, **sampling["params"], "max_new_tokens": H.MAX_NEW_TOKENS,
+                             "round_seed": sampling["round_seed"], "seed_rule": EV.SEED_RULE,
+                             "seed_application": "torch.manual_seed·cuda.manual_seed_all 직전 설정, 호출마다"}),
                "torch": torch.__version__, "cuda": torch.version.cuda, "device": device.name,
                "device_uuid": f"GPU-{device.uuid}", "load_seconds": round(load_seconds, 1),
                "peak_allocated_bytes": torch.cuda.max_memory_allocated(),
                "raw_out": str(Path(args.raw_out).resolve()),
-               "raw_out_sha256": hashlib.sha256(Path(args.raw_out).read_bytes()).hexdigest()},
+               "raw_out_sha256": hashlib.sha256(Path(args.raw_out).read_bytes()).hexdigest(),
+               **({"environment": {**EV.environment_record(), "transformers": transformers_version(),
+                                   "cudnn": torch.backends.cudnn.version()}} if args.record_env else {})},
         "planner_prompt_sha256": prompt_sha, "code_fingerprint": execution_spec.code_fingerprint(ROOT)["sha256"],
         "pipeline": {"aggregation_grounding": "flat", "condition_check": args.condition_check, "condition_notes": False,
                      "normalize_grounding": True, "semantic_reinterpretation": True, "provider": "mock",
