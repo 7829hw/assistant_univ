@@ -78,3 +78,16 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
     - the models selected later in the real pilot (SFT and final SFT+DPO).
     Register each under a new name. Never overwrite, re-tag or delete an existing Ollama model. Any other
     registration needs a new user approval.
+13. Ollama GPU check (decision 55, 2026-10-08). When the container loses its GPU, Ollama silently runs on the CPU. This
+    rule protects the execution condition only; it does not change any judgment rule.
+    - Before starting an Ollama cell (evaluation, render check, collection): `docker exec ollama nvidia-smi -L` must list
+      GPU 2 (UUID `GPU-a644de12…`). After (or during) the first item, `ollama ps` must show PROCESSOR 100% GPU
+      (`/api/ps` `size_vram == size`).
+    - During the cell, check the recorded generation rate of every item (eval_count / eval_duration; evaluation records
+      without eval_duration use eval_count / (duration_ms − load_duration_ms)). If it falls far below the same model's
+      GPU records (threshold fixed beforehand from existing records and written in the run's plan-deviation record;
+      pilot_002: 30 tok/s, `sft_dpo_inventory/pilot_002/PLAN_DEVIATIONS.md`), stop the cell at once.
+      `sft_dpo_inventory/pilot_002/ollama_gpu_guard.py` does both checks.
+    - Keep a stopped cell's output as `ABORTED_*`; never use it for baselines or judgments. Do not touch the container;
+      report. Once the cause is fixed, the cell may be measured again from the start; this replaces an invalid
+      measurement and is not a rerun. Record that and why.

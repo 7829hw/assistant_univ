@@ -238,3 +238,16 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
       - teacher를 넣으면서 새로 생긴 것: ann-e645cbc1(valid98 t11 template·family, 업체 100 016 family),
         b004-06(valid98 h27 family). b004-06·15·30·31의 업체 100 family 겹침은 결정 15로 허용된 것이다.
     - 예외로 기록하고, 업체 100 family 분리 보고(결정 15)에 이 문항들을 함께 적는다.
+
+## 2026-10-08 — Ollama GPU 사용 확인(`pilot_002`)
+
+55. (2026-10-08, 사용자) Ollama 컨테이너가 GPU를 잃으면 Ollama는 오류 없이 CPU로 돈다(aux_test E 중단, `pilot_002/aux_test/README.md`).
+    판정 규칙은 바꾸지 않고 실행 조건만 지킨다. 규칙은 `CLAUDE.md` 13번에 넣었다.
+    - Ollama 셀을 시작하기 전: `docker exec ollama nvidia-smi -L`에 GPU 2(UUID `GPU-a644de12…`)가 보여야 한다.
+      첫 문항 뒤(실제로는 첫 문항 동안 모델이 올라와 있을 때) `ollama ps`의 PROCESSOR가 100% GPU여야 한다.
+    - 측정 중: 문항마다 기록된 생성 속도를 본다. 같은 모델의 GPU 측정 기록보다 크게 낮아지면 그 셀을 즉시 멈춘다.
+      기준값은 측정 전에 기존 기록에서 정해 PLAN 이탈 기록(`pilot_002/PLAN_DEVIATIONS.md`)에 적는다.
+    - 멈춘 셀의 출력은 `ABORTED_*`로 남기고 기준값·판정에 쓰지 않는다. 컨테이너는 건드리지 않고 보고한다.
+      원인이 해소되면 그 셀을 처음부터 다시 잴 수 있다. 무효 측정을 대체하는 것이고 재실행이 아니다. 그 사실과 이유를 기록한다.
+    - 판정에 쓰인 기존 Ollama 기록(업체 100 E·B-conv, pilot_001 Ollama 셀, valid98 Ollama 셀, teacher 수집)을 기록된 생성 속도로만
+      한 번 감사한다(모델 호출 없음). 의심 셀은 보고만 하고 판정은 바꾸지 않는다. 결과: `pilot_002/ollama_gpu_audit.md`.
