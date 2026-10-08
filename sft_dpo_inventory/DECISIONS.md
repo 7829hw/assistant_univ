@@ -230,3 +230,11 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - checkpoint 선택: selection_v1(결정 46)의 grounding_ok가 가장 높은 것. 동점이면 더 이른 쪽.
     - valid98은 선택한 SFT와 최종 모델에 대해서만 보조로 잰다(결정 41).
     - `ollama create` 승인(결정 20)을 pilot_002의 SFT와 최종 모델 등록에도 적용한다. 새 이름으로 등록하고 기존 모델은 건드리지 않는다.
+54. (2026-10-08, 사용자) pilot_002 학습 데이터의 겹침 검사(`pilot_002/data/overlap.json`)에서 valid98·업체 100과 template·family 키
+    겹침이 나왔다. 데이터는 바꾸지 않고 그대로 진행한다.
+    - 질문·id 겹침은 네 셋 모두 0이고, selection_v1·aux_test_v1은 모든 키에서 0이다. batch005에서 온 겹침은 0이다.
+    - 겹침은 모두 v004 승인 corpus 문항이다.
+      - pilot_001에도 있던 것: valid98(b004-05·20·21·23), 업체 100(ann-7fae41a3·ann-f7808786, 결정 15의 b004-05).
+      - teacher를 넣으면서 새로 생긴 것: ann-e645cbc1(valid98 t11 template·family, 업체 100 016 family),
+        b004-06(valid98 h27 family). b004-06·15·30·31의 업체 100 family 겹침은 결정 15로 허용된 것이다.
+    - 예외로 기록하고, 업체 100 family 분리 보고(결정 15)에 이 문항들을 함께 적는다.
