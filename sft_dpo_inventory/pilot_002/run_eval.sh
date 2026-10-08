@@ -26,8 +26,10 @@ commit() {   # message files...
   git add "$@" && git -c user.name="Hyeongwoo Kim" -c user.email="7829hw@gmail.com" commit -q -m "$msg
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_0116EAU9dFUyCZgz7zW8W6EG" && git push -q origin geoflow/sft-dpo-t2pc >> "$HERE/runs.log" 2>&1 \
-  || die "commit/push failed: $msg"
+Claude-Session: https://claude.ai/code/session_0116EAU9dFUyCZgz7zW8W6EG" || die "commit failed: $msg"
+  # 2026-10-09: 다른 장비의 세션(path_repeat_001)이 같은 브랜치에 먼저 push해 push가 거부된다(fetch first).
+  # merge·rebase로 우회하지 않는다(CLAUDE.md). 커밋은 로컬에 쌓고 push 실패는 기록만 한다.
+  git push -q origin geoflow/sft-dpo-t2pc >> "$HERE/runs.log" 2>&1 || log "push rejected (remote ahead, not integrated): $msg"
 }
 ollama_idle() { for _ in $(seq 120); do [ "$(curl -s localhost:11434/api/ps)" = '{"models":[]}' ] && return 0; sleep 5; done; return 1; }
 gpu_record() {
