@@ -120,3 +120,79 @@
   - 측정 결과: `E.json`, `B-conv.json`
   - 비교: `comparison.json`, `compare.py`
   - 실행 기록: `runs.log`
+
+## pilot_002(2026-10-09 추가)
+
+위 표 1–3과 참고 표는 고치지 않았습니다. 이 절의 숫자는 pilot_002 판정 스크립트가 원본 기록에서 다시 센 값입니다.
+- 업체 100: `pilot_002/vendor100/judge.py` → `pilot_002/vendor100/judgment.json`(PROTOCOL_v2 판정).
+- aux_test_v1: `pilot_002/aux_test/compare_aux.py` → `pilot_002/aux_test/comparison.json`(보고만).
+- 보고서: `pilot_002/REPORT.md`.
+
+공통 조건은 위와 같습니다(prompt `87048d0c`, 기준일 2026-09-25, 조건 계층 켬, mock provider, 코드 지문 791c4a68, Ollama 0.35.1).
+- HF 셀: Qwen3-8B@b968826d BF16, `enable_thinking=True`, greedy, 생성 상한 8192.
+- Ollama 셀: Q4_K_M, think 미지정, num_predict 미지정, 문항마다 모델 내림.
+- pilot_002 Ollama 셀은 GPU 2에서 쟀고, 결정 55의 GPU 확인(100% GPU, 호출 30 tok/s 이상)을 통과했습니다.
+
+### 표 4. 업체 100: 파인튜닝 전후(pilot_001, pilot_002)
+
+| 셀 | grounding_ok | 정상 | U | 조용한 오답 | 지연 중앙값(초) | 장치 | 원본 기록 경로 |
+|---|---:|---:|---:|---:|---:|---|---|
+| HF-E(전) | 84 | 91 | 2 | 0 | 22.0 | GPU 2 | `thinking_prep_001/hf_e/HF-E_run1.json` |
+| E(전) | 79 | 84 | 3 | 1 | 10.9 | GPU 3 | `pilot_prep_003/ollama/E.json` |
+| B-conv(전) | 77 | 79 | 6 | 0 | 10.4 | GPU 3 | `pilot_prep_003/ollama/B-conv.json` |
+| pilot_001 HF-SFT | 82 | 87 | 2 | 1 | 34.2 | GPU 2 | `pilot_001/vendor100/HF-sft.json` |
+| pilot_001 HF-최종 | 86 | 90 | 4 | 0 | 28.4 | GPU 2 | `pilot_001/vendor100/HF-final.json` |
+| pilot_001 Ollama-SFT | 80 | 82 | 6 | 3 | 12.6 | GPU 2 | `pilot_001/vendor100/Ollama-sft.json` |
+| pilot_001 Ollama-최종 | 77 | 81 | 2 | 2 | 12.2 | GPU 2 | `pilot_001/vendor100/Ollama-final.json` |
+| pilot_002 HF-SFT | 85 | 91 | 1 | 0 | 27.0 | GPU 3 | `pilot_002/vendor100/HF-sft.json` |
+| pilot_002 HF-최종 | 88 | 87 | 1 | 0 | 25.1 | GPU 3 | `pilot_002/vendor100/HF-final.json` |
+| pilot_002 Ollama-SFT | 77 | 80 | 7 | 2 | 11.2 | GPU 2 | `pilot_002/vendor100/Ollama-sft.json` |
+| pilot_002 Ollama-최종 | 86 | 86 | 9 | 1 | 11.2 | GPU 2 | `pilot_002/vendor100/Ollama-final.json` |
+
+- pilot_001 행은 표 2의 값을 그대로 옮겼습니다.
+- pilot_002 모델:
+  - SFT: base + SFT adapter(checkpoint-380). Ollama 이름은 `geoflow-qwen3-8b-pilot002-sft:q4km-hfthink`(1a813e0a)입니다.
+  - 최종: base + SFT+DPO adapter(checkpoint-144). Ollama 이름은 `geoflow-qwen3-8b-pilot002-final:q4km-hfthink`(c2d10cb2)입니다.
+- 장치: HF는 결과 파일의 `meta.hf.device_uuid`입니다. Ollama는 `pilot_002/{vendor100,aux_test}/gpu_guard_*.json`과 `pilot_002/runs.log`입니다.
+  - HF-E(GPU 2)와 pilot_002 HF 셀(GPU 3)은 장치가 다릅니다.
+  - HF 경로의 GPU 2·3 출력 일치는 확인되지 않았습니다(`pilot_001_analysis/REPORT.md` e절).
+
+### 표 5. 업체 100: pilot_002 전후 비교(PROTOCOL_v2)
+
+판정과 숫자는 `pilot_002/vendor100/judgment.json`을 그대로 옮겼습니다.
+PROTOCOL_v2는 U·조용한 오답 순증 3 이상을 악화로 봅니다. pilot_001의 PROTOCOL은 1 이상이었으므로 표 3의 판정과 문구를 비교하지 않습니다.
+
+| 비교 | grounding_ok | 차이 | b / c | McNemar p | U(전→후, 새로 생긴 문항) | 조용한 오답(전→후, 새로 생긴 문항) | PROTOCOL_v2 판정 | 악화 사유 |
+|---|---|---:|---|---:|---|---|---|---|
+| HF 주: HF-E → HF-최종 | 84 → 88 | +4 | 9 / 5 | 0.42 | 2 → 1(없음) | 0 → 0 | 차이 없음 | – |
+| HF 참고: HF-E → HF-SFT | 84 → 85 | +1 | 7 / 6 | 1.00 | 2 → 1(054) | 0 → 0 | 차이 없음 | – |
+| 운영 주: E → Ollama-최종 | 79 → 86 | +7 | 12 / 5 | 0.14 | 3 → 9(016, 026, 037, 040, 041, 074, 093) | 1 → 1(100) | 악화 | U 순증 6 |
+| 운영 참고: E → Ollama-SFT | 79 → 77 | −2 | 7 / 9 | 0.80 | 3 → 7(026, 037, 040, 041, 044, 085) | 1 → 2(030, 100) | 악화 | U 순증 4 |
+
+- grounding_ok 차이는 네 비교 모두 유의하지 않았습니다(p 0.14–1.00).
+- 운영 경로의 "악화"는 U 순증 규칙 때문입니다. 운영 최종 셀은 grounding_ok가 7 늘었지만, 안전한 실패가 12 → 4로 줄고 U가 3 → 9로 늘었습니다.
+- 지연은 운영 셀에서 E 대비 1.03배(SFT·최종)로, 악화 기준(1.5배) 아래입니다.
+- 각 셀은 한 번씩만 쟀습니다.
+
+### 표 6. 보조 시험 셋 aux_test_v1(51문항, 보고만)
+
+| 셀 | grounding_ok | 정상 | U | 조용한 오답 | 지연 중앙값(초) | 장치 | 원본 기록 경로 |
+|---|---:|---:|---:|---:|---:|---|---|
+| HF-E(전) | 27 | – | – | – | 21.9 | GPU 2 | `pilot_prep_005/sets/runs/aux_test_base.json` |
+| E(전) | 29 | 32 | 3 | 5 | 13.5 | GPU 2 | `pilot_002/aux_test/E.json` |
+| B-conv(전) | 24 | 27 | 3 | 8 | 11.6 | GPU 2 | `pilot_002/aux_test/B-conv.json` |
+| pilot_002 HF-SFT | 33 | – | – | – | 30.8 | GPU 3 | `pilot_002/aux_test/HF-sft.json` |
+| pilot_002 HF-최종 | 30 | – | – | – | 29.3 | GPU 3 | `pilot_002/aux_test/HF-final.json` |
+| pilot_002 Ollama-SFT | 32 | 32 | 6 | 3 | 12.0 | GPU 2 | `pilot_002/aux_test/Ollama-sft.json` |
+| pilot_002 Ollama-최종 | 29 | 31 | 4 | 5 | 11.0 | GPU 2 | `pilot_002/aux_test/Ollama-final.json` |
+
+- aux_test_v1은 pilot_002 때 만든 셋이라 pilot_001 행이 없습니다.
+- HF 셀은 `pilot_prep_005/sets/eval_set.py` 출력입니다. 호출·최종 답 기록이 없어 정상·U·조용한 오답을 셀 수 없습니다(–).
+- 비교(보고만):
+
+| 비교 | grounding_ok | b / c | p | U | 조용한 오답 |
+|---|---|---|---:|---|---|
+| HF-E → HF-최종 | 27 → 30 | 7 / 4 | 0.55 | – | – |
+| HF-E → HF-SFT | 27 → 33 | 10 / 4 | 0.18 | – | – |
+| E → Ollama-최종 | 29 → 29 | 9 / 9 | 1.00 | 3 → 4 | 5 → 5 |
+| E → Ollama-SFT | 29 → 32 | 10 / 7 | 0.63 | 3 → 6 | 5 → 3 |
