@@ -276,3 +276,14 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
       - 학습, 데이터 설계, checkpoint 선택, trace 선택, annotation 후보에 쓰지 않는다(`CLAUDE.md` 8번, 결정 36).
     - 결정 43과의 관계: 결정 43은 미확인 실험을 두 개로 제한했다. 이 측정은 그 두 실험(이미 끝남, `pilot_001_analysis/REPORT.md` 6절)에
       더하는 별도 실험이며, 이 결정으로 따로 승인한다. 결정 43의 두 실험과 그 결론은 바꾸지 않는다.
+
+## 2026-10-09 — Partial Grounding A/B(`evaluation/partial_grounding/ab_p0`, branch `geoflow/partial-grounding`)
+
+57. (2026-10-09, 사용자) Full vs Partial-P0 출력 contract A/B를 Ollama `qwen3:8b`(base, cell E 조건)로 업체 100에서 잰다.
+    계획은 `evaluation/partial_grounding/ab_p0/PLAN.md`다.
+    - 반복: arm마다 greedy 1회와 sampling 5회(path_repeat_001과 같은 seed·설정). 같은 회차의 두 arm은 같은 seed.
+    - 장비 절차는 결정 56과 같다(`path_repeat_001/PLAN.md` 4절, `cell_guard.py`).
+    - 업체 100 사용 범위: 이 측정에 한한 예외다(결정 56과 같은 대상 규칙). PROTOCOL 문서는 고치지 않는다.
+    - 결과의 쓰임: interface 진단으로만 쓴다. 판정, 기준값(E 79, HF-E 84) 교체, 학습, checkpoint 선택, annotation 후보에
+      쓰지 않는다(`CLAUDE.md` 8번).
+    - parser/composer는 `9cb8a39`로 고정하고, fingerprint 고정 테스트 3건은 모델 실험으로 동작을 확정한 뒤 한 번만 갱신한다.
