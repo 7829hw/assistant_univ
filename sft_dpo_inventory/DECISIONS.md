@@ -290,3 +290,25 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - 이유: 운영 경로 주 비교(E → Ollama-최종)가 PROTOCOL_v2에서 "악화"(U 순증 6, 3 → 9)였다(`pilot_002/vendor100/judgment.json`).
     - 등록한 모델(`geoflow-qwen3-8b-pilot002-sft:q4km-hfthink`, `geoflow-qwen3-8b-pilot002-final:q4km-hfthink`)과 adapter는 분석용으로 남긴다.
       지우거나 덮어쓰지 않는다.
+
+## 2026-10-09 — pilot_002 결과 진단(`conversion_diag`, `selection_decline`, `pilot_002_diag`)
+
+59. (2026-10-09, 사용자) 다음 작업은 학습 없는 진단이다. 업체 100과 aux_test_v1은 쓰지 않고 개발 셋(selection_v1, valid98)만 쓴다.
+    prompt와 `SEMANTIC_CODE` 파일은 바꾸지 않는다(지문 `791c4a68…` 유지).
+60. (2026-10-09, 사용자) 다음 pilot의 PROTOCOL(v3)에 중단 규칙을 넣는다.
+    - 선택 셋에서 가장 좋은 checkpoint의 grounding_ok가 base보다 낮으면, 학습 모델 등록과 업체 100 평가 전에 멈춘다.
+    - 이번에는 결정으로만 기록한다. PROTOCOL_v2는 고치지 않는다.
+61. (2026-10-09, 사용자) 진단용 Ollama 모델 등록(`ollama create`)을 승인한다. 결정 20의 범위에 더하는 것이다.
+    - 대상: 공식 qwen3:8b에 LoRA adapter를 얹은 모델, Q8_0 변환본, TEMPLATE만 바꾼 공식 모델.
+    - 모두 새 이름(`geoflow-diag-…`)으로 등록한다. 기존 모델은 덮어쓰거나 지우지 않는다.
+62. (2026-10-09, 사용자) pilot_002 U 검토 결과(`pilot_002/u_review/U_REVIEW.md`). 사용자가 Claude의 검토 의견을 확인했다.
+    - Ollama-최종 U 9문항(013, 016, 026, 037, 040, 041, 054, 074, 093)의 U 판정은 모두 맞다.
+      - 실차 통행량 4문항(013, 037, 054, 074)의 gold는 맞다. 통행량에서 "실차"는 상태 조건(`taxi_status=occupied`)이다.
+      - 093의 gold는 "부산 안"을 장소 두 개로 적은 옛 표기다. Ollama-최종 출력은 어느 표기로 보아도 틀렸으므로 판정은 같다.
+    - 관찰 1: 실차 통행량 오독은 HF-최종(037, 054, 074)과 base E(013, 054)에도 있다. HF-최종은 출발·도착 역할이 없어서 안전하게 멈췄다.
+    - 관찰 2: 같은 adapter에서 dimension_target이 Ollama에서만 빠진 문항은 016, 026, 040, 044, 085다.
+    - `CLAUDE.md` 2번 문구(14번 규칙의 rebase만 예외)는 그대로 둔다.
+63. (2026-10-09, 사용자) 진단에 모델 호출 없는 확인 세 가지를 더한다.
+    - E-1: 비교하는 Ollama 모델들에 실제로 적용된 파라미터가 같은지 `/api/show`로 확인한다.
+    - E-2: 계약 표기(한 장소 od_role both + dimension_target both)가 어떤 조건에서 실행되고 어떤 조건에서 멈추는지 확인한다.
+    - E-3: "실차 통행량" 오독이 selection_v1·valid98 기록에도 있는지 확인한다. 결정 36에 따라 업체 100 문항은 근거로 쓰지 않는다.
