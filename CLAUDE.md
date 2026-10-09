@@ -29,8 +29,8 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
 2. After each work unit, in this order: verify → review the diff and the staged diff → make a logical
    commit → `git push origin geoflow/sft-dpo-t2pc` → report the SHA.
    - The first push sets upstream with `-u`.
-   - No force push, merge/rebase or history rewrite.
-   - If a push fails, report the cause; do not work around it.
+   - No force push, merge/rebase or history rewrite, except the rebase that rule 14 allows for a rejected push.
+   - If a push fails, follow rule 14. Otherwise report the cause; do not work around it.
 3. Commit all data (decision 33, 2026-10-07): generated training/evaluation data and raw outputs (corpora, thinking
    and teacher traces, evaluation raw outputs under `training/generated/`, summaries). Never commit model/adapter
    weights, checkpoints, merged models, GGUF files, caches or temporary files. Never use `git add -f`; if data is
@@ -91,3 +91,10 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
     - Keep a stopped cell's output as `ABORTED_*`; never use it for baselines or judgments. Do not touch the container;
       report. Once the cause is fixed, the cell may be measured again from the start; this replaces an invalid
       measurement and is not a rerun. Record that and why.
+14. Several sessions on one branch (decision 57, 2026-10-09). This rule takes precedence over the "no merge/rebase" part of rule 2.
+    - If a push is rejected, `git fetch` and compare the files changed by the remote-only commits with the files changed by the
+      local-only commits (`git diff --name-only <merge-base> origin/<branch>` vs `... HEAD`).
+    - If no file is in both lists, rebase the local commits onto the remote branch, then push. Never force push.
+    - If any file is in both lists, or the rebase hits a conflict, stop (abort the rebase) and report.
+    - Before adding a decision, fetch the remote and use the next free number in `sft_dpo_inventory/DECISIONS.md`.
+    - Never edit commits or files that another session pushed.

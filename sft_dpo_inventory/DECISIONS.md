@@ -276,3 +276,17 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
       - 학습, 데이터 설계, checkpoint 선택, trace 선택, annotation 후보에 쓰지 않는다(`CLAUDE.md` 8번, 결정 36).
     - 결정 43과의 관계: 결정 43은 미확인 실험을 두 개로 제한했다. 이 측정은 그 두 실험(이미 끝남, `pilot_001_analysis/REPORT.md` 6절)에
       더하는 별도 실험이며, 이 결정으로 따로 승인한다. 결정 43의 두 실험과 그 결론은 바꾸지 않는다.
+
+## 2026-10-09 — 같은 브랜치의 여러 세션, pilot_002 처리
+
+57. (2026-10-09, 사용자) 같은 브랜치를 여러 세션이 함께 쓸 때의 규칙. `CLAUDE.md` 14번에 넣었고, 2번의 "merge/rebase 금지"보다 우선한다.
+    - push가 거부되면 `git fetch`로 원격을 받고, 원격에만 있는 커밋과 로컬에만 있는 커밋이 고친 파일 목록을 비교한다.
+    - 겹치는 파일이 하나도 없으면 로컬 커밋을 원격 위로 rebase한 뒤 push한다. force push는 하지 않는다.
+    - 겹치는 파일이 있거나 rebase 중 충돌이 나면 멈추고 보고한다.
+    - 결정을 추가하기 전에는 원격을 받아 이 문서에서 다음 빈 번호를 확인하고 쓴다.
+    - 첫 적용: pilot_002 로컬 커밋 14개를 `d0ac84a`(path_repeat_001) 위로 rebase했다. 겹친 파일 0, 주요 결과 sha256·지문·전체 테스트 확인
+      (`pilot_002/rebase_20261009.md`).
+58. (2026-10-09, 사용자) pilot_002의 SFT와 최종 모델은 채택하지 않는다.
+    - 이유: 운영 경로 주 비교(E → Ollama-최종)가 PROTOCOL_v2에서 "악화"(U 순증 6, 3 → 9)였다(`pilot_002/vendor100/judgment.json`).
+    - 등록한 모델(`geoflow-qwen3-8b-pilot002-sft:q4km-hfthink`, `geoflow-qwen3-8b-pilot002-final:q4km-hfthink`)과 adapter는 분석용으로 남긴다.
+      지우거나 덮어쓰지 않는다.
