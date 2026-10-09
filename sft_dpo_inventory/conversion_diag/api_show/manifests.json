@@ -1,0 +1,189 @@
+{
+ "qwen3:8b": {
+  "manifest_sha256": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
+  "layers": {
+   "model": [
+    {
+     "digest": "sha256:a3de86cd1c132c822487ededd47a324c50491393e6565cd14bafa40d0b8e686f",
+     "size": 5225374496
+    }
+   ],
+   "template": [
+    {
+     "digest": "sha256:ae370d884f108d16e7cc8fd5259ebc5773a0afa6e078b11f4ed7e39a27e0dfc4",
+     "size": 1723,
+     "content": "\n{{- $lastUserIdx := -1 -}}\n{{- range $idx, $msg := .Messages -}}\n{{- if eq $msg.Role \"user\" }}{{ $lastUserIdx = $idx }}{{ end -}}\n{{- end }}\n{{- if or .System .Tools }}<|im_start|>system\n{{ if .System }}\n{{ .System }}\n{{- end }}\n{{- if .Tools }}\n\n# Tools\n\nYou may call one or more functions to assist with the user query.\n\nYou are provided with function signatures within <tools></tools> XML tags:\n<tools>\n{{- range .Tools }}\n{\"type\": \"function\", \"function\": {{ .Function }}}\n{{- end }}\n</tools>\n\nFor each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:\n<tool_call>\n{\"name\": <function-name>, \"arguments\": <args-json-object>}\n</tool_call>\n{{- end -}}\n<|im_end|>\n{{ end }}\n{{- range $i, $_ := .Messages }}\n{{- $last := eq (len (slice $.Messages $i)) 1 -}}\n{{- if eq .Role \"user\" }}<|im_start|>user\n{{ .Content }}\n{{- if and $.IsThinkSet (eq $i $lastUserIdx) }}\n   {{- if $.Think -}}\n      {{- \" \"}}/think\n   {{- else -}}\n      {{- \" \"}}/no_think\n   {{- end -}}\n{{- end }}<|im_end|>\n{{ else if eq .Role \"assistant\" }}<|im_start|>assistant\n{{ if (and $.IsThinkSet (and .Thinking (or $last (gt $i $lastUserIdx)))) -}}\n<think>{{ .Thinking }}</think>\n{{ end -}}\n{{ if .Content }}{{ .Content }}\n{{- else if .ToolCalls }}<tool_call>\n{{ range .ToolCalls }}{\"name\": \"{{ .Function.Name }}\", \"arguments\": {{ .Function.Arguments }}}\n{{ end }}</tool_call>\n{{- end }}{{ if not $last }}<|im_end|>\n{{ end }}\n{{- else if eq .Role \"tool\" }}<|im_start|>user\n<tool_response>\n{{ .Content }}\n</tool_response><|im_end|>\n{{ end }}\n{{- if and (ne .Role \"assistant\") $last }}<|im_start|>assistant\n{{ if and $.IsThinkSet (not $.Think) -}}\n<think>\n\n</think>\n\n{{ end -}}\n{{ end }}\n{{- end }}"
+    }
+   ],
+   "license": [
+    {
+     "digest": "sha256:d18a5cc71b84bc4af394a31116bd3932b42241de70c77d2b76d69a314ec8aa12",
+     "size": 11338
+    }
+   ],
+   "params": [
+    {
+     "digest": "sha256:cff3f395ef3756ab63e58b0ad1b32bb6f802905cae1472e6a12034e4246fbbdb",
+     "size": 120,
+     "content": "{\"repeat_penalty\":1,\"stop\":[\"\\u003c|im_start|\\u003e\",\"\\u003c|im_end|\\u003e\"],\"temperature\":0.6,\"top_k\":20,\"top_p\":0.95}\n"
+    }
+   ]
+  }
+ },
+ "geoflow-qwen3-8b-b968826d-base:q4km-hfthink": {
+  "manifest_sha256": "ab29de1974dfe2a81da3706a8423a7b88e9e93a9cab93854c79e3259695116c4",
+  "layers": {
+   "model": [
+    {
+     "digest": "sha256:f060d7cbb5a2d45470b29af3df3d60662036f0fa97f851b63f7a55bb25935154",
+     "size": 5027784064
+    }
+   ],
+   "template": [
+    {
+     "digest": "sha256:e38a19eb4af49271e2b67e180fcc659f5dc31cb9f3493b36be63a333f7bd2634",
+     "size": 565,
+     "content": "{{- if .System }}<|im_start|>system\n{{ .System }}<|im_end|>\n{{ end }}\n{{- range $i, $_ := .Messages }}\n{{- $last := eq (len (slice $.Messages $i)) 1 -}}\n{{- if eq .Role \"user\" }}<|im_start|>user\n{{ .Content }}<|im_end|>\n{{ else if eq .Role \"assistant\" }}<|im_start|>assistant\n{{ if and $last .Thinking }}<think>\n{{ .Thinking }}\n</think>\n\n{{ end }}{{ .Content }}{{ if not $last }}<|im_end|>\n{{ end }}\n{{- end }}\n{{- if and (ne .Role \"assistant\") $last }}<|im_start|>assistant\n{{ if and $.IsThinkSet (not $.Think) }}<think>\n\n</think>\n\n{{ end }}\n{{- end }}\n{{- end }}\n"
+    }
+   ],
+   "params": [
+    {
+     "digest": "sha256:cff3f395ef3756ab63e58b0ad1b32bb6f802905cae1472e6a12034e4246fbbdb",
+     "size": 120,
+     "content": "{\"repeat_penalty\":1,\"stop\":[\"\\u003c|im_start|\\u003e\",\"\\u003c|im_end|\\u003e\"],\"temperature\":0.6,\"top_k\":20,\"top_p\":0.95}\n"
+    }
+   ]
+  }
+ },
+ "geoflow-qwen3-8b-pilot002-sft:q4km-hfthink": {
+  "manifest_sha256": "1a813e0a62488f1fc4261b2fbd42c5a6febb1ff37bf65c16651078ace3e44038",
+  "layers": {
+   "model": [
+    {
+     "digest": "sha256:8cda8c9565faea3744ae7338542b584a178c0935f0f83c24ccd8ad2cd3271d8b",
+     "size": 5027783584
+    }
+   ],
+   "template": [
+    {
+     "digest": "sha256:e38a19eb4af49271e2b67e180fcc659f5dc31cb9f3493b36be63a333f7bd2634",
+     "size": 565,
+     "content": "{{- if .System }}<|im_start|>system\n{{ .System }}<|im_end|>\n{{ end }}\n{{- range $i, $_ := .Messages }}\n{{- $last := eq (len (slice $.Messages $i)) 1 -}}\n{{- if eq .Role \"user\" }}<|im_start|>user\n{{ .Content }}<|im_end|>\n{{ else if eq .Role \"assistant\" }}<|im_start|>assistant\n{{ if and $last .Thinking }}<think>\n{{ .Thinking }}\n</think>\n\n{{ end }}{{ .Content }}{{ if not $last }}<|im_end|>\n{{ end }}\n{{- end }}\n{{- if and (ne .Role \"assistant\") $last }}<|im_start|>assistant\n{{ if and $.IsThinkSet (not $.Think) }}<think>\n\n</think>\n\n{{ end }}\n{{- end }}\n{{- end }}\n"
+    }
+   ],
+   "params": [
+    {
+     "digest": "sha256:cff3f395ef3756ab63e58b0ad1b32bb6f802905cae1472e6a12034e4246fbbdb",
+     "size": 120,
+     "content": "{\"repeat_penalty\":1,\"stop\":[\"\\u003c|im_start|\\u003e\",\"\\u003c|im_end|\\u003e\"],\"temperature\":0.6,\"top_k\":20,\"top_p\":0.95}\n"
+    }
+   ]
+  }
+ },
+ "geoflow-qwen3-8b-pilot002-final:q4km-hfthink": {
+  "manifest_sha256": "c2d10cb20788a929b4e80fdec064cbb788fe8540ec1b739bf6fbdd67c2202d44",
+  "layers": {
+   "model": [
+    {
+     "digest": "sha256:ab359d09e09d25543b4f7f872a566ca0c264c6fb276d838eeb4ac5c23f0d74a4",
+     "size": 5027783584
+    }
+   ],
+   "template": [
+    {
+     "digest": "sha256:e38a19eb4af49271e2b67e180fcc659f5dc31cb9f3493b36be63a333f7bd2634",
+     "size": 565,
+     "content": "{{- if .System }}<|im_start|>system\n{{ .System }}<|im_end|>\n{{ end }}\n{{- range $i, $_ := .Messages }}\n{{- $last := eq (len (slice $.Messages $i)) 1 -}}\n{{- if eq .Role \"user\" }}<|im_start|>user\n{{ .Content }}<|im_end|>\n{{ else if eq .Role \"assistant\" }}<|im_start|>assistant\n{{ if and $last .Thinking }}<think>\n{{ .Thinking }}\n</think>\n\n{{ end }}{{ .Content }}{{ if not $last }}<|im_end|>\n{{ end }}\n{{- end }}\n{{- if and (ne .Role \"assistant\") $last }}<|im_start|>assistant\n{{ if and $.IsThinkSet (not $.Think) }}<think>\n\n</think>\n\n{{ end }}\n{{- end }}\n{{- end }}\n"
+    }
+   ],
+   "params": [
+    {
+     "digest": "sha256:cff3f395ef3756ab63e58b0ad1b32bb6f802905cae1472e6a12034e4246fbbdb",
+     "size": 120,
+     "content": "{\"repeat_penalty\":1,\"stop\":[\"\\u003c|im_start|\\u003e\",\"\\u003c|im_end|\\u003e\"],\"temperature\":0.6,\"top_k\":20,\"top_p\":0.95}\n"
+    }
+   ]
+  }
+ },
+ "geoflow-diag-qwen3-8b-official-hftmpl:q4km": {
+  "manifest_sha256": "f83b28a9a4567285857b0834a1a27b54cb18b4c86f0c2c2fbeffae20cc80ab5b",
+  "layers": {
+   "model": [
+    {
+     "digest": "sha256:a3de86cd1c132c822487ededd47a324c50491393e6565cd14bafa40d0b8e686f",
+     "size": 5225374496
+    }
+   ],
+   "license": [
+    {
+     "digest": "sha256:d18a5cc71b84bc4af394a31116bd3932b42241de70c77d2b76d69a314ec8aa12",
+     "size": 11338
+    }
+   ],
+   "template": [
+    {
+     "digest": "sha256:e38a19eb4af49271e2b67e180fcc659f5dc31cb9f3493b36be63a333f7bd2634",
+     "size": 565,
+     "content": "{{- if .System }}<|im_start|>system\n{{ .System }}<|im_end|>\n{{ end }}\n{{- range $i, $_ := .Messages }}\n{{- $last := eq (len (slice $.Messages $i)) 1 -}}\n{{- if eq .Role \"user\" }}<|im_start|>user\n{{ .Content }}<|im_end|>\n{{ else if eq .Role \"assistant\" }}<|im_start|>assistant\n{{ if and $last .Thinking }}<think>\n{{ .Thinking }}\n</think>\n\n{{ end }}{{ .Content }}{{ if not $last }}<|im_end|>\n{{ end }}\n{{- end }}\n{{- if and (ne .Role \"assistant\") $last }}<|im_start|>assistant\n{{ if and $.IsThinkSet (not $.Think) }}<think>\n\n</think>\n\n{{ end }}\n{{- end }}\n{{- end }}\n"
+    }
+   ],
+   "params": [
+    {
+     "digest": "sha256:cff3f395ef3756ab63e58b0ad1b32bb6f802905cae1472e6a12034e4246fbbdb",
+     "size": 120,
+     "content": "{\"repeat_penalty\":1,\"stop\":[\"\\u003c|im_start|\\u003e\",\"\\u003c|im_end|\\u003e\"],\"temperature\":0.6,\"top_k\":20,\"top_p\":0.95}\n"
+    }
+   ]
+  }
+ },
+ "geoflow-diag-qwen3-8b-b968826d-base:q8_0-hfthink": {
+  "manifest_sha256": "3c3843ae15ae6afa378a1ee6b65a3da5c2f854d7e17cdbed94a869f96077f9dc",
+  "layers": {
+   "model": [
+    {
+     "digest": "sha256:6f7c42fd463f03a3cb3e1d96d69442698efa3b4e4014d52e23347174de42bd86",
+     "size": 8709518720
+    }
+   ],
+   "template": [
+    {
+     "digest": "sha256:e38a19eb4af49271e2b67e180fcc659f5dc31cb9f3493b36be63a333f7bd2634",
+     "size": 565,
+     "content": "{{- if .System }}<|im_start|>system\n{{ .System }}<|im_end|>\n{{ end }}\n{{- range $i, $_ := .Messages }}\n{{- $last := eq (len (slice $.Messages $i)) 1 -}}\n{{- if eq .Role \"user\" }}<|im_start|>user\n{{ .Content }}<|im_end|>\n{{ else if eq .Role \"assistant\" }}<|im_start|>assistant\n{{ if and $last .Thinking }}<think>\n{{ .Thinking }}\n</think>\n\n{{ end }}{{ .Content }}{{ if not $last }}<|im_end|>\n{{ end }}\n{{- end }}\n{{- if and (ne .Role \"assistant\") $last }}<|im_start|>assistant\n{{ if and $.IsThinkSet (not $.Think) }}<think>\n\n</think>\n\n{{ end }}\n{{- end }}\n{{- end }}\n"
+    }
+   ],
+   "params": [
+    {
+     "digest": "sha256:cff3f395ef3756ab63e58b0ad1b32bb6f802905cae1472e6a12034e4246fbbdb",
+     "size": 120,
+     "content": "{\"repeat_penalty\":1,\"stop\":[\"\\u003c|im_start|\\u003e\",\"\\u003c|im_end|\\u003e\"],\"temperature\":0.6,\"top_k\":20,\"top_p\":0.95}\n"
+    }
+   ]
+  }
+ },
+ "geoflow-diag-qwen3-8b-pilot002-final:q8_0-hfthink": {
+  "manifest_sha256": "b608abf0337a19797de53a1ef6932aa525c3f4d7031cf35036925809b9c64b49",
+  "layers": {
+   "model": [
+    {
+     "digest": "sha256:47ba910c75d96e3d533676e863cf65ffa91be228972e1bbcf52e1e2800d84bb2",
+     "size": 8709518240
+    }
+   ],
+   "template": [
+    {
+     "digest": "sha256:e38a19eb4af49271e2b67e180fcc659f5dc31cb9f3493b36be63a333f7bd2634",
+     "size": 565,
+     "content": "{{- if .System }}<|im_start|>system\n{{ .System }}<|im_end|>\n{{ end }}\n{{- range $i, $_ := .Messages }}\n{{- $last := eq (len (slice $.Messages $i)) 1 -}}\n{{- if eq .Role \"user\" }}<|im_start|>user\n{{ .Content }}<|im_end|>\n{{ else if eq .Role \"assistant\" }}<|im_start|>assistant\n{{ if and $last .Thinking }}<think>\n{{ .Thinking }}\n</think>\n\n{{ end }}{{ .Content }}{{ if not $last }}<|im_end|>\n{{ end }}\n{{- end }}\n{{- if and (ne .Role \"assistant\") $last }}<|im_start|>assistant\n{{ if and $.IsThinkSet (not $.Think) }}<think>\n\n</think>\n\n{{ end }}\n{{- end }}\n{{- end }}\n"
+    }
+   ],
+   "params": [
+    {
+     "digest": "sha256:cff3f395ef3756ab63e58b0ad1b32bb6f802905cae1472e6a12034e4246fbbdb",
+     "size": 120,
+     "content": "{\"repeat_penalty\":1,\"stop\":[\"\\u003c|im_start|\\u003e\",\"\\u003c|im_end|\\u003e\"],\"temperature\":0.6,\"top_k\":20,\"top_p\":0.95}\n"
+    }
+   ]
+  }
+ }
+}

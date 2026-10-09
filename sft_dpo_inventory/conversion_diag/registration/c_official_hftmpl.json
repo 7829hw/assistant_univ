@@ -1,0 +1,49 @@
+{
+ "model": "geoflow-diag-qwen3-8b-official-hftmpl:q4km",
+ "digest": "f83b28a9a4567285857b0834a1a27b54cb18b4c86f0c2c2fbeffae20cc80ab5b",
+ "details": {
+  "parent_model": "qwen3:8b",
+  "format": "gguf",
+  "family": "qwen3",
+  "families": [
+   "qwen3"
+  ],
+  "parameter_size": "8.2B",
+  "quantization_level": "Q4_K_M",
+  "context_length": 40960,
+  "embedding_length": 4096
+ },
+ "ollama_version": "0.35.1",
+ "template_kind": "hf",
+ "sources": {
+  "from": {
+   "model": "qwen3:8b",
+   "digest": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41"
+  }
+ },
+ "modelfile": "FROM qwen3:8b\nTEMPLATE \"\"\"{{- if .System }}<|im_start|>system\n{{ .System }}<|im_end|>\n{{ end }}\n{{- range $i, $_ := .Messages }}\n{{- $last := eq (len (slice $.Messages $i)) 1 -}}\n{{- if eq .Role \"user\" }}<|im_start|>user\n{{ .Content }}<|im_end|>\n{{ else if eq .Role \"assistant\" }}<|im_start|>assistant\n{{ if and $last .Thinking }}<think>\n{{ .Thinking }}\n</think>\n\n{{ end }}{{ .Content }}{{ if not $last }}<|im_end|>\n{{ end }}\n{{- end }}\n{{- if and (ne .Role \"assistant\") $last }}<|im_start|>assistant\n{{ if and $.IsThinkSet (not $.Think) }}<think>\n\n</think>\n\n{{ end }}\n{{- end }}\n{{- end }}\n\"\"\"\nPARAMETER stop \"<|im_start|>\"\nPARAMETER stop \"<|im_end|>\"\nPARAMETER temperature 0.6\nPARAMETER top_k 20\nPARAMETER top_p 0.95\nPARAMETER repeat_penalty 1\n",
+ "template_sha256": "87a2728cb8dc9fe424d624542f6060ec05a1d285ebbec578bb078900e33396b5",
+ "show_template_equals_official": false,
+ "show_template_equals_hf": false,
+ "show_parameters": "repeat_penalty                 1\nstop                           \"<|im_start|>\"\nstop                           \"<|im_end|>\"\ntemperature                    0.6\ntop_k                          20\ntop_p                          0.95",
+ "show_parameters_equal_E": true,
+ "capabilities": [
+  "tools",
+  "thinking",
+  "completion"
+ ],
+ "method": "POST /api/blobs + POST /api/create (equivalent of ollama create)",
+ "existing_models_untouched": [
+  "gemma4:12b",
+  "gemma4:e4b",
+  "geoflow-qwen3-8b-b968826d-base:q4km-hfthink",
+  "geoflow-qwen3-8b-pilot001-final:q4km-hfthink",
+  "geoflow-qwen3-8b-pilot001-sft:q4km-hfthink",
+  "geoflow-qwen3-8b-pilot002-final:q4km-hfthink",
+  "geoflow-qwen3-8b-pilot002-sft:q4km-hfthink",
+  "qwen3.5:9b",
+  "qwen3.8:27b",
+  "qwen3:8b"
+ ],
+ "registered_at": "2026-10-09T12:29:22.298274+09:00"
+}

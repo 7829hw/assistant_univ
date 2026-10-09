@@ -1,0 +1,51 @@
+{
+ "model": "geoflow-diag-qwen3-8b-pilot002-final:q8_0-hfthink",
+ "digest": "b608abf0337a19797de53a1ef6932aa525c3f4d7031cf35036925809b9c64b49",
+ "details": {
+  "parent_model": "qwen3-8b-pilot002-final-Q8_0.gguf",
+  "format": "gguf",
+  "family": "qwen3",
+  "families": [
+   "qwen3"
+  ],
+  "parameter_size": "8.2B",
+  "quantization_level": "Q8_0",
+  "context_length": 40960,
+  "embedding_length": 4096
+ },
+ "ollama_version": "0.35.1",
+ "template_kind": "hf",
+ "sources": {
+  "gguf": {
+   "path": "/data/hwkim/sftdpo_work/gguf/diag/qwen3-8b-pilot002-final-Q8_0.gguf",
+   "sha256": "47ba910c75d96e3d533676e863cf65ffa91be228972e1bbcf52e1e2800d84bb2"
+  }
+ },
+ "modelfile": "FROM qwen3-8b-pilot002-final-Q8_0.gguf\nTEMPLATE \"\"\"{{- if .System }}<|im_start|>system\n{{ .System }}<|im_end|>\n{{ end }}\n{{- range $i, $_ := .Messages }}\n{{- $last := eq (len (slice $.Messages $i)) 1 -}}\n{{- if eq .Role \"user\" }}<|im_start|>user\n{{ .Content }}<|im_end|>\n{{ else if eq .Role \"assistant\" }}<|im_start|>assistant\n{{ if and $last .Thinking }}<think>\n{{ .Thinking }}\n</think>\n\n{{ end }}{{ .Content }}{{ if not $last }}<|im_end|>\n{{ end }}\n{{- end }}\n{{- if and (ne .Role \"assistant\") $last }}<|im_start|>assistant\n{{ if and $.IsThinkSet (not $.Think) }}<think>\n\n</think>\n\n{{ end }}\n{{- end }}\n{{- end }}\n\"\"\"\nPARAMETER stop \"<|im_start|>\"\nPARAMETER stop \"<|im_end|>\"\nPARAMETER temperature 0.6\nPARAMETER top_k 20\nPARAMETER top_p 0.95\nPARAMETER repeat_penalty 1\n",
+ "template_sha256": "a55ee1b1660128b7098723e0abcd92caa0788061051c62d51cbe87d9cf1974d8",
+ "show_template_equals_official": false,
+ "show_template_equals_hf": false,
+ "show_parameters": "repeat_penalty                 1\nstop                           \"<|im_start|>\"\nstop                           \"<|im_end|>\"\ntemperature                    0.6\ntop_k                          20\ntop_p                          0.95",
+ "show_parameters_equal_E": true,
+ "capabilities": [
+  "tools",
+  "thinking",
+  "completion"
+ ],
+ "method": "POST /api/blobs + POST /api/create (equivalent of ollama create)",
+ "existing_models_untouched": [
+  "gemma4:12b",
+  "gemma4:e4b",
+  "geoflow-diag-qwen3-8b-b968826d-base:q8_0-hfthink",
+  "geoflow-diag-qwen3-8b-official-hftmpl:q4km",
+  "geoflow-qwen3-8b-b968826d-base:q4km-hfthink",
+  "geoflow-qwen3-8b-pilot001-final:q4km-hfthink",
+  "geoflow-qwen3-8b-pilot001-sft:q4km-hfthink",
+  "geoflow-qwen3-8b-pilot002-final:q4km-hfthink",
+  "geoflow-qwen3-8b-pilot002-sft:q4km-hfthink",
+  "qwen3.5:9b",
+  "qwen3.8:27b",
+  "qwen3:8b"
+ ],
+ "registered_at": "2026-10-09T12:29:59.015415+09:00"
+}
