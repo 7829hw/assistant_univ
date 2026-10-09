@@ -158,14 +158,30 @@ def sampling_settings(args):
     values = {"temperature": getattr(args, "temperature", None), "top_p": getattr(args, "top_p", None),
               "top_k": getattr(args, "top_k", None), "seed": getattr(args, "seed", None)}
     if all(value is None for value in values.values()):
+        if extra_sampling_options(args):
+            raise SystemExit("--min-p 등 sampling 값은 --temperature·--top-p·--top-k·--seed와 함께만 쓴다")
         return None
     missing = [key for key, value in values.items() if value is None]
     if missing:
         raise SystemExit(f"sampling은 --temperature, --top-p, --top-k, --seed를 모두 지정해야 한다(빠짐: {missing})")
     if getattr(args, "replay_from", None):
         raise SystemExit("sampling과 --replay-from은 함께 쓰지 않는다")
-    return {"temperature": values["temperature"], "top_p": values["top_p"], "top_k": values["top_k"],
-            "round_seed": values["seed"], "seed_rule": SEED_RULE}
+    sampling = {"temperature": values["temperature"], "top_p": values["top_p"], "top_k": values["top_k"],
+                "round_seed": values["seed"], "seed_rule": SEED_RULE}
+    extra = extra_sampling_options(args)
+    if extra:     # calibration_001: 명시한 값만 요청 options에 더한다. 주지 않으면 명세(와 hash)는 이전과 같다
+        sampling["extra_options"] = extra
+    return sampling
+
+
+#: calibration_001 PLAN.md: Ollama options로 명시적으로 보내는 그 밖의 sampling 값(인자 이름 → options 키).
+EXTRA_SAMPLING_OPTIONS = {"min_p": "min_p", "repeat_penalty": "repeat_penalty",
+                          "presence_penalty": "presence_penalty", "frequency_penalty": "frequency_penalty"}
+
+
+def extra_sampling_options(args):
+    return {key: getattr(args, name) for name, key in EXTRA_SAMPLING_OPTIONS.items()
+            if getattr(args, name, None) is not None}
 
 
 class _SeededClient:
@@ -185,7 +201,8 @@ class _SeededClient:
         seed = call_seed(self.sampling["round_seed"], self.item_id, self.calls)
         self.calls += 1
         self.client.options = {"temperature": self.sampling["temperature"], "top_p": self.sampling["top_p"],
-                               "top_k": self.sampling["top_k"], "seed": seed}
+                               "top_k": self.sampling["top_k"], "seed": seed,
+                               **self.sampling.get("extra_options", {})}
         response = self.client.chat(messages, tools=tools, **kwargs)
         if isinstance(response, dict):
             response = {**response, "sampling_seed": seed}
@@ -211,6 +228,29 @@ def environment_record(host=None):
     if host is not None:
         record["ollama_container_gpus"] = run("docker", "exec", "ollama", "nvidia-smi", "-L").splitlines()
     return record
+
+
+def open_raw_out(path):
+    """``--raw-out``: 호출별 원문(thinking·content)을 append로 쓴다. 저장소 안이면 ignore 경로여야 한다."""
+    if not path:
+        return None
+    path = Path(path).resolve()
+    repo = Path(__file__).resolve().parent
+    if repo in path.parents:
+        import subprocess
+        ignored = subprocess.run(["git", "-C", str(repo), "check-ignore", "-q", str(path)]).returncode == 0
+        if not ignored:
+            raise SystemExit(f"--raw-out은 저장소 밖이나 ignore 경로여야 한다: {path}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path.open("a", encoding="utf-8")
+
+
+def write_raw_calls(stream, item_id, recorder):
+    for index, (call, raw) in enumerate(zip(recorder.calls, recorder.raw)):
+        stream.write(json.dumps({"id": item_id, "call": index, "kind": call.get("kind"),
+                                 "sampling_seed": call.get("sampling_seed"), "done_reason": call.get("done_reason"),
+                                 "eval_count": call.get("eval_count"), **raw}, ensure_ascii=False) + "\n")
+    stream.flush()
 
 
 def run_spec(args, *, digest, version, prompt_sha, items):
@@ -475,6 +515,7 @@ class _RecordingClient:
         self.client = client
         self.model = getattr(client, "model", None)
         self.calls = []
+        self.raw = []
 
     def __getattr__(self, name):
         return getattr(self.client, name)
@@ -493,6 +534,8 @@ class _RecordingClient:
                 "duration_ms": round((time.perf_counter() - started) * 1000, 1)})
             raise
         message = (response or {}).get("message") or {}
+        # 원문(thinking 포함). 결과 파일에는 넣지 않고 --raw-out에만 쓴다(calibration_001).
+        self.raw.append({"thinking": message.get("thinking") or "", "content": message.get("content")})
         self.calls.append({
             "kind": "plan" if len(messages) <= 2 else "repair",
             # 요청 전체(system prompt·첫 응답·재질의 문구)의 hash. 기록 응답을 다시 넣을 때 같은 요청인지 본다.
@@ -1189,6 +1232,7 @@ def cmd_llm(args):
     if cache is None:
         A.unload_all_models(args.host)
     reset = A.OllamaStateReset(args.host, args.model)
+    raw_stream = open_raw_out(getattr(args, "raw_out", None))
     with partial.open("a", encoding="utf-8") as handle:
         for item in items:
             if item["id"] in done:
@@ -1247,9 +1291,13 @@ def cmd_llm(args):
                    **observed}
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
             handle.flush()
+            if raw_stream is not None:
+                write_raw_calls(raw_stream, item["id"], recorder)
             done[item["id"]] = row
             print(f"{item['id']} {category} {observed['outcome']} {observed['error_code'] or ''}",
                   flush=True)
+    if raw_stream is not None:
+        raw_stream.close()
     rows = [done[item["id"]] for item in items if item["id"] in done]
     import httpx
     # 결과에 영향을 주는 모델 쪽 설정: Modelfile 기본 파라미터(penalty 등), 적재된 context 길이와 VRAM.
@@ -1284,6 +1332,9 @@ def cmd_llm(args):
                                     "run_spec": spec, "run_spec_sha256": spec_sha,
                                     **_continuity(rows, args.model_state),
                                     "chat_timeout_s": args.chat_timeout,
+                                    **({"raw_out": str(Path(args.raw_out).resolve()),
+                                        "raw_out_sha256": hashlib.sha256(Path(args.raw_out).read_bytes()).hexdigest()}
+                                       if getattr(args, "raw_out", None) else {}),
                                     "finished_at": datetime.now(ZoneInfo("Asia/Seoul")).isoformat(),
                                     "scorer_version": SCORER_VERSION}),
               "summary": _summary(rows), "rows": rows}
@@ -2003,6 +2054,12 @@ def build_parser():
     llm.add_argument("--top-k", type=int, default=None)
     llm.add_argument("--seed", type=int, default=None,
                      help="회차 seed. 호출 seed는 call_seed(회차 seed, 문항 id, 호출 순번)")
+    llm.add_argument("--min-p", type=float, default=None, help="sampling options min_p(calibration_001, 명시할 때만 보냄)")
+    llm.add_argument("--repeat-penalty", type=float, default=None)
+    llm.add_argument("--presence-penalty", type=float, default=None)
+    llm.add_argument("--frequency-penalty", type=float, default=None)
+    llm.add_argument("--raw-out", default=None,
+                     help="호출별 원문(thinking·content) JSONL. 저장소 밖이나 ignore 경로(calibration_001)")
     llm.add_argument("--record-env", action="store_true",
                      help="meta에 host GPU 이름·UUID·드라이버와 Ollama 컨테이너 GPU를 남긴다(생성에는 영향 없음)")
     rerun = sub.add_parser("rerun")

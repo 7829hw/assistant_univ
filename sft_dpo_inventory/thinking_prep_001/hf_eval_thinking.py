@@ -33,14 +33,18 @@ def sampling_settings(args):
     """--do-sample이면 temperature·top_p·top_k·seed가 모두 있어야 한다. 없으면 None(greedy)."""
     values = {"temperature": args.temperature, "top_p": args.top_p, "top_k": args.top_k, "seed": args.seed}
     if not args.do_sample:
-        if any(value is not None for value in values.values()):
+        if any(value is not None for value in values.values()) or any(getattr(args, name, None) is not None for name in ("min_p", "repetition_penalty")):
             raise SystemExit("sampling 값은 --do-sample과 함께만 쓴다")
         return None
     missing = [key for key, value in values.items() if value is None]
     if missing:
         raise SystemExit(f"--do-sample은 --temperature, --top-p, --top-k, --seed를 모두 지정해야 한다(빠짐: {missing})")
-    return {"params": {"temperature": args.temperature, "top_p": args.top_p, "top_k": args.top_k},
-            "round_seed": args.seed}
+    params = {"temperature": args.temperature, "top_p": args.top_p, "top_k": args.top_k}
+    # calibration_001: 명시한 값만 generate()에 더한다. 주지 않으면 이전과 같다.
+    for name in ("min_p", "repetition_penalty"):
+        if getattr(args, name, None) is not None:
+            params[name] = getattr(args, name)
+    return {"params": params, "round_seed": args.seed}
 
 
 def transformers_version():
@@ -62,6 +66,9 @@ def main():
     parser.add_argument("--top-p", type=float, default=None)
     parser.add_argument("--top-k", type=int, default=None)
     parser.add_argument("--seed", type=int, default=None, help="회차 seed. 호출 seed는 EV.call_seed(회차 seed, 문항 id, 호출 순번)")
+    parser.add_argument("--min-p", type=float, default=None, help="sampling generate(min_p=...)(calibration_001, 명시할 때만)")
+    parser.add_argument("--repetition-penalty", type=float, default=None, help="sampling generate(repetition_penalty=...)")
+    parser.add_argument("--gold", default=None, help="평가 문항 파일(기본: 업체 gold). calibration_001은 selection_gold.yaml")
     parser.add_argument("--record-env", action="store_true", help="meta에 GPU·드라이버·소프트웨어 판을 남긴다(생성에는 영향 없음)")
     args = parser.parse_args()
     sampling = sampling_settings(args)
@@ -80,7 +87,10 @@ def main():
     client = H.load_client(adapter=args.adapter)
     load_seconds = time.perf_counter() - started
     device = torch.cuda.get_device_properties(0)
-    items = [i for i in EV.load_gold(None)["items"] if not args.only or i["id"] in args.only.split(",")]
+    gold_path = Path(args.gold).resolve() if args.gold else None
+    if gold_path is not None:
+        EV.GOLD_PATH = gold_path     # meta의 gold_file·gold_sha256도 이 파일로 남는다
+    items = [i for i in EV.load_gold(gold_path)["items"] if not args.only or i["id"] in args.only.split(",")]
     Path(args.raw_out).parent.mkdir(parents=True, exist_ok=True)
     rows = []
     with open(args.raw_out, "w", encoding="utf-8") as raw_stream:
