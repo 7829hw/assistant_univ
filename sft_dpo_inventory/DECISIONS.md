@@ -312,3 +312,27 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - E-1: 비교하는 Ollama 모델들에 실제로 적용된 파라미터가 같은지 `/api/show`로 확인한다.
     - E-2: 계약 표기(한 장소 od_role both + dimension_target both)가 어떤 조건에서 실행되고 어떤 조건에서 멈추는지 확인한다.
     - E-3: "실차 통행량" 오독이 selection_v1·valid98 기록에도 있는지 확인한다. 결정 36에 따라 업체 100 문항은 근거로 쓰지 않는다.
+
+## 2026-10-09 — sampling 보정 실험(`calibration_001`)
+
+64. (2026-10-09, 사용자) 결정 F. 다음 작업은 sampling 보정 실험이다. 학습하지 않고 selection_v1만 쓴다.
+    - 같은 셀을 greedy로 다시 재지 않는다. 바이트 단위로 같은 결과가 나오므로 의미가 없다.
+65. (2026-10-09, 사용자) 결정 G. 채점 기준.
+    - 질문에 없는 `aggregation`(예: sum)을 추가하면 호출이 같아도 grounding_ok를 X로 둔다.
+    - 옛 표기 때문에 X가 되는 indepv2/n10과 indepv4/k32는 다음 선택 셋 selection_v2에서 뺀다
+      (98문항, `calibration_001/selection_v2_items.json`).
+    - indepv3/m12는 장소 이름 오류라 그대로 둔다.
+    - PROTOCOL_v2에 고정된 selection_v1은 고치지 않는다.
+66. (2026-10-09, 사용자) 결정 H. pilot_003에서 "실차 통행량" 대조 묶음을 보강한다.
+    - 묶음 구성: 실차 통행량(passage_count + taxi_status occupied), 공차 통행량(+ vacant), 상태 없는 통행량,
+      실차 건수(trip_count).
+    - 근거: 학습 데이터에 이 유형의 정답이 0개이고, valid98 h30에서 같은 오류가 확인됐다.
+    - selection_v1과 업체 100은 근거로 쓰지 않는다(결정 36).
+    - 이번에는 기록만 하고, pilot_003 준비 때 실행한다.
+67. (2026-10-09, 사용자) 결정 I. 진단 보고서(`pilot_002_diag/REPORT.md`)의 나머지 검토 항목.
+    - 계약 표기가 멈추는 두 조건은 표기와 무관한 mock 도구·도구 명세의 한계다. 업체에 물을 질문 목록
+      (`vendor_questions_pending.md`)에 넣는다.
+      - 실차 구간을 dayofweek로 묶기.
+      - 장소보다 같거나 넓은 단위로 묶기.
+    - Ollama 저장소에 남은 LoRA blob은 그대로 둔다.
+    - 진단 모델 (c)·(d)·(e)는 sampling 보정 실험이 끝날 때까지 남긴다.
