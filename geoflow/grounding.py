@@ -187,8 +187,9 @@ def parse_grounding(payload, question, *, raw_text="",
             context={"raw_text": raw_text},
         )
 
-    raw_concepts, hoisted = _hoist_structural_factors(payload.get("concepts"))
     notes = []
+    payload = complete_grounding_payload(payload, notes)
+    raw_concepts, hoisted = _hoist_structural_factors(payload.get("concepts"))
     if normalize:
         payload = {**payload, "factors": _drop_default_target(
             _hoist_date_token_keys(payload.get("factors"), notes), notes)}
@@ -234,6 +235,99 @@ def parse_grounding(payload, question, *, raw_text="",
     )
     _check_measure(grounding, raw_text)
     return grounding
+
+
+#: subtype 하나가 속하는 core concept. subtype 이름은 concept 사이에 겹치지 않는다(``CONCEPT_SUBTYPES``).
+_CONCEPT_OF_SUBTYPE = {subtype: concept.value
+                       for concept, subtypes in CONCEPT_SUBTYPES.items() for subtype in subtypes}
+
+
+
+def _inferred_fields(raw):
+    """subtype과 value 유무만으로 정해지는 concept·role·source. 정할 수 없으면 그 필드는 None이다.
+
+    - subtype → concept: ``CONCEPT_SUBTYPES``의 역방향 표.
+    - role: 측정값 subtype(AMOUNT·PROPORTION)은 MEASURE, EVENT는 SUPPORT, scope는 COND.
+      LOCATION/place는 값이 있으면 조건(SUBCOND), 없으면 답이 장소인 질문의 MEASURE다.
+    - source: 조건(SUBCOND·COND)은 사용자가 말한 값(user), 사건과 측정값은 implicit.
+    """
+    subtype = raw.get("subtype")
+    concept = _CONCEPT_OF_SUBTYPE.get(subtype.strip()) if isinstance(subtype, str) else None
+    if concept is None:
+        return {"concept": None, "role": None, "source": None}
+    subtype = subtype.strip()
+    if concept in (CoreConcept.AMOUNT.value, CoreConcept.PROPORTION.value):
+        role = FunctionalRole.MEASURE.value
+    elif concept == CoreConcept.EVENT.value:
+        role = FunctionalRole.SUPPORT.value
+    elif subtype in SCOPE_SUBTYPES:
+        role = FunctionalRole.COND.value
+    elif subtype == Subtype.PLACE:
+        role = (FunctionalRole.MEASURE.value if raw.get("value") in (None, "", {})
+                else FunctionalRole.SUBCOND.value)
+    else:
+        role = None
+    source = None
+    if role in (FunctionalRole.SUBCOND.value, FunctionalRole.COND.value):
+        source = NodeSource.USER.value
+    elif role in (FunctionalRole.SUPPORT.value, FunctionalRole.MEASURE.value):
+        source = NodeSource.IMPLICIT.value
+    return {"concept": concept, "role": role, "source": source}
+
+
+def complete_grounding_payload(payload, notes=None):
+    """생략된 구조 필드를 ontology에서 채운다(Partial Grounding). 질문 원문은 읽지 않는다.
+
+    LLM이 subtype과 value(장소 값, od_role 등 뜻을 정하는 부분)만 적어도 기존 Grounding과 같은
+    payload가 되게 한다.
+
+    1. concept·role·source가 비었으면 ``_inferred_fields``로 채운다.
+    2. id가 없으면 ``{subtype}_{순번}``을 붙인다(이미 쓰인 id와 겹치지 않게).
+
+    적어 둔 값은 바꾸지 않고 기존 계약 검사에 맡긴다. concept이 subtype과 어긋나면
+    ``INVALID_SUBTYPE``으로 거부된다. role은 추론과 달라도 거부하지 않는다. 값이 있는 장소를
+    EXTENT로 적는 것, 그룹 단위 말을 값 없는 SUBCOND 장소로 적어 정리 규칙이 빼는 것이 기존 계약에서
+    성립하기 때문이다. support EVENT는 채우지 않는다. 측정값에서 하나로 정해지는 사건은 composer가
+    이미 만든다(``MacroComposer._infer_port``). 정할 수 없는 경우(모르는 subtype)도 채우지 않고
+    기존 검사가 거부하게 한다. 이미 완전한 payload는 그대로 돌려준다(멱등).
+    """
+    concepts = payload.get("concepts") if isinstance(payload, dict) else None
+    if not isinstance(concepts, list):
+        return payload
+    completed, filled = [], []
+    for index, raw in enumerate(concepts):
+        if not isinstance(raw, dict):
+            completed.append(raw)
+            continue
+        raw = dict(raw)
+        for key, want in _inferred_fields(raw).items():
+            if want is not None and raw.get(key) in (None, ""):
+                raw[key] = want
+                filled.append(f"concepts[{index}].{key}")
+        completed.append(raw)
+
+    taken = {raw["id"] for raw in completed
+             if isinstance(raw, dict) and isinstance(raw.get("id"), str) and raw["id"].strip()}
+    counters = {}
+    for index, raw in enumerate(completed):
+        if not isinstance(raw, dict) or raw.get("id") not in (None, ""):
+            continue
+        base = raw.get("subtype").strip() if isinstance(raw.get("subtype"), str) else ""
+        base = base or "concept"
+        while True:
+            counters[base] = counters.get(base, 0) + 1
+            candidate = f"{base}_{counters[base]}"
+            if candidate not in taken:
+                break
+        raw["id"] = candidate
+        taken.add(candidate)
+        filled.append(f"concepts[{index}].id")
+
+    if not filled:
+        return payload
+    if notes is not None:
+        notes.append({"rule": "partial_grounding_completed", "filled": filled})
+    return {**payload, "concepts": completed}
 
 
 def _hoist_structural_factors(raw_concepts):
@@ -435,6 +529,8 @@ def hoist_condition_concepts(raw_concepts, factors):
     - subtype이 조건 이름(OBJECT/taxi_type): value가 조건 값이면 factor로. value가 없으면 같은
       factor가 이미 있을 때만(질문 표현으로 정해진 값) 개념을 뺀다. 없으면 두어 검증이 거부한다.
     같은 factor에 다른 값이 이미 있으면 옮기지 않는다(어느 쪽이 맞는지 고르지 않는다).
+    concept을 생략한 개념(Partial Grounding)은 OBJECT로 적은 것과 같게 본다. 조건 값은 어느 core
+    concept의 subtype도 아니어서 concept이 무엇이든 뜻이 달라지지 않는다.
     """
     if not isinstance(raw_concepts, list) or not isinstance(factors, dict):
         return raw_concepts, {}, []
@@ -448,7 +544,8 @@ def hoist_condition_concepts(raw_concepts, factors):
         subtype = raw.get("subtype")
         text_value = raw.get("value") if isinstance(raw.get("value"), str) else None
         name, value = None, None
-        if (raw.get("concept") == "OBJECT" and not subtype
+        as_object = raw.get("concept") in ("OBJECT", None, "")
+        if (as_object and not subtype
                 and text_value in _CONDITION_SUBTYPES
                 and factors.get(_CONDITION_SUBTYPES[raw["value"]]) == raw["value"]):
             # subtype 없이 조건 값만 적은 개념이 같은 factor를 그대로 되풀이한다. 정보가 없다.
@@ -458,7 +555,7 @@ def hoist_condition_concepts(raw_concepts, factors):
         if not isinstance(subtype, str):
             cleaned.append(raw)
             continue
-        if raw.get("concept") == "OBJECT" and subtype in _CONDITION_SUBTYPES:
+        if as_object and subtype in _CONDITION_SUBTYPES:
             name, value = _CONDITION_SUBTYPES[subtype], subtype
         elif subtype in _CONDITION_NAMES:
             name = subtype

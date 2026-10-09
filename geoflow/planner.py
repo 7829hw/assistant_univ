@@ -30,7 +30,7 @@ from geoflow.factors import (
     describe_factor,
     describe_factor_semantics,
 )
-from geoflow.grounding import drop_unsupported_regions, parse_grounding
+from geoflow.grounding import complete_grounding_payload, drop_unsupported_regions, parse_grounding
 from geoflow.operator_registry import OPERATORS
 from geoflow.correction_scope import describe_scope, kept_factors, stage_guidance
 from geoflow.repair import (
@@ -550,6 +550,10 @@ class GeoFlowPlanner:
                 context={"raw_text": text},
             )
 
+        # 생략된 구조 필드(Partial Grounding)를 먼저 채운다. 조건 대조(reconcile_payload)가 parse 전에
+        # concept·role·source·id를 읽기 때문이다. parse_grounding은 채워진 payload를 그대로 받는다(멱등).
+        completion = []
+        payload = complete_grounding_payload(payload, completion)
         audit = None
         if self.condition_check:
             reference = (self.clock or conditions.reference_now)()
@@ -557,9 +561,9 @@ class GeoFlowPlanner:
                 payload, question, reference_date=reference, raw_text=text,
                 structured=self.structured,
             )
-        return self._parse(payload, audit, text, question)
+        return self._parse(payload, audit, text, question, completion)
 
-    def _parse(self, payload, audit, text, question):
+    def _parse(self, payload, audit, text, question, completion=()):
         """grounding 계약 검사. 재질의로 고칠 수 있는 오류면 첫 응답을 초안으로 붙여 올린다.
 
         합성 단계 오류와 같은 재질의 판정(``repair.decide``)을 쓴다. 판정이 계획 단계인지 합성 단계인지에
@@ -576,6 +580,7 @@ class GeoFlowPlanner:
                 error.draft = PlanningDraft(payload=payload, raw_text=text, condition_audit=audit)
             raise
         grounding.condition_audit = audit
+        grounding.normalizations = [*completion, *grounding.normalizations]
         # 발화에 없는 상위 지역은 조회를 어긋나게 만들 뿐이므로 덜어 낸다.
         # 거부가 아니라 제거로 처리하는 이유는 drop_invented_regions와 같다.
         drop_unsupported_regions(grounding)
