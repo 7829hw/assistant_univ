@@ -11,6 +11,8 @@
   2. 출발·도착 역할 추가·변경: gold와 장소별 od_role이 다름. gold가 같은 장소를 pickup·dropoff 두 개로 적고(옛 표기) 모델이
      그 장소 하나에 both를 적은 경우는 "표기 차이"로 따로 센다.
   3. 실차 통행량 오독: gold가 passage_count + taxi_status occupied인데 측정값을 trip_count로 읽음.
+- 질문에 없는 집계 추가: gold에 aggregation이 없는데 최종 grounding에 있음(``grounding_check`` 차이 ``factor:aggregation_spec``의
+  gold 값이 None). 결정 62의 세 가지와 별도로 센다.
 - 한 조건만 다른 쌍의 문항 단위 전이(얻음·잃음 목록, U·조용한 오답의 새로 생김·사라짐).
 - 결과: ``selection_comparison.json``. 질문 문장은 넣지 않는다.
 """
@@ -88,6 +90,10 @@ def decision_d(gold_item, grounding):
     return out
 
 
+def aggregation_added(diffs):
+    return any(not isinstance(d, str) and d[0] == "factor:aggregation_spec" and d[1] is None for d in diffs)
+
+
 def load_hf(path, gold):
     res = json.loads(path.read_text(encoding="utf-8"))
     raw = Path(res["meta"]["raw_out"])
@@ -100,11 +106,12 @@ def load_hf(path, gold):
                 loops[r["id"]] += 1
     out = {}
     for r in res["rows"]:
-        regraded, _ = EV.grounding_check(gold[r["id"]], r.get("grounding"))
+        regraded, diffs = EV.grounding_check(gold[r["id"]], r.get("grounding"))
         out[r["id"]] = {"grounding_ok": bool(regraded), "report_class": None, "seconds": r["seconds"],
                         "outcome": f"{r['outcome']}:{r['error_code']}", "vendor_style": r["vendor_style_category"],
                         "truncated": sum(d == "length" for d in r["done_reasons"]), "loop_calls": loops.get(r["id"], 0),
                         "thinking_first": r.get("thinking_chars_first_plan"), "calls": r["model_calls"],
+                        "aggregation_added": aggregation_added(diffs),
                         **decision_d(gold[r["id"]], r.get("grounding"))}
     return out, res["meta"]
 
@@ -116,7 +123,7 @@ def load_ollama(path, gold):
     for row in rows:
         key, src = row["id"], source[row["id"]]
         flags = C.R.unacceptable(key, row, src)
-        regraded, _ = EV.grounding_check(gold[key], src.get("grounding"))
+        regraded, diffs = EV.grounding_check(gold[key], src.get("grounding"))
         calls = src.get("llm_calls") or []
         out[key] = {"grounding_ok": bool(regraded), "grounding_ok_recorded": src.get("grounding_ok"),
                     "report_class": C.report_class(row, flags), "u_flags": flags, "v4": row["v4"],
@@ -124,7 +131,7 @@ def load_ollama(path, gold):
                     "outcome": f"{src.get('outcome')}:{src.get('error_code')}", "vendor_style": src.get("category"),
                     "truncated": sum((c.get("done_reason") == "length") for c in calls), "loop_calls": None,
                     "thinking_first": next((c.get("thinking_chars") for c in calls if c.get("kind") == "plan"), None),
-                    "calls": len(calls), **decision_d(gold[key], src.get("grounding"))}
+                    "calls": len(calls), "aggregation_added": aggregation_added(diffs), **decision_d(gold[key], src.get("grounding"))}
     return out, meta
 
 
@@ -148,6 +155,7 @@ def summary(items, meta, path):
             "first_plan_thinking_chars_median": statistics.median(th) if th else None,
             "decision_d": {k: sorted(i for i, v in items.items() if v[k])
                            for k in ("dt_missing", "role_error", "role_notation", "occupied_misread")},
+            "aggregation_added": sorted(k for k, i in items.items() if i["aggregation_added"]),
             "model": meta.get("model"), "adapter": meta.get("adapter"), "ollama_version": meta.get("ollama_version")}
 
 
@@ -164,7 +172,7 @@ def pair(A, B):
             b = {k for k in keys if B[k]["report_class"] == cls}
             out[name] = [len(a), len(b)]
             out[f"{name}_new"], out[f"{name}_gone"] = sorted(b - a), sorted(a - b)
-    for key in ("dt_missing", "role_error", "occupied_misread"):
+    for key in ("dt_missing", "role_error", "occupied_misread", "aggregation_added"):
         out[key] = [sum(A[k][key] for k in keys), sum(B[k][key] for k in keys)]
     la = statistics.median(A[k]["seconds"] for k in keys)
     lb = statistics.median(B[k]["seconds"] for k in keys)
@@ -200,7 +208,7 @@ def main():
             print(name, "not measured")
             continue
         print(name, c["grounding_ok"], "U", c["U"], "silent", c["silent"], "lat", c["latency_median_s"], "trunc", c["truncated_calls"],
-              "loops", c["loop_calls"], {k: len(v) for k, v in c["decision_d"].items()})
+              "loops", c["loop_calls"], {k: len(v) for k, v in c["decision_d"].items()}, "agg_added", len(c["aggregation_added"]))
     for label, p in out["pairs"].items():
         print(label, p["pair"], p.get("skipped") or (p["grounding_ok"], "b", p["b_gained"], "c", p["c_lost"], "U", p.get("U"),
                                                       "silent", p.get("silent")))
