@@ -1,0 +1,7427 @@
+{
+ "cells": {
+  "E": "sft_dpo_inventory/pilot_prep_003/ollama/E.json",
+  "B-conv": "sft_dpo_inventory/pilot_prep_003/ollama/B-conv.json",
+  "HF-최종": "sft_dpo_inventory/pilot_002/vendor100/HF-final.json",
+  "Ollama-최종": "sft_dpo_inventory/pilot_002/vendor100/Ollama-final.json",
+  "Ollama-SFT": "sft_dpo_inventory/pilot_002/vendor100/Ollama-sft.json",
+  "HF-SFT": "sft_dpo_inventory/pilot_002/vendor100/HF-sft.json"
+ },
+ "items": {
+  "013": {
+   "question": "2026년 6월 4일 대구 동성로의 실차 통행량은?",
+   "expected_outcome": "answered",
+   "gold_calls": [
+    "get_place_scope(name=동성로, region=대구)",
+    "get_passage_count(scope=$resolve.scope, date=20260604, taxi_status=occupied)"
+   ],
+   "gold_grounding": {
+    "concepts": [
+     {
+      "id": "place_scope",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "동성로",
+       "region": "대구"
+      }
+     },
+     {
+      "id": "event",
+      "concept": "EVENT",
+      "subtype": "passage",
+      "role": "SUPPORT",
+      "source": "implicit"
+     },
+     {
+      "id": "measure",
+      "concept": "AMOUNT",
+      "subtype": "passage_count",
+      "role": "MEASURE",
+      "source": "implicit"
+     }
+    ],
+    "factors": {
+     "date": "20260604",
+     "taxi_status": "occupied"
+    }
+   },
+   "family": false,
+   "template": false,
+   "cells": {
+    "E": {
+     "report_class": "용납할 수 없는 실패",
+     "u_flags": [
+      "U1:taxi_status",
+      "U2:scope",
+      "U2:scope_pickup",
+      "U3:tool"
+     ],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:taxi_status",
+      "measure",
+      "places"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "대구 동성로",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "동성로",
+         "region": "대구"
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "실차 통행량",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "20260604"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": false,
+     "arg_mismatches": [
+      [
+       "scope",
+       "scope:edge:1742",
+       null
+      ],
+      [
+       "scope_pickup",
+       null,
+       "scope:edge:1742"
+      ],
+      [
+       "taxi_status",
+       "occupied",
+       null
+      ]
+     ],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "동성로",
+        "region": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:edge:1742"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:edge:1742",
+        "date": "20260604"
+       },
+       "result": {
+        "count": 20
+       }
+      }
+     ],
+     "final_answer": "대구 동성로 출발 20260604 실차 구간 건수: 20건",
+     "thinking_chars": [
+      3116,
+      1225
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "B-conv": {
+     "report_class": "용납할 수 없는 실패",
+     "u_flags": [
+      "U1:taxi_status",
+      "U2:scope",
+      "U2:scope_pickup",
+      "U3:tool"
+     ],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:aggregation_spec",
+      "factor:taxi_status",
+      "measure",
+      "places"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "대구 동성로",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "동성로",
+         "region": "대구"
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "실차 통행량",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "20260604",
+       "aggregation": "sum"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": "sum",
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": false,
+     "arg_mismatches": [
+      [
+       "scope",
+       "scope:edge:1742",
+       null
+      ],
+      [
+       "scope_pickup",
+       null,
+       "scope:edge:1742"
+      ],
+      [
+       "taxi_status",
+       "occupied",
+       null
+      ]
+     ],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "동성로",
+        "region": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:edge:1742"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:edge:1742",
+        "date": "20260604"
+       },
+       "result": {
+        "count": 20
+       }
+      }
+     ],
+     "final_answer": "대구 동성로 출발 20260604 합계 실차 구간 건수: 20건",
+     "thinking_chars": [
+      4864,
+      1766
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "HF-최종": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "대구 동성로",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "동성로",
+         "region": "대구"
+        },
+        "attributes": {}
+       },
+       {
+        "id": "passage",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "passage",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "passage_count",
+        "text": "실차 통행량",
+        "concept": "AMOUNT",
+        "subtype": "passage_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "20260604",
+       "taxi_status": "occupied"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "동성로",
+        "region": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:edge:1742"
+      },
+      {
+       "tool": "get_passage_count",
+       "args": {
+        "scope": "scope:edge:1742",
+        "date": "20260604",
+        "taxi_status": "occupied"
+       },
+       "result": {
+        "count": 12345
+       }
+      }
+     ],
+     "final_answer": "대구 동성로 20260604 실차 택시 통행량: 12,345건",
+     "thinking_chars": [
+      4209
+     ],
+     "call_kinds": [
+      "plan"
+     ]
+    },
+    "Ollama-최종": {
+     "report_class": "용납할 수 없는 실패",
+     "u_flags": [
+      "U1:taxi_status",
+      "U2:scope",
+      "U2:scope_dropoff",
+      "U2:scope_pickup",
+      "U3:tool"
+     ],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:taxi_status",
+      "measure",
+      "places"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "대구 동성로",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "동성로",
+         "region": "대구"
+        },
+        "attributes": {
+         "od_role": "both"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "실차 통행량",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "20260604"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": false,
+     "arg_mismatches": [
+      [
+       "scope",
+       "scope:edge:1742",
+       null
+      ],
+      [
+       "scope_dropoff",
+       null,
+       "scope:edge:1742"
+      ],
+      [
+       "scope_pickup",
+       null,
+       "scope:edge:1742"
+      ],
+      [
+       "taxi_status",
+       "occupied",
+       null
+      ]
+     ],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "동성로",
+        "region": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:edge:1742"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:edge:1742",
+        "scope_dropoff": "scope:edge:1742",
+        "date": "20260604"
+       },
+       "result": {
+        "count": 20
+       }
+      }
+     ],
+     "final_answer": "대구 동성로 20260604 실차 구간 건수: 20건",
+     "thinking_chars": [
+      null,
+      2777,
+      6604
+     ],
+     "call_kinds": [
+      "plan",
+      "plan",
+      "repair"
+     ]
+    },
+    "Ollama-SFT": {
+     "report_class": "용납할 수 없는 실패",
+     "u_flags": [
+      "U1:taxi_status",
+      "U2:scope",
+      "U2:scope_dropoff",
+      "U2:scope_pickup",
+      "U3:tool"
+     ],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:taxi_status",
+      "measure",
+      "places"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "place_1",
+        "text": "대구 동성로",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "동성로",
+         "region": "대구"
+        },
+        "attributes": {
+         "od_role": "both"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "실차 통행량",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "20260604"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": false,
+     "arg_mismatches": [
+      [
+       "scope",
+       "scope:edge:1742",
+       null
+      ],
+      [
+       "scope_dropoff",
+       null,
+       "scope:edge:1742"
+      ],
+      [
+       "scope_pickup",
+       null,
+       "scope:edge:1742"
+      ],
+      [
+       "taxi_status",
+       "occupied",
+       null
+      ]
+     ],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "동성로",
+        "region": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:edge:1742"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:edge:1742",
+        "scope_dropoff": "scope:edge:1742",
+        "date": "20260604"
+       },
+       "result": {
+        "count": 20
+       }
+      }
+     ],
+     "final_answer": "대구 동성로 20260604 실차 구간 건수: 20건",
+     "thinking_chars": [
+      1608,
+      4293
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "HF-SFT": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "place_1",
+        "text": "대구 동성로",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "동성로",
+         "region": "대구"
+        },
+        "attributes": {}
+       },
+       {
+        "id": "passage",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "passage",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "passage_count",
+        "text": "실차 통행량",
+        "concept": "AMOUNT",
+        "subtype": "passage_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "20260604",
+       "taxi_status": "occupied"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "동성로",
+        "region": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:edge:1742"
+      },
+      {
+       "tool": "get_passage_count",
+       "args": {
+        "scope": "scope:edge:1742",
+        "date": "20260604",
+        "taxi_status": "occupied"
+       },
+       "result": {
+        "count": 12345
+       }
+      }
+     ],
+     "final_answer": "대구 동성로 20260604 실차 택시 통행량: 12,345건",
+     "thinking_chars": [
+      6981
+     ],
+     "call_kinds": [
+      "plan"
+     ]
+    }
+   }
+  },
+  "016": {
+   "question": "대구 수성구에서 출발한 실차 구간의 도착 읍면동 상위 3곳은?",
+   "expected_outcome": "answered",
+   "gold_calls": [
+    "get_place_scope(name=수성구, region=대구)",
+    "get_trip_count(scope_pickup=$pickup.scope, dimension=emd, dimension_target=dropoff, order=top, limit=3)"
+   ],
+   "gold_grounding": {
+    "concepts": [
+     {
+      "id": "place_scope_pickup",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "수성구",
+       "region": "대구"
+      },
+      "attributes": {
+       "od_role": "pickup"
+      }
+     },
+     {
+      "id": "event",
+      "concept": "EVENT",
+      "subtype": "trip",
+      "role": "SUPPORT",
+      "source": "implicit"
+     },
+     {
+      "id": "measure",
+      "concept": "AMOUNT",
+      "subtype": "trip_count",
+      "role": "MEASURE",
+      "source": "implicit"
+     }
+    ],
+    "factors": {
+     "dimension": "emd",
+     "dimension_target": "dropoff",
+     "order": "top",
+     "limit": 3
+    }
+   },
+   "family": true,
+   "template": false,
+   "cells": {
+    "E": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "origin",
+        "text": "대구 수성구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "수성구",
+         "region": "대구"
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "실차 구간 건수",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "dimension": "emd",
+       "dimension_target": "dropoff",
+       "order": "top",
+       "limit": 3
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "수성구",
+        "region": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2726000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2726000000",
+        "dimension": "emd",
+        "dimension_target": "dropoff",
+        "limit": 3,
+        "order": "top"
+       },
+       "result": [
+        {
+         "dropoff": "동인동",
+         "count": 20
+        },
+        {
+         "dropoff": "중앙로동",
+         "count": 20
+        },
+        {
+         "dropoff": "태평로동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "대구 수성구 출발 읍면동별 하차 지역 기준 상위 3개 실차 구간 건수\n- 동인동: 20건\n- 중앙로동: 20건\n- 태평로동: 20건",
+     "thinking_chars": [
+      2302
+     ],
+     "call_kinds": [
+      "plan"
+     ]
+    },
+    "B-conv": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "origin",
+        "text": "대구 수성구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "수성구",
+         "region": "대구"
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "dimension": "emd",
+       "dimension_target": "dropoff",
+       "order": "top",
+       "limit": 3
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      },
+      "normalizations": [
+       {
+        "concept": "destination",
+        "rule": "non_place_word_dropped",
+        "before": {
+         "name": "읍면동",
+         "region": ""
+        }
+       }
+      ]
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "수성구",
+        "region": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2726000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2726000000",
+        "dimension": "emd",
+        "dimension_target": "dropoff",
+        "limit": 3,
+        "order": "top"
+       },
+       "result": [
+        {
+         "dropoff": "동인동",
+         "count": 20
+        },
+        {
+         "dropoff": "중앙로동",
+         "count": 20
+        },
+        {
+         "dropoff": "태평로동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "대구 수성구 출발 읍면동별 하차 지역 기준 상위 3개 실차 구간 건수\n- 동인동: 20건\n- 중앙로동: 20건\n- 태평로동: 20건",
+     "thinking_chars": [
+      1580
+     ],
+     "call_kinds": [
+      "plan"
+     ]
+    },
+    "HF-최종": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "origin",
+        "text": "대구 수성구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "수성구",
+         "region": "대구"
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "실차 구간 건수",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "dimension": "emd",
+       "dimension_target": "dropoff",
+       "order": "top",
+       "limit": 3
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "수성구",
+        "region": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2726000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2726000000",
+        "dimension": "emd",
+        "dimension_target": "dropoff",
+        "limit": 3,
+        "order": "top"
+       },
+       "result": [
+        {
+         "dropoff": "동인동",
+         "count": 20
+        },
+        {
+         "dropoff": "중앙로동",
+         "count": 20
+        },
+        {
+         "dropoff": "태평로동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "대구 수성구 출발 읍면동별 하차 지역 기준 상위 3개 실차 구간 건수\n- 동인동: 20건\n- 중앙로동: 20건\n- 태평로동: 20건",
+     "thinking_chars": [
+      1775
+     ],
+     "call_kinds": [
+      "plan"
+     ]
+    },
+    "Ollama-최종": {
+     "report_class": "용납할 수 없는 실패",
+     "u_flags": [
+      "U2:dimension_target"
+     ],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:dimension_target"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "origin",
+        "text": "대구 수성구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "수성구",
+         "region": "대구"
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "dimension": "emd",
+       "order": "top",
+       "limit": 3
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      },
+      "normalizations": [
+       {
+        "concept": "destination",
+        "rule": "non_place_word_dropped",
+        "before": {
+         "name": "읍면동",
+         "region": ""
+        }
+       }
+      ]
+     },
+     "tool_ok": true,
+     "arg_mismatches": [
+      [
+       "dimension_target",
+       "dropoff",
+       null
+      ]
+     ],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "수성구",
+        "region": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2726000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2726000000",
+        "dimension": "emd",
+        "limit": 3,
+        "order": "top"
+       },
+       "result": [
+        {
+         "pickup": "두산동",
+         "dropoff": "동인동",
+         "count": 20
+        },
+        {
+         "pickup": "두산동",
+         "dropoff": "중앙로동",
+         "count": 20
+        },
+        {
+         "pickup": "두산동",
+         "dropoff": "태평로동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "대구 수성구 출발 읍면동별 상위 3개 실차 구간 건수\n- 두산동 → 동인동: 20건\n- 두산동 → 중앙로동: 20건\n- 두산동 → 태평로동: 20건",
+     "thinking_chars": [
+      1930
+     ],
+     "call_kinds": [
+      "plan"
+     ]
+    },
+    "Ollama-SFT": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "origin",
+        "text": "대구 수성구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "수성구",
+         "region": "대구"
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "실차 구간 건수",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "dimension": "emd",
+       "order": "top",
+       "limit": 3,
+       "dimension_target": "dropoff"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "수성구",
+        "region": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2726000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2726000000",
+        "dimension": "emd",
+        "dimension_target": "dropoff",
+        "limit": 3,
+        "order": "top"
+       },
+       "result": [
+        {
+         "dropoff": "동인동",
+         "count": 20
+        },
+        {
+         "dropoff": "중앙로동",
+         "count": 20
+        },
+        {
+         "dropoff": "태평로동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "대구 수성구 출발 읍면동별 하차 지역 기준 상위 3개 실차 구간 건수\n- 동인동: 20건\n- 중앙로동: 20건\n- 태평로동: 20건",
+     "thinking_chars": [
+      3895
+     ],
+     "call_kinds": [
+      "plan"
+     ]
+    },
+    "HF-SFT": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "origin",
+        "text": "대구 수성구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "수성구",
+         "region": "대구"
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "실차 구간 건수",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "order": "top",
+       "limit": 3,
+       "dimension": "emd",
+       "dimension_target": "dropoff"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "수성구",
+        "region": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2726000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2726000000",
+        "dimension": "emd",
+        "dimension_target": "dropoff",
+        "limit": 3,
+        "order": "top"
+       },
+       "result": [
+        {
+         "dropoff": "동인동",
+         "count": 20
+        },
+        {
+         "dropoff": "중앙로동",
+         "count": 20
+        },
+        {
+         "dropoff": "태평로동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "대구 수성구 출발 읍면동별 하차 지역 기준 상위 3개 실차 구간 건수\n- 동인동: 20건\n- 중앙로동: 20건\n- 태평로동: 20건",
+     "thinking_chars": [
+      2496
+     ],
+     "call_kinds": [
+      "plan"
+     ]
+    }
+   }
+  },
+  "026": {
+   "question": "대구에서 출발해 부산에 도착한 실차 중 대구의 승차 읍면동 상위 2곳은?",
+   "expected_outcome": "answered",
+   "gold_calls": [
+    "get_place_scope(name=대구)",
+    "get_place_scope(name=부산)",
+    "get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, dimension=emd, dimension_target=pickup, order=top, limit=2)"
+   ],
+   "gold_grounding": {
+    "concepts": [
+     {
+      "id": "place_scope_pickup",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "대구",
+       "region": ""
+      },
+      "attributes": {
+       "od_role": "pickup"
+      }
+     },
+     {
+      "id": "place_scope_dropoff",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "부산",
+       "region": ""
+      },
+      "attributes": {
+       "od_role": "dropoff"
+      }
+     },
+     {
+      "id": "event",
+      "concept": "EVENT",
+      "subtype": "trip",
+      "role": "SUPPORT",
+      "source": "implicit"
+     },
+     {
+      "id": "measure",
+      "concept": "AMOUNT",
+      "subtype": "trip_count",
+      "role": "MEASURE",
+      "source": "implicit"
+     }
+    ],
+    "factors": {
+     "dimension": "emd",
+     "dimension_target": "pickup",
+     "order": "top",
+     "limit": 2
+    }
+   },
+   "family": false,
+   "template": false,
+   "cells": {
+    "E": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "origin",
+        "text": "대구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "대구",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "destination",
+        "text": "부산",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "부산",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "dropoff"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "실차 구간 건수",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "dimension": "emd",
+       "dimension_target": "pickup",
+       "order": "top",
+       "limit": 2
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2700000000"
+      },
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2600000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2700000000",
+        "scope_dropoff": "scope:district:2600000000",
+        "dimension": "emd",
+        "dimension_target": "pickup",
+        "limit": 2,
+        "order": "top"
+       },
+       "result": [
+        {
+         "pickup": "동인동",
+         "count": 20
+        },
+        {
+         "pickup": "중앙로동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "대구 → 부산 읍면동별 승차 지역 기준 상위 2개 실차 구간 건수\n- 동인동: 20건\n- 중앙로동: 20건",
+     "thinking_chars": [
+      1413
+     ],
+     "call_kinds": [
+      "plan"
+     ]
+    },
+    "B-conv": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "origin",
+        "text": "대구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "대구",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "destination",
+        "text": "부산",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "부산",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "dropoff"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "실차 구간 건수",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "order": "top",
+       "limit": 2,
+       "dimension": "emd",
+       "dimension_target": "pickup"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2700000000"
+      },
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2600000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2700000000",
+        "scope_dropoff": "scope:district:2600000000",
+        "dimension": "emd",
+        "dimension_target": "pickup",
+        "limit": 2,
+        "order": "top"
+       },
+       "result": [
+        {
+         "pickup": "동인동",
+         "count": 20
+        },
+        {
+         "pickup": "중앙로동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "대구 → 부산 읍면동별 승차 지역 기준 상위 2개 실차 구간 건수\n- 동인동: 20건\n- 중앙로동: 20건",
+     "thinking_chars": [
+      4004
+     ],
+     "call_kinds": [
+      "plan"
+     ]
+    },
+    "HF-최종": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "origin",
+        "text": "대구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "대구",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "destination",
+        "text": "부산",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "부산",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "dropoff"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "실차 중 대구의 승차 읍면동",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "order": "top",
+       "limit": 2,
+       "dimension": "emd",
+       "dimension_target": "pickup"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2700000000"
+      },
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2600000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2700000000",
+        "scope_dropoff": "scope:district:2600000000",
+        "dimension": "emd",
+        "dimension_target": "pickup",
+        "limit": 2,
+        "order": "top"
+       },
+       "result": [
+        {
+         "pickup": "동인동",
+         "count": 20
+        },
+        {
+         "pickup": "중앙로동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "대구 → 부산 읍면동별 승차 지역 기준 상위 2개 실차 구간 건수\n- 동인동: 20건\n- 중앙로동: 20건",
+     "thinking_chars": [
+      2846
+     ],
+     "call_kinds": [
+      "plan"
+     ]
+    },
+    "Ollama-최종": {
+     "report_class": "용납할 수 없는 실패",
+     "u_flags": [
+      "U2:dimension_target"
+     ],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:dimension_target"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "origin",
+        "text": "대구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "대구",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "destination",
+        "text": "부산",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "부산",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "dropoff"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "실차",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "dimension": "emd",
+       "order": "top",
+       "limit": 2
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [
+      [
+       "dimension_target",
+       "pickup",
+       null
+      ]
+     ],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2700000000"
+      },
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2600000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2700000000",
+        "scope_dropoff": "scope:district:2600000000",
+        "dimension": "emd",
+        "limit": 2,
+        "order": "top"
+       },
+       "result": [
+        {
+         "pickup": "동인동",
+         "dropoff": "초읍동",
+         "count": 20
+        },
+        {
+         "pickup": "중앙로동",
+         "dropoff": "초량동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "대구 → 부산 읍면동별 상위 2개 실차 구간 건수\n- 동인동 → 초읍동: 20건\n- 중앙로동 → 초량동: 20건",
+     "thinking_chars": [
+      1750
+     ],
+     "call_kinds": [
+      "plan"
+     ]
+    },
+    "Ollama-SFT": {
+     "report_class": "용납할 수 없는 실패",
+     "u_flags": [
+      "U2:dimension_target"
+     ],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:dimension_target"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "origin",
+        "text": "대구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "대구",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "destination",
+        "text": "부산",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "부산",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "dropoff"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "실차 중 대구의 승차 읍면동",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "dimension": "emd",
+       "order": "top",
+       "limit": 2
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [
+      [
+       "dimension_target",
+       "pickup",
+       null
+      ]
+     ],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2700000000"
+      },
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2600000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2700000000",
+        "scope_dropoff": "scope:district:2600000000",
+        "dimension": "emd",
+        "limit": 2,
+        "order": "top"
+       },
+       "result": [
+        {
+         "pickup": "동인동",
+         "dropoff": "초읍동",
+         "count": 20
+        },
+        {
+         "pickup": "중앙로동",
+         "dropoff": "초량동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "대구 → 부산 읍면동별 상위 2개 실차 구간 건수\n- 동인동 → 초읍동: 20건\n- 중앙로동 → 초량동: 20건",
+     "thinking_chars": [
+      1616
+     ],
+     "call_kinds": [
+      "plan"
+     ]
+    },
+    "HF-SFT": {
+     "report_class": "안전한 실패",
+     "u_flags": [],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "no_grounding"
+     ],
+     "outcome": "failed",
+     "error_code": "OUTPUT_TRUNCATED",
+     "grounding": null,
+     "tool_ok": null,
+     "arg_mismatches": null,
+     "calls": [],
+     "final_answer": null,
+     "thinking_chars": [
+      31104,
+      31104
+     ],
+     "call_kinds": [
+      "plan",
+      "plan"
+     ]
+    }
+   }
+  },
+  "037": {
+   "question": "지난달 대구 수성구의 읍면동별 실차 택시 통행량 중 가장 많은 곳은?",
+   "expected_outcome": "answered",
+   "gold_calls": [
+    "get_place_scope(name=수성구, region=대구)",
+    "get_passage_count(scope=$resolve.scope, date=last_month, taxi_status=occupied, dimension=emd, order=top, limit=1)"
+   ],
+   "gold_grounding": {
+    "concepts": [
+     {
+      "id": "place_scope",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "수성구",
+       "region": "대구"
+      }
+     },
+     {
+      "id": "event",
+      "concept": "EVENT",
+      "subtype": "passage",
+      "role": "SUPPORT",
+      "source": "implicit"
+     },
+     {
+      "id": "measure",
+      "concept": "AMOUNT",
+      "subtype": "passage_count",
+      "role": "MEASURE",
+      "source": "implicit"
+     }
+    ],
+    "factors": {
+     "date": "last_month",
+     "taxi_status": "occupied",
+     "dimension": "emd",
+     "order": "top",
+     "limit": 1
+    }
+   },
+   "family": true,
+   "template": false,
+   "cells": {
+    "E": {
+     "report_class": "안전한 실패",
+     "u_flags": [],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:taxi_status",
+      "measure"
+     ],
+     "outcome": "failed",
+     "error_code": "MISSING_RELATION_QUALIFIER",
+     "grounding": {
+      "concepts": [
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "location",
+        "text": "",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "COND",
+        "source": "user",
+        "value": {
+         "name": "수성구",
+         "region": "대구"
+        },
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "last_month",
+       "dimension": "emd",
+       "order": "top",
+       "limit": 1
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": null,
+     "arg_mismatches": null,
+     "calls": [],
+     "final_answer": null,
+     "thinking_chars": [
+      2666,
+      1255
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "B-conv": {
+     "report_class": "안전한 실패",
+     "u_flags": [],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:aggregation_spec",
+      "factor:taxi_status",
+      "measure"
+     ],
+     "outcome": "failed",
+     "error_code": "MISSING_RELATION_QUALIFIER",
+     "grounding": {
+      "concepts": [
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "place",
+        "text": "",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "COND",
+        "source": "user",
+        "value": {
+         "name": "수성구",
+         "region": "대구"
+        },
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "last_month",
+       "dimension": "emd",
+       "order": "top",
+       "limit": 1,
+       "aggregation": "sum"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": "sum",
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": null,
+     "arg_mismatches": null,
+     "calls": [],
+     "final_answer": null,
+     "thinking_chars": [
+      6075,
+      7071
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "HF-최종": {
+     "report_class": "안전한 실패",
+     "u_flags": [],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:taxi_status",
+      "measure"
+     ],
+     "outcome": "failed",
+     "error_code": "MISSING_RELATION_QUALIFIER",
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "대구 수성구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "수성구",
+         "region": "대구"
+        },
+        "attributes": {}
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "실차 택시 통행량",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "last_month",
+       "dimension": "emd",
+       "order": "top",
+       "limit": 1
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": null,
+     "arg_mismatches": null,
+     "calls": [],
+     "final_answer": null,
+     "thinking_chars": [
+      2696,
+      4870
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "Ollama-최종": {
+     "report_class": "용납할 수 없는 실패",
+     "u_flags": [
+      "U1:taxi_status",
+      "U2:scope",
+      "U2:scope_pickup",
+      "U3:tool"
+     ],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:taxi_status",
+      "measure",
+      "places"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "대구 수성구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "수성구",
+         "region": "대구"
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "실차 택시 통행량",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "last_month",
+       "dimension": "emd",
+       "order": "top",
+       "limit": 1
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": false,
+     "arg_mismatches": [
+      [
+       "scope",
+       "scope:district:2726000000",
+       null
+      ],
+      [
+       "scope_pickup",
+       null,
+       "scope:district:2726000000"
+      ],
+      [
+       "taxi_status",
+       "occupied",
+       null
+      ]
+     ],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "수성구",
+        "region": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2726000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2726000000",
+        "date": "last_month",
+        "dimension": "emd",
+        "limit": 1,
+        "order": "top"
+       },
+       "result": [
+        {
+         "pickup": "두산동",
+         "dropoff": "동인동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "대구 수성구 출발 지난달 읍면동별 상위 1개 실차 구간 건수\n- 두산동 → 동인동: 20건",
+     "thinking_chars": [
+      2984,
+      2829
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "Ollama-SFT": {
+     "report_class": "용납할 수 없는 실패",
+     "u_flags": [
+      "U1:taxi_status",
+      "U2:scope",
+      "U2:scope_dropoff",
+      "U2:scope_pickup",
+      "U3:tool"
+     ],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:aggregation_spec",
+      "factor:taxi_status",
+      "measure",
+      "places"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "대구 수성구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "수성구",
+         "region": "대구"
+        },
+        "attributes": {
+         "od_role": "both"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "실차 택시 통행량",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "last_month",
+       "dimension": "emd",
+       "order": "top",
+       "limit": 1,
+       "aggregation": "sum"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": "sum",
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": false,
+     "arg_mismatches": [
+      [
+       "scope",
+       "scope:district:2726000000",
+       null
+      ],
+      [
+       "scope_dropoff",
+       null,
+       "scope:district:2726000000"
+      ],
+      [
+       "scope_pickup",
+       null,
+       "scope:district:2726000000"
+      ],
+      [
+       "taxi_status",
+       "occupied",
+       null
+      ]
+     ],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "수성구",
+        "region": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2726000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2726000000",
+        "scope_dropoff": "scope:district:2726000000",
+        "date": "last_month",
+        "dimension": "emd",
+        "limit": 1,
+        "order": "top"
+       },
+       "result": [
+        {
+         "pickup": "두산동",
+         "dropoff": "두산동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "대구 수성구 지난달 읍면동별 상위 1개 합계 실차 구간 건수\n- 두산동 → 두산동: 20건",
+     "thinking_chars": [
+      2066,
+      1134
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "HF-SFT": {
+     "report_class": "안전한 실패",
+     "u_flags": [],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:aggregation_spec",
+      "factor:taxi_status",
+      "measure"
+     ],
+     "outcome": "failed",
+     "error_code": "MISSING_RELATION_QUALIFIER",
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "대구 수성구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "COND",
+        "source": "user",
+        "value": {
+         "name": "수성구",
+         "region": "대구"
+        },
+        "attributes": {}
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "실차 택시 통행량",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "last_month",
+       "aggregation": "max",
+       "order": "top",
+       "limit": 1,
+       "dimension": "emd"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": "max",
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": null,
+     "arg_mismatches": null,
+     "calls": [],
+     "final_answer": null,
+     "thinking_chars": [
+      4364,
+      3737
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    }
+   }
+  },
+  "040": {
+   "question": "휴일 오후 6시부터 8시까지 부산의 승차 읍면동 중 가장 많은 곳은?",
+   "expected_outcome": "answered",
+   "gold_calls": [
+    "get_place_scope(name=부산)",
+    "get_trip_count(scope_pickup=$pickup.scope, date=holiday, time=180000-200000, dimension=emd, dimension_target=pickup, order=top, limit=1)"
+   ],
+   "gold_grounding": {
+    "concepts": [
+     {
+      "id": "place_scope_pickup",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "부산",
+       "region": ""
+      },
+      "attributes": {
+       "od_role": "pickup"
+      }
+     },
+     {
+      "id": "event",
+      "concept": "EVENT",
+      "subtype": "trip",
+      "role": "SUPPORT",
+      "source": "implicit"
+     },
+     {
+      "id": "measure",
+      "concept": "AMOUNT",
+      "subtype": "trip_count",
+      "role": "MEASURE",
+      "source": "implicit"
+     }
+    ],
+    "factors": {
+     "date": "holiday",
+     "time": "180000-200000",
+     "dimension": "emd",
+     "dimension_target": "pickup",
+     "order": "top",
+     "limit": 1
+    }
+   },
+   "family": false,
+   "template": false,
+   "cells": {
+    "E": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:aggregation_spec"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "부산",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "부산",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "승차 읍면동",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "holiday",
+       "time": "180000-200000",
+       "aggregation": "sum",
+       "dimension": "emd",
+       "dimension_target": "pickup",
+       "order": "top",
+       "limit": 1
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": "sum",
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2600000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2600000000",
+        "date": "holiday",
+        "dimension": "emd",
+        "dimension_target": "pickup",
+        "limit": 1,
+        "order": "top",
+        "time": "180000-200000"
+       },
+       "result": [
+        {
+         "pickup": "초읍동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "부산 출발 휴일 180000-200000 읍면동별 승차 지역 기준 상위 1개 합계 실차 구간 건수\n- 초읍동: 20건",
+     "thinking_chars": [
+      1750,
+      1208
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "B-conv": {
+     "report_class": "용납할 수 없는 실패",
+     "u_flags": [
+      "U2:dimension_target"
+     ],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:dimension_target"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "부산",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "부산",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "승차 읍면동 중 가장 많은 곳",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "holiday",
+       "time": "180000-200000",
+       "dimension": "emd",
+       "order": "top",
+       "limit": 1
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [
+      [
+       "dimension_target",
+       "pickup",
+       null
+      ]
+     ],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2600000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2600000000",
+        "date": "holiday",
+        "dimension": "emd",
+        "limit": 1,
+        "order": "top",
+        "time": "180000-200000"
+       },
+       "result": [
+        {
+         "pickup": "초읍동",
+         "dropoff": "동인동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "부산 출발 휴일 180000-200000 읍면동별 상위 1개 실차 구간 건수\n- 초읍동 → 동인동: 20건",
+     "thinking_chars": [
+      2334,
+      1310
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "HF-최종": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "부산",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "부산",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "승차 읍면동 중 가장 많은 곳",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "holiday",
+       "time": "180000-200000",
+       "order": "top",
+       "limit": 1,
+       "dimension": "emd",
+       "dimension_target": "pickup"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2600000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2600000000",
+        "date": "holiday",
+        "dimension": "emd",
+        "dimension_target": "pickup",
+        "limit": 1,
+        "order": "top",
+        "time": "180000-200000"
+       },
+       "result": [
+        {
+         "pickup": "초읍동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "부산 출발 휴일 180000-200000 읍면동별 승차 지역 기준 상위 1개 실차 구간 건수\n- 초읍동: 20건",
+     "thinking_chars": [
+      3237,
+      1434
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "Ollama-최종": {
+     "report_class": "용납할 수 없는 실패",
+     "u_flags": [
+      "U2:dimension_target"
+     ],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:dimension_target"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "부산",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "부산",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "가장 많은 곳",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "holiday",
+       "time": "180000-200000",
+       "dimension": "emd",
+       "order": "top",
+       "limit": 1
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [
+      [
+       "dimension_target",
+       "pickup",
+       null
+      ]
+     ],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2600000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2600000000",
+        "date": "holiday",
+        "dimension": "emd",
+        "limit": 1,
+        "order": "top",
+        "time": "180000-200000"
+       },
+       "result": [
+        {
+         "pickup": "초읍동",
+         "dropoff": "동인동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "부산 출발 휴일 180000-200000 읍면동별 상위 1개 실차 구간 건수\n- 초읍동 → 동인동: 20건",
+     "thinking_chars": [
+      1900
+     ],
+     "call_kinds": [
+      "plan"
+     ]
+    },
+    "Ollama-SFT": {
+     "report_class": "용납할 수 없는 실패",
+     "u_flags": [
+      "U2:dimension_target"
+     ],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:aggregation_spec",
+      "factor:dimension_target"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "place_1",
+        "text": "부산",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "부산",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "승차 읍면동 중 가장 많은 곳",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "holiday",
+       "time": "180000-200000",
+       "dimension": "emd",
+       "order": "top",
+       "limit": 1,
+       "aggregation": "sum"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": "sum",
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [
+      [
+       "dimension_target",
+       "pickup",
+       null
+      ]
+     ],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2600000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2600000000",
+        "date": "holiday",
+        "dimension": "emd",
+        "limit": 1,
+        "order": "top",
+        "time": "180000-200000"
+       },
+       "result": [
+        {
+         "pickup": "초읍동",
+         "dropoff": "동인동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "부산 출발 휴일 180000-200000 읍면동별 상위 1개 합계 실차 구간 건수\n- 초읍동 → 동인동: 20건",
+     "thinking_chars": [
+      3928,
+      1427
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "HF-SFT": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "부산",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "부산",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "승차 읍면동 중 가장 많은 곳",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "holiday",
+       "time": "180000-200000",
+       "dimension": "emd",
+       "dimension_target": "pickup",
+       "order": "top",
+       "limit": 1
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2600000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2600000000",
+        "date": "holiday",
+        "dimension": "emd",
+        "dimension_target": "pickup",
+        "limit": 1,
+        "order": "top",
+        "time": "180000-200000"
+       },
+       "result": [
+        {
+         "pickup": "초읍동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "부산 출발 휴일 180000-200000 읍면동별 승차 지역 기준 상위 1개 실차 구간 건수\n- 초읍동: 20건",
+     "thinking_chars": [
+      2315,
+      1515
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    }
+   }
+  },
+  "041": {
+   "question": "이번 달 부산에서 하차 건수가 적은 읍면동 하위 2곳은?",
+   "expected_outcome": "answered",
+   "gold_calls": [
+    "get_place_scope(name=부산)",
+    "get_trip_count(scope_dropoff=$dropoff.scope, date=this_month, dimension=emd, dimension_target=dropoff, order=bottom, limit=2)"
+   ],
+   "gold_grounding": {
+    "concepts": [
+     {
+      "id": "place_scope_dropoff",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "부산",
+       "region": ""
+      },
+      "attributes": {
+       "od_role": "dropoff"
+      }
+     },
+     {
+      "id": "event",
+      "concept": "EVENT",
+      "subtype": "trip",
+      "role": "SUPPORT",
+      "source": "implicit"
+     },
+     {
+      "id": "measure",
+      "concept": "AMOUNT",
+      "subtype": "trip_count",
+      "role": "MEASURE",
+      "source": "implicit"
+     }
+    ],
+    "factors": {
+     "date": "this_month",
+     "dimension": "emd",
+     "dimension_target": "dropoff",
+     "order": "bottom",
+     "limit": 2
+    }
+   },
+   "family": false,
+   "template": false,
+   "cells": {
+    "E": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:aggregation_spec"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "place_1",
+        "text": "",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "COND",
+        "source": "user",
+        "value": {
+         "name": "부산",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "dropoff"
+        }
+       }
+      ],
+      "factors": {
+       "dimension": "emd",
+       "dimension_target": "dropoff",
+       "order": "bottom",
+       "limit": 2,
+       "date": "this_month",
+       "aggregation": "sum"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": "sum",
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2600000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_dropoff": "scope:district:2600000000",
+        "date": "this_month",
+        "dimension": "emd",
+        "dimension_target": "dropoff",
+        "limit": 2,
+        "order": "bottom"
+       },
+       "result": [
+        {
+         "dropoff": "초읍동",
+         "count": 20
+        },
+        {
+         "dropoff": "초량동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "부산 도착 이번 달 읍면동별 하차 지역 기준 하위 2개 합계 실차 구간 건수\n- 초읍동: 20건\n- 초량동: 20건",
+     "thinking_chars": [
+      4497,
+      1494
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "B-conv": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "부산",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "COND",
+        "source": "user",
+        "value": {
+         "name": "부산",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "dropoff"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "하차 건수",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "this_month",
+       "dimension": "emd",
+       "dimension_target": "dropoff",
+       "order": "bottom",
+       "limit": 2
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2600000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_dropoff": "scope:district:2600000000",
+        "date": "this_month",
+        "dimension": "emd",
+        "dimension_target": "dropoff",
+        "limit": 2,
+        "order": "bottom"
+       },
+       "result": [
+        {
+         "dropoff": "초읍동",
+         "count": 20
+        },
+        {
+         "dropoff": "초량동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "부산 도착 이번 달 읍면동별 하차 지역 기준 하위 2개 실차 구간 건수\n- 초읍동: 20건\n- 초량동: 20건",
+     "thinking_chars": [
+      3113,
+      6059
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "HF-최종": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "부산",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "부산",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "dropoff"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "하차 건수",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "this_month",
+       "dimension": "emd",
+       "dimension_target": "dropoff",
+       "order": "bottom",
+       "limit": 2
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2600000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_dropoff": "scope:district:2600000000",
+        "date": "this_month",
+        "dimension": "emd",
+        "dimension_target": "dropoff",
+        "limit": 2,
+        "order": "bottom"
+       },
+       "result": [
+        {
+         "dropoff": "초읍동",
+         "count": 20
+        },
+        {
+         "dropoff": "초량동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "부산 도착 이번 달 읍면동별 하차 지역 기준 하위 2개 실차 구간 건수\n- 초읍동: 20건\n- 초량동: 20건",
+     "thinking_chars": [
+      1938,
+      1784
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "Ollama-최종": {
+     "report_class": "용납할 수 없는 실패",
+     "u_flags": [
+      "U2:scope_dropoff",
+      "U2:scope_pickup"
+     ],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "places"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "region",
+        "text": "부산",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "부산",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "하차 건수",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "this_month",
+       "dimension": "emd",
+       "dimension_target": "dropoff",
+       "order": "bottom",
+       "limit": 2
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [
+      [
+       "scope_dropoff",
+       "scope:district:2600000000",
+       null
+      ],
+      [
+       "scope_pickup",
+       null,
+       "scope:district:2600000000"
+      ]
+     ],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2600000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2600000000",
+        "date": "this_month",
+        "dimension": "emd",
+        "dimension_target": "dropoff",
+        "limit": 2,
+        "order": "bottom"
+       },
+       "result": [
+        {
+         "dropoff": "동인동",
+         "count": 20
+        },
+        {
+         "dropoff": "중앙로동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "부산 출발 이번 달 읍면동별 하차 지역 기준 하위 2개 실차 구간 건수\n- 동인동: 20건\n- 중앙로동: 20건",
+     "thinking_chars": [
+      4893,
+      89202
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "Ollama-SFT": {
+     "report_class": "용납할 수 없는 실패",
+     "u_flags": [
+      "U2:dimension_target"
+     ],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:dimension_target"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "부산",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "부산",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "dropoff"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "하차 건수",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "this_month",
+       "dimension": "emd",
+       "order": "bottom",
+       "limit": 2
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [
+      [
+       "dimension_target",
+       "dropoff",
+       null
+      ]
+     ],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2600000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_dropoff": "scope:district:2600000000",
+        "date": "this_month",
+        "dimension": "emd",
+        "limit": 2,
+        "order": "bottom"
+       },
+       "result": [
+        {
+         "pickup": "동인동",
+         "dropoff": "초읍동",
+         "count": 20
+        },
+        {
+         "pickup": "중앙로동",
+         "dropoff": "초량동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "부산 도착 이번 달 읍면동별 하위 2개 실차 구간 건수\n- 동인동 → 초읍동: 20건\n- 중앙로동 → 초량동: 20건",
+     "thinking_chars": [
+      3340,
+      59271
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "HF-SFT": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:aggregation_spec"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "부산",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "COND",
+        "source": "user",
+        "value": {
+         "name": "부산",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "dropoff"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "하차 건수",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "this_month",
+       "dimension": "emd",
+       "dimension_target": "dropoff",
+       "order": "bottom",
+       "limit": 2,
+       "aggregation": "sum"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": "sum",
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2600000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_dropoff": "scope:district:2600000000",
+        "date": "this_month",
+        "dimension": "emd",
+        "dimension_target": "dropoff",
+        "limit": 2,
+        "order": "bottom"
+       },
+       "result": [
+        {
+         "dropoff": "초읍동",
+         "count": 20
+        },
+        {
+         "dropoff": "초량동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "부산 도착 이번 달 읍면동별 하차 지역 기준 하위 2개 합계 실차 구간 건수\n- 초읍동: 20건\n- 초량동: 20건",
+     "thinking_chars": [
+      4316,
+      1727
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    }
+   }
+  },
+  "054": {
+   "question": "부산 광안동의 실차 택시 통행량은?",
+   "expected_outcome": "answered",
+   "gold_calls": [
+    "get_place_scope(name=광안동, region=부산)",
+    "get_passage_count(scope=$resolve.scope, taxi_status=occupied)"
+   ],
+   "gold_grounding": {
+    "concepts": [
+     {
+      "id": "place_scope",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "광안동",
+       "region": "부산"
+      }
+     },
+     {
+      "id": "event",
+      "concept": "EVENT",
+      "subtype": "passage",
+      "role": "SUPPORT",
+      "source": "implicit"
+     },
+     {
+      "id": "measure",
+      "concept": "AMOUNT",
+      "subtype": "passage_count",
+      "role": "MEASURE",
+      "source": "implicit"
+     }
+    ],
+    "factors": {
+     "taxi_status": "occupied"
+    }
+   },
+   "family": false,
+   "template": false,
+   "cells": {
+    "E": {
+     "report_class": "용납할 수 없는 실패",
+     "u_flags": [
+      "U1:taxi_status",
+      "U2:scope",
+      "U2:scope_pickup",
+      "U3:tool"
+     ],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:taxi_status",
+      "measure",
+      "places"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "광안동",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "광안동",
+         "region": "부산"
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "실차 택시 통행량",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {},
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": false,
+     "arg_mismatches": [
+      [
+       "scope",
+       "scope:district:2650010400",
+       null
+      ],
+      [
+       "scope_pickup",
+       null,
+       "scope:district:2650010400"
+      ],
+      [
+       "taxi_status",
+       "occupied",
+       null
+      ]
+     ],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "광안동",
+        "region": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2650010400"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2650010400"
+       },
+       "result": {
+        "count": 20
+       }
+      }
+     ],
+     "final_answer": "부산 광안동 출발 실차 구간 건수: 20건",
+     "thinking_chars": [
+      2329,
+      2239
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "B-conv": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "부산 광안동",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "광안동",
+         "region": "부산"
+        },
+        "attributes": {}
+       },
+       {
+        "id": "passage",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "passage",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "passage_count",
+        "text": "통행량",
+        "concept": "AMOUNT",
+        "subtype": "passage_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "taxi_status": "occupied"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "광안동",
+        "region": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2650010400"
+      },
+      {
+       "tool": "get_passage_count",
+       "args": {
+        "scope": "scope:district:2650010400",
+        "taxi_status": "occupied"
+       },
+       "result": {
+        "count": 12345
+       }
+      }
+     ],
+     "final_answer": "부산 광안동 실차 택시 통행량: 12,345건",
+     "thinking_chars": [
+      4807
+     ],
+     "call_kinds": [
+      "plan"
+     ]
+    },
+    "HF-최종": {
+     "report_class": "안전한 실패",
+     "u_flags": [],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:taxi_status",
+      "measure"
+     ],
+     "outcome": "failed",
+     "error_code": "MISSING_RELATION_QUALIFIER",
+     "grounding": {
+      "concepts": [
+       {
+        "id": "place_1",
+        "text": "부산 광안동",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "광안동",
+         "region": "부산"
+        },
+        "attributes": {}
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "실차 택시 통행량",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {},
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": null,
+     "arg_mismatches": null,
+     "calls": [],
+     "final_answer": null,
+     "thinking_chars": [
+      2221,
+      2238
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "Ollama-최종": {
+     "report_class": "용납할 수 없는 실패",
+     "u_flags": [
+      "U1:taxi_status",
+      "U2:scope",
+      "U2:scope_pickup",
+      "U3:tool"
+     ],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:taxi_status",
+      "measure",
+      "places"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "부산 광안동",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "광안동",
+         "region": "부산"
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "실차 택시 통행량",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {},
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": false,
+     "arg_mismatches": [
+      [
+       "scope",
+       "scope:district:2650010400",
+       null
+      ],
+      [
+       "scope_pickup",
+       null,
+       "scope:district:2650010400"
+      ],
+      [
+       "taxi_status",
+       "occupied",
+       null
+      ]
+     ],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "광안동",
+        "region": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2650010400"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2650010400"
+       },
+       "result": {
+        "count": 20
+       }
+      }
+     ],
+     "final_answer": "부산 광안동 출발 실차 구간 건수: 20건",
+     "thinking_chars": [
+      7813,
+      2908
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "Ollama-SFT": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "place_1",
+        "text": "부산 광안동",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "광안동",
+         "region": "부산"
+        },
+        "attributes": {}
+       },
+       {
+        "id": "passage",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "passage",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "passage_count",
+        "text": "통행량",
+        "concept": "AMOUNT",
+        "subtype": "passage_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "taxi_status": "occupied"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "광안동",
+        "region": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2650010400"
+      },
+      {
+       "tool": "get_passage_count",
+       "args": {
+        "scope": "scope:district:2650010400",
+        "taxi_status": "occupied"
+       },
+       "result": {
+        "count": 12345
+       }
+      }
+     ],
+     "final_answer": "부산 광안동 실차 택시 통행량: 12,345건",
+     "thinking_chars": [
+      8630
+     ],
+     "call_kinds": [
+      "plan"
+     ]
+    },
+    "HF-SFT": {
+     "report_class": "용납할 수 없는 실패",
+     "u_flags": [
+      "U1:taxi_status",
+      "U2:scope",
+      "U2:scope_pickup",
+      "U3:tool"
+     ],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:taxi_status",
+      "measure",
+      "places"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "place_1",
+        "text": "부산 광안동",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "광안동",
+         "region": "부산"
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "실차 택시 통행량",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {},
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": false,
+     "arg_mismatches": [
+      [
+       "scope",
+       "scope:district:2650010400",
+       null
+      ],
+      [
+       "scope_pickup",
+       null,
+       "scope:district:2650010400"
+      ],
+      [
+       "taxi_status",
+       "occupied",
+       null
+      ]
+     ],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "광안동",
+        "region": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2650010400"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2650010400"
+       },
+       "result": {
+        "count": 20
+       }
+      }
+     ],
+     "final_answer": "부산 광안동 출발 실차 구간 건수: 20건",
+     "thinking_chars": [
+      1870,
+      1934
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    }
+   }
+  },
+  "074": {
+   "question": "휴일 부산 초읍동 어린이대공원 주변의 실차 택시 통행량은?",
+   "expected_outcome": "answered",
+   "gold_calls": [
+    "get_place_scope(name=어린이대공원, region=부산 초읍동, include_vicinity=true)",
+    "get_passage_count(scope=$resolve.scope, date=holiday, taxi_status=occupied)"
+   ],
+   "gold_grounding": {
+    "concepts": [
+     {
+      "id": "place_scope",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "어린이대공원",
+       "region": "부산 초읍동"
+      }
+     },
+     {
+      "id": "event",
+      "concept": "EVENT",
+      "subtype": "passage",
+      "role": "SUPPORT",
+      "source": "implicit"
+     },
+     {
+      "id": "measure",
+      "concept": "AMOUNT",
+      "subtype": "passage_count",
+      "role": "MEASURE",
+      "source": "implicit"
+     }
+    ],
+    "factors": {
+     "vicinity": true,
+     "date": "holiday",
+     "taxi_status": "occupied"
+    }
+   },
+   "family": false,
+   "template": false,
+   "cells": {
+    "E": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "place_1",
+        "text": "부산 초읍동 어린이대공원",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "어린이대공원",
+         "region": "부산 초읍동"
+        },
+        "attributes": {}
+       },
+       {
+        "id": "passage",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "passage",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "passage_count",
+        "text": "통행량",
+        "concept": "AMOUNT",
+        "subtype": "passage_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "holiday",
+       "vicinity": true,
+       "taxi_status": "occupied"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "어린이대공원",
+        "region": "부산 초읍동",
+        "include_vicinity": true
+       },
+       "result": "scope:gz:3982"
+      },
+      {
+       "tool": "get_passage_count",
+       "args": {
+        "scope": "scope:gz:3982",
+        "date": "holiday",
+        "taxi_status": "occupied"
+       },
+       "result": {
+        "count": 12345
+       }
+      }
+     ],
+     "final_answer": "부산 초읍동 어린이대공원 주변 휴일 실차 택시 통행량: 12,345건",
+     "thinking_chars": [
+      4153
+     ],
+     "call_kinds": [
+      "plan"
+     ]
+    },
+    "B-conv": {
+     "report_class": "용납할 수 없는 실패",
+     "u_flags": [
+      "U1:taxi_status",
+      "U2:scope",
+      "U2:scope_pickup",
+      "U3:tool"
+     ],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:taxi_status",
+      "measure",
+      "places"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "place_1",
+        "text": "부산 초읍동 어린이대공원",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "어린이대공원",
+         "region": "부산 초읍동"
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "실차 택시 통행량",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "vicinity": true,
+       "date": "holiday"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": false,
+     "arg_mismatches": [
+      [
+       "scope",
+       "scope:gz:3982",
+       null
+      ],
+      [
+       "scope_pickup",
+       null,
+       "scope:gz:3982"
+      ],
+      [
+       "taxi_status",
+       "occupied",
+       null
+      ]
+     ],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "어린이대공원",
+        "region": "부산 초읍동",
+        "include_vicinity": true
+       },
+       "result": "scope:gz:3982"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:gz:3982",
+        "date": "holiday"
+       },
+       "result": {
+        "count": 20
+       }
+      }
+     ],
+     "final_answer": "부산 초읍동 어린이대공원 출발 휴일 실차 구간 건수: 20건",
+     "thinking_chars": [
+      4220,
+      4681
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "HF-최종": {
+     "report_class": "안전한 실패",
+     "u_flags": [],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:taxi_status",
+      "measure"
+     ],
+     "outcome": "failed",
+     "error_code": "MISSING_RELATION_QUALIFIER",
+     "grounding": {
+      "concepts": [
+       {
+        "id": "place_1",
+        "text": "부산 초읍동 어린이대공원",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "어린이대공원",
+         "region": "부산 초읍동"
+        },
+        "attributes": {}
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "실차 택시 통행량",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "vicinity": true,
+       "date": "holiday"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": null,
+     "arg_mismatches": null,
+     "calls": [],
+     "final_answer": null,
+     "thinking_chars": [
+      3743,
+      3127
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "Ollama-최종": {
+     "report_class": "용납할 수 없는 실패",
+     "u_flags": [
+      "U1:taxi_status",
+      "U2:scope",
+      "U2:scope_dropoff",
+      "U2:scope_pickup",
+      "U3:tool"
+     ],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:taxi_status",
+      "measure",
+      "places"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "place_1",
+        "text": "부산 초읍동 어린이대공원",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "어린이대공원",
+         "region": "부산 초읍동"
+        },
+        "attributes": {
+         "od_role": "both"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "실차 택시 통행량",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "vicinity": true,
+       "date": "holiday"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": false,
+     "arg_mismatches": [
+      [
+       "scope",
+       "scope:gz:3982",
+       null
+      ],
+      [
+       "scope_dropoff",
+       null,
+       "scope:gz:3982"
+      ],
+      [
+       "scope_pickup",
+       null,
+       "scope:gz:3982"
+      ],
+      [
+       "taxi_status",
+       "occupied",
+       null
+      ]
+     ],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "어린이대공원",
+        "region": "부산 초읍동",
+        "include_vicinity": true
+       },
+       "result": "scope:gz:3982"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:gz:3982",
+        "scope_dropoff": "scope:gz:3982",
+        "date": "holiday"
+       },
+       "result": {
+        "count": 20
+       }
+      }
+     ],
+     "final_answer": "부산 초읍동 어린이대공원 주변 휴일 실차 구간 건수: 20건",
+     "thinking_chars": [
+      2003,
+      2692
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "Ollama-SFT": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "place_1",
+        "text": "부산 초읍동 어린이대공원",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "어린이대공원",
+         "region": "부산 초읍동"
+        },
+        "attributes": {}
+       },
+       {
+        "id": "passage",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "passage",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "passage_count",
+        "text": "실차 택시 통행량",
+        "concept": "AMOUNT",
+        "subtype": "passage_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "holiday",
+       "vicinity": true,
+       "taxi_status": "occupied"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "어린이대공원",
+        "region": "부산 초읍동",
+        "include_vicinity": true
+       },
+       "result": "scope:gz:3982"
+      },
+      {
+       "tool": "get_passage_count",
+       "args": {
+        "scope": "scope:gz:3982",
+        "date": "holiday",
+        "taxi_status": "occupied"
+       },
+       "result": {
+        "count": 12345
+       }
+      }
+     ],
+     "final_answer": "부산 초읍동 어린이대공원 주변 휴일 실차 택시 통행량: 12,345건",
+     "thinking_chars": [
+      1883
+     ],
+     "call_kinds": [
+      "plan"
+     ]
+    },
+    "HF-SFT": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "place_1",
+        "text": "부산 초읍동 어린이대공원",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "어린이대공원",
+         "region": "부산 초읍동"
+        },
+        "attributes": {}
+       },
+       {
+        "id": "passage",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "passage",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "passage_count",
+        "text": "실차 택시 통행량",
+        "concept": "AMOUNT",
+        "subtype": "passage_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "vicinity": true,
+       "date": "holiday",
+       "taxi_status": "occupied"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "어린이대공원",
+        "region": "부산 초읍동",
+        "include_vicinity": true
+       },
+       "result": "scope:gz:3982"
+      },
+      {
+       "tool": "get_passage_count",
+       "args": {
+        "scope": "scope:gz:3982",
+        "date": "holiday",
+        "taxi_status": "occupied"
+       },
+       "result": {
+        "count": 12345
+       }
+      }
+     ],
+     "final_answer": "부산 초읍동 어린이대공원 주변 휴일 실차 택시 통행량: 12,345건",
+     "thinking_chars": [
+      2143
+     ],
+     "call_kinds": [
+      "plan"
+     ]
+    }
+   }
+  },
+  "093": {
+   "question": "이번 달 부산 안에서 이용이 적은 읍면동 간 OD 노선 하위 2개는?",
+   "expected_outcome": "answered",
+   "gold_calls": [
+    "get_place_scope(name=부산)",
+    "get_trip_count(scope_pickup=$area.scope, scope_dropoff=$area.scope, date=this_month, dimension=emd, dimension_target=both, order=bottom, limit=2)"
+   ],
+   "gold_grounding": {
+    "concepts": [
+     {
+      "id": "place_scope_pickup",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "부산",
+       "region": ""
+      },
+      "attributes": {
+       "od_role": "pickup"
+      }
+     },
+     {
+      "id": "place_scope_dropoff",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "부산",
+       "region": ""
+      },
+      "attributes": {
+       "od_role": "dropoff"
+      }
+     },
+     {
+      "id": "event",
+      "concept": "EVENT",
+      "subtype": "trip",
+      "role": "SUPPORT",
+      "source": "implicit"
+     },
+     {
+      "id": "measure",
+      "concept": "AMOUNT",
+      "subtype": "trip_count",
+      "role": "MEASURE",
+      "source": "implicit"
+     }
+    ],
+    "factors": {
+     "date": "this_month",
+     "dimension": "emd",
+     "dimension_target": "both",
+     "order": "bottom",
+     "limit": 2
+    }
+   },
+   "family": true,
+   "template": true,
+   "cells": {
+    "E": {
+     "report_class": "안전한 실패",
+     "u_flags": [],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "places"
+     ],
+     "outcome": "failed",
+     "error_code": "MISSING_RELATION_QUALIFIER",
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "부산",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "부산",
+         "region": ""
+        },
+        "attributes": {}
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "이용이 적은 읍면동 간 OD 노선",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "this_month",
+       "dimension": "emd",
+       "dimension_target": "both",
+       "order": "bottom",
+       "limit": 2
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      },
+      "normalizations": [
+       {
+        "rule": "default_answer_without_bucket_dropped",
+        "factor": "answer",
+        "value": "value"
+       }
+      ]
+     },
+     "tool_ok": null,
+     "arg_mismatches": null,
+     "calls": [],
+     "final_answer": null,
+     "thinking_chars": [
+      2138,
+      55539
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "B-conv": {
+     "report_class": "용납할 수 없는 실패",
+     "u_flags": [
+      "U2:scope_dropoff"
+     ],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "places"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "origin",
+        "text": "부산",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "부산",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "이용량",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "this_month",
+       "dimension": "emd",
+       "dimension_target": "both",
+       "order": "bottom",
+       "limit": 2
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      },
+      "normalizations": [
+       {
+        "concept": "destination",
+        "rule": "unit_word_place_duplicate_dropped",
+        "before": {
+         "name": "읍면동",
+         "region": "부산"
+        }
+       }
+      ]
+     },
+     "tool_ok": true,
+     "arg_mismatches": [
+      [
+       "scope_dropoff",
+       "scope:district:2600000000",
+       null
+      ]
+     ],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2600000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2600000000",
+        "date": "this_month",
+        "dimension": "emd",
+        "dimension_target": "both",
+        "limit": 2,
+        "order": "bottom"
+       },
+       "result": [
+        {
+         "pickup": "초읍동",
+         "dropoff": "동인동",
+         "count": 20
+        },
+        {
+         "pickup": "초량동",
+         "dropoff": "중앙로동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "부산 출발 이번 달 읍면동별 승하차 지역 조합 하위 2개 실차 구간 건수\n- 초읍동 → 동인동: 20건\n- 초량동 → 중앙로동: 20건",
+     "thinking_chars": [
+      1735
+     ],
+     "call_kinds": [
+      "plan"
+     ]
+    },
+    "HF-최종": {
+     "report_class": "안전한 실패",
+     "u_flags": [],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:aggregation_spec",
+      "places"
+     ],
+     "outcome": "unsupported",
+     "error_code": "UNCONSUMED_CONDITION",
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "부산 안에서",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "COND",
+        "source": "user",
+        "value": {
+         "name": "부산",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "both"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "이용이 적은 읍면동 간 OD 노선",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "this_month",
+       "dimension": "emd",
+       "dimension_target": "both",
+       "order": "bottom",
+       "limit": 2,
+       "aggregation": "min"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": "min",
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": null,
+     "arg_mismatches": null,
+     "calls": [],
+     "final_answer": null,
+     "thinking_chars": [
+      5977,
+      11132
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "Ollama-최종": {
+     "report_class": "용납할 수 없는 실패",
+     "u_flags": [
+      "U2:scope_dropoff"
+     ],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "places"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "origin",
+        "text": "부산 안에서",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "부산",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "destination",
+        "text": "읍면동 간 OD 노선",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "이용이 적은 읍면동 간 OD 노선",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "this_month",
+       "dimension": "emd",
+       "order": "bottom",
+       "limit": 2
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      },
+      "normalizations": [
+       {
+        "concept": "origin",
+        "rule": "empty_name_region_is_place",
+        "before": {
+         "name": "",
+         "region": "부산"
+        },
+        "after": {
+         "name": "부산",
+         "region": ""
+        }
+       }
+      ]
+     },
+     "tool_ok": true,
+     "arg_mismatches": [
+      [
+       "scope_dropoff",
+       "scope:district:2600000000",
+       null
+      ]
+     ],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2600000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2600000000",
+        "date": "this_month",
+        "dimension": "emd",
+        "limit": 2,
+        "order": "bottom"
+       },
+       "result": [
+        {
+         "pickup": "초읍동",
+         "dropoff": "동인동",
+         "count": 20
+        },
+        {
+         "pickup": "초량동",
+         "dropoff": "중앙로동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "부산 출발 이번 달 읍면동별 하위 2개 실차 구간 건수\n- 초읍동 → 동인동: 20건\n- 초량동 → 중앙로동: 20건",
+     "thinking_chars": [
+      2230
+     ],
+     "call_kinds": [
+      "plan"
+     ]
+    },
+    "Ollama-SFT": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "places"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "부산 안에서",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "부산",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "both"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "이용이 적은 읍면동 간 OD 노선",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "this_month",
+       "dimension": "emd",
+       "order": "bottom",
+       "limit": 2,
+       "dimension_target": "both"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2600000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2600000000",
+        "scope_dropoff": "scope:district:2600000000",
+        "date": "this_month",
+        "dimension": "emd",
+        "dimension_target": "both",
+        "limit": 2,
+        "order": "bottom"
+       },
+       "result": [
+        {
+         "pickup": "초읍동",
+         "dropoff": "초읍동",
+         "count": 20
+        },
+        {
+         "pickup": "초량동",
+         "dropoff": "초량동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "부산 이번 달 읍면동별 승하차 지역 조합 하위 2개 실차 구간 건수\n- 초읍동 → 초읍동: 20건\n- 초량동 → 초량동: 20건",
+     "thinking_chars": [
+      2364,
+      1641
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "HF-SFT": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "places"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "부산",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "COND",
+        "source": "user",
+        "value": {
+         "name": "부산",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "both"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "이용이 적은 읍면동 간 OD 노선",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "this_month",
+       "dimension": "emd",
+       "dimension_target": "both",
+       "order": "bottom",
+       "limit": 2
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "부산",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2600000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2600000000",
+        "scope_dropoff": "scope:district:2600000000",
+        "date": "this_month",
+        "dimension": "emd",
+        "dimension_target": "both",
+        "limit": 2,
+        "order": "bottom"
+       },
+       "result": [
+        {
+         "pickup": "초읍동",
+         "dropoff": "초읍동",
+         "count": 20
+        },
+        {
+         "pickup": "초량동",
+         "dropoff": "초량동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "부산 이번 달 읍면동별 승하차 지역 조합 하위 2개 실차 구간 건수\n- 초읍동 → 초읍동: 20건\n- 초량동 → 초량동: 20건",
+     "thinking_chars": [
+      3124,
+      9108
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    }
+   }
+  },
+  "044": {
+   "question": "지난 주 대구에서 승차 건수가 적은 읍면동 하위 2곳은?",
+   "expected_outcome": "answered",
+   "gold_calls": [
+    "get_place_scope(name=대구)",
+    "get_trip_count(scope_pickup=$pickup.scope, date=last_week, dimension=emd, dimension_target=pickup, order=bottom, limit=2)"
+   ],
+   "gold_grounding": {
+    "concepts": [
+     {
+      "id": "place_scope_pickup",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "대구",
+       "region": ""
+      },
+      "attributes": {
+       "od_role": "pickup"
+      }
+     },
+     {
+      "id": "event",
+      "concept": "EVENT",
+      "subtype": "trip",
+      "role": "SUPPORT",
+      "source": "implicit"
+     },
+     {
+      "id": "measure",
+      "concept": "AMOUNT",
+      "subtype": "trip_count",
+      "role": "MEASURE",
+      "source": "implicit"
+     }
+    ],
+    "factors": {
+     "date": "last_week",
+     "dimension": "emd",
+     "dimension_target": "pickup",
+     "order": "bottom",
+     "limit": 2
+    }
+   },
+   "family": false,
+   "template": false,
+   "cells": {
+    "E": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "pickup_location",
+        "text": "대구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "대구",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "승차 건수",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "last_week",
+       "dimension": "emd",
+       "dimension_target": "pickup",
+       "order": "bottom",
+       "limit": 2
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2700000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2700000000",
+        "date": "last_week",
+        "dimension": "emd",
+        "dimension_target": "pickup",
+        "limit": 2,
+        "order": "bottom"
+       },
+       "result": [
+        {
+         "pickup": "동인동",
+         "count": 20
+        },
+        {
+         "pickup": "중앙로동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "대구 출발 지난주 읍면동별 승차 지역 기준 하위 2개 실차 구간 건수\n- 동인동: 20건\n- 중앙로동: 20건",
+     "thinking_chars": [
+      2154
+     ],
+     "call_kinds": [
+      "plan"
+     ]
+    },
+    "B-conv": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "trip",
+        "text": "승차 건수",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "place",
+        "text": "대구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "대구",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip_count",
+        "text": "승차 건수",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "last_week",
+       "dimension": "emd",
+       "dimension_target": "pickup",
+       "order": "bottom",
+       "limit": 2
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2700000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2700000000",
+        "date": "last_week",
+        "dimension": "emd",
+        "dimension_target": "pickup",
+        "limit": 2,
+        "order": "bottom"
+       },
+       "result": [
+        {
+         "pickup": "동인동",
+         "count": 20
+        },
+        {
+         "pickup": "중앙로동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "대구 출발 지난주 읍면동별 승차 지역 기준 하위 2개 실차 구간 건수\n- 동인동: 20건\n- 중앙로동: 20건",
+     "thinking_chars": [
+      2396,
+      2345
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "HF-최종": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "대구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "대구",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "승차 건수",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "last_week",
+       "dimension": "emd",
+       "dimension_target": "pickup",
+       "order": "bottom",
+       "limit": 2
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2700000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2700000000",
+        "date": "last_week",
+        "dimension": "emd",
+        "dimension_target": "pickup",
+        "limit": 2,
+        "order": "bottom"
+       },
+       "result": [
+        {
+         "pickup": "동인동",
+         "count": 20
+        },
+        {
+         "pickup": "중앙로동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "대구 출발 지난주 읍면동별 승차 지역 기준 하위 2개 실차 구간 건수\n- 동인동: 20건\n- 중앙로동: 20건",
+     "thinking_chars": [
+      2602,
+      1236
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "Ollama-최종": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "대구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "대구",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "승차 건수",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "last_week",
+       "dimension": "emd",
+       "dimension_target": "pickup",
+       "order": "bottom",
+       "limit": 2
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2700000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2700000000",
+        "date": "last_week",
+        "dimension": "emd",
+        "dimension_target": "pickup",
+        "limit": 2,
+        "order": "bottom"
+       },
+       "result": [
+        {
+         "pickup": "동인동",
+         "count": 20
+        },
+        {
+         "pickup": "중앙로동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "대구 출발 지난주 읍면동별 승차 지역 기준 하위 2개 실차 구간 건수\n- 동인동: 20건\n- 중앙로동: 20건",
+     "thinking_chars": [
+      2430,
+      1153
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "Ollama-SFT": {
+     "report_class": "용납할 수 없는 실패",
+     "u_flags": [
+      "U2:dimension_target"
+     ],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:dimension",
+      "factor:dimension_target"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "대구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "대구",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "승차 건수",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "last_week",
+       "dimension": "sigungu",
+       "order": "bottom",
+       "limit": 2
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [
+      [
+       "dimension",
+       "emd",
+       "sigungu"
+      ],
+      [
+       "dimension_target",
+       "pickup",
+       null
+      ]
+     ],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2700000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2700000000",
+        "date": "last_week",
+        "dimension": "sigungu",
+        "limit": 2,
+        "order": "bottom"
+       },
+       "result": [
+        {
+         "pickup": "중구",
+         "dropoff": "부산진구",
+         "count": 20
+        },
+        {
+         "pickup": "동구",
+         "dropoff": "부산 동구",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "대구 출발 지난주 시군구별 하위 2개 실차 구간 건수\n- 중구 → 부산진구: 20건\n- 동구 → 부산 동구: 20건",
+     "thinking_chars": [
+      2559,
+      1063
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "HF-SFT": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "대구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "대구",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "pickup"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "승차 건수",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "last_week",
+       "dimension": "emd",
+       "dimension_target": "pickup",
+       "order": "bottom",
+       "limit": 2
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2700000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_pickup": "scope:district:2700000000",
+        "date": "last_week",
+        "dimension": "emd",
+        "dimension_target": "pickup",
+        "limit": 2,
+        "order": "bottom"
+       },
+       "result": [
+        {
+         "pickup": "동인동",
+         "count": 20
+        },
+        {
+         "pickup": "중앙로동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "대구 출발 지난주 읍면동별 승차 지역 기준 하위 2개 실차 구간 건수\n- 동인동: 20건\n- 중앙로동: 20건",
+     "thinking_chars": [
+      2415,
+      1247
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    }
+   }
+  },
+  "085": {
+   "question": "이번 주 대구에 도착한 실차의 하차 읍면동을 많은 순서로 3곳 알려줘.",
+   "expected_outcome": "answered",
+   "gold_calls": [
+    "get_place_scope(name=대구)",
+    "get_trip_count(scope_dropoff=$dropoff.scope, date=this_week, dimension=emd, dimension_target=dropoff, order=top, limit=3)"
+   ],
+   "gold_grounding": {
+    "concepts": [
+     {
+      "id": "place_scope_dropoff",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "대구",
+       "region": ""
+      },
+      "attributes": {
+       "od_role": "dropoff"
+      }
+     },
+     {
+      "id": "event",
+      "concept": "EVENT",
+      "subtype": "trip",
+      "role": "SUPPORT",
+      "source": "implicit"
+     },
+     {
+      "id": "measure",
+      "concept": "AMOUNT",
+      "subtype": "trip_count",
+      "role": "MEASURE",
+      "source": "implicit"
+     }
+    ],
+    "factors": {
+     "date": "this_week",
+     "dimension": "emd",
+     "dimension_target": "dropoff",
+     "order": "top",
+     "limit": 3
+    }
+   },
+   "family": false,
+   "template": false,
+   "cells": {
+    "E": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "place_1",
+        "text": "대구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "대구",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "dropoff"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "하차 읍면동",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "dimension": "emd",
+       "dimension_target": "dropoff",
+       "order": "top",
+       "limit": 3,
+       "date": "this_week"
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2700000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_dropoff": "scope:district:2700000000",
+        "date": "this_week",
+        "dimension": "emd",
+        "dimension_target": "dropoff",
+        "limit": 3,
+        "order": "top"
+       },
+       "result": [
+        {
+         "dropoff": "동인동",
+         "count": 20
+        },
+        {
+         "dropoff": "중앙로동",
+         "count": 20
+        },
+        {
+         "dropoff": "태평로동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "대구 도착 이번 주 읍면동별 하차 지역 기준 상위 3개 실차 구간 건수\n- 동인동: 20건\n- 중앙로동: 20건\n- 태평로동: 20건",
+     "thinking_chars": [
+      7602,
+      37999
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "B-conv": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "대구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "대구",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "dropoff"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "하차 읍면동",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "this_week",
+       "dimension": "emd",
+       "dimension_target": "dropoff",
+       "order": "top",
+       "limit": 3
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2700000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_dropoff": "scope:district:2700000000",
+        "date": "this_week",
+        "dimension": "emd",
+        "dimension_target": "dropoff",
+        "limit": 3,
+        "order": "top"
+       },
+       "result": [
+        {
+         "dropoff": "동인동",
+         "count": 20
+        },
+        {
+         "dropoff": "중앙로동",
+         "count": 20
+        },
+        {
+         "dropoff": "태평로동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "대구 도착 이번 주 읍면동별 하차 지역 기준 상위 3개 실차 구간 건수\n- 동인동: 20건\n- 중앙로동: 20건\n- 태평로동: 20건",
+     "thinking_chars": [
+      2302,
+      1006
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "HF-최종": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "대구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "대구",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "dropoff"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "하차 읍면동",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "this_week",
+       "dimension": "emd",
+       "dimension_target": "dropoff",
+       "order": "top",
+       "limit": 3
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2700000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_dropoff": "scope:district:2700000000",
+        "date": "this_week",
+        "dimension": "emd",
+        "dimension_target": "dropoff",
+        "limit": 3,
+        "order": "top"
+       },
+       "result": [
+        {
+         "dropoff": "동인동",
+         "count": 20
+        },
+        {
+         "dropoff": "중앙로동",
+         "count": 20
+        },
+        {
+         "dropoff": "태평로동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "대구 도착 이번 주 읍면동별 하차 지역 기준 상위 3개 실차 구간 건수\n- 동인동: 20건\n- 중앙로동: 20건\n- 태평로동: 20건",
+     "thinking_chars": [
+      1871,
+      1728
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "Ollama-최종": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "대구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "대구",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "dropoff"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "하차 읍면동",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "this_week",
+       "dimension": "emd",
+       "dimension_target": "dropoff",
+       "order": "top",
+       "limit": 3
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2700000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_dropoff": "scope:district:2700000000",
+        "date": "this_week",
+        "dimension": "emd",
+        "dimension_target": "dropoff",
+        "limit": 3,
+        "order": "top"
+       },
+       "result": [
+        {
+         "dropoff": "동인동",
+         "count": 20
+        },
+        {
+         "dropoff": "중앙로동",
+         "count": 20
+        },
+        {
+         "dropoff": "태평로동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "대구 도착 이번 주 읍면동별 하차 지역 기준 상위 3개 실차 구간 건수\n- 동인동: 20건\n- 중앙로동: 20건\n- 태평로동: 20건",
+     "thinking_chars": [
+      4667,
+      4161
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "Ollama-SFT": {
+     "report_class": "용납할 수 없는 실패",
+     "u_flags": [
+      "U2:dimension_target"
+     ],
+     "grounding_ok": false,
+     "grounding_diff_keys": [
+      "factor:dimension_target"
+     ],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "place_1",
+        "text": "대구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "대구",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "dropoff"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "하차 읍면동",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "this_week",
+       "dimension": "emd",
+       "order": "top",
+       "limit": 3
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [
+      [
+       "dimension_target",
+       "dropoff",
+       null
+      ]
+     ],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2700000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_dropoff": "scope:district:2700000000",
+        "date": "this_week",
+        "dimension": "emd",
+        "limit": 3,
+        "order": "top"
+       },
+       "result": [
+        {
+         "pickup": "동인동",
+         "dropoff": "동인동",
+         "count": 20
+        },
+        {
+         "pickup": "중앙로동",
+         "dropoff": "중앙로동",
+         "count": 20
+        },
+        {
+         "pickup": "태평로동",
+         "dropoff": "태평로동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "대구 도착 이번 주 읍면동별 상위 3개 실차 구간 건수\n- 동인동 → 동인동: 20건\n- 중앙로동 → 중앙로동: 20건\n- 태평로동 → 태평로동: 20건",
+     "thinking_chars": [
+      1613,
+      1165
+     ],
+     "call_kinds": [
+      "plan",
+      "repair"
+     ]
+    },
+    "HF-SFT": {
+     "report_class": "정상 답변",
+     "u_flags": [],
+     "grounding_ok": true,
+     "grounding_diff_keys": [],
+     "outcome": "answered",
+     "error_code": null,
+     "grounding": {
+      "concepts": [
+       {
+        "id": "location",
+        "text": "대구",
+        "concept": "LOCATION",
+        "subtype": "place",
+        "role": "SUBCOND",
+        "source": "user",
+        "value": {
+         "name": "대구",
+         "region": ""
+        },
+        "attributes": {
+         "od_role": "dropoff"
+        }
+       },
+       {
+        "id": "trip",
+        "text": "",
+        "concept": "EVENT",
+        "subtype": "trip",
+        "role": "SUPPORT",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       },
+       {
+        "id": "trip_count",
+        "text": "하차 읍면동",
+        "concept": "AMOUNT",
+        "subtype": "trip_count",
+        "role": "MEASURE",
+        "source": "implicit",
+        "value": null,
+        "attributes": {}
+       }
+      ],
+      "factors": {
+       "date": "this_week",
+       "dimension": "emd",
+       "dimension_target": "dropoff",
+       "order": "top",
+       "limit": 3
+      },
+      "aggregation": {
+       "bucket": null,
+       "inner": null,
+       "outer": null,
+       "select": null,
+       "source": "flat"
+      }
+     },
+     "tool_ok": true,
+     "arg_mismatches": [],
+     "calls": [
+      {
+       "tool": "get_place_scope",
+       "args": {
+        "name": "대구",
+        "include_vicinity": false
+       },
+       "result": "scope:district:2700000000"
+      },
+      {
+       "tool": "get_trip_count",
+       "args": {
+        "scope_dropoff": "scope:district:2700000000",
+        "date": "this_week",
+        "dimension": "emd",
+        "dimension_target": "dropoff",
+        "limit": 3,
+        "order": "top"
+       },
+       "result": [
+        {
+         "dropoff": "동인동",
+         "count": 20
+        },
+        {
+         "dropoff": "중앙로동",
+         "count": 20
+        },
+        {
+         "dropoff": "태평로동",
+         "count": 20
+        }
+       ]
+      }
+     ],
+     "final_answer": "대구 도착 이번 주 읍면동별 하차 지역 기준 상위 3개 실차 구간 건수\n- 동인동: 20건\n- 중앙로동: 20건\n- 태평로동: 20건",
+     "thinking_chars": [
+      2694
+     ],
+     "call_kinds": [
+      "plan"
+     ]
+    }
+   }
+  }
+ }
+}
