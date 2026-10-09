@@ -30,23 +30,27 @@ greedy/sampling)의 첫 계획 응답을 (full) 그대로, (partial) `id·concep
 
 - full arm은 기록을 재현한다(cell E grounding_ok 79, match 84).
 - 3,398문항 중 3,238건(95.3%)은 Tool 호출·오류 코드·채점 범주가 완전히 같다.
-- 달라진 160건: 개선 51, 중립 103, 퇴행 6 (개선/퇴행 = match·올바른 거부 여부가 바뀜).
+- 정답(match 또는 올바른 거부 `expected_refusal`) 기준으로 Full 정답 → Partial 오답은 **0건**,
+  Full 오답 → Partial 정답은 46건이다. 나머지 114건은 오답끼리 바뀌었다.
 - 현재 기준 조건(E, HF-E, pilot HF-sft/HF-final, ollama_greedy): 100/100 동일.
 - 약한 조건일수록 이득이 크다: HF base match 50→58, cell F 55→59, HF-F 53→56.
   모델이 틀리게 적은 구조 필드(EVENT 잘못 선택, role/source 오기)가 partial에서는 생기지 않기 때문이다.
 
-원인별(`analysis.txt`, 한 문항이 여러 원인에 들 수 있음):
+원인별(`analysis.txt`, 한 문항이 여러 원인에 들 수 있음. 개선/중립 = 정답 여부가 바뀜/그대로):
 
-| 원인 | 개선 | 중립 | 퇴행 |
-|---|---:|---:|---:|
-| EVENT가 측정값의 사건과 다름 | 30 | 58 | 6 |
-| role/source 오기 | 32 | 77 | 0 |
-| 답이 장소인 MEASURE | 15 | 0 | 0 |
-| ontology 밖 subtype | 7 | 10 | 0 |
+| 원인 | 개선 | 중립 |
+|---|---:|---:|
+| EVENT가 측정값의 사건과 다름 | 42 | 52 |
+| role/source 오기 | 27 | 82 |
+| 답이 장소인 MEASURE | 0 | 15 |
+| ontology 밖 subtype | 7 | 10 |
 
-퇴행 6건은 모두 같은 유형이다. 잘못된 EVENT(fare+operation 등) 때문에 `NO_OPERATOR`로 **우연히** 거부되어
-gold(거부 기대)와 맞던 문항이, partial에서는 올바른 사건이 추론되어 답을 내고 오답이 된다. partial이 틀린
-것이 아니라 우연한 안전망이 사라진 것이다. 거부해야 하는 이유(예: "소속" 의미)는 별도로 다뤄야 한다.
+**정정(2026-10-09).** 처음 판에는 "퇴행 6건"이라고 적었다. 분석 스크립트가 `refused_unsupported`를 올바른 거부로
+셌기 때문이다. `score()`에서 그것은 답해야 할 문항을 거부한 오답이고, 올바른 거부는 `expected_refusal`이다.
+6건(질문 5개)은 gold가 모두 answered다. full은 잘못된 EVENT 때문에 `NO_OPERATOR`로 틀리게 거부했고, partial은
+답했으나 모델이 적은 다른 의미 값(장소 누락, 날짜 표기, dimension 등)으로 틀렸다. 거부되어야 할 이유가 없으므로
+capability·검증 규칙을 더하지 않는다. 이 6건은 `regression_event_refusal.yaml`로 고정했고, 사건 추론으로 거부가
+사라지는 동작은 `tests/test_partial_grounding.py`(`EventRefusalRegressionTest`)가 확인한다.
 
 출력 길이: gold 111건의 최종 JSON은 Qwen3-8B tokenizer로 평균 125 → 68 토큰(−46%). thinking ON에서는
 응답당 eval이 약 1,000토큰이라 전체 출력 기준 절감은 수 %다.
@@ -57,11 +61,11 @@ gold(거부 기대)와 맞던 문항이, partial에서는 올바른 사건이 �
   출력하도록 prompt를 줄였을 때(설계안 Phase 4) 모델의 의미 판단이 유지되는지는 LLM 측정이 필요하다
   (Phase 5: 같은 모델 Full vs Partial prompt, Ollama/HF 순차 측정).
 - 실행 의미 코드가 바뀌어 fingerprint 고정 테스트 3건이 실패한다(`test_cli_run_settings` 2건,
-  `test_path_repeat_sampling` 1건). 재검증 전까지 명세를 갱신하지 않았다. 나머지 1,294건은 통과한다.
+  `test_path_repeat_sampling` 1건). 실제 모델 실험이 끝나 동작을 확정한 뒤 한 번만 갱신한다. 나머지는 통과한다.
 
 ## 파일
 
 - `replay_partial.py`: 재실행. `analyze_replay.py`: 원인 분류.
-- `replay_result.json`, `replay_log.txt`, `analysis.txt`: 결과.
+- `replay_result.json`, `replay_log.txt`, `analysis.txt`: 결과. `regression_event_refusal.yaml`: regression set.
 - 구현: `geoflow/grounding.py`(`complete_grounding_payload`, `hoist_condition_concepts`),
   `geoflow/planner.py`. 테스트: `tests/test_partial_grounding.py`.

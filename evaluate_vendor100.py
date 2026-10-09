@@ -1177,8 +1177,11 @@ def cmd_llm(args):
                          if not args.only or item["id"] in args.only.split(",")], args.order)
     out = Path(args.out)
     partial = out.with_suffix(".jsonl")
-    from geoflow.planner import GeoFlowPlanner
-    prompt_sha = hashlib.sha256(GeoFlowPlanner(client=None).system_prompt().encode(
+    from geoflow.planner import GeoFlowPlanner, load_planner_prompt
+    # --planner-prompt가 없으면 기본 prompt(이전 기록과 같은 요청). 의미 결정 hash는 결합된 system prompt다.
+    prompt_path = getattr(args, "planner_prompt", None)
+    planner_prompt = load_planner_prompt(prompt_path) if prompt_path else None
+    prompt_sha = hashlib.sha256(GeoFlowPlanner(client=None, prompt=planner_prompt).system_prompt().encode(
         "utf-8")).hexdigest()
     spec = run_spec(args, digest=digest, version=version, prompt_sha=prompt_sha, items=items)
     spec_sha = _execution_spec_module().spec_sha256(spec)
@@ -1219,6 +1222,8 @@ def cmd_llm(args):
                 options["normalize_grounding"] = False
             if args.no_semantic:
                 options["semantic_reinterpretation"] = False
+            if planner_prompt is not None:
+                options["planner_prompt"] = planner_prompt
             pipeline = GeoFlowPipeline.create(
                 client=recorder, tool_executor=_executor(),
                 aggregation_grounding=args.aggregation_grounding,
@@ -1267,6 +1272,8 @@ def cmd_llm(args):
                                     "ollama_version": version, "model_details": details,
                                     "model_runtime": runtime,
                                     "planner_prompt_sha256": prompt_sha,
+                                    **({"planner_prompt_path": prompt_path}
+                                       if prompt_path else {}),
                                     "replay_from": args.replay_from,
                                     "pipeline": {"aggregation_grounding": args.aggregation_grounding,
                                                  "condition_check": args.condition_check,
@@ -2003,6 +2010,8 @@ def build_parser():
     llm.add_argument("--top-k", type=int, default=None)
     llm.add_argument("--seed", type=int, default=None,
                      help="회차 seed. 호출 seed는 call_seed(회차 seed, 문항 id, 호출 순번)")
+    llm.add_argument("--planner-prompt", default=None,
+                     help="planner prompt YAML(partial_grounding A/B). 지정하지 않으면 기본 prompt. 결과 meta에 경로를 남긴다")
     llm.add_argument("--record-env", action="store_true",
                      help="meta에 host GPU 이름·UUID·드라이버와 Ollama 컨테이너 GPU를 남긴다(생성에는 영향 없음)")
     rerun = sub.add_parser("rerun")

@@ -24,7 +24,8 @@ from geoflow import operator_mapping  # noqa: E402
 from geoflow.grounding import _inferred_fields  # noqa: E402
 from geoflow.types import CoreConcept  # noqa: E402
 
-GOOD = {"match", "refused_unsupported"}
+#: 맞은 결과. refused_unsupported는 답해야 할 문항을 거부한 오답이다(score()). 올바른 거부는 expected_refusal.
+GOOD = {"match", "expected_refusal"}
 
 
 def causes(payload):
@@ -89,7 +90,7 @@ def main(path):
                         "source": result["source"], "id": row["id"], "question": row["question"],
                         "full": [row["full"]["category"], row["full"]["error_code"]],
                         "partial": [row["partial"]["category"], row["partial"]["error_code"]]})
-    print("source | items | same | match full→partial | match+refused full→partial | grounding_ok full→partial")
+    print("source | items | same | match full→partial | correct(match+expected_refusal) full→partial | grounding_ok full→partial")
     for name, items, same, mf, mp, gf, gp, of, op in table:
         print(f"{name} | {items} | {same} | {mf}→{mp} | {gf}→{gp} | {of}→{op}")
     print(json.dumps(dict(total), ensure_ascii=False))

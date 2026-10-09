@@ -12,7 +12,7 @@ from datetime import date
 from geoflow import providers
 from geoflow.compiler import compile_plan
 from geoflow.composer import MacroComposer
-from geoflow.errors import PlannerError
+from geoflow.errors import CompositionError, PlannerError
 from geoflow.grounding import complete_grounding_payload, parse_grounding
 from geoflow.pipeline import GeoFlowPipeline
 from tests.test_geoflow import ScriptedClient, new_tool_executor, planner_response
@@ -128,6 +128,32 @@ class SamePlanTest(unittest.TestCase):
         self.assertEqual(steps(partial, question), steps(full, question))
         self.assertEqual([tool for tool, _ in steps(partial, question)],
                          ["get_place_scope", "get_place_scope", "get_trip_count"])
+
+
+class EventRefusalRegressionTest(unittest.TestCase):
+    """evaluation/partial_grounding/regression_event_refusal.yaml: 잘못된 EVENT가 거부를 만들던 답해야 할 문항.
+
+    full에서 모델이 고른 사건(fare+operation)은 operator가 없어 거부된다. partial은 사건을 적지 않으므로
+    측정값에서 정해지는 사건으로 답한다. 이 질문은 거부되어야 할 이유가 없다(gold expected_outcome answered).
+    """
+
+    QUESTION = "지난해 부산 소속 택시의 요금 중간값은?"
+    PLACE = {"subtype": "place", "value": {"name": "부산", "region": ""}}
+    FACTORS = {"date": "last_year", "aggregation": "med"}
+
+    def test_wrong_event_in_full_output_is_what_refused(self):
+        full = {"concepts": [{**self.PLACE, "id": "p", "concept": "LOCATION", "role": "SUBCOND", "source": "user"},
+                             {"id": "e", "concept": "EVENT", "subtype": "operation", "role": "SUPPORT"},
+                             {"id": "m", "concept": "AMOUNT", "subtype": "fare", "role": "MEASURE"}],
+                "factors": self.FACTORS}
+        with self.assertRaises(CompositionError) as caught:
+            steps(full, self.QUESTION)
+        self.assertEqual(caught.exception.code, "NO_OPERATOR")
+
+    def test_partial_output_answers_with_the_measure_event(self):
+        partial = {"concepts": [self.PLACE, {"subtype": "fare"}], "factors": self.FACTORS}
+        self.assertEqual(steps(partial, self.QUESTION)[-1],
+                         ("get_trip_metrics", {"aggregation": "med", "date": "last_year", "metric": "fare"}))
 
 
 class PlannerPathTest(unittest.TestCase):

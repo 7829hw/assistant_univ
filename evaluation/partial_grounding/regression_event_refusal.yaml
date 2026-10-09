@@ -1,0 +1,54 @@
+# Partial Grounding regression set: 잘못된 EVENT가 거부로 이어지던 답해야 할 문항 (2026-10-09)
+#
+# replay_partial.py에서 full은 refused_unsupported(NO_OPERATOR), partial은 answered_mismatch였던 6건(질문 5개).
+# 처음 README에는 "퇴행"으로 적었으나 채점 정의를 잘못 읽은 것이다. score()에서 refused_unsupported는 답해야 할
+# 문항을 거부한 오답이고, 6건 모두 gold의 expected_outcome은 answered다. 즉 full도 partial도 틀렸다.
+#
+# 이 질문들이 거부되어야 할 이유는 없다. 측정값·사건·조건 조합은 모두 operator registry가 실행할 수 있다(partial이
+# 해당 Tool을 고른다). 따라서 capability·factor·graph 검증에 거부 규칙을 더하지 않는다. full의 거부는 모델이 고른
+# 잘못된 EVENT(fare+operation, vacant_ratio+operation, trip_count+operation, passage_count+drive)에서 나왔고,
+# partial에서는 그 EVENT를 모델이 적지 않으므로 생기지 않는다.
+#
+# 고정하는 기대 동작:
+#   1. 기록된 응답을 partial로 넣으면 NO_OPERATOR로 거부되지 않는다(사건은 측정값에서 정해진다).
+#   2. 남은 오답(residual)은 모델이 적은 의미 값의 오류이며 partial 계약의 문제가 아니다.
+# 실제 모델 A/B(ab_p0)에서는 이 문항들의 Full/Partial 결과를 따로 표로 남긴다.
+version: 1
+expected_outcome: answered
+items:
+  - source: sft_dpo_inventory/baseline_conditions_001/runs/B.json
+    id: "061"
+    question: 지난해 부산 소속 택시의 요금 중간값은?
+    full: {category: refused_unsupported, error: NO_OPERATOR, wrong_event: operation, measure: AMOUNT/fare}
+    partial: {category: answered_mismatch}
+    residual: 모델이 장소(부산)를 개념으로 적지 않았다(scope 없이 전체 조회).
+  - source: sft_dpo_inventory/baseline_conditions_001/runs/C.json
+    id: "090"
+    question: 이번 달 서울 소속 택시의 최대 공차율은?
+    full: {category: refused_unsupported, error: NO_OPERATOR, wrong_event: operation, measure: PROPORTION/vacant_ratio}
+    partial: {category: answered_mismatch}
+    residual: 모델이 date를 this_month가 아니라 20240401-20240430으로 적었다.
+  - source: sft_dpo_inventory/baseline_conditions_001/runs/C.json
+    id: "099"
+    question: 올해 부산 소속 택시의 평균 공차율은?
+    full: {category: refused_unsupported, error: NO_OPERATOR, wrong_event: operation, measure: PROPORTION/vacant_ratio}
+    partial: {category: answered_mismatch}
+    residual: 모델이 date를 this_year가 아니라 20260101-20261231로 적었다(채점은 토큰 표기를 기대).
+  - source: sft_dpo_inventory/pilot_001_analysis/decision43/valid98_B-conv.json
+    id: heldout_v9/h16
+    question: 평일에 부산진구 안에서 오간 택시 운행을 승차 동과 하차 동의 쌍별로 집계해 줄래?
+    full: {category: refused_unsupported, error: NO_OPERATOR, wrong_event: operation, measure: AMOUNT/trip_count}
+    partial: {category: answered_mismatch}
+    residual: Tool 인자는 gold와 같고, 장소 값의 region(부산)과 od_role 표기(both 한 장소 대 pickup·dropoff 두 장소)가 gold 표기와 다르다.
+  - source: sft_dpo_inventory/pilot_001_analysis/device_check/B-conv.json
+    id: "080"
+    question: 지난 주 대구의 읍면동별 공차 택시 통행량 상위 3곳은?
+    full: {category: refused_unsupported, error: NO_OPERATOR, wrong_event: drive, measure: AMOUNT/passage_count}
+    partial: {category: answered_mismatch}
+    residual: 모델이 dimension을 emd가 아니라 sigungu로 적었다.
+  - source: sft_dpo_inventory/pilot_prep_003/ollama/B-conv.json
+    id: "080"
+    question: 지난 주 대구의 읍면동별 공차 택시 통행량 상위 3곳은?
+    full: {category: refused_unsupported, error: NO_OPERATOR, wrong_event: drive, measure: AMOUNT/passage_count}
+    partial: {category: answered_mismatch}
+    residual: 위와 같은 응답(같은 조건의 다른 기록). dimension sigungu.
