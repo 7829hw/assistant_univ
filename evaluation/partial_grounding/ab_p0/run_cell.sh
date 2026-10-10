@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ab_p0 Ollama 셀 하나(PLAN.md 2절): precheck → 실행 → watch → keep_alive 대기 → postcheck.
 #
-#   run_cell.sh DIR NAME full|p0 [harness 추가 인자...]
+#   run_cell.sh DIR NAME full|p0|p0_1 [harness 추가 인자...]
 #
 # 결과: DIR/NAME.{json,jsonl,spec.json,log,pre.json,guard.json,wait.json,post.json}. 시각과 판정은 runs.log에 덧붙인다.
 # 셀 전환 확인은 path_repeat_001/cell_guard.py를 그대로 쓴다(결정 56·57).
@@ -15,7 +15,8 @@ DIR=$HERE/$1; NAME=$2; ARM=$3; shift 3
 case "$ARM" in
   full) PROMPT=() ;;
   p0) PROMPT=(--planner-prompt evaluation/partial_grounding/prompts/partial_p0.yaml) ;;
-  *) echo "arm은 full 또는 p0" >&2; exit 64 ;;
+  p0_1) PROMPT=(--planner-prompt evaluation/partial_grounding/prompts/partial_p0_1.yaml) ;;
+  *) echo "arm은 full, p0, p0_1" >&2; exit 64 ;;
 esac
 mkdir -p "$DIR"
 OUT=$DIR/$NAME

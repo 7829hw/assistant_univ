@@ -2,8 +2,9 @@
 """ab_p0 분석(PLAN.md 3·4절). 모델을 부르지 않는다.
 
     python evaluation/partial_grounding/ab_p0/analyze.py --out evaluation/partial_grounding/ab_p0/analysis.json
+    python evaluation/partial_grounding/ab_p0/analyze.py --arms full,p0_1 --out .../analysis_p0_1.json
 
-runs/{full,p0}_greedy.json, runs/{full,p0}_sample_r{1..5}.json을 읽는다. 없는 회차는 건너뛰고 적는다.
+runs/{A,B}_greedy.json, runs/{A,B}_sample_r{1..5}.json을 읽는다(기본 A=full, B=p0). 없는 회차는 건너뛰고 적는다.
 """
 
 import argparse
@@ -26,7 +27,7 @@ from failure_census import stage_of  # noqa: E402
 from geoflow.errors import GeoFlowError  # noqa: E402
 from geoflow.planner import GeoFlowPlanner, parse_planner_json  # noqa: E402
 
-ARMS = ("full", "p0")
+ARMS = ("full", "p0")    # --arms로 바꾼다. 앞이 기준(A), 뒤가 비교(B)
 ROUNDS = (1, 2, 3, 4, 5)
 CORRECT = {"match", "expected_refusal"}
 #: 최종 결과가 grounding 단계에서 멈춘 오류(failure census stage).
@@ -143,9 +144,13 @@ def paired(per_item_full, per_item_p0, ids, *, seed=20261009, draws=10000):
 
 
 def main(argv=None):
+    global ARMS
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", required=True)
+    parser.add_argument("--arms", default=",".join(ARMS))
     args = parser.parse_args(argv)
+    ARMS = tuple(args.arms.split(","))
+    a, b = ARMS
     gold = {item["id"]: item for item in V.load_gold(ROOT / "evaluation/vendor100/gold.yaml")["items"]}
     cells = {}
     for arm in ARMS:
@@ -158,7 +163,7 @@ def main(argv=None):
     for (arm, name), views in sorted(cells.items()):
         result["cells"][f"{arm}_{name}"] = metrics(list(views.values()))
 
-    rounds = [f"sample_r{r}" for r in ROUNDS if ("full", f"sample_r{r}") in cells and ("p0", f"sample_r{r}") in cells]
+    rounds = [f"sample_r{r}" for r in ROUNDS if (a, f"sample_r{r}") in cells and (b, f"sample_r{r}") in cells]
     ids = sorted(gold)
     if rounds:
         result["sampling_rounds"] = rounds
@@ -171,34 +176,34 @@ def main(argv=None):
                 summary[key] = None     # 해당 문항이 없다(업체 100에는 거부해야 할 문항이 없다)
                 continue
             summary[key] = {arm: {"mean": statistics.mean(per[arm]), "rounds": per[arm]} for arm in ARMS}
-            summary[key]["diff_mean"] = summary[key]["p0"]["mean"] - summary[key]["full"]["mean"]
+            summary[key]["diff_mean"] = summary[key][b]["mean"] - summary[key][a]["mean"]
         result["sampling_summary"] = summary
         k = {arm: {i: sum(cells[(arm, r)][i]["correct"] for r in rounds) for i in ids} for arm in ARMS}
         rate = {arm: {i: k[arm][i] / len(rounds) for i in ids} for arm in ARMS}
         answerable = [i for i in ids if gold[i].get("expected_outcome", "answered") == "answered"]
         refusal = [i for i in ids if i not in answerable]
-        result["paired"] = {"all": paired(rate["full"], rate["p0"], ids),
-                            "answerable": paired(rate["full"], rate["p0"], answerable)}
+        result["paired"] = {"all": paired(rate[a], rate[b], ids),
+                            "answerable": paired(rate[a], rate[b], answerable)}
         if refusal:
-            result["paired"]["refusal"] = paired(rate["full"], rate["p0"], refusal)
+            result["paired"]["refusal"] = paired(rate[a], rate[b], refusal)
         result["items"] = [{"id": i, "question": gold[i]["question"], "expected": gold[i].get("expected_outcome"),
-                            "k_full": k["full"][i], "k_p0": k["p0"][i],
-                            "greedy_full": cells.get(("full", "greedy"), {}).get(i, {}).get("category"),
-                            "greedy_p0": cells.get(("p0", "greedy"), {}).get(i, {}).get("category")}
+                            f"k_{a}": k[a][i], f"k_{b}": k[b][i],
+                            f"greedy_{a}": cells.get((a, "greedy"), {}).get(i, {}).get("category"),
+                            f"greedy_{b}": cells.get((b, "greedy"), {}).get(i, {}).get("category")}
                            for i in ids]
-        result["systematic"] = [row for row in result["items"] if abs(row["k_full"] - row["k_p0"]) >= 4]
+        result["systematic"] = [row for row in result["items"] if abs(row[f"k_{a}"] - row[f"k_{b}"]) >= 4]
         result["discordant"] = {
-            r: {"full_correct_p0_wrong": [i for i in ids if cells[("full", r)][i]["correct"]
-                                          and not cells[("p0", r)][i]["correct"]],
-                "full_wrong_p0_correct": [i for i in ids if not cells[("full", r)][i]["correct"]
-                                          and cells[("p0", r)][i]["correct"]]}
+            r: {f"{a}_correct_{b}_wrong": [i for i in ids if cells[(a, r)][i]["correct"]
+                                           and not cells[(b, r)][i]["correct"]],
+                f"{a}_wrong_{b}_correct": [i for i in ids if not cells[(a, r)][i]["correct"]
+                                           and cells[(b, r)][i]["correct"]]}
             for r in rounds}
         result["regression_set"] = [row for row in result["items"] if row["id"] in REGRESSION_IDS]
-    if ("full", "greedy") in cells and ("p0", "greedy") in cells:
+    if (a, "greedy") in cells and (b, "greedy") in cells:
         g = {arm: cells[(arm, "greedy")] for arm in ARMS}
         result["greedy_discordant"] = {
-            "full_correct_p0_wrong": [i for i in ids if g["full"][i]["correct"] and not g["p0"][i]["correct"]],
-            "full_wrong_p0_correct": [i for i in ids if not g["full"][i]["correct"] and g["p0"][i]["correct"]]}
+            f"{a}_correct_{b}_wrong": [i for i in ids if g[a][i]["correct"] and not g[b][i]["correct"]],
+            f"{a}_wrong_{b}_correct": [i for i in ids if not g[a][i]["correct"] and g[b][i]["correct"]]}
     result["json_tokens"] = json_tokens(cells)
     Path(args.out).write_text(json.dumps(result, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     print(json.dumps({key: result.get(key) for key in ("missing", "sampling_summary", "paired", "systematic",
@@ -222,8 +227,9 @@ def json_tokens(cells):
                    for (cell_arm, _), views in cells.items() if cell_arm == arm
                    for view in views.values() if view["json_text"]]
         out[arm] = {"n": len(lengths), "mean": statistics.mean(lengths) if lengths else None}
-    if out.get("full", {}).get("mean") and out.get("p0", {}).get("mean"):
-        out["reduction"] = 1 - out["p0"]["mean"] / out["full"]["mean"]
+    a, b = ARMS
+    if out.get(a, {}).get("mean") and out.get(b, {}).get("mean"):
+        out["reduction"] = 1 - out[b]["mean"] / out[a]["mean"]
     return out
 
 

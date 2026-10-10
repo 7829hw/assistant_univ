@@ -287,3 +287,10 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - 결과의 쓰임: interface 진단으로만 쓴다. 판정, 기준값(E 79, HF-E 84) 교체, 학습, checkpoint 선택, annotation 후보에
       쓰지 않는다(`CLAUDE.md` 8번).
     - parser/composer는 `9cb8a39`로 고정하고, fingerprint 고정 테스트 3건은 모델 실험으로 동작을 확정한 뒤 한 번만 갱신한다.
+
+58. (2026-10-10, 사용자) ab_p0에서 structural·grounding failure gate가 불통과해 Partial-P0.1 prompt(사용자 교체안, 예시 실행
+    확인으로 네 곳 수정)를 같은 조건으로 잰다. 계획은 `evaluation/partial_grounding/ab_p0/PLAN_P0_1.md`다.
+    - Full arm은 ab_p0 셀을 다시 쓰고 P0.1만 잰다(greedy 1회, sampling 5회, 같은 seed). 결정 57의 업체 100 예외·쓰임
+      제한·장비 절차를 그대로 따른다.
+    - P0.1은 업체 100의 ab_p0 오류를 보고 고친 prompt다. 업체 100 결과는 P0.1에 낙관적으로 치우칠 수 있으므로, P1로
+      넘어가기 전에 다른 문항 집합에서 확인할지 따로 정한다.
