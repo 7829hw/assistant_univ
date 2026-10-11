@@ -298,3 +298,8 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
 59. (2026-10-11, 사용자) Partial-P0.2: P0.1에 scope/place value 보존 규칙(규칙 10)과 scope 예시 6만 더해 같은 조건으로
     잰다(`evaluation/partial_grounding/ab_p0/PLAN_P0_2.md`). factor 규칙은 더하지 않는다. 업체 100 사용·쓰임 제한·장비
     절차는 결정 57·58과 같다.
+
+60. (2026-10-11, 사용자) P0.2를 동결하고 valid98에서 Full vs P0.2 paired A/B를 잰다(`evaluation/partial_grounding/ab_valid98/PLAN.md`).
+    - valid98은 결정 41 이후 보조 기록용이다. 이 측정은 prompt contract 진단으로만 쓰고, 학습·checkpoint 선택·annotation에 쓰지 않는다.
+    - arm마다 greedy 1회와 sampling 5회(ab_p0와 같은 seed·설정), 장비 절차는 결정 56과 같다. 같은 조건의 Full 기록이 없어 Full도 잰다.
+    - 결과를 보기 전에는 prompt·parser·repair를 고치지 않는다. 업체 100은 다시 돌리지 않는다.
