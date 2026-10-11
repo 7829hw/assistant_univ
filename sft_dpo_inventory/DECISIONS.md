@@ -303,3 +303,17 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - valid98은 결정 41 이후 보조 기록용이다. 이 측정은 prompt contract 진단으로만 쓰고, 학습·checkpoint 선택·annotation에 쓰지 않는다.
     - arm마다 greedy 1회와 sampling 5회(ab_p0와 같은 seed·설정), 장비 절차는 결정 56과 같다. 같은 조건의 Full 기록이 없어 Full도 잰다.
     - 결과를 보기 전에는 prompt·parser·repair를 고치지 않는다. 업체 100은 다시 돌리지 않는다.
+
+61. (2026-10-11, 사용자) Partial-P0.3: P0.2의 output_format에 규칙 11(pickup/dropoff/both·week/month 값의 출력 위치)만 더한다
+    (`evaluation/partial_grounding/prompts/partial_p0_3.yaml`, hash `8b157c9a…`, 결합 prompt 기준 추가 97줄·삭제 0·변경 0).
+    근거는 valid98 진단(`ab_valid98/REPORT.md` 9절)이므로 valid98은 P0.3 판정에 다시 쓰지 않는다(변경 근거·failure taxonomy·
+    regression 후보로만 남김). 판정은 Full·P0·P0.3 세 arm으로 한다(`evaluation/partial_grounding/ab_p0_3/PLAN.md`).
+    - 판정용 셋: sel154 = 결정 46의 선택용 후보 154(selection_v1 100 + 같은 후보 pool에서 뽑히지 않은 54).
+      `ab_p0_3/sel154_gold.yaml`(sha256 `aab80783…`). 문항 내용을 읽기 전에 수만 보고 정했다(`ab_p0_3/survey_sets.json`).
+    - 이유: 후보 중 P0.x 설계에 쓰지 않았고 dimension_target(20문항: pickup 7·dropoff 8·both 5)·bucket(24)·거부(10)를 함께 가진
+      가장 큰 셋이다. pool 나머지 54만으로는 dimension_target 7(pickup 0)이라 H4 검정력이 없다. aux_test_v1은 결정 42의
+      "판정에 쓰지 않는 보조 시험 셋" 지정과 충돌하므로 넣지 않는다. 업체 100·valid98은 P0.x 설계에 썼으므로 뺀다.
+    - 오염 관계: selection_v1은 결정 41·46의 checkpoint 선택용이고 pilot_002 SFT 선택(HF, 집계 grounding_ok)에 쓰였다. 이번 측정은
+      그 용도를 바꾸지 않는다. 결과(문항별 오류 포함)는 prompt contract 판정에만 쓰고 학습·annotation·데이터 설계에 쓰지 않는다.
+      sel154로 P0.3 판정을 한 뒤 그 문항을 보고 prompt를 고치지 않는다(1회 판정).
+    - 설정·장비 절차는 결정 56·57·60과 같다(greedy 1 + sampling 5, seed 20261010–20261014, cell_guard). HF 재현은 보류한다.
