@@ -63,7 +63,7 @@ guard가 멈춘 셀은 `ABORTED_*`로 남기고 전체를 멈춘 뒤 보고한�
 - Efficiency: 최종 JSON token(Qwen3-8B tokenizer), eval_count, thinking 길이, 문항 wall-clock, timeout, retry.
 - Refusal confusion(arm별), 오류 census A–F(ab_valid98과 같은 heuristic).
 - Paired(Full vs P0.3 주 비교, Full vs P0·P0 vs P0.3 보조): 문항별 k/5, 회차별 2×2, 일관된 개선·악화(|k차| ≥ 4), 거부 판단이 바뀐 문항,
-  새 structural failure 문항, 문항 단위 paired bootstrap 95% CI(10000회, seed 0), sign-flip permutation p.
+  새 structural failure 문항, 문항 단위 paired bootstrap 95% CI(10000회, seed 20261009, ab_p0 `paired()`와 같음), sign-flip permutation p.
 
 ### 부분집합(gold factor 존재로 고정)
 
@@ -135,3 +135,13 @@ arm별(Full·P0·P0.3) sampling 합계와 Full 대비 증감을 표로 낸다.
 
 이번 단계에서 하지 않을 것: HF 재현, P1, thinking OFF, SFT, pruning, 082/h36 전용 수정, region heuristic, repair·parser·composer 변경,
 valid98 재판정, push.
+
+## 기록: 2026-10-11 15:57 UTC 첫 실행 중단(모델 호출 없음)
+
+- `run_all.sh`의 첫 셀(smoke) precheck가 `container_sees_gpu` 실패로 멈췄다. 모델은 한 번도 부르지 않았고 결과 파일은 없다.
+- host가 15:36 UTC에 다시 켜졌다(kernel 6.8.0-139 → 6.8.0-146). Ollama 컨테이너는 다시 올라와 API(0.40.1)는 답하지만
+  `docker exec`·`docker inspect`가 `stat /var/lib/docker/overlay2/71e79e26…: no such file or directory`로 실패한다.
+  host `nvidia-smi -L`에는 `GPU-d4308fbb…`가 보인다.
+- CLAUDE.md 13번의 컨테이너 GPU 확인을 할 수 없으므로 컨테이너를 건드리지 않고 멈췄다. 복구 뒤 같은 `run_all.sh`로 처음부터 잰다
+  (측정이 아니었으므로 재실행이 아니다).
+- 분석 스크립트(`analyze.py`)는 이 중단 뒤, 결과가 없는 상태에서 고정했다. ab_valid98 기록으로 점검해 그 보고서의 수가 재현됐다.
