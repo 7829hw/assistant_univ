@@ -15,6 +15,8 @@
 - trace 원문(thinking 문장, 생성 token id)은 ``--out``(ignore 경로)에만 둔다. ``--summary``에는 질문별 집계·후보 목록(원문 hash)과
   사람이 읽어 볼 표본 10개(고정 seed)의 id만 남긴다. 추론 문장은 사람이 검토하지 않았다.
 - gold를 힌트로 주고 추론을 쓰게 하는 방식은 쓰지 않는다.
+- ``--range START:END``(pilot_003, 결정 83): corpus 순서의 질문 번호(qi)가 START 이상 END 미만인 질문만 돈다. qi와 seed(기준 seed + qi)는
+  전체 순서 그대로라 여러 GPU에 나눠도 한 번에 돈 것과 같은 seed다. 주지 않으면 이전과 같다(전체).
 """
 import argparse
 import hashlib
@@ -81,6 +83,7 @@ def main():
     parser.add_argument("--split", default="train")
     parser.add_argument("--out", required=True)
     parser.add_argument("--summary", required=True)
+    parser.add_argument("--range", default=None, help="START:END(질문 번호, 끝 미포함). 나눠 돌릴 때")
     parser.add_argument("--flags", default=str(ROOT / "training/records/corpora/reviewed_gold_v003_t2pc/review_flags.json"))
     args = parser.parse_args()
     out_dir, summary_dir = Path(args.out), Path(args.summary)
@@ -109,7 +112,10 @@ def main():
     started = time.perf_counter()
     questions, sft_candidates, dpo_candidates = [], [], []
     with open(out_dir / "traces.jsonl", "w", encoding="utf-8") as stream:
+        lo, hi = (int(x) for x in args.range.split(":")) if args.range else (0, len(records))
         for qi, record in enumerate(records):
+            if not lo <= qi < hi:
+                continue
             messages = record["messages"][:2]
             question = messages[1]["content"]
             if planner.messages(question) != messages:
@@ -191,7 +197,8 @@ def main():
         "reasoning_text_human_reviewed": False,
         "traces_path": str(traces_path.resolve()), "traces_sha256": sha256(traces_path),
         "seconds": round(time.perf_counter() - started, 1),
-        "peak_allocated_bytes": torch.cuda.max_memory_allocated()}
+        "peak_allocated_bytes": torch.cuda.max_memory_allocated(),
+        **({"range": args.range, "device_uuid": f"GPU-{torch.cuda.get_device_properties(0).uuid}"} if args.range else {})}
     (summary_dir / "summary.json").write_text(json.dumps({"summary": summary, "questions": questions}, ensure_ascii=False,
                                                          indent=1) + "\n", encoding="utf-8")
     (summary_dir / "candidates.json").write_text(json.dumps({"sft": sft_candidates, "dpo": dpo_candidates},

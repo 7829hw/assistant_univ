@@ -94,6 +94,10 @@ def main():
                        "content_sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(),
                        "thinking_sha256": hashlib.sha256(thinking.encode("utf-8")).hexdigest(),
                        "prompt_eval_count": response.get("prompt_eval_count"), "eval_count": response.get("eval_count"),
+                       # pilot_003(결정 55 guard): 서버가 준 시간(ns → ms). 이전 기록에는 없다.
+                       **{f"{k}_ms": round(response[k] / 1e6, 1) for k in ("eval_duration", "load_duration",
+                                                                          "prompt_eval_duration", "total_duration")
+                          if isinstance(response.get(k), (int, float))},
                        "done_reason": response.get("done_reason"), "seconds": round(time.perf_counter() - t1, 1),
                        "parsed": payload, "verdict": verdict}
                 stream.write(json.dumps(row, ensure_ascii=False) + "\n")

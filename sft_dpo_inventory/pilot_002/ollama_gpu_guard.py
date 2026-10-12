@@ -18,6 +18,7 @@ watch(셀 측정 중, 측정 프로세스 PID를 지켜본다)
   - 평가 기록(``llm_calls``): ``eval_count / (duration_ms - load_duration_ms)``. 기록에 ``eval_duration``이 없어
     prompt 처리 시간이 분모에 들어간다(감사와 같은 계산, ``ollama_gpu_audit.md``).
   - 렌더링 확인 기록(``eval_tok_s``): ``eval_count / eval_duration``.
+  - teacher trace 행(``eval_duration_ms``, pilot_003): ``eval_count / eval_duration``.
 - 기준(``PLAN_DEVIATIONS.md`` 1번): 호출 하나라도 ``--min-rate``(30 tok/s) 미만이거나 PROCESSOR가 100% GPU가 아니면
   측정 프로세스를 즉시 멈추고(SIGTERM) exit 2. 컨테이너와 모델은 건드리지 않는다.
 - 측정 프로세스가 끝나면 끝까지 본 기록으로 판단을 남긴다. GPU 확인을 끝내 하지 못했으면 exit 3.
@@ -88,6 +89,9 @@ def rates(record):
             yield f"{label}#{k}", call["eval_count"] / (gen_ms / 1000)
     elif record.get("eval_tok_s") is not None:
         yield record.get("id"), record["eval_tok_s"]
+    elif record.get("eval_duration_ms") and record.get("eval_count"):
+        # teacher trace 행(pilot_003): eval_count / eval_duration
+        yield record.get("trace_id"), record["eval_count"] / (record["eval_duration_ms"] / 1000)
 
 
 def alive(pid):
