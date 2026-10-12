@@ -3,7 +3,9 @@
 #   bash run_cal.sh smoke-hf                      # 재현성: HF-base 5문항을 같은 seed로 두 번(repro/)
 #   bash run_cal.sh smoke-ollama LABEL MODEL      # 재현성: Ollama 5문항을 같은 seed로 두 번(repro/)
 #   bash run_cal.sh hf LABEL ADAPTER|-            # HF 셀: 표본 k=1..4(runs/LABEL_s{k}.*), 셀 끝에 커밋·push
-#   bash run_cal.sh ollama LABEL MODEL            # Ollama 셀: 표본 k=1..4, 결정 55 확인, 셀 끝에 커밋·push
+#   bash run_cal.sh ollama LABEL MODEL [FIRST_K]  # Ollama 셀: 표본 k=FIRST_K..4(기본 1), 결정 55 확인, 셀 끝에 커밋·push
+#   bash run_cal.sh device LABEL MODEL ITEMS      # 결정 68(J): s1 앞 문항을 seed 20261101로 Ollama GPU에서 다시 생성(repro/)
+# Ollama GPU는 컨테이너 설정이 정한다. 결정 69(K)부터 기준은 GPU 3(OLLAMA_GPU=2는 예비로 잴 때만).
 # 출력이 이미 있으면 멈춘다(다시 재지 않음). HF와 Ollama는 동시에 돌리지 않는다. 컨테이너는 건드리지 않는다.
 # 원문(thinking 포함)은 training/generated/calibration_001/raw/(ignore). 기록(json·jsonl·log)은 커밋한다.
 set -u
@@ -19,6 +21,7 @@ SAMPLE_SEEDS="20261101 20261102 20261103 20261104"   # 표본 번호 k=1..4 → 
 OLLAMA_SAMPLING="--temperature 0.6 --top-p 0.95 --top-k 20 --min-p 0 --repeat-penalty 1 --presence-penalty 0 --frequency-penalty 0"
 HF_SAMPLING="--do-sample --temperature 0.6 --top-p 0.95 --top-k 20 --min-p 0 --repetition-penalty 1"
 declare -A UUID=([2]=GPU-a644de12-2a2c-ca3d-4822-b80f704b0b21 [3]=GPU-48f798cc-9437-50ac-d604-448bbad7b311)
+OLLAMA_GPU=${OLLAMA_GPU:-3}
 export HF_HOME=/home/hwkim/sftdpo_work/hf-cache HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false PYTHONDONTWRITEBYTECODE=1
 cd "$REPO"
 mkdir -p "$HERE/runs" "$HERE/repro" "$RAW"
@@ -73,17 +76,17 @@ ollama_run() {   # prefix seed model only
   [ -e "$p.jsonl" ] && die "$p.jsonl already exists"
   [ -e "$RAW/$(basename "$p")_raw.jsonl" ] && die "raw for $(basename "$p") already exists"
   ollama_idle || die "Ollama model still loaded before $(basename "$p")"
-  [ -z "$(nvidia-smi -i ${UUID[2]} --query-compute-apps=pid --format=csv,noheader)" ] || die "GPU 2 busy before $(basename "$p")"
-  "$TV" "$GUARD" precheck --out "${p}_gpu_precheck.json" >> "$LOG" 2>&1 || die "$(basename "$p") precheck failed (decision 55)"
+  [ -z "$(nvidia-smi -i ${UUID[$OLLAMA_GPU]} --query-compute-apps=pid --format=csv,noheader)" ] || die "GPU $OLLAMA_GPU busy before $(basename "$p")"
+  "$TV" "$GUARD" precheck --gpu-uuid "${UUID[$OLLAMA_GPU]}" --out "${p}_gpu_precheck.json" >> "$LOG" 2>&1 || die "$(basename "$p") precheck failed (decision 55)"
   gpu_record "ollama $(basename "$p") ($model)"
   since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  log "ollama $(basename "$p") start ($model) seed $seed"
+  log "ollama $(basename "$p") start ($model) seed $seed GPU $OLLAMA_GPU"
   local extra=(); [ -z "$only" ] || extra+=(--only "$only")
   "$TV" evaluate_vendor100.py --gold "$GOLD" llm --model "$model" --reference-date 2026-09-25 --condition-check \
     --model-think auto $OLLAMA_SAMPLING --seed "$seed" --record-env --raw-out "$RAW/$(basename "$p")_raw.jsonl" \
     --out "$p.json" "${extra[@]}" > "$p.log" 2>&1 &
   local pid=$!
-  "$TV" "$GUARD" watch --pid $pid --rows "$p.jsonl" --model "$model" --out "${p}_gpu_guard.json" > "${p}_gpu_guard.log" 2>&1
+  "$TV" "$GUARD" watch --gpu-uuid "${UUID[$OLLAMA_GPU]}" --pid $pid --rows "$p.jsonl" --model "$model" --out "${p}_gpu_guard.json" > "${p}_gpu_guard.log" 2>&1
   local grc=$?; wait $pid; local rc=$?
   sampler_params "$since" "$p"
   log "ollama $(basename "$p") exit=$rc guard=$grc"
@@ -107,12 +110,15 @@ case $mode in
     for seed in $SAMPLE_SEEDS; do k=$((k+1)); p=$HERE/runs/${label}_s$k
       hf_run "$p" "$seed" "$adapter" ""; files+=("$p.json" "$p.log"); done
     commit "eval(sft-dpo): calibration_001 HF 셀 $label(selection_v1, sampling k=4, 한 번 측정)" "${files[@]}" "$LOG" "$HERE/gpu_check.txt" ;;
+  device)
+    label=$1; model=$2; items=$3
+    ollama_run "$HERE/repro/device_${label}_g$OLLAMA_GPU" 20261101 "$model" "$items" ;;
   ollama)
-    label=$1; model=$2; k=0; files=()
-    for seed in $SAMPLE_SEEDS; do k=$((k+1)); p=$HERE/runs/${label}_s$k
+    label=$1; model=$2; first=${3:-1}; k=0; files=()
+    for seed in $SAMPLE_SEEDS; do k=$((k+1)); [ $k -ge "$first" ] || continue; p=$HERE/runs/${label}_s$k
       ollama_run "$p" "$seed" "$model" ""
       files+=("$p.json" "$p.jsonl" "$p.spec.json" "$p.log" "${p}_gpu_guard.json" "${p}_gpu_guard.log" "${p}_gpu_precheck.json" "${p}_sampler_params.txt"); done
-    commit "eval(sft-dpo): calibration_001 Ollama 셀 $label($model, selection_v1, sampling k=4, 결정 55 확인 통과)" \
+    commit "eval(sft-dpo): calibration_001 Ollama 셀 $label($model, selection_v1, sampling k=4, 표본 $first–4, GPU $OLLAMA_GPU, 결정 55 확인 통과)" \
       "${files[@]}" "$LOG" "$HERE/gpu_check.txt" ;;
   *) die "unknown mode $mode" ;;
 esac

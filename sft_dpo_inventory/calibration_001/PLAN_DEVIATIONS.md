@@ -17,3 +17,23 @@
   - s1·s2는 GPU에서 끝까지 돌았고 guard를 통과했다(`runs/Ollama-final_s{1,2}*`). PLAN.md 5절대로 그대로 쓴다.
   - 남은 측정: Ollama-final s3·s4, 셀 e s1–s4.
 - 다시 재는 조건: 호스트에서 GPU 2가 복구되어야 한다(사람 조치). 복구 뒤 precheck가 통과하면 s3를 처음부터(같은 seed 20261103) 다시 재고, 그 사실을 여기에 덧붙인다.
+
+## 2. 재개: 기본 GPU를 GPU 3으로(결정 68·69, 2026-10-12)
+
+- 사람이 호스트와 컨테이너를 정리했다. 컨테이너는 2026-10-12 05:27:59Z(14:27 KST)에 다시 시작했고 `device_ids`는 "3"이다.
+  컨테이너 안 `nvidia-smi -L`에는 GPU 3(`GPU-48f798cc…`)만 보인다.
+- 확인한 것(`resume_check.txt`, `resume_precheck.json`):
+  - host GPU 0–3이 모두 보인다(GPU 2도 복구됨). GPU 3에는 다른 사용자 프로세스가 없고 메모리는 2 MiB다.
+  - Ollama 0.35.1. 측정 모델 digest는 그대로다: Ollama-최종 `c2d10cb2…`, e `b608abf0…`.
+  - 결정 55 precheck는 기준 GPU 3에서 통과했다. 실행 의미 코드 지문은 `791c4a68…`이다.
+- 측정 조건 중 바뀐 것:
+  - 장치: GPU 2 → GPU 3(같은 RTX 6000 Ada).
+  - NVIDIA 드라이버: 595.71.05 → 595.99.02(재부팅 때 바뀜).
+  - 컨테이너 재시작(사람 조치).
+  - 평가 harness의 Python 환경(scratchpad tokvenv)이 재부팅으로 지워져 같은 방법으로 다시 만들었다(requirements.txt
+    + transformers 4.56.x + Jinja2 + numpy). 생성은 Ollama 서버가 하므로 이 환경은 요청과 채점에만 쓰인다.
+  - 이 차이들이 생성 결과에 영향을 주는지는 아래 3절의 바이트 비교(결정 68)로 본다.
+- 도구 변경(측정 의미는 같음):
+  - `pilot_002/ollama_gpu_guard.py`: 기준 UUID를 GPU 3으로 바꾸고 `--gpu-uuid`를 더했다(예비 GPU 2로 잴 때).
+    기록 키는 `container_sees_gpu`·`host_gpu`·`gpu_uuid`로 바뀐다. 1절까지의 기록은 옛 키(`…gpu2`) 그대로다.
+  - `run_cal.sh`: `OLLAMA_GPU`(기본 3), 시작 표본 번호 인자, 결정 68 장치 확인 모드(`device`)를 더했다.

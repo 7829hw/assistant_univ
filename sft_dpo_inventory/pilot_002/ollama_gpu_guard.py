@@ -5,13 +5,14 @@
     python ollama_gpu_guard.py watch --pid PID --rows RUN.jsonl --model M --out GUARD.json [--min-rate 30]
 
 precheck(셀 시작 전)
-- ``docker exec ollama nvidia-smi -L``에 GPU 2(UUID ``GPU-a644de12…``)가 보인다.
-- Ollama 버전, 올라간 모델 없음(``/api/ps``), host GPU 2에 다른 compute 프로세스 없음.
+- ``docker exec ollama nvidia-smi -L``에 기준 GPU가 보인다. 기준은 결정 69(2026-10-12)부터 GPU 3
+  (UUID ``GPU-48f798cc…``)이고, GPU 3을 쓸 수 없어 예비 GPU 2로 잴 때만 ``--gpu-uuid``로 바꾼다.
+- Ollama 버전, 올라간 모델 없음(``/api/ps``), host 기준 GPU에 다른 compute 프로세스 없음.
 - 하나라도 아니면 exit 1(셀을 시작하지 않는다).
 
 watch(셀 측정 중, 측정 프로세스 PID를 지켜본다)
 - 첫 문항 동안 ``/api/ps``로 그 모델이 올라온 것을 잡아 ``size_vram == size``(``ollama ps``의 PROCESSOR 100% GPU)인지 본다.
-  ``docker exec ollama ollama ps`` 출력과 host GPU 2 메모리도 함께 남긴다. 첫 문항 안에 잡지 못하면 다음 문항에서 다시 본다.
+  ``docker exec ollama ollama ps`` 출력과 host 기준 GPU 메모리도 함께 남긴다. 첫 문항 안에 잡지 못하면 다음 문항에서 다시 본다.
 - 문항 기록이 하나 쌓일 때마다 호출별 생성 속도를 본다.
   - 평가 기록(``llm_calls``): ``eval_count / (duration_ms - load_duration_ms)``. 기록에 ``eval_duration``이 없어
     prompt 처리 시간이 분모에 들어간다(감사와 같은 계산, ``ollama_gpu_audit.md``).
@@ -34,7 +35,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 HOST = "http://localhost:11434"
-GPU2 = "GPU-a644de12-2a2c-ca3d-4822-b80f704b0b21"
+GPU3 = "GPU-48f798cc-9437-50ac-d604-448bbad7b311"   # 결정 69: 기준 GPU(예비 GPU 2는 --gpu-uuid로)
 
 
 def now():
@@ -46,9 +47,9 @@ def sh(cmd):
     return (p.stdout + p.stderr).strip()
 
 
-def gpu2_state():
-    return {"memory_used": sh(["nvidia-smi", "-i", GPU2, "--query-gpu=memory.used", "--format=csv,noheader"]),
-            "apps": sh(["nvidia-smi", "-i", GPU2, "--query-compute-apps=pid,process_name,used_memory",
+def gpu_state(uuid):
+    return {"uuid": uuid, "memory_used": sh(["nvidia-smi", "-i", uuid, "--query-gpu=memory.used", "--format=csv,noheader"]),
+            "apps": sh(["nvidia-smi", "-i", uuid, "--query-compute-apps=pid,process_name,used_memory",
                         "--format=csv,noheader"])}
 
 
@@ -56,13 +57,13 @@ def precheck(args):
     container = sh(["docker", "exec", "ollama", "nvidia-smi", "-L"])
     version = httpx.get(f"{HOST}/api/version", timeout=10).json().get("version")
     ps = httpx.get(f"{HOST}/api/ps", timeout=10).json()
-    out = {"checked_at": now(), "container_nvidia_smi": container, "container_sees_gpu2": GPU2 in container,
+    out = {"checked_at": now(), "container_nvidia_smi": container, "gpu_uuid": args.gpu_uuid, "container_sees_gpu": args.gpu_uuid in container,
            "ollama_version": version, "version_ok": version == args.version, "ps": ps,
-           "no_model_loaded": not ps.get("models"), "host_gpu2": gpu2_state()}
-    out["host_gpu2_free"] = not out["host_gpu2"]["apps"]
-    out["ok"] = out["container_sees_gpu2"] and out["version_ok"] and out["no_model_loaded"] and out["host_gpu2_free"]
+           "no_model_loaded": not ps.get("models"), "host_gpu": gpu_state(args.gpu_uuid)}
+    out["host_gpu_free"] = not out["host_gpu"]["apps"]
+    out["ok"] = out["container_sees_gpu"] and out["version_ok"] and out["no_model_loaded"] and out["host_gpu_free"]
     Path(args.out).write_text(json.dumps(out, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    print(json.dumps({k: out[k] for k in ("container_sees_gpu2", "ollama_version", "no_model_loaded", "host_gpu2_free",
+    print(json.dumps({k: out[k] for k in ("gpu_uuid", "container_sees_gpu", "ollama_version", "no_model_loaded", "host_gpu_free",
                                           "ok")}, ensure_ascii=False))
     return 0 if out["ok"] else 1
 
@@ -125,7 +126,7 @@ def watch(args):
                                       "size_vram": m.get("size_vram"),
                                       "gpu_100": bool(m.get("size")) and m.get("size_vram") == m.get("size"),
                                       "ollama_ps": sh(["docker", "exec", "ollama", "ollama", "ps"]),
-                                      "host_gpu2": gpu2_state()}
+                                      "host_gpu": gpu_state(args.gpu_uuid)}
                 save()
                 print("GPU check", json.dumps({k: state["gpu_check"][k] for k in ("during_record", "gpu_100")}),
                       flush=True)
@@ -176,12 +177,14 @@ def main():
     p = sub.add_parser("precheck")
     p.add_argument("--out", required=True)
     p.add_argument("--version", default="0.35.1")
+    p.add_argument("--gpu-uuid", default=GPU3)
     w = sub.add_parser("watch")
     w.add_argument("--pid", type=int, required=True)
     w.add_argument("--rows", required=True)
     w.add_argument("--model", required=True)
     w.add_argument("--out", required=True)
     w.add_argument("--min-rate", type=float, default=30.0)
+    w.add_argument("--gpu-uuid", default=GPU3)
     args = parser.parse_args()
     return precheck(args) if args.cmd == "precheck" else watch(args)
 
