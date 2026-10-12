@@ -17,8 +17,9 @@ matched its own command line with `pgrep -f`, never exited, and the GPU sat idle
    a bracket pattern such as `'[b]0_holdout'` or exclude your own PID.
 4. If a wait runs longer than the job's expected duration, check the actual state instead of assuming:
    log modification time, output line count, `curl -s localhost:11434/api/ps`.
-5. Do not make other model calls (e.g. live repair calls from replay experiments) while an isolated
-   measurement is running. They break the per-observation model unload (`OllamaStateReset`).
+5. Do not make other model calls (e.g. live repair calls from replay experiments) while a measurement is running.
+   Since decision 79 (2026-10-12) Ollama measurements run continuously with the model kept loaded, so any other call
+   changes the server state the cell is measured under.
 
 ## SFT/DPO work branch rules (geoflow/sft-dpo-t2pc)
 
@@ -41,7 +42,7 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
    record in `sft_dpo_inventory/pilot_001/ollama/container/`).
    - Do not move, restart or reconfigure the container or change its GPU assignment. A person does that.
    - Do not start another Ollama server and do not pull models. If something is needed, stop and report.
-   - Ollama calls are allowed (decision 19, 2026-10-06). Rule 7 (isolated measurements, HF and Ollama measurements in
+   - Ollama calls are allowed (decision 19, 2026-10-06). Rule 7 (measurement method, HF and Ollama measurements in
      sequence) still applies.
 5. Default GPU (decision 69, 2026-10-12; replaces the GPU split of decision 38): Ollama measurements and HF work
    (training, HF inference) both use host GPU 3 (UUID `GPU-48f798cc-9437-50ac-d604-448bbad7b311`) by default.
@@ -60,8 +61,20 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
      `CUDA_VISIBLE_DEVICES` value in use.
    - HF and Ollama may share one GPU only in sequence (rule 7), never at the same time. If the GPU in use cannot be
      confirmed, stop and report.
-7. While an isolated Ollama measurement runs, make no other Ollama calls (rule 5 above). Do not run HF and
-   Ollama measurements at the same time; run them in sequence.
+7. Ollama measurement method (decision 79, 2026-10-12; replaces the per-question and per-sample model unload).
+   - Measure continuously: do not unload the model per question or between samples, and do not wait for keep_alive
+     to expire. `evaluate_vendor100.py llm` defaults to `--model-state keep_loaded` with no unload at start;
+     `calibration_001/run_cal.sh` defaults to `ISOLATION=continuous`.
+   - The old isolated method stays available only to reproduce earlier records (`--model-state unload_per_question`,
+     `ISOLATION=per_question`). `evaluate_v2.py` and `evaluate_prompt_ab.py` are older harnesses that still unload
+     per observation; do not use them for new cells.
+   - All cells in one comparison use the same method. Do not compare a continuous cell directly with a record measured
+     with unloading (everything up to calibration_001 and quant_recipe); if the comparison is needed, measure the
+     reference cell again continuously.
+   - Record the method in the result metadata (`pipeline.isolation`, `pipeline.start_unload`, `run_settings.model_state`).
+   - Measure one cell at a time, and make no other model calls during a measurement (rule 5 at the top).
+   - The decision 55 checks (rule 13) stay as they are.
+   - Do not run HF and Ollama measurements at the same time; run them in sequence.
 8. Keep the existing data policies: protected dev/validation/diagnostic data never becomes training input,
    and annotation recommendations or validator PASS are not human approval. Vendor 100 results are
    evaluation-only (never used for training, checkpoint selection or annotation candidates).
@@ -69,6 +82,9 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
    thinking ON, for both training and evaluation.
    - Comparison baselines: Ollama path = cell E (think unspecified, which Ollama 0.34.4 renders as thinking on;
      grounding_ok 79). HF path = HF-E (base Qwen3-8B@b968826d, `enable_thinking=True`).
+   - Operating path (decision 76, 2026-10-12): HF transformers BF16, base Qwen3-8B@b968826d plus the adapter. The main
+     comparison is HF-base vs the HF trained model on that path. Ollama E is a reference cell only (reported, never
+     judged), and the Ollama quantized paths (Q4, Q8) are no longer operating targets.
    - Do not go back to nonthinking settings (`enable_thinking: false`, `--model-think off`) for new training data,
      training configs or evaluation cells. Ask the user first if a task seems to need them.
    - Existing nonthinking records (F, HF-F, the nonthinking `reviewed_gold_v003_t2pc` exports and configs) stay
