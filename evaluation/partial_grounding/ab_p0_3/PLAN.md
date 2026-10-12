@@ -145,3 +145,13 @@ valid98 재판정, push.
 - CLAUDE.md 13번의 컨테이너 GPU 확인을 할 수 없으므로 컨테이너를 건드리지 않고 멈췄다. 복구 뒤 같은 `run_all.sh`로 처음부터 잰다
   (측정이 아니었으므로 재실행이 아니다).
 - 분석 스크립트(`analyze.py`)는 이 중단 뒤, 결과가 없는 상태에서 고정했다. ab_valid98 기록으로 점검해 그 보고서의 수가 재현됐다.
+
+## 기록: 2026-10-12 05:40 UTC 컨테이너 복구와 Ollama 버전 변경(실행 전)
+
+- 사용자가 컨테이너를 복구했다(StartedAt 2026-10-12T05:37:57Z). `docker inspect`·`docker exec ollama nvidia-smi -L` 정상,
+  컨테이너 안에서 `GPU-d4308fbb…`(RTX PRO 6000)가 보인다. `/api/ps`는 비어 있고 host GPU 메모리 0 MiB, 다른 프로세스 없음.
+- Ollama가 0.40.1 → **0.40.3**으로 바뀌었다. `qwen3:8b` digest는 `500a1f06`으로 같다.
+- 사용자 지시("그냥 최신버전으로 해")에 따라 0.40.3으로 잰다. Full·P0·P0.3 세 arm을 모두 이 run에서 같은 버전으로 재므로
+  arm 간 paired 비교는 한 버전 안의 비교다(결정 31의 취지와 맞다). 다만 ab_p0·ab_valid98(0.40.1) 수치와의 arm 밖 비교는 버전 차이가 섞인다.
+- 가설·gate·subset·분석 정의·cell 순서·seed·prompt·sel154·`MIN_RATE` 77.6 tok/s(0.40.1 기록에서 정함)는 바꾸지 않는다.
+- 어제 실패한 smoke precheck 로그(`raw/smoke/p0_3_smoke.log`, `runs.log`)는 그대로 두고 이어 붙인다.
