@@ -14,7 +14,7 @@
 llama-quantize --tensor-type attn_v=f16 <BF16.gguf> <NAME-Q4_K_M-official.gguf> Q4_K_M
 ```
 
-- 로그: 두 파일 모두 attn_v 36개에 `applying manual override: q4_K -> f16`(18)·`q6_K -> f16`(18)이 찍혔다. imatrix는 쓰지 않았다(공식 blob에도 imatrix 키가 없다).
+- 로그: 두 파일 모두 attn_v 36개에 `applying manual override: q4_K -> f16`이 찍혔다(로그의 앞 타입은 층별 Q6_K 조정 전의 값이다). imatrix는 쓰지 않았다(공식 blob에도 imatrix 키가 없다).
 
 ## 2. 파일
 
