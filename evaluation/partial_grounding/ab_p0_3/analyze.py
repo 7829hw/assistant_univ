@@ -34,6 +34,20 @@ def _load_module(name, path):
 V98 = _load_module("ab_valid98_analyze", HERE.parent / "ab_valid98" / "analyze.py")
 P = V98.P
 
+_first_response_check = P.first_response_check
+
+
+def _first_response_check_total(row, question):
+    """결과 뒤 추가(2026-10-12): parser가 GeoFlowError가 아닌 예외를 내는 첫 응답(concept value가 dict 등)은
+    실행 harness와 같은 UNHANDLED_EXCEPTION 구조 오류로 센다. 정의는 바꾸지 않고 분석이 죽지 않게만 한다."""
+    try:
+        return _first_response_check(row, question)
+    except Exception:
+        return "UNHANDLED_EXCEPTION", None
+
+
+P.first_response_check = _first_response_check_total
+
 GOLD = HERE / "sel154_gold.yaml"
 ARMS = ("full", "p0", "p0_3")
 TIME_DIMENSIONS = {"week", "month", "day", "hour"}

@@ -163,3 +163,10 @@ valid98 재판정, push.
   그 호출의 load_duration이 43.6 s였다(컨테이너 재생성 직후 첫 load). 직후 진단 호출 2번(판정 무관, `num_ctx` 40960,
   400 token)은 206 tok/s였다. 원인을 재생성 직후 첫 호출 워밍업으로 보고, model unload를 기다린 뒤 `run_all.sh`를 처음부터 잰다
   (CLAUDE.md 13번: 무효 측정의 대체이며 재실행이 아니다). 기준·속도 임계값은 바꾸지 않는다.
+
+## 기록: 2026-10-12 14:20 UTC 측정 완료와 분석 중 수정 1건
+
+- 19 cell(smoke 포함) 모두 guard 통과, prompt hash·fingerprint·gold·seed·문항 수 일치(`integrity.txt`).
+- `analyze.py` 첫 실행이 첫 응답 재검사에서 parser의 `TypeError`(concept value가 dict, Full `indepv4/k18` greedy·r2 두 관측)로 멈췄다.
+  실행 harness와 같은 `UNHANDLED_EXCEPTION` 구조 오류로 세도록 감쌌다. 지표·부분집합 정의는 바꾸지 않았다.
+- 결과를 본 뒤의 세부 분석은 `explore_p0_3.py`(사후 탐색, 판정에 쓰지 않음)에 따로 둔다. 결과: `REPORT.md`.
