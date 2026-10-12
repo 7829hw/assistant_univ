@@ -48,6 +48,12 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
    (training, HF inference) both use host GPU 3 (UUID `GPU-48f798cc-9437-50ac-d604-448bbad7b311`) by default.
    - GPU 2 (UUID `GPU-a644de12-2a2c-ca3d-4822-b80f704b0b21`) is a spare, used only when GPU 3 cannot be used (for
      example, another user's process is on it). Never use GPU 0 or GPU 1.
+   - Exception (decision 83, 2026-10-13): in work under decision Y (pilot_003), GPU 0–3 may be used. Training still uses one
+     GPU. Before each use check UUID, state, memory in use and other users' processes, and skip a GPU that has another
+     process. Do not run HF on GPU 3 while an Ollama measurement (E reference cell, teacher collection) runs. Before splitting
+     work across GPUs, compare HF sampling of 5 items with the same seed on each GPU against GPU 3 byte for byte; if any GPU
+     differs, measure all samples of a cell on one GPU and both cells of a paired comparison on the same GPU. Record the
+     device of every sample.
    - HF runs with `CUDA_VISIBLE_DEVICES=3` (or `=2` for the spare); inside the process it appears as `cuda:0`. Do not
      change `CUDA_DEVICE_ORDER`.
    - Never unload Ollama models yourself and never touch the container to free a GPU. If an Ollama measurement is
