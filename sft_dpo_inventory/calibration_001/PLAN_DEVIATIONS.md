@@ -37,3 +37,14 @@
   - `pilot_002/ollama_gpu_guard.py`: 기준 UUID를 GPU 3으로 바꾸고 `--gpu-uuid`를 더했다(예비 GPU 2로 잴 때).
     기록 키는 `container_sees_gpu`·`host_gpu`·`gpu_uuid`로 바뀐다. 1절까지의 기록은 옛 키(`…gpu2`) 그대로다.
   - `run_cal.sh`: `OLLAMA_GPU`(기본 3), 시작 표본 번호 인자, 결정 68 장치 확인 모드(`device`)를 더했다.
+
+## 3. 장치 일치 확인(결정 68) — 결과: 모두 같음, s1·s2를 그대로 쓴다
+
+- 2026-10-12 14:33–14:35 KST, GPU 3. Ollama-최종 s1의 앞 5문항(old44/g02, g03, g04, g06, g08)을 s1과 같은 seed 규칙
+  (`S_1 = 20261101`, 호출 번호별 seed)으로 다시 생성했다(`repro/device_Ollama-final_g3*`). 결정 55 guard 통과(100% GPU, 최저 44.3 tok/s).
+- GPU 2 기록(`Ollama-final_s1`)과 호출 단위로 thinking·content를 바이트 비교했다(`device_compare.py`, `repro/device_compare.json`).
+  - 7/7 호출이 같다(첫 호출 5개, 재질의 2개). 호출별 seed와 eval_count도 같다.
+- 결정 68에 따라 GPU 2의 s1·s2를 그대로 쓰고 s3·s4만 GPU 3에서 잰다. s3는 PLAN §5대로 같은 seed(20261103)로 처음부터 잰다.
+  - 멈춘 s3의 원문(ignore 경로)은 `ABORTED_gpu_Ollama-final_s3_raw.jsonl`로 이름을 바꿔 둔다. 기록은 1절대로 `runs/ABORTED_gpu_*`에 있다.
+- 한계: 5문항 7호출이 같다는 것은 장치·드라이버·컨테이너 재시작이 이 모델의 생성을 바꾸지 않았다는 강한 근거지만, 나머지 문항까지
+  보장하지는 않는다(확인됨: 비교한 7호출, 가능성 있음: 나머지).
