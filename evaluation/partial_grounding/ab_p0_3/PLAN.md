@@ -158,3 +158,8 @@ valid98 재판정, push.
 - 05:42 UTC 첫 시도는 smoke precheck에서 `version_ok` 실패로 멈췄다(cell_guard의 기대 버전이 0.40.1로 고정). 모델 호출 없음.
   `cell_guard.py`에 `CELL_GUARD_OLLAMA_VERSION` 환경변수(기본 0.40.1)를 넣고 `run_cell.sh`에서만 0.40.3을 지정했다.
   다른 검사(digest, 컨테이너 GPU, 메모리, 속도 77.6 tok/s)는 그대로다. code fingerprint는 ab88a19e 그대로.
+- 05:43–05:44 UTC 두 번째 시도: precheck 통과, `ollama ps` 100% GPU였지만 smoke 첫 문항(old44/g02) 속도가 43.7 tok/s로
+  77.6 미만이라 guard가 셀을 멈췄다. 결과는 `raw/smoke/ABORTED_p0_3_smoke.*`로 남기고 판정에 쓰지 않는다.
+  그 호출의 load_duration이 43.6 s였다(컨테이너 재생성 직후 첫 load). 직후 진단 호출 2번(판정 무관, `num_ctx` 40960,
+  400 token)은 206 tok/s였다. 원인을 재생성 직후 첫 호출 워밍업으로 보고, model unload를 기다린 뒤 `run_all.sh`를 처음부터 잰다
+  (CLAUDE.md 13번: 무효 측정의 대체이며 재실행이 아니다). 기준·속도 임계값은 바꾸지 않는다.
