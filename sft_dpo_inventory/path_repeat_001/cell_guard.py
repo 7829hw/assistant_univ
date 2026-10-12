@@ -40,7 +40,8 @@ HOST = "http://localhost:11434"
 GPU = "GPU-d4308fbb-d17f-3609-676a-935c6072c831"
 MODEL = "qwen3:8b"
 DIGEST = "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41"
-VERSION = "0.40.1"
+# 기본은 0.40.1. 컨테이너 버전이 바뀐 run은 계획 기록과 함께 CELL_GUARD_OLLAMA_VERSION으로 기대 버전을 지정한다(ab_p0_3, 2026-10-12).
+VERSION = os.environ.get("CELL_GUARD_OLLAMA_VERSION", "0.40.1")
 CONTEXT_LENGTH = 40960
 BASELINE_MIB = 4
 TOLERANCE_MIB = 200

@@ -155,3 +155,6 @@ valid98 재판정, push.
   arm 간 paired 비교는 한 버전 안의 비교다(결정 31의 취지와 맞다). 다만 ab_p0·ab_valid98(0.40.1) 수치와의 arm 밖 비교는 버전 차이가 섞인다.
 - 가설·gate·subset·분석 정의·cell 순서·seed·prompt·sel154·`MIN_RATE` 77.6 tok/s(0.40.1 기록에서 정함)는 바꾸지 않는다.
 - 어제 실패한 smoke precheck 로그(`raw/smoke/p0_3_smoke.log`, `runs.log`)는 그대로 두고 이어 붙인다.
+- 05:42 UTC 첫 시도는 smoke precheck에서 `version_ok` 실패로 멈췄다(cell_guard의 기대 버전이 0.40.1로 고정). 모델 호출 없음.
+  `cell_guard.py`에 `CELL_GUARD_OLLAMA_VERSION` 환경변수(기본 0.40.1)를 넣고 `run_cell.sh`에서만 0.40.3을 지정했다.
+  다른 검사(digest, 컨테이너 GPU, 메모리, 속도 77.6 tok/s)는 그대로다. code fingerprint는 ab88a19e 그대로.

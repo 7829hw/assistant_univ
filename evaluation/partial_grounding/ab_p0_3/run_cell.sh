@@ -12,6 +12,8 @@ GOLD=evaluation/partial_grounding/ab_p0_3/sel154_gold.yaml
 PY=/data/hwkim/path_repeat_001/venv/py/bin/python
 GUARD="$PY $ROOT/sft_dpo_inventory/path_repeat_001/cell_guard.py"
 MIN_RATE=77.6
+# 2026-10-12 컨테이너 복구 뒤 Ollama 0.40.3(PLAN.md 기록, 사용자 지시)
+export CELL_GUARD_OLLAMA_VERSION=0.40.3
 DIR=$HERE/$1; NAME=$2; ARM=$3; shift 3
 case "$ARM" in
   full) PROMPT=() ;;
