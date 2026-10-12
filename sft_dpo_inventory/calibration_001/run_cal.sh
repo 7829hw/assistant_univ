@@ -7,6 +7,9 @@
 #   bash run_cal.sh device LABEL MODEL ITEMS      # 결정 68(J): s1 앞 문항을 seed 20261101로 Ollama GPU에서 다시 생성(repro/)
 # 다른 작업이 같은 설정으로 셀을 잴 때(quant_recipe, 결정 75): OUT_DIR(기록 폴더, 기본 이 폴더)·RAW_DIR(원문, ignore 경로)·
 # TAG(커밋 메시지 머리, 기본 calibration_001)를 준다. 주지 않으면 이전과 같다.
+# 측정 방식(결정 79, U): ISOLATION=continuous(기본)는 모델을 내리지 않고 연속으로 잰다(--model-state keep_loaded, 표본 사이 내림 대기 없음,
+# precheck는 같은 모델만 올라가 있으면 통과). ISOLATION=per_question은 결정 79 전의 격리 방식(calibration_001·quant_recipe 기록)을 재현한다.
+# 두 방식의 셀은 직접 비교하지 않는다. 방식은 결과 meta(pipeline.isolation)와 runs.log에 남는다.
 # Ollama GPU는 컨테이너 설정이 정한다. 결정 69(K)부터 기준은 GPU 3(OLLAMA_GPU=2는 예비로 잴 때만).
 # 출력이 이미 있으면 멈춘다(다시 재지 않음). HF와 Ollama는 동시에 돌리지 않는다. 컨테이너는 건드리지 않는다.
 # 원문(thinking 포함)은 training/generated/calibration_001/raw/(ignore). 기록(json·jsonl·log)은 커밋한다.
@@ -25,6 +28,9 @@ OLLAMA_SAMPLING="--temperature 0.6 --top-p 0.95 --top-k 20 --min-p 0 --repeat-pe
 HF_SAMPLING="--do-sample --temperature 0.6 --top-p 0.95 --top-k 20 --min-p 0 --repetition-penalty 1"
 declare -A UUID=([2]=GPU-a644de12-2a2c-ca3d-4822-b80f704b0b21 [3]=GPU-48f798cc-9437-50ac-d604-448bbad7b311)
 OLLAMA_GPU=${OLLAMA_GPU:-3}
+ISOLATION=${ISOLATION:-continuous}
+case $ISOLATION in continuous) MODEL_STATE=keep_loaded ;; per_question) MODEL_STATE=unload_per_question ;;
+  *) echo "unknown ISOLATION=$ISOLATION" >&2; exit 1 ;; esac
 export HF_HOME=/home/hwkim/sftdpo_work/hf-cache HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false PYTHONDONTWRITEBYTECODE=1
 cd "$REPO"
 mkdir -p "$OUT_DIR/runs" "$HERE/repro" "$RAW"
@@ -78,15 +84,17 @@ ollama_run() {   # prefix seed model only
   local p=$1 seed=$2 model=$3 only=$4 since
   [ -e "$p.jsonl" ] && die "$p.jsonl already exists"
   [ -e "$RAW/$(basename "$p")_raw.jsonl" ] && die "raw for $(basename "$p") already exists"
-  ollama_idle || die "Ollama model still loaded before $(basename "$p")"
+  local allow=()
+  if [ "$ISOLATION" = per_question ]; then ollama_idle || die "Ollama model still loaded before $(basename "$p")"
+  else allow=(--allow-loaded "$model"); fi
   [ -z "$(nvidia-smi -i ${UUID[$OLLAMA_GPU]} --query-compute-apps=pid --format=csv,noheader)" ] || die "GPU $OLLAMA_GPU busy before $(basename "$p")"
-  "$TV" "$GUARD" precheck --gpu-uuid "${UUID[$OLLAMA_GPU]}" --out "${p}_gpu_precheck.json" >> "$LOG" 2>&1 || die "$(basename "$p") precheck failed (decision 55)"
+  "$TV" "$GUARD" precheck --gpu-uuid "${UUID[$OLLAMA_GPU]}" "${allow[@]}" --out "${p}_gpu_precheck.json" >> "$LOG" 2>&1 || die "$(basename "$p") precheck failed (decision 55)"
   gpu_record "ollama $(basename "$p") ($model)"
   since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  log "ollama $(basename "$p") start ($model) seed $seed GPU $OLLAMA_GPU"
+  log "ollama $(basename "$p") start ($model) seed $seed GPU $OLLAMA_GPU isolation $ISOLATION"
   local extra=(); [ -z "$only" ] || extra+=(--only "$only")
   "$TV" evaluate_vendor100.py --gold "$GOLD" llm --model "$model" --reference-date 2026-09-25 --condition-check \
-    --model-think auto $OLLAMA_SAMPLING --seed "$seed" --record-env --raw-out "$RAW/$(basename "$p")_raw.jsonl" \
+    --model-think auto --model-state $MODEL_STATE $OLLAMA_SAMPLING --seed "$seed" --record-env --raw-out "$RAW/$(basename "$p")_raw.jsonl" \
     --out "$p.json" "${extra[@]}" > "$p.log" 2>&1 &
   local pid=$!
   "$TV" "$GUARD" watch --gpu-uuid "${UUID[$OLLAMA_GPU]}" --pid $pid --rows "$p.jsonl" --model "$model" --out "${p}_gpu_guard.json" > "${p}_gpu_guard.log" 2>&1
@@ -121,7 +129,7 @@ case $mode in
     for seed in $SAMPLE_SEEDS; do k=$((k+1)); [ $k -ge "$first" ] || continue; p=$OUT_DIR/runs/${label}_s$k
       ollama_run "$p" "$seed" "$model" ""
       files+=("$p.json" "$p.jsonl" "$p.spec.json" "$p.log" "${p}_gpu_guard.json" "${p}_gpu_guard.log" "${p}_gpu_precheck.json" "${p}_sampler_params.txt"); done
-    commit "eval(sft-dpo): $TAG Ollama 셀 $label($model, selection_v1, sampling k=4, 표본 $first–4, GPU $OLLAMA_GPU, 결정 55 확인 통과)" \
+    commit "eval(sft-dpo): $TAG Ollama 셀 $label($model, selection_v1, sampling k=4, 표본 $first–4, GPU $OLLAMA_GPU, $ISOLATION, 결정 55 확인 통과)" \
       "${files[@]}" "$LOG" "$OUT_DIR/gpu_check.txt" ;;
   *) die "unknown mode $mode" ;;
 esac

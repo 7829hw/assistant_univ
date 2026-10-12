@@ -113,13 +113,20 @@ class EvaluatorControlsTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             E.order_items(items, "random")
 
-    def test_defaults_are_the_existing_evaluation_condition(self):
+    def test_defaults_are_the_continuous_condition(self):
+        # 결정 79(U, 2026-10-12): 기본은 연속 방식이고 시작할 때도 모델을 내리지 않는다. 격리 방식은 옵션으로 남는다.
         args = E.build_parser().parse_args(["llm", "--model", "m", "--out", "x.json"]) \
             if hasattr(E, "build_parser") else None
         if args is None:
             self.skipTest("parser builder not exposed")
         self.assertEqual(E.run_settings(args), {"reference_date": "2026-09-25",
-                                                "model_state": "unload_per_question", "order": "file"})
+                                                "model_state": "keep_loaded", "order": "file"})
+        self.assertFalse(E.start_unload(args))
+        isolated = E.build_parser().parse_args(["llm", "--model", "m", "--out", "x.json",
+                                                "--model-state", "unload_per_question"])
+        self.assertTrue(E.start_unload(isolated))
+        old_keep = E.build_parser().parse_args(["llm", "--model", "m", "--out", "x.json", "--start-unload"])
+        self.assertTrue(E.start_unload(old_keep))
 
     def test_resume_refuses_legacy_rows_without_spec(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -165,6 +172,7 @@ class ResumePolicyTest(unittest.TestCase):
         self.gold = self.dir / "gold.yaml"
         self.gold.write_text("items:\n" + GOLD_FIXTURE, encoding="utf-8")
         self.resets = []
+        self.unloads = []
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -189,7 +197,8 @@ class ResumePolicyTest(unittest.TestCase):
         with mock.patch.object(E, "GOLD_PATH", self.gold), \
                 mock.patch("ollama_client.OllamaClient", return_value=QuestionClient(interrupt_after)), \
                 mock.patch("evaluate_prompt_ab.OllamaStateReset", Reset), \
-                mock.patch("evaluate_prompt_ab.unload_all_models", return_value=[]), \
+                mock.patch("evaluate_prompt_ab.unload_all_models",
+                           side_effect=lambda *a, **k: self.unloads.append(1) or []), \
                 mock.patch("evaluate_prompt_ab._server_details", return_value=("0.34.4", digest, {})), \
                 mock.patch("builtins.print"):
             E.cmd_llm(args)
@@ -201,9 +210,17 @@ class ResumePolicyTest(unittest.TestCase):
         rows = (self.dir / "run.jsonl").read_text(encoding="utf-8").splitlines()
         self.assertEqual(len(rows), 1)
 
+    def test_continuous_run_never_unloads(self):
+        # 결정 79: 연속 방식은 시작할 때도 문항마다도 모델을 내리지 않고, 방식을 meta에 남긴다.
+        result = self.run_llm("keep_loaded", name="cont")
+        self.assertEqual((self.resets, self.unloads), ([], []))
+        self.assertEqual(result["meta"]["pipeline"]["isolation"], "keep_loaded")
+        self.assertFalse(result["meta"]["pipeline"]["start_unload"])
+
     def test_unload_run_resumes_as_a_new_session(self):
         self.interrupted("unload_per_question")
         result = self.run_llm("unload_per_question")
+        self.assertTrue(self.unloads)
         self.assertEqual([r["session"] for r in result["rows"]], [1, 2, 2])
         self.assertEqual(result["meta"]["sessions"], [{"session": 1, "items": 1}, {"session": 2, "items": 2}])
         self.assertTrue(result["meta"]["pure_live"])

@@ -8,6 +8,7 @@ precheck(셀 시작 전)
 - ``docker exec ollama nvidia-smi -L``에 기준 GPU가 보인다. 기준은 결정 69(2026-10-12)부터 GPU 3
   (UUID ``GPU-48f798cc…``)이고, GPU 3을 쓸 수 없어 예비 GPU 2로 잴 때만 ``--gpu-uuid``로 바꾼다.
 - Ollama 버전, 올라간 모델 없음(``/api/ps``), host 기준 GPU에 다른 compute 프로세스 없음.
+  연속 방식(결정 79, ``--allow-loaded MODEL``)에서는 그 모델 하나만 올라가 있어도 통과한다(다른 모델이 있으면 실패).
 - 하나라도 아니면 exit 1(셀을 시작하지 않는다).
 
 watch(셀 측정 중, 측정 프로세스 PID를 지켜본다)
@@ -60,11 +61,20 @@ def precheck(args):
     out = {"checked_at": now(), "container_nvidia_smi": container, "gpu_uuid": args.gpu_uuid, "container_sees_gpu": args.gpu_uuid in container,
            "ollama_version": version, "version_ok": version == args.version, "ps": ps,
            "no_model_loaded": not ps.get("models"), "host_gpu": gpu_state(args.gpu_uuid)}
-    out["host_gpu_free"] = not out["host_gpu"]["apps"]
-    out["ok"] = out["container_sees_gpu"] and out["version_ok"] and out["no_model_loaded"] and out["host_gpu_free"]
+    # 연속 방식(결정 79): 같은 모델만 올라가 있으면 통과하고, 그때 GPU의 Ollama runner 프로세스는 다른 프로세스로 세지 않는다.
+    allowed = getattr(args, "allow_loaded", None)
+    loaded = [m.get("name") for m in ps.get("models") or []]
+    out["allow_loaded"] = allowed
+    out["only_allowed_model_loaded"] = bool(allowed) and bool(loaded) and set(loaded) == {allowed}
+    apps = [a for a in out["host_gpu"]["apps"].splitlines() if a.strip()]
+    if out["only_allowed_model_loaded"]:
+        apps = [a for a in apps if "ollama" not in a.lower()]
+    out["host_gpu_free"] = not apps
+    out["ok"] = (out["container_sees_gpu"] and out["version_ok"] and (out["no_model_loaded"] or out["only_allowed_model_loaded"])
+                 and out["host_gpu_free"])
     Path(args.out).write_text(json.dumps(out, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    print(json.dumps({k: out[k] for k in ("gpu_uuid", "container_sees_gpu", "ollama_version", "no_model_loaded", "host_gpu_free",
-                                          "ok")}, ensure_ascii=False))
+    print(json.dumps({k: out[k] for k in ("gpu_uuid", "container_sees_gpu", "ollama_version", "no_model_loaded",
+                                          "only_allowed_model_loaded", "host_gpu_free", "ok")}, ensure_ascii=False))
     return 0 if out["ok"] else 1
 
 
@@ -178,6 +188,8 @@ def main():
     p.add_argument("--out", required=True)
     p.add_argument("--version", default="0.35.1")
     p.add_argument("--gpu-uuid", default=GPU3)
+    p.add_argument("--allow-loaded", default=None,
+                   help="연속 방식(결정 79): 이 모델만 올라가 있으면 통과(다른 모델이 있거나 다른 프로세스가 있으면 실패)")
     w = sub.add_parser("watch")
     w.add_argument("--pid", type=int, required=True)
     w.add_argument("--rows", required=True)

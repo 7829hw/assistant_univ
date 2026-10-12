@@ -73,8 +73,16 @@ XLSX_FILE = VENDOR_DIR / "질문 결과 및 정답 설명_100문항.xlsx"
 QUESTIONS_FILE = HERE / "assistant_univ_questions_100_v3.yaml"
 VARIANTS_FILE = VENDOR_DIR / "stated_variants.yaml"
 REFERENCE_DATE = date(2026, 9, 25)
-#: 모델 적재 방식. 앞의 것이 기본값이다(grounding_v1부터의 평가 조건).
-MODEL_STATES = ("unload_per_question", "keep_loaded")
+#: 모델 적재 방식. 앞의 것이 기본값이다. 결정 79(U, 2026-10-12)부터 기본은 연속(keep_loaded)이다.
+#: unload_per_question은 grounding_v1부터 calibration_001·quant_recipe까지의 격리 조건이고, 재현용으로 남긴다.
+MODEL_STATES = ("keep_loaded", "unload_per_question")
+
+
+def start_unload(args):
+    """시작할 때 서버의 모델을 모두 내릴지. --start-unload/--no-start-unload가 없으면 격리 방식만 내린다
+    (연속 방식은 표본 사이에도 모델을 내리지 않는다. 이전 keep_loaded 기록은 --start-unload로 재현한다)."""
+    value = getattr(args, "start_unload", None)
+    return args.model_state == "unload_per_question" if value is None else value
 
 
 def order_items(items, order):
@@ -1229,7 +1237,7 @@ def cmd_llm(args):
                                       new_session=args.resume_new_session)
     partial.with_suffix(".spec.json").write_text(json.dumps(spec, ensure_ascii=False, indent=1), encoding="utf-8")
     cache = load_replay_cache(args.replay_from) if args.replay_from else None
-    if cache is None:
+    if cache is None and start_unload(args):
         A.unload_all_models(args.host)
     reset = A.OllamaStateReset(args.host, args.model)
     raw_stream = open_raw_out(getattr(args, "raw_out", None))
@@ -1324,6 +1332,7 @@ def cmd_llm(args):
                                                  "provider": "mock", "tims_execution": "legacy",
                                                  "temperature": 0, "think": getattr(args, "model_think", "auto"),
                                                  "isolation": args.model_state,
+                                                 "start_unload": start_unload(args),
                                                  **({"temperature": sampling["temperature"], "sampling": sampling}
                                                     if sampling is not None else {})},
                                     **({"environment": environment} if environment is not None else {}),
@@ -2040,8 +2049,11 @@ def build_parser():
     llm.add_argument("--reference-date", type=date.fromisoformat, default=REFERENCE_DATE,
                      help="상대 날짜를 풀 기준일(조건 계층·컴파일·채점에 같이 쓴다). 기본 2026-09-25(정답 셋의 기준일)")
     llm.add_argument("--model-state", choices=MODEL_STATES, default=MODEL_STATES[0],
-                     help="unload_per_question: 문항마다 모델을 내리고 실행(기존 평가 조건). "
-                          "keep_loaded: 시작할 때만 내리고 모델을 올린 채 연속 실행(CLI 연속 사용과 같은 서버 조건)")
+                     help="keep_loaded(기본, 결정 79): 모델을 올린 채 연속 실행(CLI 연속 사용과 같은 서버 조건). "
+                          "unload_per_question: 문항마다 모델을 내리고 실행(결정 79 전의 격리 조건, 재현용)")
+    llm.add_argument("--start-unload", action=argparse.BooleanOptionalAction, default=None,
+                     help="시작할 때 서버의 모델을 모두 내린다. 기본은 unload_per_question일 때만 내린다"
+                          "(결정 79 전 keep_loaded 기록의 재현은 --start-unload)")
     llm.add_argument("--resume-new-session", action="store_true",
                      help="keep_loaded run을 중단 뒤 이어 실행할 때 나머지를 별도 세션으로 기록한다(순수 연속 아님으로 표시)")
     llm.add_argument("--order", default="file",
