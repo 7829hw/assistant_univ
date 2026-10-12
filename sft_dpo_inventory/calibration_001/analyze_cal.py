@@ -28,6 +28,8 @@ PAIRS = [("HF와 Ollama", "HF-base", "c"), ("HF와 Ollama", "HF-base", "d"), ("H
          ("TEMPLATE", "E", "c"), ("변환", "c", "B-conv"),
          ("양자화", "B-conv", "d"), ("양자화", "Ollama-final", "e"),
          ("학습 효과", "HF-base", "HF-final"), ("학습 효과", "B-conv", "Ollama-final"), ("학습 효과", "d", "e")]
+# 계획 외 참고 쌍(PLAN_DEVIATIONS 4절): 9.3 표 다음에 따로 내고, 검정력의 "모든 쌍 평균"에는 넣지 않는다.
+REFERENCE_PAIRS = [("참고: HF와 Ollama Q4", "HF-final", "Ollama-final"), ("참고: HF와 Ollama Q4", "HF-base", "B-conv")]
 V2_REMOVED = set(json.loads((HERE / "selection_v2_items.json").read_text(encoding="utf-8"))["removed"])
 ERRORS = ("aggregation_added", "dt_missing", "role_error", "role_notation", "occupied_misread")
 
@@ -147,6 +149,15 @@ def power(rows, n_values=(100, 98), k_values=(1, 4, 8)):
     return out
 
 
+def device(meta):
+    """표본을 잰 GPU UUID와 드라이버. HF는 torch 장치, Ollama는 컨테이너가 본 GPU."""
+    hf = meta.get("hf") or {}
+    env = hf.get("environment") or meta.get("environment") or {}
+    uuid = hf.get("device_uuid") or next((g.split("UUID: ")[-1].rstrip(")") for g in env.get("ollama_container_gpus") or []), None)
+    drivers = {g.get("driver") for g in env.get("host_gpus") or []}
+    return {"uuid": uuid, "driver": sorted(d for d in drivers if d)}
+
+
 def greedy_values():
     comp = json.loads((ROOT / "sft_dpo_inventory/conversion_diag/selection_comparison.json").read_text(encoding="utf-8"))
     out = {}
@@ -173,7 +184,8 @@ def main():
             metas.setdefault(cell, []).append({"sample": k, "model": meta.get("model"),
                                                "sampling": (meta.get("pipeline") or {}).get("sampling")
                                                or ((meta.get("hf") or {}).get("decoding")),
-                                               "raw_out_sha256": meta.get("raw_out_sha256") or (meta.get("hf") or {}).get("raw_out_sha256")})
+                                               "raw_out_sha256": meta.get("raw_out_sha256") or (meta.get("hf") or {}).get("raw_out_sha256"),
+                                               "device": device(meta)})
             data[cell].append(rows)
             for key, r in rows.items():
                 samples_out.append({"cell": cell, "sample": k, "id": key, **r})
@@ -214,6 +226,10 @@ def main():
                 comps.append({"group": group, **compare(a, b, mats[a]["ok"], mats[b]["ok"], mats[a]["U"], mats[b]["U"],
                                                         rng, cells[a], cells[b])})
         pw = power(comps) if comps else None
+        for group, a, b in REFERENCE_PAIRS:
+            if a in data and b in data:
+                comps.append({"group": group, "reference_only": True,
+                              **compare(a, b, mats[a]["ok"], mats[b]["ok"], mats[a]["U"], mats[b]["U"], rng, cells[a], cells[b])})
         result["sets"][set_name] = {"items": len(ids), "cells": cells,
                                     "comparisons": [{k: v for k, v in r.items() if not k.startswith("_")} for r in comps],
                                     "power": pw}
