@@ -74,7 +74,10 @@ QUESTIONS_FILE = HERE / "assistant_univ_questions_100_v3.yaml"
 VARIANTS_FILE = VENDOR_DIR / "stated_variants.yaml"
 REFERENCE_DATE = date(2026, 9, 25)
 #: 모델 적재 방식. 앞의 것이 기본값이다(grounding_v1부터의 평가 조건).
-MODEL_STATES = ("unload_per_question", "keep_loaded")
+#: resident(결정 62): run 전체에서 모델을 내리지 않는다. 셀 시작에도 내리지 않으므로 앞선 셀·warm-up이 올린 모델을 그대로 쓴다.
+MODEL_STATES = ("unload_per_question", "keep_loaded", "resident")
+#: 문항 사이에 모델을 내리지 않는 상태(앞선 처리 이력이 출력에 남는다, grounding_v14).
+CONTINUOUS_STATES = ("keep_loaded", "resident")
 
 
 def order_items(items, order):
@@ -108,7 +111,7 @@ def load_partial_rows(partial, spec, spec_sha, *, model_state, new_session=False
       조건을 확인할 수 없으므로 이어 붙이지 않는다(읽기·채점은 그대로 된다).
     - unload_per_question: 문항마다 모델을 내리므로 문항끼리 서버 상태가 이어지지 않는다. 명세가 같으면 새 세션
       번호로 이어 붙인다.
-    - keep_loaded: 앞선 처리 이력이 출력에 영향을 준다(grounding_v14). 중단 전 서버 상태는 복원할 수 없고, 이전
+    - keep_loaded·resident: 앞선 처리 이력이 출력에 영향을 준다(grounding_v14). 중단 전 서버 상태는 복원할 수 없고, 이전
       요청을 다시 보내도 같은 상태가 된다고 가정하지 않는다. 기본은 거부한다. new_session=True면 나머지를 별도
       세션으로 기록하고 run을 "순수 연속 아님"으로 표시한다.
     """
@@ -130,8 +133,8 @@ def load_partial_rows(partial, spec, spec_sha, *, model_state, new_session=False
                              "새 --out으로 시작한다.")
         sessions.add(row.get("session", 1))
         done[row["id"]] = row
-    if done and model_state == "keep_loaded" and not new_session:
-        raise SystemExit(f"{partial}: keep_loaded run은 이어 실행하지 않는다. 중단 전 서버 상태를 복원할 수 없어 나머지가 "
+    if done and model_state in CONTINUOUS_STATES and not new_session:
+        raise SystemExit(f"{partial}: {model_state} run은 이어 실행하지 않는다. 중단 전 서버 상태를 복원할 수 없어 나머지가 "
                          "같은 연속 실행이 아니다. 새 --out으로 다시 시작하거나, 나머지를 별도 세션으로 기록하려면 "
                          "--resume-new-session을 쓴다(순수 연속 실행으로 표시하지 않는다).")
     return done, (max(sessions) + 1) if sessions else 1
@@ -248,14 +251,14 @@ def _measurement(calls):
 
 
 def _continuity(rows, model_state):
-    """run의 세션 구성과 측정 종류. 순수 연속 실측은 keep_loaded·한 세션·기록 재적용 없음일 때뿐이다."""
+    """run의 세션 구성과 측정 종류. 순수 연속 실측은 keep_loaded·resident, 한 세션·기록 재적용 없음일 때뿐이다."""
     from collections import Counter
     sessions = Counter(row.get("session", 1) for row in rows)
     kinds = Counter(row.get("measurement", "live") for row in rows)
     return {"sessions": [{"session": key, "items": sessions[key]} for key in sorted(sessions)],
             "measurement": dict(kinds),
             "pure_live": set(kinds) <= {"live"},
-            "pure_continuous": model_state == "keep_loaded" and len(sessions) == 1 and set(kinds) <= {"live"}}
+            "pure_continuous": model_state in CONTINUOUS_STATES and len(sessions) == 1 and set(kinds) <= {"live"}}
 PROTOCOL = "vendor100_v1"
 #: 평가 문항 파일(--gold). None이면 업체 gold.yaml.
 GOLD_PATH = None
@@ -1189,7 +1192,7 @@ def cmd_llm(args):
                                       new_session=args.resume_new_session)
     partial.with_suffix(".spec.json").write_text(json.dumps(spec, ensure_ascii=False, indent=1), encoding="utf-8")
     cache = load_replay_cache(args.replay_from) if args.replay_from else None
-    if cache is None:
+    if cache is None and args.model_state != "resident":
         A.unload_all_models(args.host)
     reset = A.OllamaStateReset(args.host, args.model)
     with partial.open("a", encoding="utf-8") as handle:
@@ -1198,7 +1201,7 @@ def cmd_llm(args):
                 continue
             item_started = datetime.now(ZoneInfo("Asia/Seoul"))
             replayed = cache is not None and (prompt_sha, item["question"]) in cache
-            keep = args.model_state == "keep_loaded"
+            keep = args.model_state in CONTINUOUS_STATES
             if not replayed:
                 state = type("Kept", (), {"succeeded": None})() if keep else reset.reset()
                 replay = _ReplayClient(client, cache) if cache is not None else None
@@ -1997,7 +2000,8 @@ def build_parser():
                      help="상대 날짜를 풀 기준일(조건 계층·컴파일·채점에 같이 쓴다). 기본 2026-09-25(정답 셋의 기준일)")
     llm.add_argument("--model-state", choices=MODEL_STATES, default=MODEL_STATES[0],
                      help="unload_per_question: 문항마다 모델을 내리고 실행(기존 평가 조건). "
-                          "keep_loaded: 시작할 때만 내리고 모델을 올린 채 연속 실행(CLI 연속 사용과 같은 서버 조건)")
+                          "keep_loaded: 시작할 때만 내리고 모델을 올린 채 연속 실행(CLI 연속 사용과 같은 서버 조건). "
+                          "resident: 시작할 때도 내리지 않는다(multi-cell run 상주, 결정 62)")
     llm.add_argument("--resume-new-session", action="store_true",
                      help="keep_loaded run을 중단 뒤 이어 실행할 때 나머지를 별도 세션으로 기록한다(순수 연속 아님으로 표시)")
     llm.add_argument("--order", default="file",

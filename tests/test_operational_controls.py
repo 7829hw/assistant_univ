@@ -170,7 +170,7 @@ class ResumePolicyTest(unittest.TestCase):
         self.tmp.cleanup()
 
     def run_llm(self, model_state, *, interrupt_after=None, digest="d1", resume_new_session=False, only="",
-                order="file", replay_from=None, condition_check=True, name="run"):
+                order="file", replay_from=None, condition_check=True, name="run", unload=None):
         resets = self.resets
 
         class Reset:
@@ -189,7 +189,7 @@ class ResumePolicyTest(unittest.TestCase):
         with mock.patch.object(E, "GOLD_PATH", self.gold), \
                 mock.patch("ollama_client.OllamaClient", return_value=QuestionClient(interrupt_after)), \
                 mock.patch("evaluate_prompt_ab.OllamaStateReset", Reset), \
-                mock.patch("evaluate_prompt_ab.unload_all_models", return_value=[]), \
+                mock.patch("evaluate_prompt_ab.unload_all_models", unload or mock.Mock(return_value=[])), \
                 mock.patch("evaluate_prompt_ab._server_details", return_value=("0.34.4", digest, {})), \
                 mock.patch("builtins.print"):
             E.cmd_llm(args)
@@ -230,6 +230,26 @@ class ResumePolicyTest(unittest.TestCase):
         self.assertEqual(result["meta"]["item_order"], ["c", "b", "a"])
         self.assertEqual(result["meta"]["run_spec"]["items"], ["c", "b", "a"])
         self.assertEqual([r["reset_ok"] for r in result["rows"]], [None] * 3)
+
+    def test_resident_run_never_unloads(self):
+        """resident(결정 62): 시작할 때도, 문항 사이에도 모델을 내리지 않는다."""
+        with mock.patch("evaluate_prompt_ab.unload_all_models", return_value=[]) as unload:
+            result = self.run_llm("resident", unload=unload)
+        self.assertEqual(self.resets, [])
+        self.assertEqual(unload.call_count, 0)
+        self.assertTrue(result["meta"]["pure_continuous"])
+        self.assertEqual(result["meta"]["pipeline"]["isolation"], "resident")
+
+    def test_keep_loaded_still_unloads_once_at_start(self):
+        with mock.patch("evaluate_prompt_ab.unload_all_models", return_value=[]) as unload:
+            self.run_llm("keep_loaded", unload=unload)
+        self.assertEqual(unload.call_count, 1)
+
+    def test_resident_run_is_not_resumed_into_the_same_run(self):
+        self.interrupted("resident")
+        with self.assertRaises(SystemExit) as raised:
+            self.run_llm("resident")
+        self.assertIn("resident", str(raised.exception))
 
     def test_unload_per_question_is_the_default_behaviour(self):
         result = self.run_llm("unload_per_question")

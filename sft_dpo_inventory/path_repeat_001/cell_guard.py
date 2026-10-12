@@ -4,6 +4,9 @@
     python cell_guard.py precheck --path ollama|hf --out PRE.json
     python cell_guard.py wait-empty --out WAIT.json            # Ollama keep_alive가 끝나 /api/ps가 빌 때까지
     python cell_guard.py watch --pid PID --rows RUN.jsonl --out GUARD.json --min-rate R
+    python cell_guard.py precheck --path ollama --resident --out PRE.json   # 상주 run(결정 62): 모델이 올라와 있어야 한다
+    python cell_guard.py warmup --out WARMUP.json --min-rate R              # 상주 run 시작 전 1회(판정 무관)
+    python cell_guard.py residency --pid RUN_PID --out RESIDENCY.json      # 상주 run 전체 동안 unload·reload 감시
 
 precheck(셀 시작 직전과 끝난 직후)
 - 공통: host ``nvidia-smi``에 이 장비의 GPU(UUID ``GPU-d4308fbb…``)가 있고 compute 프로세스가 없다.
@@ -21,6 +24,16 @@ watch(Ollama 셀 측정 중, 측정 프로세스 PID를 지켜본다)
 - ``--min-rate`` 미만인 문항, 100% GPU가 아님, context 길이가 다름 중 하나면 측정 프로세스를 즉시 SIGTERM으로 멈추고 exit 2.
   서버와 모델은 건드리지 않는다.
 - 측정 프로세스가 끝나면 끝까지 본 기록으로 판단을 남긴다. GPU 확인을 끝내 하지 못했으면 exit 3.
+
+상주 실행(결정 62, 2026-10-12): multi-cell run에서는 모델을 한 번 올리고 run이 끝날 때까지 내리지 않는다.
+- ``precheck --resident``: 빈 GPU 대신 목표 모델이 올라와 있고 100% GPU·context 40960이며 GPU의 compute 프로세스가 Ollama
+  runner뿐인지 본다. 버전·digest·컨테이너 GPU 검사는 같다. 셀 사이에 ``wait-empty``를 쓰지 않는다.
+- ``warmup``: 판정에 쓰지 않는 짧은 chat 호출(harness와 같은 options: num_ctx·think를 넣지 않음, 생성 상한만)을 보내 모델을
+  올리고, 마지막 호출의 생성 속도(eval_count/eval_duration)가 ``--min-rate`` 이상이고 100% GPU인지 본다. 모델을 내리지 않는다.
+- ``residency``: run 프로세스(``--pid``)가 끝날 때까지 ``/api/ps``와 GPU compute 프로세스를 주기적으로 보고, 모델이 사라진
+  횟수(unload), 다시 올라오거나 runner PID가 바뀐 횟수(reload), 컨테이너 StartedAt 변화(restart)를 기록한다. 모델을 부르지 않는다.
+- chat 요청에는 keep_alive가 없어(ollama_client.py, code fingerprint 범위) 서버 기본 keep_alive(5분)가 적용된다. 셀 사이 간격을
+  짧게 두는 것으로 상주를 유지하고, 실제 상주 여부는 ``residency`` 기록으로 확인한다.
 """
 import argparse
 import json
@@ -74,15 +87,45 @@ def loaded_models():
     return httpx.get(f"{HOST}/api/ps", timeout=10).json().get("models") or []
 
 
+def target_model(ps):
+    found = [m for m in ps if m.get("name") == MODEL or m.get("model") == MODEL]
+    return found[0] if found else None
+
+
+def ollama_runner_only(apps):
+    """GPU compute 프로세스가 모두 Ollama runner인가(상주 run에서 다른 프로세스가 GPU를 쓰지 않는지)."""
+    lines = [line for line in (apps or "").splitlines() if line.strip()]
+    return bool(lines) and all("ollama" in line or "llama" in line for line in lines)
+
+
+def runner_pids(apps):
+    return sorted(line.split(",")[0].strip() for line in (apps or "").splitlines()
+                  if line.strip() and ("ollama" in line or "llama" in line))
+
+
+def container_started_at():
+    return sh(["docker", "inspect", "ollama", "--format", "{{.State.StartedAt}}"])
+
+
 def precheck(args):
     gpu = gpu_state()
     ps = loaded_models()
-    out = {"checked_at": now(), "path": args.path, "gpu": gpu, "ollama_ps": ps,
-           "gpu_present": GPU in gpu["nvidia_smi_L"], "no_compute_apps": not gpu["compute_apps"],
-           "memory_at_baseline": gpu["memory_used_mib"] is not None
-           and gpu["memory_used_mib"] <= BASELINE_MIB + TOLERANCE_MIB,
-           "no_model_loaded": not ps}
-    checks = ["gpu_present", "no_compute_apps", "memory_at_baseline", "no_model_loaded"]
+    out = {"checked_at": now(), "path": args.path, "resident": bool(getattr(args, "resident", False)), "gpu": gpu,
+           "ollama_ps": ps, "gpu_present": GPU in gpu["nvidia_smi_L"]}
+    if out["resident"]:
+        m = target_model(ps) or {}
+        out.update({"model_resident": bool(m), "resident_gpu_100": bool(m.get("size")) and m.get("size_vram") == m.get("size"),
+                    "resident_context_ok": m.get("context_length") == CONTEXT_LENGTH,
+                    "only_one_model": len(ps) == 1, "compute_apps_ollama_only": ollama_runner_only(gpu["compute_apps"]),
+                    "runner_pids": runner_pids(gpu["compute_apps"]), "container_started_at": container_started_at()})
+        checks = ["gpu_present", "model_resident", "resident_gpu_100", "resident_context_ok", "only_one_model",
+                  "compute_apps_ollama_only"]
+    else:
+        out.update({"no_compute_apps": not gpu["compute_apps"],
+                    "memory_at_baseline": gpu["memory_used_mib"] is not None
+                    and gpu["memory_used_mib"] <= BASELINE_MIB + TOLERANCE_MIB,
+                    "no_model_loaded": not ps})
+        checks = ["gpu_present", "no_compute_apps", "memory_at_baseline", "no_model_loaded"]
     if args.path == "ollama":
         version = httpx.get(f"{HOST}/api/version", timeout=10).json().get("version")
         tags = {m.get("name"): m.get("digest") for m in httpx.get(f"{HOST}/api/tags", timeout=10).json()["models"]}
@@ -116,6 +159,89 @@ def wait_empty(args):
     Path(args.out).write_text(json.dumps(out, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     print(json.dumps({k: out.get(k) for k in ("ok", "waited_s")}), flush=True)
     return 0 if out["ok"] else 1
+
+
+def warmup(args):
+    """판정에 쓰지 않는 warm-up chat 호출. 모델을 올리고 속도·GPU를 확인한다. 모델을 내리지 않는다."""
+    out = {"started_at": now(), "container_started_at": container_started_at(), "calls": []}
+    for index in range(args.calls):
+        payload = {"model": MODEL, "stream": False, "options": {"num_predict": args.num_predict},
+                   "messages": [{"role": "user", "content": "warm-up입니다. 1부터 100까지 쉼표로 이어서 세어 주세요."}]}
+        started = time.monotonic()
+        try:
+            r = httpx.post(f"{HOST}/api/chat", json=payload, timeout=600).json()
+        except httpx.HTTPError as error:
+            out["calls"].append({"index": index, "error": f"{type(error).__name__}: {error}"[:300]})
+            break
+        eval_ns = r.get("eval_duration") or 0
+        out["calls"].append({"index": index, "at": now(), "wall_s": round(time.monotonic() - started, 2),
+                             "load_s": round((r.get("load_duration") or 0) / 1e9, 2), "eval_count": r.get("eval_count"),
+                             "tok_s": round(r["eval_count"] / (eval_ns / 1e9), 1) if eval_ns and r.get("eval_count") else None})
+    m = target_model(loaded_models()) or {}
+    gpu = gpu_state()
+    last = out["calls"][-1] if out["calls"] else {}
+    out.update({"finished_at": now(), "model_loaded_at": out["calls"][0].get("at") if out["calls"] else None,
+                "gpu_100": bool(m.get("size")) and m.get("size_vram") == m.get("size"),
+                "context_ok": m.get("context_length") == CONTEXT_LENGTH, "runner_pids": runner_pids(gpu["compute_apps"]),
+                "ollama_ps": sh(["docker", "exec", "ollama", "ollama", "ps"]), "min_rate": args.min_rate,
+                "rate_ok": (last.get("tok_s") or 0) >= args.min_rate})
+    out["ok"] = out["gpu_100"] and out["context_ok"] and out["rate_ok"] and len(out["calls"]) == args.calls
+    Path(args.out).write_text(json.dumps(out, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    print(json.dumps({"ok": out["ok"], "rates": [c.get("tok_s") for c in out["calls"]],
+                      "gpu_100": out["gpu_100"], "context_ok": out["context_ok"]}), flush=True)
+    return 0 if out["ok"] else 1
+
+
+def residency(args):
+    """run 프로세스가 끝날 때까지 상주 여부를 기록한다. 모델·서버·컨테이너를 건드리지 않는다."""
+    out_path = Path(args.out)
+    state = {"pid": args.pid, "started_at": now(), "container_started_at_start": container_started_at(),
+             "polls": 0, "poll_errors": 0, "loaded_polls": 0, "unloaded_polls": 0,
+             "runner_pids_seen": [], "events": [], "unload_events": 0, "reload_events": 0}
+    loaded_before, pids_before = None, None
+
+    def save():
+        out_path.write_text(json.dumps(state, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+
+    while alive(args.pid):
+        try:
+            m = target_model(loaded_models())
+        except httpx.HTTPError:
+            state["poll_errors"] += 1
+            time.sleep(args.interval)
+            continue
+        pids = runner_pids(gpu_state()["compute_apps"]) if m else []
+        state["polls"] += 1
+        state["loaded_polls" if m else "unloaded_polls"] += 1
+        for pid in pids:
+            if pid not in state["runner_pids_seen"]:
+                state["runner_pids_seen"].append(pid)
+        if loaded_before is True and not m:
+            state["unload_events"] += 1
+            state["events"].append({"at": now(), "event": "unload"})
+        if loaded_before is False and m:
+            state["reload_events"] += 1
+            state["events"].append({"at": now(), "event": "reload"})
+        elif m and pids_before and pids and pids != pids_before:
+            state["reload_events"] += 1
+            state["events"].append({"at": now(), "event": "runner_pid_changed", "from": pids_before, "to": pids})
+        if loaded_before is None:
+            state["model_loaded_at_start"] = bool(m)
+        loaded_before = bool(m)
+        if pids:
+            pids_before = pids
+        if state["polls"] % 12 == 1:
+            save()
+        time.sleep(args.interval)
+    state["finished_at"] = now()
+    state["container_started_at_end"] = container_started_at()
+    state["container_restart"] = state["container_started_at_end"] != state["container_started_at_start"]
+    state["ok"] = (state.get("model_loaded_at_start") is True and state["unload_events"] == 0
+                   and state["reload_events"] == 0 and not state["container_restart"])
+    save()
+    print(json.dumps({k: state.get(k) for k in ("ok", "unload_events", "reload_events", "container_restart",
+                                                  "polls")}), flush=True)
+    return 0 if state["ok"] else 4
 
 
 def item_rate(record):
@@ -230,6 +356,16 @@ def main():
     p = sub.add_parser("precheck")
     p.add_argument("--path", choices=("ollama", "hf"), required=True)
     p.add_argument("--out", required=True)
+    p.add_argument("--resident", action="store_true", help="상주 run(결정 62): 목표 모델이 올라와 있어야 한다")
+    u = sub.add_parser("warmup")
+    u.add_argument("--out", required=True)
+    u.add_argument("--min-rate", type=float, required=True)
+    u.add_argument("--calls", type=int, default=2)
+    u.add_argument("--num-predict", type=int, default=256)
+    r = sub.add_parser("residency")
+    r.add_argument("--pid", type=int, required=True)
+    r.add_argument("--out", required=True)
+    r.add_argument("--interval", type=float, default=5.0)
     e = sub.add_parser("wait-empty")
     e.add_argument("--out", required=True)
     e.add_argument("--timeout", type=float, default=420.0)
@@ -239,7 +375,8 @@ def main():
     w.add_argument("--out", required=True)
     w.add_argument("--min-rate", type=float, required=True)
     args = parser.parse_args()
-    return {"precheck": precheck, "wait-empty": wait_empty, "watch": watch}[args.cmd](args)
+    return {"precheck": precheck, "wait-empty": wait_empty, "watch": watch, "warmup": warmup,
+            "residency": residency}[args.cmd](args)
 
 
 if __name__ == "__main__":

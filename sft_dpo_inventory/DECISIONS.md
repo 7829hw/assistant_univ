@@ -317,3 +317,25 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
       그 용도를 바꾸지 않는다. 결과(문항별 오류 포함)는 prompt contract 판정에만 쓰고 학습·annotation·데이터 설계에 쓰지 않는다.
       sel154로 P0.3 판정을 한 뒤 그 문항을 보고 prompt를 고치지 않는다(1회 판정).
     - 설정·장비 절차는 결정 56·57·60과 같다(greedy 1 + sampling 5, seed 20261010–20261014, cell_guard). HF 재현은 보류한다.
+
+62. (2026-10-12, 사용자) P0.3 sel154 결과(commit `7baf67b`, 분기 B) 뒤 두 가지를 정한다.
+    - 원인 분석: 새 prompt·재측정 없이 기존 raw만으로 P0.3 실패 원인을 분석한다(`evaluation/partial_grounding/ab_p0_3/ROOT_CAUSE.md`).
+      P0.3는 candidate로 동결하지 않고 HF 재현·P0.4·SFT·pruning은 보류한다. 기록에 thinking 원문이 없어(thinking_chars만)
+      thinking 비교는 길이와 첫 응답 구조로 대신했다.
+    - Ollama 상주 실행: 이후 Ollama 모델 호출이 있는 모든 multi-cell run은 모델을 run 시작 때 한 번 올리고(판정 무관 warm-up)
+      run이 끝날 때까지 내리지 않는다. 셀 사이에 unload·keep_alive=0·VRAM 비우기 대기·컨테이너 재시작·arm별 reload를 하지 않는다.
+      - 구현: `evaluate_vendor100.py --model-state resident`(시작할 때도, 문항 사이에도 내리지 않음),
+        `sft_dpo_inventory/path_repeat_001/cell_guard.py`의 `precheck --resident`·`warmup`·`residency`,
+        실험 run_all.sh가 source하는 `sft_dpo_inventory/path_repeat_001/resident_lib.sh`(resident_begin / resident_cell / resident_end).
+        두 파일 모두 code fingerprint 범위 밖이다(`ab88a19e` 그대로).
+      - 셀 전 확인은 컨테이너 GPU(결정 55 규칙 13), 목표 모델이 올라와 있고 100% GPU·context 40960, GPU compute 프로세스가 Ollama
+        runner뿐인지다. 생성 속도 guard(watch)는 그대로다.
+      - REPORT에 남길 것: 모델 최초 load 시각(warm-up), run 종료 시각, run 중 unload·reload(runner PID 변화 포함)·컨테이너 재시작
+        횟수(정상 0), warm-up 횟수. `resident/warmup.json`, `resident/residency.json`에 기록된다.
+      - 조건 변화: 지금까지의 Ollama 평가 셀은 문항마다 모델을 내린 상태(unload_per_question)다. grounding_v14에서 모델을 내리지 않으면
+        같은 요청의 출력이 직전 처리 이력에 따라 달라짐(temperature 0 포함)을 확인했다. 따라서 상주 run의 수치는 이전 셀과 직접
+        비교하지 않고, 같은 run 안의 arm끼리만 비교한다. greedy 재현은 문항 순서·셀 순서가 같을 때만 기대한다.
+      - 한계: chat 요청에는 keep_alive가 없어 서버 기본값(5분)이 적용된다. 요청에 긴 keep_alive를 넣으려면 code fingerprint 범위인
+        `ollama_client.py`를 바꿔야 하므로 하지 않았다. 셀 사이 간격을 수 초로 두어 상주를 유지하고 실제 상주 여부는
+        `residency` 기록으로 확인한다.
+      - 아직 실제 모델 호출로 검증하지 않았다(이번 단계는 모델 호출 금지). 첫 상주 run의 warm-up·residency 기록으로 확인한다.
