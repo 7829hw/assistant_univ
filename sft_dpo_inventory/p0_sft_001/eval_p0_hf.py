@@ -34,6 +34,23 @@ sys.path.insert(0, str(ROOT / "sft_dpo_inventory/thinking_prep_001"))
 import evaluate_vendor100 as EV  # noqa: E402
 import hf_thinking as H  # noqa: E402
 
+_split_thinking = H.split_thinking
+
+
+def split_thinking_answer_only(raw):
+    """PLAN_DEVIATIONS.md 2번: thinking 블록 없이 바로 답한 응답(`<think>`·`</think>` 모두 없음)은 답 본문으로 본다.
+
+    `hf_thinking.split_thinking`은 `</think>`가 없으면 잘린 thinking으로 보고 본문을 비운다. Gold-only 모델은 답만 있는
+    학습 레코드 형식대로 thinking 없이 JSON을 바로 낸다. Ollama의 think 분리와 같게, `<think>`로 시작하지 않고
+    `</think>`도 없는 응답은 thinking "" + 본문 전체로 나눈다. `<think>`로 시작한 응답의 처리(잘림 포함)는 그대로다.
+    """
+    if "<think>" not in raw and H.THINK_END not in raw:
+        return "", raw.strip(), True
+    return _split_thinking(raw)
+
+
+H.split_thinking = split_thinking_answer_only
+
 
 def sampling_settings(args):
     """--do-sample이면 temperature·top_p·top_k·seed가 모두 있어야 한다. 없으면 None(greedy)."""
