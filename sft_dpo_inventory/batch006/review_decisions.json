@@ -1,0 +1,547 @@
+{
+ "batch": "b006",
+ "reviewed_at": "2026-10-13",
+ "reviewer": "Claude 검토(사용자 2026-10-13 지시로 위임된 검토, 결정 67). 사용자가 이 파일을 보고 뒤집을 수 있다.",
+ "labels": {
+  "APPROVE": "그대로 승인",
+  "APPROVE_WITHOUT_MOCK": "계약·compile 통과, mock 실행 데이터만 없음(승인)",
+  "EDIT_REQUIRED": "수정 뒤 자동 검사를 다시 통과해야 승인",
+  "REJECT": "제외"
+ },
+ "edit_rule": "원문(candidates_draft.yaml)은 그대로 두고 revision(question, concept_text: concept id → 새 text, null이면 text 삭제)을 apply_review.py가 적용해 approved.jsonl을 만든다.",
+ "items": [
+  {
+   "id": "b006-01",
+   "decision": "APPROVE",
+   "reason": "사건 표현 '손님을 태운 위치'로 승차 끝 grouping. 장소 제한 없음, h3·지난주 일치.",
+   "edited": false,
+   "pair": "a1",
+   "pair_valid": true,
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-02",
+   "decision": "APPROVE",
+   "reason": "'손님을 내려준 위치' = 하차 끝 grouping. a1 대조 상대와 끝점만 다름.",
+   "edited": false,
+   "pair": "a1",
+   "pair_valid": true,
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-03",
+   "decision": "APPROVE",
+   "reason": "'하차가 가장 많이 몰린 H3 셀' = dropoff grouping, top 5.",
+   "edited": false,
+   "pair": "a2",
+   "pair_valid": false,
+   "pair_note": "대조쌍 무효, 일반 문항으로 둔다: 끝점과 함께 순위 방향(top↔bottom)과 표현(몰린↔드물었던)이 바뀐다",
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-04",
+   "decision": "APPROVE",
+   "reason": "'승차가 가장 드물었던' = pickup grouping, bottom 5. 문항 자체는 맞으나 a2 대조쌍으로는 순위 방향도 바뀐다.",
+   "edited": false,
+   "pair": "a2",
+   "pair_valid": false,
+   "pair_note": "대조쌍 무효, 일반 문항으로 둔다: 끝점과 함께 순위 방향(top↔bottom)과 표현(몰린↔드물었던)이 바뀐다",
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-05",
+   "decision": "APPROVE",
+   "reason": "'택시를 탄 건수'의 시도 = 승차 끝 시도, top 1.",
+   "edited": false,
+   "pair": "a3",
+   "pair_valid": true,
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-06",
+   "decision": "APPROVE",
+   "reason": "'택시에서 내린 건수' = 하차 끝, a3 대조 유효.",
+   "edited": false,
+   "pair": "a3",
+   "pair_valid": true,
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-07",
+   "decision": "APPROVE",
+   "reason": "'실차 하차가 가장 적었던 시도' = dropoff, bottom 2, 8월 범위 일치. measure text는 v005 관례('실차 하차')와 같음.",
+   "edited": false,
+   "pair": null,
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-08",
+   "decision": "APPROVE",
+   "reason": "'가장 적게 출발한 읍면동' = pickup emd bottom 3.",
+   "edited": false,
+   "pair": null,
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-09",
+   "decision": "EDIT_REQUIRED",
+   "reason": "의미(both grouping, emd, bottom 3)는 맞으나 measure text '실차'가 질문에 없다. gold에서 measure text를 뺀다(v005의 text 없는 implicit measure 관례).",
+   "edited": true,
+   "revision": {
+    "concept_text": {
+     "measure": null
+    }
+   },
+   "pair": null,
+   "mock_available": true,
+   "final": "approve_after_recheck"
+  },
+  {
+   "id": "b006-10",
+   "decision": "APPROVE",
+   "reason": "'실차가 출발한 곳을 시군구 단위로' = pickup sigungu, 순위 없음.",
+   "edited": false,
+   "pair": "a4",
+   "pair_valid": true,
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-11",
+   "decision": "APPROVE",
+   "reason": "'도착한 곳' = dropoff. a4 대조 유효.",
+   "edited": false,
+   "pair": "a4",
+   "pair_valid": true,
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-12",
+   "decision": "APPROVE",
+   "reason": "수성구에서 탄 = od_role pickup, 탄 위치로 나눔 = dt pickup(같은 끝).",
+   "edited": false,
+   "pair": "a5",
+   "pair_valid": false,
+   "pair_note": "대조 상대가 없다",
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-13",
+   "decision": "APPROVE_WITHOUT_MOCK",
+   "reason": "수영구 승차 제한 + 승차 grouping, '뜸했던' = bottom 2. 계약·compile 통과, mock에 수영구 h3 데이터 없음.",
+   "edited": false,
+   "pair": null,
+   "mock_available": false,
+   "final": "approve"
+  },
+  {
+   "id": "b006-14",
+   "decision": "APPROVE",
+   "reason": "대구에서 출발 = pickup 제한, 출발한 곳을 구 단위 = pickup sigungu.",
+   "edited": false,
+   "pair": null,
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-15",
+   "decision": "APPROVE",
+   "reason": "부산에서 태운 = pickup 제한, 태운 건수 적은 구 = pickup sigungu bottom 2.",
+   "edited": false,
+   "pair": "a6",
+   "pair_valid": false,
+   "pair_note": "대조 상대가 없다",
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-16",
+   "decision": "APPROVE",
+   "reason": "달서구에 도착 = dropoff 제한, 끝난 곳 h3 = dropoff grouping.",
+   "edited": false,
+   "pair": null,
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-17",
+   "decision": "EDIT_REQUIRED",
+   "reason": "'부산진구로 들어온'은 외부에서 들어온 운행만으로 읽힐 수 있으나 gold는 하차 제한만 있어 내부 운행도 포함한다. '한산한'도 하차 건수인지 통행 일반인지 흐리다. 문장을 '부산진구에서 손님을 내려준 곳 중 하차가 가장 적은'으로 고친다. mock 데이터 없음.",
+   "edited": true,
+   "revision": {
+    "question": "이번 달 부산 부산진구에서 손님을 내려준 곳 중 하차가 가장 적은 H3 셀 세 개는?",
+    "concept_text": {
+     "measure": "하차"
+    }
+   },
+   "pair": null,
+   "mock_available": false,
+   "final": "approve_after_recheck"
+  },
+  {
+   "id": "b006-18",
+   "decision": "APPROVE",
+   "reason": "부산에 도착 = dropoff 제한, 가장 많이 끝난 구 = dropoff sigungu top 3.",
+   "edited": false,
+   "pair": null,
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-19",
+   "decision": "APPROVE",
+   "reason": "대구에서 하차 = dropoff 제한·grouping, bottom 1. a7 대조 유효.",
+   "edited": false,
+   "pair": "a7",
+   "pair_valid": true,
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-20",
+   "decision": "APPROVE",
+   "reason": "대구에서 승차 = pickup 제한·grouping. a7 대조 유효.",
+   "edited": false,
+   "pair": "a7",
+   "pair_valid": true,
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-21",
+   "decision": "EDIT_REQUIRED",
+   "reason": "의미(both grouping h3 top 3)는 맞으나 measure text '실차'가 질문에 없다. gold에서 measure text를 뺀다. '셀'은 이 도메인에서 H3 셀뿐이라(grounding NON_PLACE_WORDS) h3로 본다.",
+   "edited": true,
+   "revision": {
+    "concept_text": {
+     "measure": null
+    }
+   },
+   "pair": null,
+   "mock_available": true,
+   "final": "approve_after_recheck"
+  },
+  {
+   "id": "b006-22",
+   "decision": "APPROVE_WITHOUT_MOCK",
+   "reason": "동대구역으로 온 = dropoff 제한, 출발 셀-끝 셀 짝 = dt both, top 2. mock에 동대구역 both h3 데이터 없음.",
+   "edited": false,
+   "pair": null,
+   "mock_available": false,
+   "final": "approve"
+  },
+  {
+   "id": "b006-23",
+   "decision": "APPROVE",
+   "reason": "'어느 동에서 시작됐는지' = pickup emd, 9월 1일 하루.",
+   "edited": false,
+   "pair": null,
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-24",
+   "decision": "APPROVE",
+   "reason": "손님을 태운 H3 셀 bottom 3, 9/1–9/7. 초안 단계에서 taxi_type 제거됨(UNCONSUMED_CONDITION 방지).",
+   "edited": false,
+   "pair": "a8",
+   "pair_valid": true,
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-25",
+   "decision": "APPROVE",
+   "reason": "손님을 내려준 셀, a8 대조 유효.",
+   "edited": false,
+   "pair": "a8",
+   "pair_valid": true,
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-26",
+   "decision": "EDIT_REQUIRED",
+   "reason": "'손님을 태운 곳 가운데 실차가 가장 적게 시작된'이 같은 뜻을 두 번 말하는 어색한 합성 문장이다. '수성구에서 손님을 가장 적게 태운 H3 셀 세 곳은?'으로 고친다.",
+   "edited": true,
+   "revision": {
+    "question": "이번 달 대구 수성구에서 손님을 가장 적게 태운 H3 셀 세 곳은?",
+    "concept_text": {
+     "measure": "손님을 가장 적게 태운"
+    }
+   },
+   "pair": null,
+   "mock_available": true,
+   "final": "approve_after_recheck"
+  },
+  {
+   "id": "b006-27",
+   "decision": "EDIT_REQUIRED",
+   "reason": "의미(동성로 pickup 제한, dropoff h3 grouping)는 맞으나 measure text가 '택시'다. '택시'를 trip_count 표지로 가르치면 택시 대수(active_taxi_count)와 섞일 수 있어 measure text를 뺀다.",
+   "edited": true,
+   "revision": {
+    "concept_text": {
+     "measure": null
+    }
+   },
+   "pair": "b1",
+   "pair_valid": false,
+   "pair_note": "대조쌍 무효, 일반 문항으로 둔다: 끝점과 함께 순위 조건(없음↔top 5)이 바뀐다",
+   "mock_available": true,
+   "final": "approve_after_recheck"
+  },
+  {
+   "id": "b006-28",
+   "decision": "APPROVE",
+   "reason": "동성로에서 내림 = dropoff 제한, 어느 셀에서 탔는지 = pickup grouping, top 5.",
+   "edited": false,
+   "pair": "b1",
+   "pair_valid": false,
+   "pair_note": "대조쌍 무효, 일반 문항으로 둔다: 끝점과 함께 순위 조건(없음↔top 5)이 바뀐다",
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-29",
+   "decision": "APPROVE",
+   "reason": "동대구역 출발 = pickup 제한, 도착한 셀 = dropoff grouping, top 3.",
+   "edited": false,
+   "pair": "b2",
+   "pair_valid": false,
+   "pair_note": "대조쌍 무효, 일반 문항으로 둔다: 끝점과 함께 순위 방향(top 3↔bottom 3)이 바뀐다",
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-30",
+   "decision": "APPROVE",
+   "reason": "동대구역 도착 = dropoff 제한, 출발한 곳 = pickup grouping, bottom 3.",
+   "edited": false,
+   "pair": "b2",
+   "pair_valid": false,
+   "pair_note": "대조쌍 무효, 일반 문항으로 둔다: 끝점과 함께 순위 방향(top 3↔bottom 3)이 바뀐다",
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-31",
+   "decision": "APPROVE",
+   "reason": "대구 출발 = pickup 제한, 내린 시도 = dropoff sido bottom 2.",
+   "edited": false,
+   "pair": "b3",
+   "pair_valid": false,
+   "pair_note": "대조쌍 무효, 일반 문항으로 둔다: 끝점과 함께 장소(대구↔부산)와 순위(bottom 2↔top 3)가 바뀐다",
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-32",
+   "decision": "APPROVE",
+   "reason": "부산 도착 = dropoff 제한, 출발 시도 = pickup sido top 3. 구어체 '어느 시도에서 출발했는지 가장 많은 세 곳'은 자연스러운 범위.",
+   "edited": false,
+   "pair": "b3",
+   "pair_valid": false,
+   "pair_note": "대조쌍 무효, 일반 문항으로 둔다: 끝점과 함께 장소(대구↔부산)와 순위(bottom 2↔top 3)가 바뀐다",
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-33",
+   "decision": "EDIT_REQUIRED",
+   "reason": "'대구로 들어온'은 대구 밖에서 들어온 운행으로 읽힐 수 있으나 gold는 하차 제한만 있어 대구 안 운행도 포함한다. '대구에 도착한'으로 고친다.",
+   "edited": true,
+   "revision": {
+    "question": "지난달 대구에 도착한 실차를 출발한 시도 기준으로 나눠 보여줘"
+   },
+   "pair": null,
+   "mock_available": true,
+   "final": "approve_after_recheck"
+  },
+  {
+   "id": "b006-34",
+   "decision": "APPROVE",
+   "reason": "수성구에서 탄 = pickup 제한, 내린 곳 = dropoff h3 bottom 2.",
+   "edited": false,
+   "pair": null,
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-35",
+   "decision": "APPROVE",
+   "reason": "중구 도착 = dropoff 제한, 출발한 구 = pickup sigungu.",
+   "edited": false,
+   "pair": null,
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-36",
+   "decision": "APPROVE",
+   "reason": "수영구에서 내림 = dropoff 제한, 탄 동 = pickup emd.",
+   "edited": false,
+   "pair": "b4",
+   "pair_valid": false,
+   "pair_note": "대조쌍 무효, 일반 문항으로 둔다: 끝점과 함께 dimension(emd↔h3)이 바뀐다",
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-37",
+   "decision": "APPROVE",
+   "reason": "수영구에서 탐 = pickup 제한, 내린 셀 = dropoff h3. b4 대조쌍은 dimension도 바뀌어 무효, 일반 문항으로 둔다.",
+   "edited": false,
+   "pair": "b4",
+   "pair_valid": false,
+   "pair_note": "대조쌍 무효, 일반 문항으로 둔다: 끝점과 함께 dimension(emd↔h3)이 바뀐다",
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-38",
+   "decision": "APPROVE",
+   "reason": "중구 안에서만 오감 = od_role both(결정 47), 도착 셀 = dropoff grouping.",
+   "edited": false,
+   "pair": null,
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-39",
+   "decision": "EDIT_REQUIRED",
+   "reason": "의미(부산진구 both 제한, pickup h3 top 3)는 맞으나 measure text '운행'이 운행일수·운행률(operation)과 혼동된다. '운행'을 '실차'로 고친다. mock 데이터 없음.",
+   "edited": true,
+   "revision": {
+    "question": "지난달 부산진구 안에서 출발과 도착이 모두 이뤄진 실차 중 출발이 가장 많았던 H3 셀 세 개는?",
+    "concept_text": {
+     "measure": "실차"
+    }
+   },
+   "pair": null,
+   "mock_available": false,
+   "final": "approve_after_recheck"
+  },
+  {
+   "id": "b006-40",
+   "decision": "APPROVE",
+   "reason": "대구 pickup·부산 dropoff 제한, 출발 지점 셀 = pickup grouping.",
+   "edited": false,
+   "pair": "b5",
+   "pair_valid": false,
+   "pair_note": "대조쌍 무효, 일반 문항으로 둔다: dimension_target과 함께 순위 조건(없음↔top 5)이 바뀐다",
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-41",
+   "decision": "APPROVE_WITHOUT_MOCK",
+   "reason": "같은 제한, 끝난 곳 = dropoff h3 top 5. mock에 대구→부산 h3 데이터 없음.",
+   "edited": false,
+   "pair": "b5",
+   "pair_valid": false,
+   "pair_note": "대조쌍 무효, 일반 문항으로 둔다: dimension_target과 함께 순위 조건(없음↔top 5)이 바뀐다",
+   "mock_available": false,
+   "final": "approve"
+  },
+  {
+   "id": "b006-42",
+   "decision": "APPROVE",
+   "reason": "광안리에서 태움 = pickup 제한, 내려준 위치 = dropoff h3 top 3. b6 대조 유효.",
+   "edited": false,
+   "pair": "b6",
+   "pair_valid": true,
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-43",
+   "decision": "APPROVE",
+   "reason": "광안리에 내려줌 = dropoff 제한, 태웠던 위치 = pickup h3 top 3. b6 대조 유효.",
+   "edited": false,
+   "pair": "b6",
+   "pair_valid": true,
+   "mock_available": true,
+   "final": "approve"
+  },
+  {
+   "id": "b006-44",
+   "decision": "REJECT",
+   "reason": "Gap C(scope 역조회): 보호 평가셋 4종에 같은 semantic family가 있어 오염 기준 10/10 제외. 예외를 두지 않는다(결정 67).",
+   "edited": false,
+   "final": "reject"
+  },
+  {
+   "id": "b006-45",
+   "decision": "REJECT",
+   "reason": "Gap C(scope 역조회): 보호 평가셋 4종에 같은 semantic family가 있어 오염 기준 10/10 제외. 예외를 두지 않는다(결정 67).",
+   "edited": false,
+   "final": "reject"
+  },
+  {
+   "id": "b006-46",
+   "decision": "REJECT",
+   "reason": "Gap C(scope 역조회): 보호 평가셋 4종에 같은 semantic family가 있어 오염 기준 10/10 제외. 예외를 두지 않는다(결정 67).",
+   "edited": false,
+   "final": "reject"
+  },
+  {
+   "id": "b006-47",
+   "decision": "REJECT",
+   "reason": "Gap C(scope 역조회): 보호 평가셋 4종에 같은 semantic family가 있어 오염 기준 10/10 제외. 예외를 두지 않는다(결정 67).",
+   "edited": false,
+   "final": "reject"
+  },
+  {
+   "id": "b006-48",
+   "decision": "REJECT",
+   "reason": "Gap C(scope 역조회): 보호 평가셋 4종에 같은 semantic family가 있어 오염 기준 10/10 제외. 예외를 두지 않는다(결정 67).",
+   "edited": false,
+   "final": "reject"
+  },
+  {
+   "id": "b006-49",
+   "decision": "REJECT",
+   "reason": "Gap C(scope 역조회): 보호 평가셋 4종에 같은 semantic family가 있어 오염 기준 10/10 제외. 예외를 두지 않는다(결정 67).",
+   "edited": false,
+   "final": "reject"
+  },
+  {
+   "id": "b006-50",
+   "decision": "REJECT",
+   "reason": "Gap C(scope 역조회): 보호 평가셋 4종에 같은 semantic family가 있어 오염 기준 10/10 제외. 예외를 두지 않는다(결정 67).",
+   "edited": false,
+   "final": "reject"
+  },
+  {
+   "id": "b006-51",
+   "decision": "REJECT",
+   "reason": "Gap C(scope 역조회): 보호 평가셋 4종에 같은 semantic family가 있어 오염 기준 10/10 제외. 예외를 두지 않는다(결정 67).",
+   "edited": false,
+   "final": "reject"
+  },
+  {
+   "id": "b006-52",
+   "decision": "REJECT",
+   "reason": "Gap C(scope 역조회): 보호 평가셋 4종에 같은 semantic family가 있어 오염 기준 10/10 제외. 예외를 두지 않는다(결정 67).",
+   "edited": false,
+   "final": "reject"
+  },
+  {
+   "id": "b006-53",
+   "decision": "REJECT",
+   "reason": "Gap C(scope 역조회): 보호 평가셋 4종에 같은 semantic family가 있어 오염 기준 10/10 제외. 예외를 두지 않는다(결정 67).",
+   "edited": false,
+   "final": "reject"
+  }
+ ]
+}

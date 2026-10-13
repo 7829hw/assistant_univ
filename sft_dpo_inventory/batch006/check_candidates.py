@@ -2,6 +2,10 @@
 """batch006(P0 SFT 보강) 후보 자동 검사(모델 호출 없음). 승인하지 않는다(결정 45).
 
     /data/hwkim/path_repeat_001/venv/py/bin/python sft_dpo_inventory/batch006/check_candidates.py
+    /data/hwkim/path_repeat_001/venv/py/bin/python sft_dpo_inventory/batch006/check_candidates.py --source approved.jsonl
+
+`--source approved.jsonl`(검토 뒤, apply_review.py 출력)이면 같은 검사를 승인·수정 문장에 다시 돌려
+approved_checks.jsonl, overlap_report_approved.json으로 쓴다(초안 결과 파일은 그대로 둔다).
 
 입력: candidates_draft.yaml(이 디렉터리). 출력(evaluation/partial_grounding/sft_p0/): augmentation_candidates.jsonl(후보마다 결과·상태), overlap_report.json.
 
@@ -19,6 +23,7 @@
    - 후보끼리 질문 중복.
 6. 학습(v005)과의 겹침은 정보로만 남긴다.
 """
+import argparse
 import copy
 import importlib.util
 import json
@@ -106,7 +111,15 @@ def eval_index():
 
 
 def main():
-    document = yaml.safe_load((HERE / "candidates_draft.yaml").read_text(encoding="utf-8"))
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--source", default="candidates_draft.yaml")
+    a = ap.parse_args()
+    if a.source.endswith(".jsonl"):
+        document = {"candidates": read_jsonl(HERE / a.source)}
+        out_rows, out_report = "approved_checks.jsonl", "overlap_report_approved.json"
+    else:
+        document = yaml.safe_load((HERE / a.source).read_text(encoding="utf-8"))
+        out_rows, out_report = "augmentation_candidates.jsonl", "overlap_report.json"
     guard = Protection.current(GOLD_DIR)
     ext_templates, ext_families = extended_fingerprints()
     evk = eval_index()
@@ -172,14 +185,17 @@ def main():
             "mock": mock, "mock_note": mock_note, "p0_problems": conv["problems"],
             "keys": {"template": tk, "family": fk, "both_expanded": alt},
             "overlap_training_info": {"question": qk in train_q, "family": fk in train_f},
-            "review": {"status": "pending", "reviewer": None},
+            "review": ({"status": "pending", "reviewer": None} if "review_decision" not in item else
+                       {"status": item["review_decision"], "edited": item["edited"], "original": item["original"]}),
+            **({"provenance": item["provenance"], "pair_draft": item["pair_draft"]} if "provenance" in item else {}),
         })
-    with open(SFT / "augmentation_candidates.jsonl", "w", encoding="utf-8") as f:
+    with open(SFT / out_rows, "w", encoding="utf-8") as f:
         for r in rows:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
     report = {
         "protection_sources": len(guard.paths), "drafted": len(rows),
         "status": dict(Counter(r["status"] for r in rows)),
+        "source": a.source,
         "by_gap": {g: dict(Counter(r["status"] for r in rows if r["gap"] == g)) for g in ("A", "B", "C")},
         "excluded_by_reason": dict(Counter(x.split(":")[0] if x.startswith(("eval", "duplicate")) else x
                                            for r in rows for x in r["excluded_reasons"])),
@@ -191,7 +207,7 @@ def main():
         "training_overlap_info": {"question": sum(r["overlap_training_info"]["question"] for r in rows),
                                   "family": sum(r["overlap_training_info"]["family"] for r in rows)},
     }
-    (SFT / "overlap_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    (SFT / out_report).write_text(json.dumps(report, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     print(json.dumps({k: report[k] for k in ("drafted", "status", "by_gap", "excluded_by_reason", "eval_overlap_by_set",
                                              "contract_fail_items", "mock_notes")}, ensure_ascii=False, indent=1))
 

@@ -385,3 +385,24 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - 보강 데이터(batch006)는 결정 45 절차(Claude 초안 → 자동 계약 검사 → 사람 승인 → training set 편입)를 따른다. gold는 Full contract로
       적고 P0 target은 결정적 변환기로 만든다. 승인분만 새 판 `reviewed_gold_v006_p0`(v005 111 + 승인분, provenance 표시)으로 만들고
       v005는 덮어쓰지 않는다. 오염 기준은 기존 그대로(정규화 질문, id, template, family; 보호 원본·확장 지문·평가 셋 4종).
+67. (2026-10-13, 사용자) P0 SFT 데이터셋 확정과 trace 출처.
+    - Gap C(scope 역조회) 10건은 v006에 넣지 않는다(**v006의 Gap C 승인 = 0**).
+      - 같은 semantic family가 보호 평가셋 4종에 이미 있어 현재 오염 기준으로 10/10 제외다.
+      - 예외를 새로 만들면 평가 독립성을 해친다. 평가셋 문항을 옮기거나 paraphrase해서 우회하지 않는다. scope 역조회는 future-data 문제로 남긴다.
+    - batch006 Gap A 26·B 17은 사용자 지시로 Claude가 한 건씩 검토했다(결정 45의 승인 단계를 사용자가 위임, 판정·이유는
+      `sft_dpo_inventory/batch006/review_decisions.json`, 사용자가 뒤집을 수 있다).
+      - APPROVE 33, APPROVE_WITHOUT_MOCK 3, EDIT_REQUIRED 7(수정 뒤 자동 검사 재통과 → 승인), REJECT 0.
+      - 원문 초안은 고치지 않고 revision으로만 수정한다.
+      - 대조쌍은 6쌍만 유효하다(a2·b1–b5는 끝점 외 의미도 바뀌어 일반 문항으로 둔다).
+      - mock 데이터가 없는 5건은 계약·compile 통과로 승인한다.
+    - `reviewed_gold_v006_p0` = v005 111 + 승인 43 = 154(`training/generated/reviewed_gold_v006_p0`). v005는 덮어쓰지 않는다.
+      - Full gold가 canonical이고 P0는 결정적 변환으로만 만든다.
+      - 154/154 불변식 통과. 신규 43건의 오염 0.
+      - v005의 기존 template·family 겹침(결정 15·54 예외 11건과 보수·확장 키 29건)은 그대로 둔다(`batch006/REPORT.md` 6절).
+    - P0 thinking trace 출처는 기존 승인 경로인 HF base `Qwen/Qwen3-8B@b968826d`(BF16·SDPA, `enable_thinking=True`, max_new_tokens 8192)다.
+      - 질문당 greedy 1 + sampling 8(temperature 0.6, top_p 0.95, top_k 20, seed = 20261006 + 질문 순번).
+      - `thinking_prep_001/collect_traces.py`와 같은 생성 방식에 P0 prompt(`d7f4c12a`)를 쓴다.
+      - Ollama `qwen3:8b`와 `qwen3.8:27b`는 쓰지 않는다. resident 계열은 쓰지 않는다.
+      - 기존 Full trace(pilot_002)는 재활용하지 않는다.
+      - 기본 채택은 EXACT_OR_SEMANTIC_MATCH만이다. STRUCTURALLY_REPAIRABLE 편입은 통계를 본 뒤 따로 정한다.
+      - SFT는 별도 preregistration 뒤에 한다.
