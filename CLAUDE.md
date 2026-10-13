@@ -91,16 +91,21 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
     - Keep a stopped cell's output as `ABORTED_*`; never use it for baselines or judgments. Do not touch the container;
       report. Once the cause is fixed, the cell may be measured again from the start; this replaces an invalid
       measurement and is not a rerun. Record that and why.
-14. Resident Ollama runs (decision 62, 2026-10-12). A multi-cell run with Ollama model calls loads the model once at the
-    start and keeps it on the GPU until the run ends.
+14. Resident Ollama runs (decisions 62–63). A multi-cell run with Ollama model calls loads the model once at the start and
+    keeps the weights on the GPU until the run ends, while each question starts from the same server state.
     - Use `sft_dpo_inventory/path_repeat_001/resident_lib.sh`: `resident_begin` (empty-GPU check, then a warm-up that is not
       scored plus a rate/GPU check, then start the residency monitor), `resident_cell` per cell (`precheck --resident` →
-      `evaluate_vendor100.py --model-state resident` → watch → postcheck), and `resident_end` at the end (unload, reload and
-      container restart counts must all be 0).
+      `evaluate_vendor100.py --model-state resident_isolated` → watch → postcheck), and `resident_end` at the end (unload,
+      reload and container restart counts must all be 0).
+    - `resident_isolated` does not unload; before each question it sends a short raw request (`PrefixCacheReset`) so the
+      server KV cache does not carry the previous question's prefix. `--model-state resident` (no reset) reuses that cache
+      and is not used for judgment runs.
+    - Weights residency (`residency.json`) and per-question isolation (`reset_ok` per row) are recorded separately. Zero
+      unloads does not mean the questions were isolated.
+    - Until the isolation check in `evaluation/partial_grounding/resident_isolation/AUDIT.md` section 4 has been run and
+      passed, do not compare resident results directly with earlier cells that unloaded per question.
     - Between cells, do not use `wait-empty`, `ollama stop`, `keep_alive: 0`, waits to free VRAM, container restarts or
       per-arm reloads. All arms use the same resident model instance.
     - The REPORT records the first model load time, the run end time, unload/reload/container-restart counts during the run
-      (0 when normal) and the number of warm-up calls.
-    - In a resident run the output depends on what the model processed just before (grounding_v14). Do not compare its
-      numbers directly with earlier cells that unloaded per question.
+      (0 when normal), the number of warm-up calls and the per-cell `reset_ok` counts.
     - Rule 5 above (no other model calls during a measurement) and rule 13 (GPU check, rate guard) still apply.

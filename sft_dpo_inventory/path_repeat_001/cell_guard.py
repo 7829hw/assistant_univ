@@ -32,6 +32,7 @@ watch(Ollama 셀 측정 중, 측정 프로세스 PID를 지켜본다)
   올리고, 마지막 호출의 생성 속도(eval_count/eval_duration)가 ``--min-rate`` 이상이고 100% GPU인지 본다. 모델을 내리지 않는다.
 - ``residency``: run 프로세스(``--pid``)가 끝날 때까지 ``/api/ps``와 GPU compute 프로세스를 주기적으로 보고, 모델이 사라진
   횟수(unload), 다시 올라오거나 runner PID가 바뀐 횟수(reload), 컨테이너 StartedAt 변화(restart)를 기록한다. 모델을 부르지 않는다.
+  이것은 weights 상주만 본다. 문항 사이 요청 상태 격리(결정 63, harness resident_isolated의 행별 reset_ok)와는 별개다.
 - chat 요청에는 keep_alive가 없어(ollama_client.py, code fingerprint 범위) 서버 기본 keep_alive(5분)가 적용된다. 셀 사이 간격을
   짧게 두는 것으로 상주를 유지하고, 실제 상주 여부는 ``residency`` 기록으로 확인한다.
 """
@@ -195,7 +196,9 @@ def warmup(args):
 def residency(args):
     """run 프로세스가 끝날 때까지 상주 여부를 기록한다. 모델·서버·컨테이너를 건드리지 않는다."""
     out_path = Path(args.out)
-    state = {"pid": args.pid, "started_at": now(), "container_started_at_start": container_started_at(),
+    state = {"scope": "weights residency only (unload/reload/container restart); request isolation is recorded per row "
+                      "as reset_ok by evaluate_vendor100 --model-state resident_isolated",
+             "pid": args.pid, "started_at": now(), "container_started_at_start": container_started_at(),
              "polls": 0, "poll_errors": 0, "loaded_polls": 0, "unloaded_polls": 0,
              "runner_pids_seen": [], "events": [], "unload_events": 0, "reload_events": 0}
     loaded_before, pids_before = None, None

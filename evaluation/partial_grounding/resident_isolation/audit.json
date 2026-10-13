@@ -1,0 +1,134 @@
+{
+ "date": "2026-10-13",
+ "model_calls": 0,
+ "client_side_logical_state_isolated": true,
+ "server_kv_cache_reused_across_questions": {
+  "resident": true,
+  "resident_isolated": "expected_no(unverified)",
+  "unload_per_question": false
+ },
+ "server_settings": {
+  "OLLAMA_NUM_PARALLEL": 1,
+  "OLLAMA_KEEP_ALIVE": "5m0s",
+  "ollama_version": "0.40.3"
+ },
+ "evidence_prefill_regression": {
+  "plan_first_call": {
+   "n": 616,
+   "prompt_tokens_median": 8017,
+   "intercept_ms": 809,
+   "ms_per_token": 5.58
+  },
+  "repair_same_question": {
+   "n": 155,
+   "prompt_tokens_median": 9276,
+   "intercept_ms": -190,
+   "ms_per_token": 6.22
+  },
+  "source": "evaluation/partial_grounding/ab_p0_3/raw/{full,p0_3}_sample_r{1,2}.json"
+ },
+ "table": [
+  [
+   "model weights",
+   "yes",
+   "yes",
+   "evaluate_vendor100.py:1236"
+  ],
+  [
+   "GPU allocation",
+   "yes",
+   "yes",
+   "cell_guard residency (runner PID)"
+  ],
+  [
+   "system prompt",
+   "same content",
+   "yes",
+   "geoflow/planner.py:307"
+  ],
+  [
+   "user message object",
+   "no",
+   "no",
+   "geoflow/planner.py:307"
+  ],
+  [
+   "prior assistant message",
+   "no",
+   "no",
+   "geoflow/planner.py:421 (same question only); evaluate_vendor100.py:1271"
+  ],
+  [
+   "example retrieval cache",
+   "no",
+   "no",
+   "geoflow/planner.py:326"
+  ],
+  [
+   "Ollama context/session",
+   "no",
+   "no",
+   "ollama_client.py:188"
+  ],
+  [
+   "client request object",
+   "no",
+   "no",
+   "ollama_client.py:188; _SeededClient"
+  ],
+  [
+   "random seed",
+   "rule-based",
+   "checked",
+   "evaluate_vendor100.py:156 call_seed"
+  ],
+  [
+   "server KV cache content",
+   "same-token prefix only",
+   "no",
+   ""
+  ],
+  [
+   "server KV cache compute path",
+   "yes(resident) / no(resident_isolated, assumed)",
+   "no",
+   "evaluate_vendor100.py:177 PrefixCacheReset"
+  ]
+ ],
+ "decision": {
+  "resident": "not for judgment runs (no isolation)",
+  "resident_isolated": "implemented (harness only, fingerprint ab88a19e); validate with the sanity experiment before use"
+ },
+ "sanity_experiment": {
+  "items": "10 v005 SFT questions (fixed seed), no eval sets",
+  "conditions": {
+   "A": [
+    "unload_per_question",
+    "file"
+   ],
+   "B": [
+    "resident_isolated",
+    "file"
+   ],
+   "B'": [
+    "resident_isolated",
+    "reverse"
+   ],
+   "C": [
+    "resident",
+    "file"
+   ],
+   "C'": [
+    "resident",
+    "reverse"
+   ]
+  },
+  "measure": "first plan response content identity and thinking length, greedy + 1 sampling seed",
+  "criteria": [
+   "B==B' 10/10 greedy & sampling -> isolation holds",
+   "B==A 10/10 -> directly comparable with unload_per_question records",
+   "B==B' but B!=A -> isolated, compare only within resident_isolated runs",
+   "B!=B' -> do not use resident_isolated; user decides"
+  ]
+ }
+}

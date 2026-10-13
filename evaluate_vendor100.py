@@ -75,9 +75,12 @@ VARIANTS_FILE = VENDOR_DIR / "stated_variants.yaml"
 REFERENCE_DATE = date(2026, 9, 25)
 #: 모델 적재 방식. 앞의 것이 기본값이다(grounding_v1부터의 평가 조건).
 #: resident(결정 62): run 전체에서 모델을 내리지 않는다. 셀 시작에도 내리지 않으므로 앞선 셀·warm-up이 올린 모델을 그대로 쓴다.
-MODEL_STATES = ("unload_per_question", "keep_loaded", "resident")
+#: resident_isolated(결정 63): resident처럼 모델을 내리지 않되, 문항마다 서버 KV cache를 같은 상태로 비운다(PrefixCacheReset).
+MODEL_STATES = ("unload_per_question", "keep_loaded", "resident", "resident_isolated")
 #: 문항 사이에 모델을 내리지 않는 상태(앞선 처리 이력이 출력에 남는다, grounding_v14).
 CONTINUOUS_STATES = ("keep_loaded", "resident")
+#: run 시작에 모델을 내리지 않는 상태(앞선 셀·warm-up이 올린 모델을 그대로 쓴다).
+RESIDENT_STATES = ("resident", "resident_isolated")
 
 
 def order_items(items, order):
@@ -169,6 +172,43 @@ def sampling_settings(args):
         raise SystemExit("sampling과 --replay-from은 함께 쓰지 않는다")
     return {"temperature": values["temperature"], "top_p": values["top_p"], "top_k": values["top_k"],
             "round_seed": values["seed"], "seed_rule": SEED_RULE}
+
+
+class PrefixCacheReset:
+    """resident_isolated(결정 63): 모델을 내리지 않고 문항 시작 전 서버 KV cache를 같은 상태로 만든다.
+
+    Ollama runner(OLLAMA_NUM_PARALLEL=1)는 직전 요청의 token을 cache에 두고 다음 요청과 겹치는 앞부분을 다시 계산하지 않는다.
+    같은 system prompt를 쓰는 다음 문항은 앞 문항이 남긴 KV를 재사용하므로 계산 경로가 직전 요청에 따라 달라진다
+    (grounding_v14). 문항마다 chat template 첫 token과 겹치지 않는 짧은 raw 요청을 먼저 보내면, 다음 문항은 cache와 겹치는
+    앞부분 없이 처음부터 prefill한다(모델을 막 올린 상태와 같은 계산 경로를 기대한다. 실측 확인 전에는 가정이다).
+    모델을 내리지 않는다(keep_alive를 보내지 않는다). load_duration이 1초를 넘으면 모델이 다시 올라온 것으로 보고 실패로 적는다.
+    """
+
+    PROMPT = "#"
+
+    def __init__(self, host, model, *, http=None):
+        import httpx
+        self.host = host.rstrip("/")
+        self.model = model
+        self._http = http or httpx
+
+    def reset(self):
+        import time as _time
+        started = _time.perf_counter()
+        detail, succeeded = "", False
+        try:
+            response = self._http.post(f"{self.host}/api/generate", timeout=60.0, json={
+                "model": self.model, "prompt": self.PROMPT, "raw": True, "stream": False,
+                "options": {"num_predict": 1, "temperature": 0}})
+            body = response.json() if response.status_code < 400 else {}
+            load_s = (body.get("load_duration") or 0) / 1e9
+            succeeded = response.status_code < 400 and load_s < 1.0
+            detail = f"HTTP {response.status_code}, load {load_s:.2f}s, prompt_eval_count {body.get('prompt_eval_count')}"
+        except Exception as error:  # noqa: BLE001 - 실패 사유로 기록한다
+            detail = f"cache reset 요청 실패: {type(error).__name__}: {error}"
+        return type("PrefixCacheResetResult", (), {
+            "attempted": True, "succeeded": succeeded, "detail": detail,
+            "duration_ms": round((_time.perf_counter() - started) * 1000, 3)})()
 
 
 class _SeededClient:
@@ -1192,9 +1232,10 @@ def cmd_llm(args):
                                       new_session=args.resume_new_session)
     partial.with_suffix(".spec.json").write_text(json.dumps(spec, ensure_ascii=False, indent=1), encoding="utf-8")
     cache = load_replay_cache(args.replay_from) if args.replay_from else None
-    if cache is None and args.model_state != "resident":
+    if cache is None and args.model_state not in RESIDENT_STATES:
         A.unload_all_models(args.host)
-    reset = A.OllamaStateReset(args.host, args.model)
+    reset = (PrefixCacheReset(args.host, args.model) if args.model_state == "resident_isolated"
+             else A.OllamaStateReset(args.host, args.model))
     with partial.open("a", encoding="utf-8") as handle:
         for item in items:
             if item["id"] in done:
@@ -2001,7 +2042,8 @@ def build_parser():
     llm.add_argument("--model-state", choices=MODEL_STATES, default=MODEL_STATES[0],
                      help="unload_per_question: 문항마다 모델을 내리고 실행(기존 평가 조건). "
                           "keep_loaded: 시작할 때만 내리고 모델을 올린 채 연속 실행(CLI 연속 사용과 같은 서버 조건). "
-                          "resident: 시작할 때도 내리지 않는다(multi-cell run 상주, 결정 62)")
+                          "resident: 시작할 때도 내리지 않는다(multi-cell run 상주, 결정 62). "
+                          "resident_isolated: 모델은 내리지 않고 문항마다 서버 KV cache를 비운다(결정 63)")
     llm.add_argument("--resume-new-session", action="store_true",
                      help="keep_loaded run을 중단 뒤 이어 실행할 때 나머지를 별도 세션으로 기록한다(순수 연속 아님으로 표시)")
     llm.add_argument("--order", default="file",

@@ -251,6 +251,49 @@ class ResumePolicyTest(unittest.TestCase):
             self.run_llm("resident")
         self.assertIn("resident", str(raised.exception))
 
+    def test_resident_isolated_resets_cache_per_question_without_unload(self):
+        """resident_isolated(결정 63): 모델을 내리지 않고(unload_all_models·OllamaStateReset 없음) 문항마다 cache를 비운다."""
+        cache_resets = []
+
+        class CacheReset:
+            def __init__(self, *a, **k):
+                pass
+
+            def reset(self):
+                cache_resets.append(1)
+                return Namespace(succeeded=True)
+
+        with mock.patch("evaluate_prompt_ab.unload_all_models", return_value=[]) as unload, \
+                mock.patch.object(E, "PrefixCacheReset", CacheReset):
+            result = self.run_llm("resident_isolated", unload=unload)
+        self.assertEqual(unload.call_count, 0)
+        self.assertEqual(self.resets, [])
+        self.assertEqual(len(cache_resets), 3)
+        self.assertEqual([r["reset_ok"] for r in result["rows"]], [True] * 3)
+        self.assertFalse(result["meta"]["pure_continuous"])
+        self.assertEqual(result["meta"]["pipeline"]["isolation"], "resident_isolated")
+
+    def test_prefix_cache_reset_request_keeps_model_loaded(self):
+        sent = []
+
+        class Http:
+            def __init__(self, load_ns):
+                self.load_ns = load_ns
+
+            def post(self, url, json=None, timeout=None):
+                sent.append((url, json))
+                return Namespace(status_code=200, json=lambda: {"load_duration": self.load_ns, "prompt_eval_count": 1})
+
+        ok = E.PrefixCacheReset("http://x/", "m", http=Http(5_000_000)).reset()
+        self.assertTrue(ok.succeeded)
+        url, body = sent[-1]
+        self.assertTrue(url.endswith("/api/generate"))
+        self.assertTrue(body["raw"])
+        self.assertNotIn("keep_alive", body)                     # 모델을 내리지 않는다
+        self.assertEqual(body["options"], {"num_predict": 1, "temperature": 0})
+        reloaded = E.PrefixCacheReset("http://x", "m", http=Http(3_000_000_000)).reset()
+        self.assertFalse(reloaded.succeeded)                     # 다시 올라왔으면 실패로 적는다
+
     def test_unload_per_question_is_the_default_behaviour(self):
         result = self.run_llm("unload_per_question")
         self.assertEqual(len(self.resets), 3)

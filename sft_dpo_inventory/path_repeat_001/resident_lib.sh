@@ -8,7 +8,8 @@
 #   resident_end                                     # 상주 감시 종료와 요약(unload·reload·컨테이너 재시작 0이어야 함)
 #
 # - 모델은 warm-up에서 한 번 올리고 run이 끝날 때까지 내리지 않는다. 셀 사이에 wait-empty·unload·keep_alive=0·컨테이너 조작이 없다.
-# - harness는 --model-state resident로 부른다(시작할 때도, 문항 사이에도 모델을 내리지 않는다).
+# - harness는 --model-state resident_isolated로 부른다(결정 63): 모델은 내리지 않고, 문항마다 서버 KV cache를 같은 상태로 비운다.
+#   weights 상주(residency.json)와 문항 격리(셀 행의 reset_ok)는 따로 기록한다. 상주가 0 unload여도 격리를 뜻하지 않는다.
 # - 모든 arm이 같은 상주 모델 instance를 쓴다. arm 사이 reload가 생기면 residency 기록에 남고 resident_end가 실패한다.
 # - 셀 하나가 실패하면 호출한 run_all.sh가 멈춘다(다시 돌리지 않는다). 결과 기록: $HERE/runs.log, $HERE/resident/.
 set -u
@@ -48,7 +49,7 @@ resident_cell() {
     _rlog "$NAME precheck FAILED: $(tail -1 "$OUT.log")"; return 1
   fi
   local START; START=$(date +%s)
-  $PY evaluate_vendor100.py --gold "$GOLD" llm --model qwen3:8b --model-state resident \
+  $PY evaluate_vendor100.py --gold "$GOLD" llm --model qwen3:8b --model-state resident_isolated \
     --reference-date 2026-09-25 --condition-check --model-think auto --record-env --out "$OUT.json" \
     "$@" >> "$OUT.log" 2>&1 &
   local PID=$!
@@ -57,6 +58,7 @@ resident_cell() {
   local GUARD_RC=$?
   wait "$PID"; local RC=$?
   _rlog "$NAME finished rc=$RC guard_rc=$GUARD_RC elapsed_s=$(( $(date +%s) - START ))"
+  [ -e "$OUT.json" ] && _rlog "$NAME isolation: $($PY -c 'import json,sys; r=json.load(open(sys.argv[1]))["rows"]; print("reset_ok", sum(x.get("reset_ok") is True for x in r), "/", len(r))' "$OUT.json")"
   if [ "$GUARD_RC" -ne 0 ]; then
     for f in "$OUT".json "$OUT".jsonl "$OUT".spec.json "$OUT".guard.json; do
       [ -e "$f" ] && mv "$f" "$DIR/ABORTED_$(basename "$f")"
