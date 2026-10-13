@@ -359,3 +359,20 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - Partial SFT 준비(`evaluation/partial_grounding/sft_p0/`): P0를 우선 기준 contract 후보로 두고(최종 확정은 사용자), 승인 gold
       v005 SFT 111건을 P0 target으로 결정적으로 바꿨다(111/111 자동 통과, 수동 검토 0). 평가 셋 질문 겹침 0(sel154는 template·family도 0).
       dimension_target 예제 31건 중 사건 표현 같은 끝 꼴은 0건이라 데이터 보강(결정 45 절차)이 필요하다. 학습은 하지 않았다.
+
+64. (2026-10-13, 사용자) P0를 Partial Grounding SFT의 기준 contract로 확정한다. 아직 학습하지 않는다.
+    - 근거:
+      - sel154에서 P0의 dimension_target 누락이 Full과 거의 같다(Full 27%, P0 26%).
+      - P0는 role 없이도 Full 수준의 semantic behavior를 유지한다.
+      - P0.1 이후 더한 boundary rule 계열에서 dimension_target 일반화가 나빠졌다(ROOT_CAUSE.md).
+      - reviewed_gold_v005_t2pc 111/111건이 결정적 변환과 운영 경로 동등성 검사를 통과했다.
+      - JSON target 길이가 Full 대비 약 51% 줄었다.
+    - 이후 Partial SFT target은 P0 contract(`evaluation/partial_grounding/prompts/partial_p0.yaml`, prompt hash `d7f4c12a`)로 만든다.
+      P0.1·P0.2·P0.3는 진단 기록으로 두고 학습 target으로 쓰지 않는다. P0.x prompt는 고치지 않고 P0.4는 만들지 않는다.
+    - 기준: parser/composer `9cb8a39`, code fingerprint `ab88a19e`.
+65. (2026-10-13, 사용자) `evaluate_vendor100._grounding_view`는 지금 고치지 않는다(평가 정규화 기술 부채로 남긴다).
+    - 한 장소 od_role=both와 같은 장소의 pickup·dropoff 두 표기는 실행과 semantic correctness에서 같지만 grounding_ok에서는 다르게
+      셀 수 있다(sel154 sampling 합계 Full 11, P0 12, P0.3 12 관측).
+    - 지금 바꾸면 Full·P0·vendor100·valid98·sel154의 과거 grounding_ok와 직접 비교할 수 없다.
+    - 나중에 바꾼다면 새 metric version을 만들고 이전 metric을 덮어쓰지 않으며, semantic correctness와 따로 버전 관리한다.
+    - semantic correctness 판정은 지금처럼 기존 metric을 쓴다. 보고서에는 이 한계를 적는다.

@@ -514,10 +514,12 @@ def _pipeline(planner):
 class _RecordingClient:
     """LLM 호출마다 소요 시간·요청 종류·원 응답을 남긴다. 호출 수와 지연을 재기 위한 것이다."""
 
-    def __init__(self, client):
+    def __init__(self, client, record_thinking=False):
         self.client = client
         self.model = getattr(client, "model", None)
         self.calls = []
+        #: --record-thinking: thinking 원문을 호출 기록에 남긴다(trace 수집·격리 비교용, 생성에는 영향 없음).
+        self.record_thinking = record_thinking
 
     def __getattr__(self, name):
         return getattr(self.client, name)
@@ -545,6 +547,7 @@ class _RecordingClient:
             "load_duration_ms": round(((response or {}).get("load_duration") or 0) / 1e6, 1),
             "content": message.get("content"),
             "thinking_chars": len(message.get("thinking") or ""),
+            **({"thinking": message.get("thinking") or ""} if self.record_thinking else {}),
             # 생성 길이와 끝난 이유(length면 생성 상한에서 잘림). 이전 기록에는 없다.
             "prompt_eval_count": (response or {}).get("prompt_eval_count"),
             "eval_count": (response or {}).get("eval_count"),
@@ -1255,7 +1258,8 @@ def cmd_llm(args):
                         state.succeeded = reset.reset().succeeded
                 replay = _ReplayClient(client, cache, before_live=_reset_before_live)
             seeded = _SeededClient(client, sampling, item["id"]) if sampling is not None else None
-            recorder = _RecordingClient(replay or seeded or client)
+            recorder = _RecordingClient(replay or seeded or client,
+                                        record_thinking=getattr(args, "record_thinking", False))
             # 기준 코드(--code-root)에는 없는 인자다. 기본값이 아닐 때만 넘긴다.
             options = {}
             if args.condition_notes:
@@ -2058,6 +2062,8 @@ def build_parser():
                      help="회차 seed. 호출 seed는 call_seed(회차 seed, 문항 id, 호출 순번)")
     llm.add_argument("--planner-prompt", default=None,
                      help="planner prompt YAML(partial_grounding A/B). 지정하지 않으면 기본 prompt. 결과 meta에 경로를 남긴다")
+    llm.add_argument("--record-thinking", action="store_true",
+                     help="호출 기록에 thinking 원문을 남긴다(생성에는 영향 없음, 결정 66)")
     llm.add_argument("--record-env", action="store_true",
                      help="meta에 host GPU 이름·UUID·드라이버와 Ollama 컨테이너 GPU를 남긴다(생성에는 영향 없음)")
     rerun = sub.add_parser("rerun")

@@ -294,6 +294,21 @@ class ResumePolicyTest(unittest.TestCase):
         reloaded = E.PrefixCacheReset("http://x", "m", http=Http(3_000_000_000)).reset()
         self.assertFalse(reloaded.succeeded)                     # 다시 올라왔으면 실패로 적는다
 
+    def test_record_thinking_keeps_thinking_text(self):
+        class Client:
+            model = "m"
+
+            def chat(self, messages, tools=None):
+                return {"message": {"content": "{}", "thinking": "생각"}, "eval_count": 1}
+
+        plain = E._RecordingClient(Client())
+        plain.chat([{"role": "user", "content": "q"}])
+        self.assertNotIn("thinking", plain.calls[-1])
+        self.assertEqual(plain.calls[-1]["thinking_chars"], 2)
+        kept = E._RecordingClient(Client(), record_thinking=True)
+        kept.chat([{"role": "user", "content": "q"}])
+        self.assertEqual(kept.calls[-1]["thinking"], "생각")
+
     def test_unload_per_question_is_the_default_behaviour(self):
         result = self.run_llm("unload_per_question")
         self.assertEqual(len(self.resets), 3)
