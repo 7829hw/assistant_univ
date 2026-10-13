@@ -376,3 +376,12 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - 지금 바꾸면 Full·P0·vendor100·valid98·sel154의 과거 grounding_ok와 직접 비교할 수 없다.
     - 나중에 바꾼다면 새 metric version을 만들고 이전 metric을 덮어쓰지 않으며, semantic correctness와 따로 버전 관리한다.
     - semantic correctness 판정은 지금처럼 기존 metric을 쓴다. 보고서에는 이 한계를 적는다.
+66. (2026-10-13, 사용자) P0 SFT 준비 절차.
+    - 앞으로 trace 수집과 관련 측정은 thinking 길이만이 아니라 원문을 보존한다. 최소 항목: question, system prompt hash, thinking
+      원문, 최종 응답, seed, model, Ollama 버전, item id, dataset version. 평가 harness에는 `--record-thinking`(생성 영향 없음)을 더했다.
+    - P0 trace는 기존 Full trace(pilot_002)를 재사용하지 않고, 승인된 새 데이터셋에 대해 P0 prompt로 새로 모은다. Ollama로 모을 때는
+      resident_isolated(weights 상주, 문항 상태 격리, warm-up 뒤 수집, 문항·셀 사이 unload 없음)로 하고, 격리 확인 실험을 통과하지 않으면
+      시작하지 않는다. 수집 모델은 기존 승인을 확인해 사용자가 정한다(임의 선택 금지).
+    - 보강 데이터(batch006)는 결정 45 절차(Claude 초안 → 자동 계약 검사 → 사람 승인 → training set 편입)를 따른다. gold는 Full contract로
+      적고 P0 target은 결정적 변환기로 만든다. 승인분만 새 판 `reviewed_gold_v006_p0`(v005 111 + 승인분, provenance 표시)으로 만들고
+      v005는 덮어쓰지 않는다. 오염 기준은 기존 그대로(정규화 질문, id, template, family; 보호 원본·확장 지문·평가 셋 4종).

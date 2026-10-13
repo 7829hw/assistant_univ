@@ -138,3 +138,22 @@
    - selection_v1은 sel154 안에 있어 P0.3 판정에 쓰였다. prompt 설계에는 쓰이지 않았지만, 선택 셋으로 계속 쓸지 정한다.
    - 평가는 Full과 P0-SFT를 같은 조건으로 비교한다.
 5. DPO 단계 여부(v005 DPO 75쌍은 chosen 75/75가 P0로 같게 변환된다).
+
+## 8. 진행 상태(2026-10-13)
+
+- 결정 64: P0를 SFT 기준 contract로 확정했다. 결정 65: `_grounding_view`는 고치지 않는다(평가 정규화 기술 부채).
+- **resident_isolated 격리 확인 불통과**(`../resident_isolation/RESULT.md`). Ollama 상주 trace 수집은 시작하지 않는다.
+- **batch006 보강 후보**(`AUGMENTATION_REVIEW.md`):
+  - 초안 53(Gap A 26, B 17, C 10). 자동 검사 통과 43(A 26, B 17).
+  - Gap C 10은 scope 역조회 family가 평가셋 4종과 겹쳐 전부 제외. 예외를 둘지는 사용자 결정이다.
+  - 사람 승인 대기 중이다.
+- **분포**(`dataset_stats.json`): 통과분이 모두 승인되면 dimension_target이 31 → 74(pickup 35, dropoff 29, both 10)로, od_role과 다른 끝 grouping이 15 → 31로 는다. scope 역조회는 0 그대로다.
+- **준비된 도구:**
+  - `collect_p0_traces.py`(dry-run 확인)
+  - `trace_collection_plan.md`
+  - `build_v006.py`(승인 파일이 없으면 멈춤)
+- **사용자 결정이 필요한 것:**
+  1. batch006 승인
+  2. Gap C 예외 여부
+  3. trace 수집 모델(HF base / Ollama qwen3:8b / 27b 반입)
+  4. 수집 실행 방식(격리가 확인되지 않았으므로 unload_per_question 또는 HF)
