@@ -10,7 +10,7 @@
 | pilot_002와의 관계 | pilot_002 레코드 SFT 379·DPO 288은 순서·내용까지 그대로 들어 있다(같은 원천·필터·seed). 더한 것: batch006 SFT 81, DPO 60 |
 | SFT 출처 | HF v004 124(27.0%), HF batch005 86(18.7%), HF batch006 17(3.7%), teacher17 68(14.8%), teacher batch005 101(22.0%), teacher batch006 64(13.9%). HF 227 : teacher 233 |
 | DPO 출처 | HF trace 쌍만(교차 DPO 없음, 결정 48·50·81). v003 102, batch004 59, batch005 127, batch006 60. 질문당 최대 8쌍(결정 52, 상한에 걸린 질문 23) |
-| 유형 분포(TV, 개발 셋 대비) | SFT 질문 0.117, SFT 레코드 0.124, DPO 쌍 0.140(pilot_002: 0.133·0.149·0.162, `../../pilot_002/data/summary.json`) |
+| 유형 분포(TV, 개발 셋 대비) | SFT 질문 0.117, SFT 레코드 0.124, DPO 쌍 0.140. pilot_002는 0.016·0.080·0.087(`../../pilot_002/data/summary.json`)이었다. batch006(전부 "집계 없음·dim 있음·dt 없음" 또는 "dim+dt" 칸)이 들어가 "집계 없음·dim 있음·dt 없음" 칸이 SFT 질문 19.8%(개발 8.2%)가 됐다 |
 | 실차 통행량 대조(결정 66) | SFT 레코드 occupied 24 · vacant 16 · plain 20 · trip 21(각 6질문). DPO 쌍 vacant 20 · plain 16 · trip 24, **occupied 0**(occupied 6질문 모두 HF 정답 표본이 없어 teacher SFT만 있다) |
 | 정지 target SFT 레코드 | 31(결정 14) |
 | SFT 응답 길이(token, EOS 포함) | p50 915, p90 1,488, max 4,050 |
