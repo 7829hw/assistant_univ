@@ -441,3 +441,13 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - 평가: Base·Gold-only·Clean-Hybrid를 P0 prompt(`d7f4c12a`)·HF greedy·thinking 켬으로 잰다.
       - 셋: sel154, valid98, vendor100, aux_test_v1.
       - 이 셋들은 이미 prompt 분석에 쓰였으므로 independent final holdout이 아니다(PLAN.md 2절에 사용 이력).
+69. (2026-10-13, 사용자) P0 SFT 1차 실패 원인 분리(`sft_dpo_inventory/p0_sft_002`). 데이터 보강·27B 반입·DPO·pruning으로 넘어가지 않는다.
+    - p0_sft_001 intermediate checkpoint 사후 진단(selection 아님).
+      - 고정 56문항 panel로 잰다.
+      - 결과: 두 arm 모두 checkpoint-77(0.5 epoch)부터 `<think>` 0/56(Case A). semantic correctness는 초기부터 Base보다 낮고 step과 함께 단조 하락하지 않는다.
+    - R70 인과 실험: 승인 reasoning 70개만 쓰고 두 arm의 차이는 손실 범위(json_only vs full_response)뿐이다.
+      - 실제 label tensor 검증 통과(`LOSS_MASK_AUDIT.md`).
+      - epoch 1(70 step). 나머지는 p0_sft_001 recipe다.
+      - mechanism probe(56문항)의 gate(R70-full emission ≥ 80%, json 대비 +50%p, thinking 중앙값 > 0)를 통과할 때만 403문항 진단 평가를 한다.
+      - R70 모델은 최종 candidate가 아니다.
+    - 앞으로 작업 단위마다 commit 뒤 바로 `git push origin geoflow/partial-grounding`하고 원격 HEAD 일치를 확인한다(사용자 지시).
