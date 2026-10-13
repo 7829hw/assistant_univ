@@ -102,8 +102,11 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
       and is not used for judgment runs.
     - Weights residency (`residency.json`) and per-question isolation (`reset_ok` per row) are recorded separately. Zero
       unloads does not mean the questions were isolated.
-    - Until the isolation check in `evaluation/partial_grounding/resident_isolation/AUDIT.md` section 4 has been run and
-      passed, do not compare resident results directly with earlier cells that unloaded per question.
+    - The isolation check (`evaluation/partial_grounding/resident_isolation/RESULT.md`, 2026-10-13) FAILED: with
+      `resident_isolated`, reversing the question order changed the first response in 10/10 greedy and 5/10 sampling items.
+      Until a new method passes that check, do not use resident runs (isolated or not) for judgment measurements or
+      training-data collection; use `unload_per_question` and report. Do not tune the reset or restart the container
+      to make the check pass.
     - Between cells, do not use `wait-empty`, `ollama stop`, `keep_alive: 0`, waits to free VRAM, container restarts or
       per-arm reloads. All arms use the same resident model instance.
     - The REPORT records the first model load time, the run end time, unload/reload/container-restart counts during the run

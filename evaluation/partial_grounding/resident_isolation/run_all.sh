@@ -4,7 +4,7 @@
 set -u
 export ROOT=/home/hwkim/assistant_univ
 export HERE=$ROOT/evaluation/partial_grounding/resident_isolation
-export GOLD=evaluation/partial_grounding/resident_isolation/items_gold.yaml
+export GOLD=evaluation/partial_grounding/resident_isolation/items_gold.json
 export MIN_RATE=77.6
 export CELL_GUARD_OLLAMA_VERSION=0.40.3
 PY=/data/hwkim/path_repeat_001/venv/py/bin/python

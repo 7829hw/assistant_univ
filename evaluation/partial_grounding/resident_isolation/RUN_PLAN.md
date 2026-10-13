@@ -8,7 +8,7 @@
 
 ## 2. 문항
 
-- `items_gold.yaml`(`build_items.py`), 10문항, 판정에 쓰지 않는 승인 학습 gold(reviewed_gold_v005_t2pc SFT).
+- `items_gold.yaml`(실행 뒤 `items_gold.json`으로 이름 변경, RESULT.md 6절)(`build_items.py`), 10문항, 판정에 쓰지 않는 승인 학습 gold(reviewed_gold_v005_t2pc SFT).
 - AUDIT 4절의 "고정 seed로 고른다"에 실행 전 자격 조건을 하나 더했다.
   - 조건: 승인 Full gold를 mock 운영 경로에 넣어 재질의 없이 answered이고, Tool 호출이 있고, 장소 조회가 2개 이하인 문항(60문항).
   - 이유: harness 채점에 gold_text(정답 호출)가 필요하다. 결과를 보기 전에 정했다.

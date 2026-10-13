@@ -99,7 +99,8 @@ def main():
                    "gold_text는 승인 Full gold를 mock 운영 경로에 넣은 호출에서 만들었다.",
            "source": str(SOURCE.relative_to(ROOT)), "seed": SEED, "eligible": len(eligible),
            "items": [eligible[sid] for sid in chosen]}
-    (HERE / "items_gold.yaml").write_text(yaml.safe_dump(doc, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    # evaluation/**/*.yaml은 학습 데이터 보호 원본이므로 JSON으로 둔다(RESULT.md 6절).
+    (HERE / "items_gold.json").write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps({"eligible": len(eligible), "chosen": chosen}, ensure_ascii=False))
 
 
