@@ -20,8 +20,8 @@ gpu_ok() {
   used=$(nvidia-smi -i ${UUID[$g]} --query-gpu=memory.used --format=csv,noheader,nounits | tr -d ' ')
   procs=$(nvidia-smi -i ${UUID[$g]} --query-compute-apps=pid --format=csv,noheader | wc -l)
   loaded=$(curl -s localhost:11434/api/ps | "$PY" -c 'import json,sys; print(len(json.load(sys.stdin)["models"]))' 2>/dev/null || echo 1)
-  if [ "$used" -ge 100 ] || [ "$procs" -ne 0 ]; then p3log "STOP: $label GPU $g busy used=${used}MiB procs=$procs"; return 1; fi
-  if [ "$g" = 3 ] && [ "$loaded" != "0" ]; then p3log "STOP: $label GPU 3 has Ollama model loaded"; return 1; fi
+  if [ "$used" -ge 100 ] || [ "$procs" -ne 0 ]; then p3log "unavailable: $label GPU $g busy used=${used}MiB procs=$procs"; return 1; fi
+  if [ "$g" = 3 ] && [ "$loaded" != "0" ]; then p3log "unavailable: $label GPU 3 has Ollama model loaded"; return 1; fi
   CUDA_VISIBLE_DEVICES=$g "$PY" -c "import torch,sys; sys.exit(0 if 'GPU-'+str(torch.cuda.get_device_properties(0).uuid)=='${UUID[$g]}' else 1)" \
     || { p3log "STOP: $label CUDA $g UUID mismatch"; return 1; }
   p3log "$label GPU $g ok used=${used}MiB procs=0 ollama_loaded=$loaded uuid=${UUID[$g]}"
