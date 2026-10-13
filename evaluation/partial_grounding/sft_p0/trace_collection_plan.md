@@ -1,4 +1,22 @@
-# P0 thinking trace 수집 계획(준비만, 실행하지 않음)
+# P0 thinking trace 수집 계획
+
+> **2026-10-13 갱신(결정 67): 실제 수집은 HF base Qwen3-8B로 한다.** 아래 1–8절은 결정 66 시점의 준비 기록이다.
+> 그중 Ollama 경로·resident_isolated 관련 내용(1절 1번, 3절, 4절, 7절)은 쓰지 않는다.
+>
+> - 출처: `Qwen/Qwen3-8B@b968826d9c46dd6066d109eabc6255188de91218`(tokenizer 같은 revision), BF16, SDPA,
+>   `enable_thinking=True`, max_new_tokens 8192. 기존 승인 절차 `sft_dpo_inventory/thinking_prep_001/collect_traces.py`와 같다.
+>   - 모델 파일: `HF_HOME=/data/hwkim/path_repeat_001/hf-cache`(path_repeat_001에서 쓴 같은 revision, offline)
+>   - 이전 경로 `/home/hwkim/sftdpo_work/hf-cache`는 이 장비에 없다. 받거나 옮기지 않았다.
+> - 표본: 질문마다 greedy 1 + sampling 8(temperature 0.6, top_p 0.95, top_k 20, num_return_sequences 8, seed = 20261006 + 질문 순번).
+>   - 기존 정책도 질문당 9개다. v005 111건이면 999 요청으로, 준비 스크립트 값과 같다.
+>   - 요청 수는 데이터셋에서 계산한다. v006 154건 → 1,386.
+> - 입력: v006 레코드의 [system(P0, `d7f4c12a`), user]. 질문 사이에 대화 상태는 없다. Ollama residency 모드는 적용하지 않는다.
+> - 장비: GPU 1장(`GPU-d4308fbb…`)을 HF와 Ollama가 같이 쓴다. path_repeat_001 PLAN.md 4절의 HF 셀 시작 전 확인을 따른다.
+>   수집 중 Ollama 호출은 없다.
+> - 실행: `run_traces_hf.sh` → `collect_p0_traces_hf.py`. 원문은 `training/generated/thinking_traces/p0_v006_hf/traces.jsonl`,
+>   실행 기록은 `traces_hf/`, 품질 통계는 `trace_quality.py`가 만든다.
+> - 판정 범주: EXACT_OR_SEMANTIC_MATCH, STRUCTURALLY_REPAIRABLE, SEMANTIC_MISMATCH, REFUSAL_MISMATCH, UNPARSEABLE.
+>   기본 채택은 EXACT_OR_SEMANTIC_MATCH + thinking 있음이다.
 
 2026-10-13. 결정 64(P0를 SFT 기준 contract로), 결정 66(trace 원문 보존).
 
