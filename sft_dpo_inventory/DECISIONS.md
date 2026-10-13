@@ -406,3 +406,38 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
       - 기존 Full trace(pilot_002)는 재활용하지 않는다.
       - 기본 채택은 EXACT_OR_SEMANTIC_MATCH만이다. STRUCTURALLY_REPAIRABLE 편입은 통계를 본 뒤 따로 정한다.
       - SFT는 별도 preregistration 뒤에 한다.
+68. (2026-10-13, 사용자) P0 contract 첫 SFT 실험(`sft_dpo_inventory/p0_sft_001`). 새 prompt·P0.4·P1·DPO·pruning·quantization은 하지 않는다.
+    - 데이터 결정 1: batch006 43건(승인 43, 수정 7, 거부 0)을 `review_decisions.json` 수정본 그대로 확정한다.
+      - `reviewed_gold_v006_p0` = v005 111 + batch006 43 = 154.
+    - 데이터 결정 2: 새 보수 규칙(한 장소 both를 두 장소로 펼쳐 대조)에만 걸리는 v005 16건은 소급 제거하지 않는다.
+      - 이유: 신규분 겹침이 아니다. 질문·id 겹침도 0이다. 기존 결정으로 승인된 데이터이고, 지금 빼면 이전 SFT와의 비교가 흐려진다.
+      - v006 manifest와 REPORT에 `legacy_conservative_family_overlap = 16`으로 적는다.
+      - v007 이후의 새 contamination policy는 별도 결정이다.
+    - 데이터 결정 3: 정답 trace가 없는 문항은 gold-only로 학습한다.
+      - 틀린 thinking에 정답 JSON을 붙이지 않는다.
+      - teacher 보충·반입은 하지 않는다.
+    - 데이터 결정 4: 첫 SFT의 reasoning 후보는 EXACT_OR_SEMANTIC_MATCH만이다. STRUCTURALLY_REPAIRABLE은 넣지 않는다.
+      결과와 무관하게 이번 run 중에 추가하지 않는다.
+    - 두 arm은 같은 154문항을 각 한 번씩 쓴다(문항 가중치 없음).
+      - Gold-only: 154개 모두 답만 있는 레코드.
+      - Clean-Hybrid: 문항당 한 trace를 코드로 고르고(`select_traces.py`) 사람 기준으로 검토(`trace_review.json`)한다.
+        - 승인 70은 thinking + canonical P0 답, 나머지 84는 Gold-only와 같은 레코드다.
+        - 거부 문항은 다른 표본으로 바꾸지 않는다.
+    - 사용자 선택(2026-10-13):
+      - checkpoint는 고정이다. 2 epoch 끝(최종 adapter)만 평가한다.
+        - selection_v1(결정 41·46)은 sel154의 부분집합이라 선택에 쓰지 않는다.
+        - v006을 나눠 validation을 만들지도 않는다(154문항 전부 학습).
+        - 0.5 epoch마다 저장은 그대로 두고, 기록만 한다.
+      - SFT 손실은 승인 recipe의 `json_only`(결정 24)를 유지한다.
+        - Clean-Hybrid의 thinking은 prompt 쪽 문맥으로만 들어가고 학습 대상은 두 arm 모두 같은 JSON + EOS다.
+        - 이번 비교는 "검증된 P0 추론을 문맥으로 둔 JSON 학습"이 "추론 없이 JSON만 학습"보다 나은가를 본다.
+    - 학습 recipe: pilot_001·002와 같다(결정 24·28·53). 바뀐 것은 데이터와 출력 위치뿐이다.
+      - base `Qwen/Qwen3-8B@b968826d`, BF16·SDPA, LoRA r16/α32/0.05(7 projection)
+      - AdamW lr 5e-5 linear, warmup 1 step, batch 1·accum 1, seed 42, max_seq_length 11,392
+      - 2 epoch, 0.25마다 저장
+    - trainer는 P0 contract 데이터를 받도록 확장했다(`data.contract: p0`).
+      - Full production prompt·thor 계약 검사 대신 P0 prompt hash와 canonical P0 target 일치를 검사한다.
+      - thinking 레코드와 답만 있는 레코드를 섞을 수 있다. 렌더링·손실 마스크 코드는 그대로다.
+    - 평가: Base·Gold-only·Clean-Hybrid를 P0 prompt(`d7f4c12a`)·HF greedy·thinking 켬으로 잰다.
+      - 셋: sel154, valid98, vendor100, aux_test_v1.
+      - 이 셋들은 이미 prompt 분석에 쓰였으므로 independent final holdout이 아니다(PLAN.md 2절에 사용 이력).

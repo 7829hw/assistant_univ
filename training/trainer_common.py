@@ -70,6 +70,8 @@ def load_config(path, stage):
 def load_records(config, stage):
     paths = config["data"]
     manifest = json.loads(Path(paths["manifest"]).read_text(encoding="utf-8"))[stage]
+    if paths.get("contract") == "p0":
+        return _load_p0_records(config, stage, manifest)
     current = check_expected_prompt()
     if manifest["prompt_hash"] != current or manifest["representation"] != "flat":
         raise ValueError("Production prompt/schema drift; rebuild data before training")
@@ -105,6 +107,51 @@ def load_records(config, stage):
                     raise ValueError("Chosen/rejected identical")
                 if record["metadata"].get("negative_category") not in {"semantic", "constraint"}:
                     raise ValueError("Missing DPO negative category")
+    return records, manifest
+
+
+def p0_system_prompt(path):
+    """Partial Grounding P0 결합 system prompt(결정 64, `evaluation/partial_grounding/prompts/partial_p0.yaml`)."""
+    from geoflow.planner import GeoFlowPlanner, load_planner_prompt
+    return GeoFlowPlanner(client=None, prompt=load_planner_prompt(path)).system_prompt()
+
+
+def _load_p0_records(config, stage, manifest):
+    """P0 contract SFT 데이터(결정 68). Full production prompt·thor 계약 대신 P0 prompt와 canonical P0 target으로 검사한다.
+
+    - SFT만. thinking 레코드와 답만 있는 레코드를 섞을 수 있다(Clean-Hybrid). 렌더링은 기존 render_records 그대로다.
+    - system = P0 결합 prompt(hash가 manifest·`data.p0_prompt_sha256_prefix`와 같아야 함).
+    - 답 JSON = metadata.target_p0(Full gold에서 결정적 변환한 canonical P0 target). 답만 있는 레코드는 문자열도 canonical
+      직렬화(json.dumps, ensure_ascii False)와 같아야 한다.
+    """
+    import hashlib
+    paths = config["data"]
+    if stage != "sft":
+        raise ValueError("P0 contract data is SFT only")
+    system = p0_system_prompt(paths["p0_prompt"])
+    current = hashlib.sha256(system.encode("utf-8")).hexdigest()
+    if manifest["prompt_hash"] != current or not current.startswith(paths["p0_prompt_sha256_prefix"]):
+        raise ValueError("P0 prompt drift; rebuild data before training")
+    records = {name: read_jsonl(paths[name]) for name in ("train", "valid")}
+    for name in records:
+        if manifest["output_hashes"].get(f"{stage}_{name}.jsonl") != sha256(paths[name]):
+            raise ValueError("Dataset checksum mismatch; regenerate data and manifest together")
+    if not records["train"]:
+        raise ValueError("Empty training dataset")
+    check_split(records["train"], records["valid"])
+    for split in records.values():
+        for record in split:
+            messages = record["messages"]
+            if [m.get("role") for m in messages] != ["system", "user", "assistant"]:
+                raise ValueError("Expected system/user/assistant chat")
+            if messages[0]["content"] != system:
+                raise ValueError("Record system prompt is not the P0 prompt")
+            target = record["metadata"]["target_p0"]
+            if thinking.is_thinking(record):
+                if thinking.response_json(messages[-1]["content"]) != target:
+                    raise ValueError("Thinking record answer differs from canonical P0 target")
+            elif messages[-1]["content"] != json.dumps(target, ensure_ascii=False):
+                raise ValueError("Answer-only record is not the canonical P0 target")
     return records, manifest
 
 
