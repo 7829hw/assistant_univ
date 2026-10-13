@@ -339,3 +339,23 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
         `ollama_client.py`를 바꿔야 하므로 하지 않았다. 셀 사이 간격을 수 초로 두어 상주를 유지하고 실제 상주 여부는
         `residency` 기록으로 확인한다.
       - 아직 실제 모델 호출로 검증하지 않았다(이번 단계는 모델 호출 금지). 첫 상주 run의 warm-up·residency 기록으로 확인한다.
+
+63. (2026-10-13, 사용자) 결정 62 이후 세 가지를 정리한다. 새 prompt·P0.4·HF 재현·SFT·DPO·pruning은 하지 않는다.
+    - gold·계약 검토(`evaluation/partial_grounding/contract_review/`): dimension_target·od_role 관련 13문항을 사람 기준으로 읽었다.
+      모두 CLEAR_GOLD이고 gold 수정은 필요 없다. 구역 내부 이동의 표준 표기는 결정 29·47(한 장소 od_role=both)로 이미 정해져 있다.
+      남은 것은 평가 비교 정규형(`evaluate_vendor100._grounding_view`)이 한 장소 both와 같은 장소 pickup·dropoff 두 개를 다르게
+      세는 점이다(semantic correctness 영향 없음, grounding_ok만). 바꿀지는 사용자 결정으로 남긴다. 계약 문서 `CONTRACT.md`는 prompt가 아니다.
+    - Ollama 상주와 문항 격리를 분리한다(`evaluation/partial_grounding/resident_isolation/AUDIT.md`). 목표는 weights 상주 = 예,
+      문항 상태 재사용 = 아니오다.
+      - 감사 결과: harness·client의 논리 상태(messages, session, context, 요청 객체, seed)는 문항마다 새로 만든다. 서버 쪽에는 Ollama
+        runner의 KV cache(OLLAMA_NUM_PARALLEL=1)가 남아, 모델을 내리지 않으면 같은 system prompt의 KV를 다음 문항이 재사용한다.
+        내용은 넘어가지 않지만 계산 경로가 직전 요청에 따라 달라진다(grounding_v14 관측과 맞음).
+      - 결정 62의 `--model-state resident`는 이를 막지 않으므로 판정용 run에 쓰지 않는다.
+      - 새 `--model-state resident_isolated`(harness 수준, code fingerprint `ab88a19e` 그대로): 모델을 내리지 않고, 문항 시작 전에
+        chat template과 겹치지 않는 짧은 raw 요청(`PrefixCacheReset`, num_predict 1, keep_alive 없음)으로 KV cache를 같은 상태로 만든다.
+        `resident_lib.sh`는 이 모드를 쓰고, weights 상주(residency.json)와 문항 격리(행별 reset_ok)를 따로 기록한다.
+      - 이 모드가 문항을 실제로 격리하는지(순서 무관, unload_per_question과 같은 출력)는 실측하지 않았다. 다음 Ollama 측정 전에
+        AUDIT.md 4절의 작은 실험(10문항, 판정 무관)을 먼저 하고, 사전 판정 기준대로 쓸지 정한다.
+    - Partial SFT 준비(`evaluation/partial_grounding/sft_p0/`): P0를 우선 기준 contract 후보로 두고(최종 확정은 사용자), 승인 gold
+      v005 SFT 111건을 P0 target으로 결정적으로 바꿨다(111/111 자동 통과, 수동 검토 0). 평가 셋 질문 겹침 0(sel154는 template·family도 0).
+      dimension_target 예제 31건 중 사건 표현 같은 끝 꼴은 0건이라 데이터 보강(결정 45 절차)이 필요하다. 학습은 하지 않았다.

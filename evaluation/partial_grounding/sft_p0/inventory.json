@@ -1,0 +1,134 @@
+{
+ "note": "모델 호출 없음. 평가 셋은 학습 target 생성에서 뺀다(결정 36·41·42·46·61, CLAUDE.md 8).",
+ "datasets": [
+  {
+   "name": "reviewed_gold_v005_t2pc/sft_train",
+   "path": "training/generated/reviewed_gold_v005_t2pc/sft_train.jsonl",
+   "items": 111,
+   "split": "train(승인 gold, 결정 13·47)",
+   "full_target": "있음(assistant = Full planner JSON, thinking 없음)",
+   "p0_convertible": "111/111 자동 통과",
+   "use_for_p0_sft": "주 입력"
+  },
+  {
+   "name": "reviewed_gold_v005_t2pc/dpo_train",
+   "path": "training/generated/reviewed_gold_v005_t2pc/dpo_train.jsonl",
+   "items": 75,
+   "split": "train(DPO 쌍)",
+   "full_target": "chosen·rejected Full JSON",
+   "p0_convertible": {
+    "chosen:same": 75,
+    "rejected:same": 59,
+    "rejected:differs": 16
+   },
+   "use_for_p0_sft": "SFT에는 쓰지 않음(DPO 단계 후보)"
+  },
+  {
+   "name": "thinking_pilot002_t2pc/sft_train",
+   "path": "training/generated/thinking_pilot002_t2pc/sft_train.jsonl",
+   "items": 379,
+   "split": "train(pilot_002, 107질문)",
+   "full_target": "thinking + Full JSON(HF·teacher trace)",
+   "p0_convertible": {
+    "json_part": {
+     "differs": 39,
+     "same": 340
+    },
+    "thinking_mentions_full_fields": {
+     "records_with_any": 379,
+     "median": 9
+    }
+   },
+   "use_for_p0_sft": "JSON만 바꾸면 thinking이 Full 구조(role 등)를 계획한 채 남는다. P0 prompt로 trace를 다시 모으는 것을 권장"
+  },
+  {
+   "name": "thinking_pilot002_t2pc/dpo_train",
+   "path": "training/generated/thinking_pilot002_t2pc/dpo_train.jsonl",
+   "items": 288,
+   "split": "train(DPO full_response)",
+   "full_target": "thinking + Full JSON",
+   "p0_convertible": "검사 안 함",
+   "use_for_p0_sft": "아니오"
+  },
+  {
+   "name": "reviewed_gold_v003_t2pc / v004_t2pc",
+   "path": "training/generated/reviewed_gold_v00{3,4}_t2pc",
+   "items": {
+    "v003_sft": 35,
+    "v004_sft": 53
+   },
+   "split": "이전 판(v005에 포함)",
+   "full_target": "Full JSON",
+   "p0_convertible": "v005로 대체",
+   "use_for_p0_sft": "아니오(중복)"
+  }
+ ],
+ "eval_sets": [
+  {
+   "name": "vendor100",
+   "items": 100,
+   "use": "평가 전용(CLAUDE.md 8, 결정 36)",
+   "full_target": "gold_text(역산 가능)",
+   "train_overlap": {
+    "question": 0,
+    "id": 0,
+    "template": 3,
+    "family": 17,
+    "family_allowed_decision15": 13
+   }
+  },
+  {
+   "name": "valid98",
+   "items": 98,
+   "use": "보조 기록(결정 41·60), P0.x 설계에 씀",
+   "full_target": "gold_text",
+   "train_overlap": {
+    "question": 0,
+    "id": 0,
+    "template": 4,
+    "family": 7,
+    "family_allowed_decision15": 0
+   }
+  },
+  {
+   "name": "selection_v1",
+   "items": 100,
+   "use": "checkpoint 선택(결정 46·53)",
+   "full_target": "gold_text",
+   "train_overlap": {
+    "question": 0,
+    "id": 0,
+    "template": 0,
+    "family": 0,
+    "family_allowed_decision15": 0
+   }
+  },
+  {
+   "name": "aux_test_v1",
+   "items": 51,
+   "use": "판정에 쓰지 않는 보조 시험(결정 42)",
+   "full_target": "gold_text",
+   "train_overlap": {
+    "question": 0,
+    "id": 0,
+    "template": 0,
+    "family": 0,
+    "family_allowed_decision15": 0
+   }
+  },
+  {
+   "name": "sel154",
+   "items": 154,
+   "use": "P0.3 판정(결정 61, 1회 판정)",
+   "full_target": "gold_text",
+   "train_overlap_v005": {
+    "question": 0,
+    "id": 0,
+    "template": 0,
+    "family": 0
+   },
+   "train_overlap_v005_hits": {}
+  }
+ ],
+ "pilot002_overlap_source": "sft_dpo_inventory/pilot_002/data/overlap.json (thinking_pilot002_t2pc 질문 기준, 결정 54)"
+}
