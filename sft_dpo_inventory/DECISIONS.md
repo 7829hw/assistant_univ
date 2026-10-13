@@ -441,3 +441,10 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - 표본마다 장치를 기록한다.
     - 이 규칙은 pilot_003 범위다. `CLAUDE.md`에는 "결정 Y에 따른 작업에서는 GPU 0–3을 쓸 수 있다"로 덧붙인다.
 
+84. (2026-10-13, 사용자) GPU 한 장이 빠졌다. 남은 3장을 모두 써서 pilot_003을 이어 간다.
+    - 상황: 2026-10-13 15:45 서버 재부팅 뒤 host GPU `GPU-a644de12-2a2c-ca3d-4822-b80f704b0b21`(이전 번호 2)이 보이지 않는다. 남은 GPU는 번호 0 `2445b100…`,
+      1 `a5ce83d0…`, 2 `48f798cc…`(이전 번호 3, Ollama GPU)다. 드라이버 595.99.02는 그대로다. Ollama 컨테이너는 재부팅 뒤 멈춰 있다(손대지 않는다).
+    - 재부팅으로 DPO 학습(약 100/348 step, checkpoint 없음)과 고른 SFT의 valid98(보조)이 멈췄다. 장치 장애로 멈춘 실행이므로 같은 config·seed로 처음부터 다시 하고,
+      멈춘 기록은 `pilot_003/aborted_device_failure/ABORTED_*`로 남긴다. 학습 설정·데이터·선택 규칙은 바꾸지 않는다.
+    - GPU 번호가 바뀌었으므로 `gpu_lib.sh`는 host `nvidia-smi`에서 번호 → UUID를 매번 만들고, Ollama GPU는 UUID `48f798cc…`로 정한다. 결정 83의 나머지 규칙은 그대로다.
+    - 장치 일치 확인(`device_check/compare.json`)은 남은 세 장치(물리 GPU 동일, 드라이버 동일)에 그대로 적용한다.
