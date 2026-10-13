@@ -12,6 +12,14 @@ def check_checkpoint_prompt(path):
     if not provenance.exists():
         return None
     info = json.loads(provenance.read_text(encoding="utf-8"))
+    data = (info.get("config") or {}).get("data") or {}
+    if data.get("contract") == "p0":
+        # P0 contract adapter(결정 68): 학습에 쓴 P0 prompt와 같아야 한다.
+        from training.trainer_common import p0_system_prompt
+        expected = hashlib.sha256(p0_system_prompt(data["p0_prompt"]).encode()).hexdigest()
+        if info["prompt_hash"] != expected or not expected.startswith(data["p0_prompt_sha256_prefix"]):
+            raise ValueError("Checkpoint P0 prompt drift; evaluate an explicitly matched prompt/version")
+        return info
     if info["prompt_hash"] != hashlib.sha256(production_prompt().encode()).hexdigest():
         raise ValueError("Checkpoint production prompt drift; evaluate an explicitly matched prompt/version")
     return info
