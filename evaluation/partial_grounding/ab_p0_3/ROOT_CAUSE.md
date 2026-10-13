@@ -326,3 +326,13 @@ indepv2/n40 "scope:gz:3982는 어떤 장소야?", indepv4/k21 "…scope:district
    - `evaluate_vendor100.py`는 code fingerprint 범위 밖이다. 출력에는 영향이 없고 기록 크기만 는다.
    - 그래야 Type I–IV를 직접 판정할 수 있다.
 4. **하지 않는 것:** P0.4 작성, rule·예시 추가, HF reproduction, sel154 재측정, gold 수정.
+
+## 정정(2026-10-13, `../contract_review/REVIEW.md`)
+
+- **9절:** n35, k34의 gold_review_candidate 표시를 철회한다.
+  - 다시 읽으면 n35의 끝점은 pickup으로 분명하다.
+  - k34는 의미가 분명하다. 표현 쪽 문제(한 장소 both 대 두 scope)는 결정 47이 이미 정했고, 평가 비교 정규형의 문제다.
+- **10절 J2:** "both 유형 G 실패의 대부분도 같은 계약 문제"는 일부만 맞다.
+  - c04a, n09, k33에서 P0.3의 실제 실패는 장소에 od_role을 적지 않은(MISSING_RELATION_QUALIFIER) 실제 오류다.
+  - 대신 양 끝 제한을 dimension_target=both로 옮겨 적은 경우가 많다.
+  - 한 장소 both와 두 장소 표기는 Tool 호출이 같아 semantic correctness에서는 match다.

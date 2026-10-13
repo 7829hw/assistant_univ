@@ -1,0 +1,897 @@
+{
+ "note": "사람 기준 검토 의견(승인 아님). gold는 수정하지 않았다. 근거 수치는 ab_p0_3 sampling 5회.",
+ "label_counts": {
+  "CLEAR_GOLD": 13
+ },
+ "contract_findings": {
+  "INTRA_AREA_SERIALIZATION": {
+   "summary": "같은 장소가 출발·도착을 모두 거르는 질문의 표현이 셋이다: od_role=both 장소 하나, 같은 장소의 pickup·dropoff 두 개, od_role 없는 장소 하나(조건 계층이 질문의 '안에서' 등으로 보충할 때만 맞음). 앞의 둘은 Tool 호출이 같다.",
+   "sel154_items": [
+    "indepv2/n10",
+    "indepv3/m12",
+    "indepv4/k32",
+    "contrast/c04a",
+    "contrast/c04c",
+    "indepv2/n09",
+    "indepv4/k33",
+    "indepv4/k34"
+   ],
+   "grounding_view_artifact_matches": {
+    "full": 11,
+    "p0": 12,
+    "p0_3": 12
+   },
+   "where": "evaluate_vendor100._grounding_view가 od_role=both를 pickup·dropoff 두 장소와 같게 보지 않는다. semantic correctness(Tool 호출 채점)에는 영향이 없고 grounding_ok·grounding_diffs에만 영향이 있다."
+  }
+ },
+ "items": [
+  {
+   "id": "indepv2/n35",
+   "question": "휴일 아침 6시에서 8시 사이 승차 건수를 시도 단위로 비교하면 제일 적은 두 곳은 어디야?",
+   "gold_text": "get_trip_count(date=holiday, time=060000-080000, dimension=sido, dimension_target=pickup, order=bottom, limit=2)",
+   "label": "CLEAR_GOLD",
+   "group": "event_no_place",
+   "A": "pickup. '승차 건수를 시도 단위로 비교해 제일 적은 두 곳'은 승차 지역 시도별 건수다. 생략(=both, 출발-도착 시도 짝)은 '두 곳'(장소 둘)을 답하라는 질문과 맞지 않는다.",
+   "B": "장소 제한 없음",
+   "C": "pickup",
+   "D": "scope 없음",
+   "note": "ROOT_CAUSE에서 gold_review_candidate로 표시했으나 다시 읽어 철회한다. '승차 건수'가 '이용 건수'로도 쓰이는 것은 측정값 뜻의 문제이고, 결과를 장소 둘로 답하라는 문장에서 끝점은 승차 쪽이다.",
+   "arms": {
+    "full": {
+     "k": 0,
+     "categories": {
+      "answered_mismatch": 4,
+      "failed": 1
+     },
+     "first_place_patterns": {
+      "0:": 4,
+      "1:pickup": 1
+     },
+     "first_dimension_target": {
+      "None": 5
+     },
+     "error_codes": {
+      "INVALID_PLACE": 1
+     }
+    },
+    "p0": {
+     "k": 0,
+     "categories": {
+      "failed": 1,
+      "refused_unsupported": 2,
+      "answered_mismatch": 2
+     },
+     "first_place_patterns": {
+      "0:": 5
+     },
+     "first_dimension_target": {
+      "None": 4,
+      "pickup": 1
+     },
+     "error_codes": {
+      "INVALID_FACTOR_COMBINATION": 1,
+      "UNCONSUMED_CONDITION": 2
+     }
+    },
+    "p0_3": {
+     "k": 0,
+     "categories": {
+      "answered_mismatch": 4,
+      "failed": 1
+     },
+     "first_place_patterns": {
+      "1:None": 5
+     },
+     "first_dimension_target": {
+      "None": 5
+     },
+     "error_codes": {
+      "NOT_FOUND": 1
+     }
+    }
+   }
+  },
+  {
+   "id": "indepv4/k34",
+   "question": "평일에 대구 안에서 출발과 도착이 다 이뤄진 운행을 내린 구 기준으로 세면 가장 적은 구는?",
+   "gold_text": "get_place_scope(name=대구)\nget_trip_count(scope_pickup=$area.scope, scope_dropoff=$area.scope, date=weekday, dimension=sigungu, dimension_target=dropoff, order=bottom, limit=1)",
+   "label": "CLEAR_GOLD",
+   "group": "intra_area",
+   "contract_note": "INTRA_AREA_SERIALIZATION",
+   "A": "grouping=dropoff('내린 구 기준'), 장소 제한=출발·도착 모두 대구('출발과 도착이 다 이뤄진')",
+   "B": "대구: 양 끝 모두(od_role=both 하나 또는 pickup·dropoff 두 개)",
+   "C": "dropoff",
+   "D": "gold는 같은 scope를 scope_pickup·scope_dropoff 두 인자로 둔다. od_role=both 장소 하나와 Tool 호출이 같다.",
+   "note": "모델 실패는 '출발과 도착이 다'를 dimension_target=both로 옮기거나(제한과 grouping 혼동) dimension_target 누락.",
+   "arms": {
+    "full": {
+     "k": 0,
+     "categories": {
+      "failed": 3,
+      "answered_mismatch": 2
+     },
+     "first_place_patterns": {
+      "1:None": 5
+     },
+     "first_dimension_target": {
+      "both": 2,
+      "None": 3
+     },
+     "error_codes": {
+      "NOT_FOUND": 1,
+      "MISSING_RELATION_QUALIFIER": 1,
+      "INVALID_FACTOR_COMBINATION": 1
+     }
+    },
+    "p0": {
+     "k": 0,
+     "categories": {
+      "refused_unsupported": 2,
+      "answered_mismatch": 2,
+      "failed": 1
+     },
+     "first_place_patterns": {
+      "1:both": 2,
+      "1:None": 3
+     },
+     "first_dimension_target": {
+      "both": 3,
+      "None": 2
+     },
+     "error_codes": {
+      "UNCONSUMED_CONDITION": 2,
+      "NOT_FOUND": 1
+     }
+    },
+    "p0_3": {
+     "k": 0,
+     "categories": {
+      "answered_mismatch": 5
+     },
+     "first_place_patterns": {
+      "1:None": 5
+     },
+     "first_dimension_target": {
+      "None": 3,
+      "both": 2
+     },
+     "error_codes": {}
+    }
+   }
+  },
+  {
+   "id": "contrast/c04a",
+   "question": "지난달 대구 안에서 이동한 읍면동 간 노선 상위 3개는?",
+   "gold_text": "get_place_scope(name=대구)\nget_trip_count(scope_pickup=$area.scope, scope_dropoff=$area.scope, date=last_month, dimension=emd, dimension_target=both, order=top, limit=3)",
+   "label": "CLEAR_GOLD",
+   "group": "intra_area",
+   "contract_note": "INTRA_AREA_SERIALIZATION",
+   "A": "장소 제한=양 끝 대구('대구 안에서 이동한'), grouping=both('읍면동 간 노선')",
+   "B": "대구: both",
+   "C": "both",
+   "D": "gold 두 scope = od_role=both 하나",
+   "arms": {
+    "full": {
+     "k": 3,
+     "categories": {
+      "refused_unsupported": 1,
+      "match": 3,
+      "answered_mismatch": 1
+     },
+     "first_place_patterns": {
+      "1:None": 2,
+      "2:pickup/dropoff": 3
+     },
+     "first_dimension_target": {
+      "both": 4,
+      "None": 1
+     },
+     "error_codes": {
+      "UNCONSUMED_CONDITION": 1
+     }
+    },
+    "p0": {
+     "k": 2,
+     "categories": {
+      "match": 2,
+      "answered_mismatch": 3
+     },
+     "first_place_patterns": {
+      "2:pickup/dropoff": 2,
+      "0:": 3
+     },
+     "first_dimension_target": {
+      "None": 1,
+      "both": 4
+     },
+     "error_codes": {}
+    },
+    "p0_3": {
+     "k": 2,
+     "categories": {
+      "failed": 2,
+      "match": 2,
+      "answered_mismatch": 1
+     },
+     "first_place_patterns": {
+      "1:None": 5
+     },
+     "first_dimension_target": {
+      "both": 4,
+      "None": 1
+     },
+     "error_codes": {
+      "MISSING_RELATION_QUALIFIER": 2
+     }
+    }
+   }
+  },
+  {
+   "id": "indepv2/n09",
+   "question": "지난달 대구 수성구 안에서만 오간 읍면동 간 노선 중 가장 많이 이용된 노선 하나는?",
+   "gold_text": "get_place_scope(name=수성구, region=대구)\nget_trip_count(scope_pickup=$area.scope, scope_dropoff=$area.scope, date=last_month, dimension=emd, dimension_target=both, order=top, limit=1)",
+   "label": "CLEAR_GOLD",
+   "group": "intra_area",
+   "contract_note": "INTRA_AREA_SERIALIZATION",
+   "A": "장소 제한=양 끝 수성구('안에서만 오간'), grouping=both('읍면동 간 노선')",
+   "B": "수성구: both",
+   "C": "both",
+   "D": "gold 두 scope = od_role=both 하나",
+   "arms": {
+    "full": {
+     "k": 3,
+     "categories": {
+      "match": 3,
+      "answered_mismatch": 1,
+      "refused_unsupported": 1
+     },
+     "first_place_patterns": {
+      "2:pickup/dropoff": 1,
+      "1:None": 3,
+      "1:both": 1
+     },
+     "first_dimension_target": {
+      "both": 4,
+      "None": 1
+     },
+     "error_codes": {
+      "UNCONSUMED_CONDITION": 1
+     }
+    },
+    "p0": {
+     "k": 5,
+     "categories": {
+      "match": 5
+     },
+     "first_place_patterns": {
+      "1:both": 3,
+      "1:None": 2
+     },
+     "first_dimension_target": {
+      "None": 2,
+      "both": 3
+     },
+     "error_codes": {}
+    },
+    "p0_3": {
+     "k": 1,
+     "categories": {
+      "failed": 3,
+      "answered_mismatch": 1,
+      "match": 1
+     },
+     "first_place_patterns": {
+      "1:None": 5
+     },
+     "first_dimension_target": {
+      "both": 4,
+      "None": 1
+     },
+     "error_codes": {
+      "MISSING_RELATION_QUALIFIER": 3
+     }
+    }
+   }
+  },
+  {
+   "id": "indepv4/k33",
+   "question": "이번 달 대구 중구 안에서만 움직인 운행을 동에서 동으로 가는 경로로 묶으면 가장 많이 다닌 두 경로는?",
+   "gold_text": "get_place_scope(name=중구, region=대구)\nget_trip_count(scope_pickup=$area.scope, scope_dropoff=$area.scope, date=this_month, dimension=emd, dimension_target=both, order=top, limit=2)",
+   "label": "CLEAR_GOLD",
+   "group": "intra_area",
+   "contract_note": "INTRA_AREA_SERIALIZATION",
+   "A": "장소 제한=양 끝 중구('안에서만 움직인'), grouping=both('동에서 동으로 가는 경로'), dimension=emd",
+   "B": "중구: both",
+   "C": "both",
+   "D": "gold 두 scope = od_role=both 하나",
+   "arms": {
+    "full": {
+     "k": 1,
+     "categories": {
+      "failed": 3,
+      "match": 1,
+      "refused_unsupported": 1
+     },
+     "first_place_patterns": {
+      "2:pickup/dropoff": 2,
+      "1:None": 3
+     },
+     "first_dimension_target": {
+      "both": 5
+     },
+     "error_codes": {
+      "NOT_FOUND": 2,
+      "MISSING_RELATION_QUALIFIER": 1,
+      "UNCONSUMED_CONDITION": 1
+     }
+    },
+    "p0": {
+     "k": 2,
+     "categories": {
+      "failed": 2,
+      "match": 2,
+      "answered_mismatch": 1
+     },
+     "first_place_patterns": {
+      "1:both": 1,
+      "1:None": 3,
+      "2:pickup/dropoff": 1
+     },
+     "first_dimension_target": {
+      "both": 5
+     },
+     "error_codes": {
+      "INVALID_CONCEPT": 1,
+      "NOT_FOUND": 1
+     }
+    },
+    "p0_3": {
+     "k": 2,
+     "categories": {
+      "match": 2,
+      "answered_mismatch": 2,
+      "failed": 1
+     },
+     "first_place_patterns": {
+      "1:None": 4,
+      "1:pickup": 1
+     },
+     "first_dimension_target": {
+      "both": 4,
+      "None": 1
+     },
+     "error_codes": {
+      "MISSING_RELATION_QUALIFIER": 1
+     }
+    }
+   }
+  },
+  {
+   "id": "indepv2/n10",
+   "question": "주중 부산 내부에서 출발과 도착이 모두 이뤄진 실차 건수는?",
+   "gold_text": "get_place_scope(name=부산)\nget_trip_count(scope_pickup=$area.scope, scope_dropoff=$area.scope, date=weekday)",
+   "label": "CLEAR_GOLD",
+   "group": "intra_area",
+   "contract_note": "INTRA_AREA_SERIALIZATION",
+   "A": "장소 제한=양 끝 부산('출발과 도착이 모두'), grouping 없음",
+   "B": "부산: both",
+   "C": "없음",
+   "D": "gold 두 scope",
+   "arms": {
+    "full": {
+     "k": 4,
+     "categories": {
+      "failed": 1,
+      "match": 4
+     },
+     "first_place_patterns": {
+      "2:pickup/dropoff": 2,
+      "1:None": 1,
+      "2:None/None": 1,
+      "1:both": 1
+     },
+     "first_dimension_target": {
+      "None": 4,
+      "both": 1
+     },
+     "error_codes": {
+      "NOT_FOUND": 1
+     }
+    },
+    "p0": {
+     "k": 2,
+     "categories": {
+      "match": 2,
+      "failed": 2,
+      "answered_mismatch": 1
+     },
+     "first_place_patterns": {
+      "2:pickup/dropoff": 4,
+      "0:": 1
+     },
+     "first_dimension_target": {
+      "None": 4,
+      "both": 1
+     },
+     "error_codes": {
+      "NOT_FOUND": 2
+     }
+    },
+    "p0_3": {
+     "k": 3,
+     "categories": {
+      "match": 3,
+      "failed": 1,
+      "answered_mismatch": 1
+     },
+     "first_place_patterns": {
+      "2:pickup/dropoff": 1,
+      "1:None": 1,
+      "1:both": 2,
+      "1:pickup": 1
+     },
+     "first_dimension_target": {
+      "both": 3,
+      "None": 2
+     },
+     "error_codes": {
+      "INVALID_PARAM_VALUE": 1
+     }
+    }
+   }
+  },
+  {
+   "id": "indepv3/m12",
+   "question": "이번 주, 승차와 하차가 둘 다 대구 중구 안에서 이뤄진 실차는 모두 몇 건?",
+   "gold_text": "get_place_scope(name=중구, region=대구)\nget_trip_count(scope_pickup=$area.scope, scope_dropoff=$area.scope, date=this_week)",
+   "label": "CLEAR_GOLD",
+   "group": "intra_area",
+   "contract_note": "INTRA_AREA_SERIALIZATION",
+   "A": "장소 제한=양 끝 중구('승차와 하차가 둘 다 … 안에서'), grouping 없음",
+   "B": "중구: both",
+   "C": "없음",
+   "D": "gold 두 scope",
+   "arms": {
+    "full": {
+     "k": 0,
+     "categories": {
+      "failed": 4,
+      "refused_unsupported": 1
+     },
+     "first_place_patterns": {
+      "2:pickup/dropoff": 4,
+      "2:None/None": 1
+     },
+     "first_dimension_target": {
+      "None": 5
+     },
+     "error_codes": {
+      "NOT_FOUND": 4,
+      "UNCONSUMED_CONDITION": 1
+     }
+    },
+    "p0": {
+     "k": 4,
+     "categories": {
+      "match": 4,
+      "failed": 1
+     },
+     "first_place_patterns": {
+      "2:pickup/dropoff": 5
+     },
+     "first_dimension_target": {
+      "None": 4,
+      "both": 1
+     },
+     "error_codes": {
+      "NOT_FOUND": 1
+     }
+    },
+    "p0_3": {
+     "k": 5,
+     "categories": {
+      "match": 5
+     },
+     "first_place_patterns": {
+      "1:both": 1,
+      "2:pickup/dropoff": 4
+     },
+     "first_dimension_target": {
+      "None": 4,
+      "both": 1
+     },
+     "error_codes": {}
+    }
+   }
+  },
+  {
+   "id": "indepv4/k32",
+   "question": "지난달 부산 수영구 안에서 타고 내린 실차 건수는 얼마나 돼?",
+   "gold_text": "get_place_scope(name=수영구, region=부산)\nget_trip_count(scope_pickup=$area.scope, scope_dropoff=$area.scope, date=last_month)",
+   "label": "CLEAR_GOLD",
+   "group": "intra_area",
+   "contract_note": "INTRA_AREA_SERIALIZATION",
+   "A": "장소 제한=양 끝 수영구('안에서 타고 내린'), grouping 없음",
+   "B": "수영구: both",
+   "C": "없음",
+   "D": "gold 두 scope",
+   "arms": {
+    "full": {
+     "k": 5,
+     "categories": {
+      "match": 5
+     },
+     "first_place_patterns": {
+      "1:None": 2,
+      "2:pickup/dropoff": 2,
+      "1:both": 1
+     },
+     "first_dimension_target": {
+      "None": 5
+     },
+     "error_codes": {}
+    },
+    "p0": {
+     "k": 5,
+     "categories": {
+      "match": 5
+     },
+     "first_place_patterns": {
+      "2:pickup/dropoff": 1,
+      "1:both": 3,
+      "1:None": 1
+     },
+     "first_dimension_target": {
+      "None": 5
+     },
+     "error_codes": {}
+    },
+    "p0_3": {
+     "k": 5,
+     "categories": {
+      "match": 5
+     },
+     "first_place_patterns": {
+      "1:both": 3,
+      "1:None": 2
+     },
+     "first_dimension_target": {
+      "None": 4,
+      "both": 1
+     },
+     "error_codes": {}
+    }
+   }
+  },
+  {
+   "id": "contrast/c04c",
+   "question": "지난달 부산 안에서 이동한 실차 구간 건수는?",
+   "gold_text": "get_place_scope(name=부산)\nget_trip_count(scope_pickup=$area.scope, scope_dropoff=$area.scope, date=last_month)",
+   "label": "CLEAR_GOLD",
+   "group": "intra_area",
+   "contract_note": "INTRA_AREA_SERIALIZATION",
+   "A": "장소 제한=양 끝 부산('부산 안에서 이동한'), grouping 없음",
+   "B": "부산: both",
+   "C": "없음",
+   "D": "gold 두 scope",
+   "arms": {
+    "full": {
+     "k": 3,
+     "categories": {
+      "match": 3,
+      "answered_mismatch": 2
+     },
+     "first_place_patterns": {
+      "1:None": 5
+     },
+     "first_dimension_target": {
+      "None": 5
+     },
+     "error_codes": {}
+    },
+    "p0": {
+     "k": 2,
+     "categories": {
+      "answered_mismatch": 3,
+      "match": 2
+     },
+     "first_place_patterns": {
+      "1:None": 5
+     },
+     "first_dimension_target": {
+      "None": 5
+     },
+     "error_codes": {}
+    },
+    "p0_3": {
+     "k": 1,
+     "categories": {
+      "failed": 3,
+      "answered_mismatch": 1,
+      "match": 1
+     },
+     "first_place_patterns": {
+      "1:None": 5
+     },
+     "first_dimension_target": {
+      "None": 5
+     },
+     "error_codes": {
+      "MISSING_RELATION_QUALIFIER": 3
+     }
+    }
+   }
+  },
+  {
+   "id": "indepv2/n05",
+   "question": "휴일에 승객들이 대구 안 어느 H3 셀에서 가장 많이 내렸는지 상위 3개를 알려줘.",
+   "gold_text": "get_place_scope(name=대구)\nget_trip_count(scope_dropoff=$dropoff.scope, date=holiday, dimension=h3, dimension_target=dropoff, order=top, limit=3)",
+   "label": "CLEAR_GOLD",
+   "group": "event_same_end",
+   "A": "dropoff('대구 안 어느 H3 셀에서 가장 많이 내렸는지')",
+   "B": "대구: dropoff",
+   "C": "dropoff",
+   "D": "scope_dropoff 하나",
+   "arms": {
+    "full": {
+     "k": 3,
+     "categories": {
+      "answered_mismatch": 1,
+      "failed": 1,
+      "match": 3
+     },
+     "first_place_patterns": {
+      "1:None": 5
+     },
+     "first_dimension_target": {
+      "None": 1,
+      "dropoff": 4
+     },
+     "error_codes": {
+      "UNGROUNDED_SCOPE": 1
+     }
+    },
+    "p0": {
+     "k": 1,
+     "categories": {
+      "answered_mismatch": 1,
+      "failed": 3,
+      "match": 1
+     },
+     "first_place_patterns": {
+      "1:None": 3,
+      "2:dropoff/None": 1,
+      "1:dropoff": 1
+     },
+     "first_dimension_target": {
+      "None": 2,
+      "dropoff": 3
+     },
+     "error_codes": {
+      "UNGROUNDED_SCOPE": 1,
+      "NO_MEASURE": 1,
+      "MISSING_RELATION_QUALIFIER": 1
+     }
+    },
+    "p0_3": {
+     "k": 0,
+     "categories": {
+      "answered_mismatch": 3,
+      "refused_unsupported": 1,
+      "failed": 1
+     },
+     "first_place_patterns": {
+      "1:None": 3,
+      "1:dropoff": 2
+     },
+     "first_dimension_target": {
+      "None": 5
+     },
+     "error_codes": {
+      "NO_OPERATOR": 1,
+      "MISSING_RELATION_QUALIFIER": 1
+     }
+    }
+   }
+  },
+  {
+   "id": "indepv4/k28",
+   "question": "이번 달 대구 중구로 향한 손님들이 실제로 내린 위치를 H3 셀 기준으로 보면 가장 붐빈 두 셀은?",
+   "gold_text": "get_place_scope(name=중구, region=대구)\nget_trip_count(scope_dropoff=$dropoff.scope, date=this_month, dimension=h3, dimension_target=dropoff, order=top, limit=2)",
+   "label": "CLEAR_GOLD",
+   "group": "event_same_end",
+   "A": "dropoff('중구로 향한 손님들이 실제로 내린 위치를 H3 셀 기준으로')",
+   "B": "중구: dropoff",
+   "C": "dropoff",
+   "D": "scope_dropoff 하나",
+   "arms": {
+    "full": {
+     "k": 0,
+     "categories": {
+      "failed": 2,
+      "answered_mismatch": 3
+     },
+     "first_place_patterns": {
+      "1:None": 4,
+      "1:dropoff": 1
+     },
+     "first_dimension_target": {
+      "dropoff": 2,
+      "None": 3
+     },
+     "error_codes": {
+      "MISSING_RELATION_QUALIFIER": 2
+     }
+    },
+    "p0": {
+     "k": 1,
+     "categories": {
+      "failed": 4,
+      "match": 1
+     },
+     "first_place_patterns": {
+      "1:None": 3,
+      "1:dropoff": 2
+     },
+     "first_dimension_target": {
+      "dropoff": 3,
+      "None": 2
+     },
+     "error_codes": {
+      "MISSING_CONCEPT_VALUE": 1,
+      "INVALID_CONCEPT": 2,
+      "NOT_FOUND": 1
+     }
+    },
+    "p0_3": {
+     "k": 0,
+     "categories": {
+      "answered_mismatch": 5
+     },
+     "first_place_patterns": {
+      "1:None": 2,
+      "1:dropoff": 3
+     },
+     "first_dimension_target": {
+      "None": 5
+     },
+     "error_codes": {}
+    }
+   }
+  },
+  {
+   "id": "indepv3/m03",
+   "question": "이번 주 대구 달서구에서 내린 손님이 가장 몰린 H3 셀 하나만 짚어 줘.",
+   "gold_text": "get_place_scope(name=달서구, region=대구)\nget_trip_count(scope_dropoff=$dropoff.scope, date=this_week, dimension=h3, dimension_target=dropoff, order=top, limit=1)",
+   "label": "CLEAR_GOLD",
+   "group": "event_same_end",
+   "A": "dropoff('달서구에서 내린 손님이 가장 몰린 H3 셀')",
+   "B": "달서구: dropoff",
+   "C": "dropoff",
+   "D": "scope_dropoff 하나",
+   "arms": {
+    "full": {
+     "k": 1,
+     "categories": {
+      "failed": 2,
+      "answered_mismatch": 2,
+      "match": 1
+     },
+     "first_place_patterns": {
+      "2:None/None": 1,
+      "1:None": 4
+     },
+     "first_dimension_target": {
+      "dropoff": 3,
+      "None": 2
+     },
+     "error_codes": {
+      "UNGROUNDED_SCOPE": 2
+     }
+    },
+    "p0": {
+     "k": 2,
+     "categories": {
+      "failed": 1,
+      "answered_mismatch": 2,
+      "match": 2
+     },
+     "first_place_patterns": {
+      "2:None/dropoff": 1,
+      "1:dropoff": 3,
+      "1:None": 1
+     },
+     "first_dimension_target": {
+      "dropoff": 3,
+      "None": 2
+     },
+     "error_codes": {
+      "UNGROUNDED_SCOPE": 1
+     }
+    },
+    "p0_3": {
+     "k": 0,
+     "categories": {
+      "failed": 1,
+      "answered_mismatch": 4
+     },
+     "first_place_patterns": {
+      "1:None": 4,
+      "1:dropoff": 1
+     },
+     "first_dimension_target": {
+      "None": 5
+     },
+     "error_codes": {
+      "MISSING_CONCEPT_VALUE": 1
+     }
+    }
+   }
+  },
+  {
+   "id": "indepv3/m04",
+   "question": "휴일 자정에서 새벽 3시 사이, 대구 중구 가운데 택시 승차가 가장 뜸했던 동 세 곳은?",
+   "gold_text": "get_place_scope(name=중구, region=대구)\nget_trip_count(scope_pickup=$pickup.scope, date=holiday, time=000000-030000, dimension=emd, dimension_target=pickup, order=bottom, limit=3)",
+   "label": "CLEAR_GOLD",
+   "group": "event_same_end",
+   "A": "pickup('중구 가운데 택시 승차가 가장 뜸했던 동')",
+   "B": "중구: pickup",
+   "C": "pickup",
+   "D": "scope_pickup 하나",
+   "note": "세 arm 공통 실패의 주원인은 '가장 뜸했던'을 order=top으로 읽는 어휘 해석이다. gold의 order=bottom은 맞다.",
+   "arms": {
+    "full": {
+     "k": 0,
+     "categories": {
+      "answered_mismatch": 4,
+      "failed": 1
+     },
+     "first_place_patterns": {
+      "1:None": 4,
+      "1:pickup": 1
+     },
+     "first_dimension_target": {
+      "pickup": 2,
+      "None": 3
+     },
+     "error_codes": {
+      "MISSING_RELATION_QUALIFIER": 1
+     }
+    },
+    "p0": {
+     "k": 0,
+     "categories": {
+      "answered_mismatch": 5
+     },
+     "first_place_patterns": {
+      "1:None": 3,
+      "1:pickup": 2
+     },
+     "first_dimension_target": {
+      "pickup": 3,
+      "None": 2
+     },
+     "error_codes": {}
+    },
+    "p0_3": {
+     "k": 0,
+     "categories": {
+      "failed": 2,
+      "answered_mismatch": 3
+     },
+     "first_place_patterns": {
+      "1:None": 5
+     },
+     "first_dimension_target": {
+      "pickup": 1,
+      "None": 4
+     },
+     "error_codes": {
+      "MISSING_RELATION_QUALIFIER": 1,
+      "NOT_FOUND": 1
+     }
+    }
+   }
+  }
+ ]
+}
