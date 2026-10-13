@@ -8,7 +8,8 @@ cd /home/hwkim/assistant_univ
 WORK=/home/hwkim/sftdpo_work/pilot_003
 SEL_GOLD=sft_dpo_inventory/conversion_diag/selection_gold.yaml
 SEL_IDS=$P3/selection/selection_v2_ids.txt
-TV=/tmp/claude-1004/-home-hwkim-assistant-univ/8a5ac38d-cd63-43c9-84e1-7ee2d9b3545b/scratchpad/tokvenv/bin/python
+# 분석(모델 호출 없음)은 hfvenv로 한다. 재부팅으로 /tmp의 tokvenv가 지워졌고, hfvenv로 SFT 선택 분석을 다시 돌려 selection_sft.json과 바이트 단위로 같음을 확인했다.
+TV=$PY
 RESOLVED=$P3/resolved/qwen3_8b_t2pc_thinking_pilot003_dpo.resolved.yaml
 die() { p3log "STOP: $1"; exit 1; }
 commit() {   # msg paths...
@@ -48,10 +49,13 @@ valid98() {   # name adapter gpu
 }
 
 p3log "pilot_003 resume after device failure (결정 84), GPUs: $GPUS"
-[ -e "$WORK/checkpoints/dpo" ] && die "$WORK/checkpoints/dpo already exists"
+[ "${FROM:-start}" = start ] && [ -e "$WORK/checkpoints/dpo" ] && die "$WORK/checkpoints/dpo already exists"
 SFT_SELECTED=$("$PY" -c "import json; print(json.load(open('$P3/selection_sft.json'))['selected']['adapter'])")
 grep -q "adapter_path: $SFT_SELECTED" "$RESOLVED" || die "resolved dpo config does not point to selected SFT"
 
+# FROM=summary: DPO 학습·valid98 sft가 끝난 뒤(20:01) 학습 요약 단계에서 tokvenv가 없어 멈췄다. 그 다음부터 잇는다(학습·평가 재실행 없음).
+FROM=${FROM:-start}
+if [ "$FROM" = start ]; then
 # ---- 3. DPO 학습 ‖ 고른 SFT valid98(보조)
 train_start dpo "$RESOLVED"
 sleep 120
@@ -59,6 +63,7 @@ g=""; for x in $(others); do gpu_ok $x "valid98 sft" && { g=$x; break; }; done
 [ -n "$g" ] || die "no usable GPU for valid98 sft"
 valid98 sft "$SFT_SELECTED" "$g" || die "valid98 sft failed"
 train_wait dpo
+fi
 mapfile -t DPO_CK < <(ls -d "$WORK"/checkpoints/dpo/checkpoint-* | sort -t- -k2 -n)
 [ ${#DPO_CK[@]} -eq 2 ] || die "expected 2 DPO checkpoints, got ${#DPO_CK[@]}"
 "$TV" "$P3/train_summary.py" dpo "${DPO_CK[@]}" > /dev/null || die "dpo train summary failed"
