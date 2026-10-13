@@ -33,6 +33,11 @@ import analyze_cal as A  # noqa: E402
 
 A.RAW = ROOT / "training/generated/pilot_003/raw"
 SEED = 20261109
+# U1–U4 판정(grounding_v13 report.unacceptable)은 "셋/id" 키로 원본 gold를 찾는다. 업체 100 문항은 compare_cells.load_cell과 같이 "dev/<id>",
+# aux_test_v1의 final_v12 문항은 pilot_002 compare_aux.py와 같은 원본 파일을 쓴다.
+A.C.R.C.GOLD_FILES["final_v12"] = "evaluation/grounding_v12/final_questions.yaml"
+_unacceptable = A.C.R.unacceptable
+A.C.R.unacceptable = lambda key, row, src: _unacceptable(key if "/" in key else f"dev/{key}", row, src)
 SETS = {
     "vendor100": {"gold": ROOT / "evaluation/vendor100/gold.yaml", "runs": P3 / "vendor100/runs", "prefix": "v100_", "k": 8,
                   "cells": ["HF-base", "HF-final", "E"], "judged": ("HF-base", "HF-final"),
@@ -79,6 +84,7 @@ def cell_summary(samples, m, ids, k):
     st["per_sample_silent"] = m["silent"].sum(axis=0).astype(int).tolist()
     st["error_rates_pct"] = {e: round(100 * float(m[e].mean()), 2) for e in A.ERRORS}
     st["occupied_misread_item_samples"] = int(m["occupied_misread"].sum())
+    st["occupied_misread_items"] = {i: int(v) for i, v in zip(ids, m["occupied_misread"].sum(axis=1)) if v > 0}
     st["latency_median_s"] = round(float(np.median([s[i]["seconds"] for s in samples for i in ids])), 2)
     st["length_capped_calls"] = int(sum(s[i]["truncated"] for s in samples for i in ids))
     loops = [s[i]["loop_calls"] for s in samples for i in ids]
