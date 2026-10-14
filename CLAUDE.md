@@ -56,6 +56,9 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
      differs, measure all samples of a cell on one GPU and both cells of a paired comparison on the same GPU. Record the
      device of every sample.
      Decision 89 (2026-10-14) allows the same GPUs and checks for the vLLM serving check (`serving_vllm`).
+     Decision 100 (AN, 2026-10-14) allows all three GPUs for pilot_004: training on one GPU; sample collection, checkpoint
+     evaluation and vendor 100 evaluation split across the three. Same checks every time; nothing else on the Ollama GPU
+     during an Ollama measurement (E, 27b); cells of one comparison use the same backend, sampler and concurrency.
    - HF runs with `CUDA_VISIBLE_DEVICES=3` (or `=2` for the spare); inside the process it appears as `cuda:0`. Do not
      change `CUDA_DEVICE_ORDER`.
    - Never unload Ollama models yourself and never touch the container to free a GPU. If an Ollama measurement is
