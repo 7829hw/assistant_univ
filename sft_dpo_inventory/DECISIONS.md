@@ -451,3 +451,10 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
       - mechanism probe(56문항)의 gate(R70-full emission ≥ 80%, json 대비 +50%p, thinking 중앙값 > 0)를 통과할 때만 403문항 진단 평가를 한다.
       - R70 모델은 최종 candidate가 아니다.
     - 앞으로 작업 단위마다 commit 뒤 바로 `git push origin geoflow/partial-grounding`하고 원격 HEAD 일치를 확인한다(사용자 지시).
+70. (2026-10-14, 사용자) p0_sft_002 결과에 따라 27B teacher 즉시 반입을 보류한다.
+    - 먼저 R70-full의 semantic 하락 원인(trace 품질, coverage 편향·forgetting, 작은 데이터 specialization)을 기존 데이터로 분해한다(`sft_dpo_inventory/p0_sft_003_prep`).
+      - 새 모델 호출, SFT, 403문항 R70 평가는 하지 않는다.
+    - teacher 보충 대상과 우선순위는 coverage 분석 뒤에 정한다.
+    - 고정 원칙:
+      - 다음 full-data SFT에서 답만 있는 레코드를 reasoning 레코드와 섞어 assistant 첫 token `{`를 대량 학습시키지 않는다(결정 69의 기전).
+      - full_response는 다음 full-reasoning SFT의 우선 후보이며, 아직 확정 손실이 아니다.
