@@ -496,3 +496,7 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
 77. (2026-10-14, 사용자) 이번 단계에서는 모델을 반입하거나 호출하지 않는다.
     - 범위는 provenance 조사, quality_gate_v1, generation PLAN, 사용자 승인 요청까지다.
     - 승인을 받아도 다음 단계에서 실행한다.
+78. (2026-10-14, 사용자) Ollama registry `library/qwen3.8:27b`의 manifest metadata 조회만 승인한다(GET 1회, `REGISTRY_VERIFY_PLAN.md`).
+    - blob·model layer 다운로드, `ollama pull`, import, copy는 금지한다.
+    - 동일 artifact의 근거는 HTTP `Docker-Content-Digest`가 `sha256:aaee06c39dcf2437cde036998d960e1fc1494b8191be7cc9657d01e509097813`와 전체 일치하는 것뿐이다.
+    - digest가 일치해도 pull은 별도 사용자 승인이 필요하다.
