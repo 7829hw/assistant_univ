@@ -29,7 +29,8 @@ queue() {   # port "model:k ..."
   local port=$1 job
   for job in $2; do sample ${job%%:*} ${job##*:} $port || return 1; done
 }
-for port in 8100 8101; do curl -sf http://127.0.0.1:$port/v1/models >/dev/null || die "server $port not up"; done
+PORTS="8100 8101"; [ "$MODE" = pinned ] && PORTS=8100
+for port in $PORTS; do curl -sf http://127.0.0.1:$port/v1/models >/dev/null || die "server $port not up"; done
 if [ "$MODE" = free ]; then
   queue 8100 "base:1 final:1 base:3 final:3" & PA=$!
   queue 8101 "base:2 final:2 base:4 final:4" & PB=$!
