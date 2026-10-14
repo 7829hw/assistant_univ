@@ -26,7 +26,9 @@ from training.data.common import check_expected_prompt, provenance, read_jsonl, 
 from training.data.validation import assess, chosen_ok, target_ok
 
 
-def build(traces_path, candidates_path, corpus, split, output):
+def build(traces_path, candidates_path, corpus, split, output, *, mark_loss_scope=False):
+    """``mark_loss_scope``(decision 86): mark each SFT record's ``metadata.loss_scope`` from its source
+    (``thinking.assign_loss_scope``) for configs with ``thinking.loss_scope: by_source``. Default off (unchanged output)."""
     output = Path(output)
     if output.exists():
         raise ValueError(f"Output already exists: {output}")
@@ -48,7 +50,7 @@ def build(traces_path, candidates_path, corpus, split, output):
             continue
         record = thinking.sft_record(trace, gold[cand["source_record_id"]], source=str(traces_path))
         record["metadata"]["v003_flags"] = cand.get("v003_flags", [])
-        sft.append(record)
+        sft.append(thinking.assign_loss_scope(record) if mark_loss_scope else record)
     for cand in candidates["dpo"]:
         chosen, rejected = traces[cand["chosen"]], traces[cand["rejected"]]
         if cand["chosen"] in contract_failed:

@@ -108,8 +108,12 @@ def main():
                 pools[port].append(client)
 
     started = time.perf_counter()
-    with ThreadPoolExecutor(max_workers=args.concurrency * len(ports)) as ex:
-        results = list(ex.map(run, jobs))
+    # 서버마다 executor 하나(작업자 C개): 한 서버에 동시 요청이 C개를 넘지 않는다.
+    executors = {port: ThreadPoolExecutor(max_workers=args.concurrency) for port in ports}
+    futures = [executors[job[2]].submit(run, job) for job in jobs]
+    results = [f.result() for f in futures]
+    for ex in executors.values():
+        ex.shutdown()
     wall = time.perf_counter() - started
     by_q = {sid: [] for sid in tgt}
     with open(OUT / "traces.jsonl", "w", encoding="utf-8") as stream:
