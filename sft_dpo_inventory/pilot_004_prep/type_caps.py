@@ -13,7 +13,9 @@
   - A. 레코드 상한만: SFT 레코드와 DPO 쌍에 각각 상한. 질문 TV는 남은 질문으로 다시 잰다.
   - B. 질문 상한 → 레코드 상한: 먼저 SFT 질문 분포에 상한을 둬 질문을 고르고(칸 안에서 seed 순서), 남은 질문의 레코드에 다시 상한.
     DPO는 남은 SFT 질문에 속한 쌍만 두고 상한.
-- 결과: ``type_caps.json``(칸별 수, 상한, 남는 레코드·질문 수, TV, 실차 대조 변형별 남는 수).
+- 예외(결정 92, ``--exempt-contrast``): 결정 66 실차 대조 묶음 질문은 상한 없이 모두 두고, 나머지 항목에만 같은 방법으로 상한을 계산한다.
+  TV는 전체(예외 포함)로 다시 재며, 0.09를 넘으면 그 값을 그대로 적는다.
+- 결과: ``type_caps.json``(예외 없음) 또는 ``type_caps_exempt.json``(예외). 칸별 수, 상한, 남는 레코드·질문 수, TV, 실차 대조 변형별 남는 수.
 """
 import argparse
 import json
@@ -107,10 +109,38 @@ def describe(sft, dpo, cell, variant):
 DEVD = json.loads(DEV.read_text(encoding="utf-8"))["dev_distribution"]["share"]
 
 
-def main():
-    p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--tau", type=float, default=0.09)
-    args = p.parse_args()
+def capped(items, cell_of, group_of, tau, exempt=frozenset()):
+    """예외(결정 92) 질문의 항목은 상한 없이 모두 두고, 나머지 항목에만 결정 88의 상한(개발 분포, τ)을 계산해 적용한다.
+    반환: (남긴 항목(원래 순서), 칸별 상한, 상한 총수)."""
+    rest = [it for it in items if group_of(it) not in exempt]
+    m, caps = caps_for(Counter(cell_of(it) for it in rest), DEVD, tau)
+    keep = {id(it) for it in apply_caps(rest, cell_of, group_of, caps)}
+    return [it for it in items if group_of(it) in exempt or id(it) in keep], caps, m
+
+
+def scenarios(sft, dpo, cell, variant, tau, exempt=frozenset()):
+    """A(레코드 상한만)와 B(질문 상한 → 레코드 상한). exempt: 상한에서 뺄 질문 id 집합."""
+    by_cell, by_sid = (lambda r: cell[r["sid"]]), (lambda r: r["sid"])
+    out = {}
+    sft_a, caps_s, m_s = capped(sft, by_cell, by_sid, tau, exempt)
+    dpo_a, caps_d, m_d = capped(dpo, by_cell, by_sid, tau, exempt)
+    out["A_record_caps"] = {"caps(non-exempt)": {"sft_record": caps_s, "dpo_pair": caps_d}, "max_total(non-exempt)": {"sft": m_s, "dpo": m_d},
+                            **describe(sft_a, dpo_a, cell, variant)}
+    questions = sorted({r["sid"] for r in sft})
+    kept_q, caps_q, m_q = capped([{"sid": q} for q in questions], by_cell, by_sid, tau, exempt)
+    keep_q = {r["sid"] for r in kept_q}
+    sft_q = [r for r in sft if r["sid"] in keep_q]
+    dpo_q = [r for r in dpo if r["sid"] in keep_q]
+    sft_b, caps_s2, m_s2 = capped(sft_q, by_cell, by_sid, tau, exempt)
+    dpo_b, caps_d2, m_d2 = capped(dpo_q, by_cell, by_sid, tau, exempt)
+    out["B_question_then_record_caps"] = {
+        "caps(non-exempt)": {"sft_question": caps_q, "sft_record": caps_s2, "dpo_pair": caps_d2},
+        "max_total(non-exempt)": {"sft_question": m_q, "sft": m_s2, "dpo": m_d2},
+        "dropped_questions": sorted(set(questions) - keep_q), **describe(sft_b, dpo_b, cell, variant)}
+    return out, {"A_record_caps": (sft_a, dpo_a), "B_question_then_record_caps": (sft_b, dpo_b)}
+
+
+def load():
     gold = {r["metadata"]["source_record_id"]: r for r in read(GOLD)}
     stop = {s for s, r in gold.items() if r["metadata"].get("target_kind") == "t2pc_stop_grounding"}
     cell = {s: profile(json.loads(r["messages"][-1]["content"]), s not in stop)["cell"] for s, r in gold.items()}
@@ -119,34 +149,26 @@ def main():
     dpo = [{"sid": r["metadata"]["source_record_id"], "pair": i} for i, r in enumerate(read(DATA / "dpo_train.jsonl"))]
     # 실차 대조 변형(결정 66): pilot_003 builder와 같은 batch006 후보 기록
     variant = {c["id"]: c["variant"] for c in json.loads(B6_CHECKED.read_text(encoding="utf-8"))["candidates"] if c.get("variant")}
+    return cell, sft, dpo, variant
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--tau", type=float, default=0.09)
+    p.add_argument("--exempt-contrast", action="store_true",
+                   help="결정 92(AG): 결정 66 실차 통행량 대조 묶음(occupied·vacant·plain·trip) 질문을 상한에서 뺀다. 결과는 type_caps_exempt.json")
+    args = p.parse_args()
+    cell, sft, dpo, variant = load()
+    exempt = frozenset(variant) if args.exempt_contrast else frozenset()
     out = {"tau": args.tau, "seed": SEED, "dev_share": DEVD, "data": str(DATA.relative_to(ROOT)),
-           "before": describe(sft, dpo, cell, variant), "scenarios": {}}
-
-    # A. 레코드 상한만
-    m_s, caps_s = caps_for(Counter(cell[r["sid"]] for r in sft), DEVD, args.tau)
-    m_d, caps_d = caps_for(Counter(cell[r["sid"]] for r in dpo), DEVD, args.tau)
-    sft_a = apply_caps(sft, lambda r: cell[r["sid"]], lambda r: r["sid"], caps_s)
-    dpo_a = apply_caps(dpo, lambda r: cell[r["sid"]], lambda r: r["sid"], caps_d)
-    out["scenarios"]["A_record_caps"] = {"caps": {"sft_record": caps_s, "dpo_pair": caps_d}, "max_total": {"sft": m_s, "dpo": m_d},
-                                         **describe(sft_a, dpo_a, cell, variant)}
-
-    # B. 질문 상한 → 레코드 상한
-    questions = sorted({r["sid"] for r in sft})
-    m_q, caps_q = caps_for(Counter(cell[s] for s in questions), DEVD, args.tau)
-    keep_q = {r["sid"] for r in apply_caps([{"sid": q} for q in questions], lambda r: cell[r["sid"]], lambda r: r["sid"], caps_q)}
-    sft_q = [r for r in sft if r["sid"] in keep_q]
-    dpo_q = [r for r in dpo if r["sid"] in keep_q]
-    m_s2, caps_s2 = caps_for(Counter(cell[r["sid"]] for r in sft_q), DEVD, args.tau)
-    m_d2, caps_d2 = caps_for(Counter(cell[r["sid"]] for r in dpo_q), DEVD, args.tau)
-    sft_b = apply_caps(sft_q, lambda r: cell[r["sid"]], lambda r: r["sid"], caps_s2)
-    dpo_b = apply_caps(dpo_q, lambda r: cell[r["sid"]], lambda r: r["sid"], caps_d2)
-    out["scenarios"]["B_question_then_record_caps"] = {
-        "caps": {"sft_question": caps_q, "sft_record": caps_s2, "dpo_pair": caps_d2},
-        "max_total": {"sft_question": m_q, "sft": m_s2, "dpo": m_d2},
-        "dropped_questions": sorted(set(questions) - keep_q), **describe(sft_b, dpo_b, cell, variant)}
-    (HERE / "type_caps.json").write_text(json.dumps(out, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    for name, s in [("before", out["before"])] + list(out["scenarios"].items()):
-        print(name, {k: s[k] for k in ("sft_records", "sft_questions", "dpo_pairs", "dpo_questions", "tv_vs_dev", "sft_record_by_source")},
+           "exempt": {"rule": "decision 92 (AG): passage-status contrast questions (decision 66) not capped" if exempt else None,
+                      "questions": sorted(exempt)},
+           "before": describe(sft, dpo, cell, variant)}
+    out["scenarios"], _ = scenarios(sft, dpo, cell, variant, args.tau, exempt)
+    name = "type_caps_exempt.json" if exempt else "type_caps.json"
+    (HERE / name).write_text(json.dumps(out, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    for key, s in [("before", out["before"])] + list(out["scenarios"].items()):
+        print(key, {k: s[k] for k in ("sft_records", "sft_questions", "dpo_pairs", "dpo_questions", "tv_vs_dev", "sft_record_by_source")},
               s["passage_status_contrast"])
 
 

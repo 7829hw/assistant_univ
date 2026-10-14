@@ -52,5 +52,43 @@ class CapsTest(unittest.TestCase):
         self.assertEqual(a, b)
 
 
+class ExemptTest(unittest.TestCase):
+    """Decision 92 (AG): exempt groups are kept whole; caps apply to the rest only."""
+
+    def setUp(self):
+        self.dev = dict(T.DEVD)
+        self.cells = sorted(self.dev)
+
+    def items(self):
+        # 질문 q0..q9: 앞 셋은 예외 후보, 모두 같은 칸(분포를 크게 벗어나게) + 나머지 칸 고르게
+        out = [{"q": f"x{i}", "c": self.cells[0]} for i in range(3) for _ in range(5)]
+        out += [{"q": f"q{i}", "c": c} for i, c in enumerate(self.cells) for _ in range(4)]
+        return out
+
+    def test_exempt_items_all_kept(self):
+        items = self.items()
+        exempt = frozenset({"x0", "x1", "x2"})
+        kept, caps, m = T.capped(items, lambda r: r["c"], lambda r: r["q"], 0.09, exempt)
+        self.assertEqual(sum(r["q"] in exempt for r in kept), 15)
+        rest = [r for r in kept if r["q"] not in exempt]
+        self.assertEqual(len(rest), m)
+        self.assertLessEqual(tv(Counter(r["c"] for r in rest), self.dev), 0.09 + 1e-9)
+
+    def test_no_exempt_matches_plain_caps(self):
+        items = self.items()
+        kept, caps, m = T.capped(items, lambda r: r["c"], lambda r: r["q"], 0.09)
+        m2, caps2 = T.caps_for(Counter(r["c"] for r in items), self.dev, 0.09)
+        self.assertEqual((caps, m), (caps2, m2))
+        self.assertEqual(len(kept), m2)
+
+    def test_exempt_may_leave_tv_over_target(self):
+        items = self.items()
+        exempt = frozenset({"x0", "x1", "x2"})
+        kept, _, _ = T.capped(items, lambda r: r["c"], lambda r: r["q"], 0.09, exempt)
+        # 예외 때문에 전체 TV가 목표를 넘을 수 있고, 도구는 그 값을 줄이려고 예외 항목을 빼지 않는다
+        self.assertEqual(sum(r["q"] in exempt for r in kept), 15)
+        self.assertGreater(tv(Counter(r["c"] for r in kept), self.dev), 0.0)
+
+
 if __name__ == "__main__":
     unittest.main()
