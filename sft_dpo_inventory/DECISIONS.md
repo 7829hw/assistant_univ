@@ -525,3 +525,9 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - Track B: 같은 조건에서 5/5 실패한 implicit-pickup 4문항(b006-05·15·20·26)은 재생성하지 않는다. 기존 trace로 semantic·contract 진단만 한다.
     - Track B의 canonical rationale candidate는 학습 데이터가 아니다. coverage에 넣지 않는다.
     - SFT·DPO, dataset freeze, P0 prompt 변경은 하지 않는다.
+84. (2026-10-14, 결과 기록) 남은 reasoning 공백 두 track의 결과를 기록한다(`p0_sft_003_teacher27b_remaining/REPORT.md`). 기준은 결정 83과 사전 등록 그대로다.
+    - Track A: 27B 200호출, EXACT_OR_SEMANTIC_MATCH 185. 정답이 있는 문항 39/40. 사람 검토 승인 38, 거부 1(b006-34: 묶음 단위어 'H3 셀'을 concept text로 씀, reasoning과 충돌). 그룹별 승인 M1 P3 28/28, M2 실패 9/11, M3 실패 1/1.
+    - 모델이 생성한 reasoning coverage는 110에서 148/154(96.1%)가 됐다. 출처는 R70 70, M2 10, M3 3, 27B P1/P2 27, 27B remaining 38이다.
+    - Track B: 모델 호출 0. gold 4/4 CLEAR_GOLD. 기존 20 call의 실패는 모두 생략(dimension_target 14, od_role 15)이고 의미 이해 실패와 P0 prompt coverage gap이다. canonical rationale 후보 4개는 학습 데이터가 아니고 coverage에 넣지 않는다.
+    - 남은 6 = IMPLICIT_PICKUP_REPEAT_FAILURE 4 + NO_CORRECT_27B_TRACE 1(b006-19, 하차 쪽 같은 꼴) + TOP1_REJECTED 1(b006-34).
+    - 다음 dataset 전략(148만 쓸지, canonical rationale을 섞을지, P0 prompt 실험)은 사용자가 정한다. dataset freeze·SFT·DPO·prompt 변경은 0이고, `qwen3.8:27b`는 store에 둔다.
