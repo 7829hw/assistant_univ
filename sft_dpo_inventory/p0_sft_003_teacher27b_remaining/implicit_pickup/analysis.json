@@ -1,0 +1,158 @@
+{
+ "model_calls": 0,
+ "source_traces": "training/generated/p0_sft_003_teacher27b/raw/traces.jsonl",
+ "source_traces_sha256": "9933052e00e252ce4152a0df271cd80dacb91ac048fe3c947ae8e2edd5550fd1",
+ "matrix_counts": {
+  "dimension_target": {
+   "omitted": 14,
+   "correct": 6
+  },
+  "od_role": {
+   "na": 5,
+   "omitted": 15
+  },
+  "combined": {
+   "one_wrong": 11,
+   "both_wrong": 9
+  },
+  "other_factors_match": 20
+ },
+ "tag_counts": {
+  "SEMANTIC_UNDERSTANDING_FAILURE": 20,
+  "PROMPT_COVERAGE_GAP": 20,
+  "OD_ROLE_DIM_TARGET_COLLAPSE": 1
+ },
+ "per_item": {
+  "b006-05": {
+   "dimension_target": {
+    "omitted": 5
+   },
+   "od_role": {
+    "na": 5
+   },
+   "tags": {
+    "SEMANTIC_UNDERSTANDING_FAILURE": 5,
+    "PROMPT_COVERAGE_GAP": 5
+   }
+  },
+  "b006-15": {
+   "dimension_target": {
+    "omitted": 5
+   },
+   "od_role": {
+    "omitted": 5
+   },
+   "tags": {
+    "SEMANTIC_UNDERSTANDING_FAILURE": 5,
+    "PROMPT_COVERAGE_GAP": 5
+   }
+  },
+  "b006-20": {
+   "dimension_target": {
+    "correct": 5
+   },
+   "od_role": {
+    "omitted": 5
+   },
+   "tags": {
+    "SEMANTIC_UNDERSTANDING_FAILURE": 5,
+    "PROMPT_COVERAGE_GAP": 5,
+    "OD_ROLE_DIM_TARGET_COLLAPSE": 1
+   }
+  },
+  "b006-26": {
+   "dimension_target": {
+    "omitted": 4,
+    "correct": 1
+   },
+   "od_role": {
+    "omitted": 5
+   },
+   "tags": {
+    "SEMANTIC_UNDERSTANDING_FAILURE": 5,
+    "PROMPT_COVERAGE_GAP": 5
+   }
+  }
+ },
+ "gold_review": {
+  "b006-05": {
+   "verdict": "CLEAR_GOLD",
+   "slots": {
+    "measure": "trip_count('택시를 탄 건수')",
+    "place restriction": "없음",
+    "place od_role": "해당 없음",
+    "grouping dimension": "sido('시도')",
+    "dimension_target": "pickup — '탄'은 승차 사건이고, '시도는?'은 한 끝의 시도 하나를 묻는다(both 조합으로는 시도 하나가 답이 될 수 없다)",
+    "order": "top('가장 많은')",
+    "limit": "1('시도는?' 단수)"
+   },
+   "note": "언어상 분명하다. 다만 P0 prompt에 사건 동사(탄·태운)로 묶는 끝을 정하는 예가 없고, '손님을 태운 운행'을 trip 이름으로 드는 규칙과 겹친다."
+  },
+  "b006-15": {
+   "verdict": "CLEAR_GOLD",
+   "slots": {
+    "measure": "trip_count('손님을 태운 건수')",
+    "place restriction": "부산",
+    "place od_role": "pickup — '부산에서'는 '태운'(승차 사건)이 일어난 곳을 제한한다. 장소 제한의 끝이다",
+    "grouping dimension": "sigungu('구')",
+    "dimension_target": "pickup — 묶는 끝도 '태운' 사건의 끝이다. 장소 제한과는 따로 판단해도 같은 끝이다",
+    "order": "bottom('가장 적은')",
+    "limit": "2('두 곳')"
+   },
+   "note": "od_role은 계약(P0 '출발·도착이 드러나는 질문에서는 각 장소 개념에 od_role을 반드시')상 필수다. '부산 안의 구'라는 범위로 읽어도 승차 끝 기준이면 같은 결과지만, 계약은 od_role 없는 표현을 허용하지 않는다."
+  },
+  "b006-20": {
+   "verdict": "CLEAR_GOLD",
+   "slots": {
+    "measure": "trip_count('승차')",
+    "place restriction": "대구",
+    "place od_role": "pickup — '대구에서 승차'는 'A에서 출발'과 같은 꼴이다",
+    "grouping dimension": "sigungu('구')",
+    "dimension_target": "pickup — '승차가 가장 적었던 구'(prompt 예시 '승차가 많은 읍면동'과 같은 꼴)",
+    "order": "bottom('가장 적었던')",
+    "limit": "1('구는?' 단수)"
+   },
+   "note": "dimension_target은 prompt 예시로 덮여 27B가 5/5 맞혔다. od_role 쪽 예시는 '출발/도착' 동사뿐이라 '승차'와 이어지지 않았다."
+  },
+  "b006-26": {
+   "verdict": "CLEAR_GOLD",
+   "slots": {
+    "measure": "trip_count('손님을 가장 적게 태운')",
+    "place restriction": "대구 수성구",
+    "place od_role": "pickup — '수성구에서 손님을 태운'은 승차 사건의 위치 제한이다",
+    "grouping dimension": "h3('H3 셀')",
+    "dimension_target": "pickup — 셀도 '태운' 사건의 끝 기준으로 묶는다. P0 정의는 trip을 dimension으로 나누는 모든 경우에 적용되고 h3를 빼지 않는다",
+    "order": "bottom('가장 적게')",
+    "limit": "3('세 곳')"
+   },
+   "note": "27B는 'dimension_target은 행정구역 dimension에만'이라는 prompt에 없는 제한을 두 번 만들었다. v006에서 h3 + dimension_target 조합은 다른 문항(b006-17, b006-24)에서 27B가 맞혔다."
+  }
+ },
+ "prompt_coverage": {
+  "prompt_file": "evaluation/partial_grounding/prompts/partial_p0.yaml",
+  "prompt_file_sha256": "b024e07954c6b3d4b76274b6afa7f83814671d44c7e59e711636020423425922",
+  "modified": false,
+  "dimension_target_examples": [
+   "'승차가 많은 읍면동', '출발 지역별' → pickup",
+   "'하차가 많은 읍면동', '도착 지역별' → dropoff",
+   "'승하차 노선', '출발지-도착지 조합' → both",
+   "'A에서 출발한 실차를 도착 읍면동별로' → od_role pickup, dimension_target dropoff"
+  ],
+  "od_role_examples": [
+   "'A에서 출발' → pickup",
+   "'B에 도착' → dropoff",
+   "'A에서 출발하여 B에 도착'",
+   "'C 안에서 오간' → both"
+  ],
+  "conflicting_cue": "'실차', '실차 구간', '손님을 태운 운행'이 이 분석 대상을 가리키면 trip — 27B는 이 규칙을 인용해 '태운'을 끝 정보 없는 trip 이름으로 읽었다(b006-15 5/5, b006-26 다수)",
+  "gaps": [
+   "사건 동사(탄·태운·승차가)로 묶는 끝을 정하는 예가 '승차가 많은 읍면동' 하나뿐이다. '탄/태운' 예가 없다",
+   "od_role 예가 '출발/도착' 동사뿐이다. 'A에서 승차', 'A에서 손님을 태운'이 장소 제한의 끝이라는 예가 없다",
+   "dimension_target과 h3 조합 예가 없다. 27B는 '행정구역 dimension에만'이라고 추론했다(2/5)",
+   "'장소 제한 끝'과 '묶는 끝'이 같은 사건에서 동시에 정해지는 예(둘 다 pickup)가 없다. 예시는 서로 다른 끝(pickup/dropoff)뿐이다"
+  ]
+ },
+ "canonical_rationale_candidates": 4,
+ "training_inclusion": false,
+ "counted_in_coverage": false
+}
