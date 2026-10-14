@@ -1,0 +1,1127 @@
+{
+ "summary": {
+  "targets": 31,
+  "by_priority": {
+   "2": 9,
+   "1": 22
+  },
+  "by_source": {
+   "v005": 18,
+   "augment_dt_event": 10,
+   "augment_od_vs_dt": 3
+  },
+  "dimension_target": {
+   "None": 6,
+   "dropoff": 7,
+   "pickup": 12,
+   "both": 6
+  },
+  "od_ne_dt": 13,
+  "bucket": 3,
+  "measure": {
+   "revenue": 1,
+   "trip_count": 25,
+   "fare": 1,
+   "speed": 3,
+   "active_taxi_ratio": 1
+  },
+  "planned_calls_max": 155,
+  "rule": "M1 AND priority ∈ {P1, P2}(p0_sft_003_prep manifest), M2 결과와 무관"
+ },
+ "items": [
+  {
+   "item_id": "ann-da98b3941dfa1c7ce800",
+   "question": "2026년 8월 나래구 개인택시 주별 매출 합계 중 가장 작은 값은?",
+   "source": "v005",
+   "priority": 2,
+   "semantic_family": "[\"revenue\", false, null, \"week\", true, false]",
+   "measure": "revenue",
+   "dimension": null,
+   "dimension_target": null,
+   "od_role": [
+    "-"
+   ],
+   "od_ne_dt": false,
+   "bucket": "week",
+   "order": null,
+   "gap": null,
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 9
+    },
+    "top_raw_diff_fields": {
+     "factor:date": 8,
+     "factor:taxi_type": 4,
+     "places": 1
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P2: 중요 feature(dt·od_ne_dt·bucket·compile 정지)이고 R70 near family 1개",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "ann-e645cbc11600d7348d68",
+   "question": "2026년 9월 솔빛동에서 승차한 실차 구간을 읍면동 하차지별로 세면 건수가 많은 4곳은?",
+   "source": "v005",
+   "priority": 1,
+   "semantic_family": "[\"trip_count\", true, \"dropoff\", null, true, false]",
+   "measure": "trip_count",
+   "dimension": "emd",
+   "dimension_target": "dropoff",
+   "od_role": [
+    "pickup"
+   ],
+   "od_ne_dt": true,
+   "bucket": null,
+   "order": "top",
+   "gap": null,
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "STRUCTURALLY_REPAIRABLE": 6,
+     "SEMANTIC_MISMATCH": 3
+    },
+    "top_raw_diff_fields": {
+     "factor:date": 9,
+     "places": 4,
+     "factor:aggregation_spec": 3
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P1: exact family가 R70에 없고 near family가 panel regression 문항과 같음",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "ann-9b222bf86273d158269e",
+   "question": "2026년 9월 솔빛동에서 하차한 실차 구간을 읍면동 승차지별로 세면 건수가 많은 4곳은?",
+   "source": "v005",
+   "priority": 1,
+   "semantic_family": "[\"trip_count\", true, \"pickup\", null, true, false]",
+   "measure": "trip_count",
+   "dimension": "emd",
+   "dimension_target": "pickup",
+   "od_role": [
+    "dropoff"
+   ],
+   "od_ne_dt": true,
+   "bucket": null,
+   "order": "top",
+   "gap": null,
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "STRUCTURALLY_REPAIRABLE": 6,
+     "SEMANTIC_MISMATCH": 3
+    },
+    "top_raw_diff_fields": {
+     "factor:date": 9,
+     "factor:aggregation_spec": 3
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P1: exact family가 R70에 없고 near family가 panel regression 문항과 같음",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "ann-a27c59659681a481ac2c",
+   "question": "2026년 9월 가람구 소속 택시의 요금을 주마다 합산한 뒤, 주별 합계 중 가장 작은 값은?",
+   "source": "v005",
+   "priority": 2,
+   "semantic_family": "[\"fare\", false, null, \"week\", true, false]",
+   "measure": "fare",
+   "dimension": null,
+   "dimension_target": null,
+   "od_role": [
+    "-"
+   ],
+   "od_ne_dt": false,
+   "bucket": "week",
+   "order": null,
+   "gap": null,
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 9
+    },
+    "top_raw_diff_fields": {
+     "factor:date": 9,
+     "factor:aggregation_spec": 3,
+     "places": 1,
+     "factor:dimension": 1
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P2: 중요 feature(dt·od_ne_dt·bucket·compile 정지)이고 R70 near family 2개",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "ann-914c48dad91bc9a62ab4",
+   "question": "2026년 9월 가람구에서 기록된 도로 통행 속도의 주별 최댓값들 중 가장 작은 값은?",
+   "source": "v005",
+   "priority": 2,
+   "semantic_family": "[\"speed\", false, null, \"week\", true, false]",
+   "measure": "speed",
+   "dimension": null,
+   "dimension_target": null,
+   "od_role": [
+    "-"
+   ],
+   "od_ne_dt": false,
+   "bucket": "week",
+   "order": null,
+   "gap": null,
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 9
+    },
+    "top_raw_diff_fields": {
+     "factor:date": 9,
+     "places": 3,
+     "factor:aggregation_spec": 1
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P2: 중요 feature(dt·od_ne_dt·bucket·compile 정지)이고 R70 near family 1개",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "ann-0e4edbda1cb1bec194c1",
+   "question": "2026년 9월 읍면동 승차지별 실차 구간 건수가 적은 4개 그룹은?",
+   "source": "v005",
+   "priority": 2,
+   "semantic_family": "[\"trip_count\", true, \"pickup\", null, false, false]",
+   "measure": "trip_count",
+   "dimension": "emd",
+   "dimension_target": "pickup",
+   "od_role": null,
+   "od_ne_dt": false,
+   "bucket": null,
+   "order": "bottom",
+   "gap": null,
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 4,
+     "STRUCTURALLY_REPAIRABLE": 5
+    },
+    "top_raw_diff_fields": {
+     "factor:date": 9,
+     "places": 6,
+     "factor:aggregation_spec": 3
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P2: 중요 feature(dt·od_ne_dt·bucket·compile 정지)이고 R70 near family 2개",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "ann-2d254560f2214204db4b",
+   "question": "2026년 9월 읍면동 승차지와 하차지 조합별 실차 구간 건수가 적은 4개 그룹은?",
+   "source": "v005",
+   "priority": 1,
+   "semantic_family": "[\"trip_count\", true, \"both\", null, false, false]",
+   "measure": "trip_count",
+   "dimension": "emd",
+   "dimension_target": "both",
+   "od_role": null,
+   "od_ne_dt": false,
+   "bucket": null,
+   "order": "bottom",
+   "gap": null,
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 4,
+     "STRUCTURALLY_REPAIRABLE": 5
+    },
+    "top_raw_diff_fields": {
+     "factor:date": 9,
+     "places": 7,
+     "factor:aggregation_spec": 2
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P1: exact family가 R70에 없고 near family가 panel regression 문항과 같음",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "b004-24",
+   "question": "2026년 9월 대구 수성구 안에서 오간 실차 구간을 읍면동 출발지-도착지 조합별로 세면 가장 많은 세 개는?",
+   "source": "v005",
+   "priority": 1,
+   "semantic_family": "[\"trip_count\", true, \"both\", null, true, false]",
+   "measure": "trip_count",
+   "dimension": "emd",
+   "dimension_target": "both",
+   "od_role": [
+    "both"
+   ],
+   "od_ne_dt": false,
+   "bucket": null,
+   "order": "top",
+   "gap": null,
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 8,
+     "STRUCTURALLY_REPAIRABLE": 1
+    },
+    "top_raw_diff_fields": {
+     "factor:date": 9,
+     "places": 7,
+     "factor:aggregation_spec": 2
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P1: exact family가 R70에 없고 near family가 panel regression 문항과 같음",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "b004-23",
+   "question": "2026년 8월 한 달 동안 대전역에 도착한 실차를 출발 읍면동별로 세면 가장 적은 두 곳은?",
+   "source": "v005",
+   "priority": 1,
+   "semantic_family": "[\"trip_count\", true, \"pickup\", null, true, false]",
+   "measure": "trip_count",
+   "dimension": "emd",
+   "dimension_target": "pickup",
+   "od_role": [
+    "dropoff"
+   ],
+   "od_ne_dt": true,
+   "bucket": null,
+   "order": "bottom",
+   "gap": null,
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 6,
+     "STRUCTURALLY_REPAIRABLE": 3
+    },
+    "top_raw_diff_fields": {
+     "factor:date": 8,
+     "places": 7,
+     "factor:aggregation_spec": 6,
+     "factor:dimension_target": 3
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P1: exact family가 R70에 없고 near family가 panel regression 문항과 같음",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "b004-34",
+   "question": "2026년 8월 요일별 평균 속도가 가장 낮은 요일은?",
+   "source": "v005",
+   "priority": 2,
+   "semantic_family": "[\"speed\", true, null, null, false, false]",
+   "measure": "speed",
+   "dimension": "dayofweek",
+   "dimension_target": null,
+   "od_role": null,
+   "od_ne_dt": false,
+   "bucket": null,
+   "order": "bottom",
+   "gap": null,
+   "compile_stop_target": true,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 7,
+     "STRUCTURALLY_REPAIRABLE": 2
+    },
+    "top_raw_diff_fields": {
+     "factor:date": 9,
+     "factor:limit": 3,
+     "factor:order": 2
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P2: 중요 feature(dt·od_ne_dt·bucket·compile 정지)이고 R70 near family 0개",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "b004-35",
+   "question": "2026년 8월에 평균 속도가 제일 느렸던 요일은?",
+   "source": "v005",
+   "priority": 2,
+   "semantic_family": "[\"speed\", true, null, null, false, false]",
+   "measure": "speed",
+   "dimension": "dayofweek",
+   "dimension_target": null,
+   "od_role": null,
+   "od_ne_dt": false,
+   "bucket": null,
+   "order": "bottom",
+   "gap": null,
+   "compile_stop_target": true,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 9
+    },
+    "top_raw_diff_fields": {
+     "factor:date": 8,
+     "factor:limit": 6,
+     "factor:order": 4,
+     "factor:dimension": 1
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P2: 중요 feature(dt·od_ne_dt·bucket·compile 정지)이고 R70 near family 0개",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "b005-31",
+   "question": "2026년 9월 대구 수성구 안에서 오간 실차를 도착 읍면동별로 세어줘",
+   "source": "v005",
+   "priority": 1,
+   "semantic_family": "[\"trip_count\", true, \"dropoff\", null, true, false]",
+   "measure": "trip_count",
+   "dimension": "emd",
+   "dimension_target": "dropoff",
+   "od_role": [
+    "both"
+   ],
+   "od_ne_dt": true,
+   "bucket": null,
+   "order": null,
+   "gap": null,
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 8,
+     "STRUCTURALLY_REPAIRABLE": 1
+    },
+    "top_raw_diff_fields": {
+     "places": 8,
+     "factor:date": 8,
+     "factor:aggregation_spec": 4
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P1: exact family가 R70에 없고 near family가 panel regression 문항과 같음",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "b005-32",
+   "question": "2026년 9월 대구 수성구 안에서 출발·도착한 실차 가운데 도착 건수가 가장 많은 읍면동 세 곳은?",
+   "source": "v005",
+   "priority": 1,
+   "semantic_family": "[\"trip_count\", true, \"dropoff\", null, true, false]",
+   "measure": "trip_count",
+   "dimension": "emd",
+   "dimension_target": "dropoff",
+   "od_role": [
+    "both"
+   ],
+   "od_ne_dt": true,
+   "bucket": null,
+   "order": "top",
+   "gap": null,
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 6,
+     "STRUCTURALLY_REPAIRABLE": 3
+    },
+    "top_raw_diff_fields": {
+     "factor:date": 9,
+     "places": 5,
+     "factor:dimension_target": 2,
+     "factor:aggregation_spec": 1
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P1: exact family가 R70에 없고 near family가 panel regression 문항과 같음",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "b005-38",
+   "question": "지난달 부산 부산진구 안에서 오간 실차를 도착 읍면동별로 셀 때 가장 적은 두 곳은?",
+   "source": "v005",
+   "priority": 1,
+   "semantic_family": "[\"trip_count\", true, \"dropoff\", null, true, false]",
+   "measure": "trip_count",
+   "dimension": "emd",
+   "dimension_target": "dropoff",
+   "od_role": [
+    "both"
+   ],
+   "od_ne_dt": true,
+   "bucket": null,
+   "order": "bottom",
+   "gap": null,
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 9
+    },
+    "top_raw_diff_fields": {
+     "places": 8,
+     "factor:aggregation_spec": 3,
+     "factor:dimension": 2,
+     "factor:dimension_target": 1
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P1: exact family가 R70에 없고 near family가 panel regression 문항과 같음",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "b005-39",
+   "question": "2026년 9월 대구 달서구 안에서 출발과 도착이 모두 이뤄진 실차를 출발 읍면동별로 세어줘",
+   "source": "v005",
+   "priority": 1,
+   "semantic_family": "[\"trip_count\", true, \"pickup\", null, true, false]",
+   "measure": "trip_count",
+   "dimension": "emd",
+   "dimension_target": "pickup",
+   "od_role": [
+    "both"
+   ],
+   "od_ne_dt": true,
+   "bucket": null,
+   "order": null,
+   "gap": null,
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 5,
+     "STRUCTURALLY_REPAIRABLE": 4
+    },
+    "top_raw_diff_fields": {
+     "factor:date": 9,
+     "factor:aggregation_spec": 4,
+     "places": 2
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P1: exact family가 R70에 없고 near family가 panel regression 문항과 같음",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "b005-42",
+   "question": "이번 달 대구 안에서 오간 실차를 도착 시군구별로 세어줘",
+   "source": "v005",
+   "priority": 1,
+   "semantic_family": "[\"trip_count\", true, \"dropoff\", null, true, false]",
+   "measure": "trip_count",
+   "dimension": "sigungu",
+   "dimension_target": "dropoff",
+   "od_role": [
+    "both"
+   ],
+   "od_ne_dt": true,
+   "bucket": null,
+   "order": null,
+   "gap": null,
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 9
+    },
+    "top_raw_diff_fields": {
+     "places": 9,
+     "factor:aggregation_spec": 2,
+     "factor:date": 2,
+     "factor:dimension": 1
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P1: exact family가 R70에 없고 near family가 panel regression 문항과 같음",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "b005-59",
+   "question": "2026년 8월 시도별 택시 가동률 최솟값이 가장 낮은 두 곳은?",
+   "source": "v005",
+   "priority": 1,
+   "semantic_family": "[\"active_taxi_ratio\", true, null, null, false, false]",
+   "measure": "active_taxi_ratio",
+   "dimension": "sido",
+   "dimension_target": null,
+   "od_role": null,
+   "od_ne_dt": false,
+   "bucket": null,
+   "order": "bottom",
+   "gap": null,
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 6,
+     "STRUCTURALLY_REPAIRABLE": 3
+    },
+    "top_raw_diff_fields": {
+     "factor:date": 9,
+     "factor:dimension": 2,
+     "measure": 1,
+     "factor:aggregation_spec": 1
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P1: exact family가 R70에 없고 near family가 panel regression 문항과 같음",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "b005-35",
+   "question": "2026년 8월 대구 동성로에서 출발한 실차를 읍면동 출발지-도착지 조합별로 세어줘",
+   "source": "v005",
+   "priority": 1,
+   "semantic_family": "[\"trip_count\", true, \"both\", null, true, false]",
+   "measure": "trip_count",
+   "dimension": "emd",
+   "dimension_target": "both",
+   "od_role": [
+    "pickup"
+   ],
+   "od_ne_dt": true,
+   "bucket": null,
+   "order": null,
+   "gap": null,
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "STRUCTURALLY_REPAIRABLE": 7,
+     "SEMANTIC_MISMATCH": 2
+    },
+    "top_raw_diff_fields": {
+     "factor:date": 9,
+     "factor:aggregation_spec": 2
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P1: exact family가 R70에 없고 near family가 panel regression 문항과 같음",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "b006-05",
+   "question": "지난달 택시를 탄 건수가 가장 많은 시도는?",
+   "source": "augment_dt_event",
+   "priority": 2,
+   "semantic_family": "[\"trip_count\", true, \"pickup\", null, false, false]",
+   "measure": "trip_count",
+   "dimension": "sido",
+   "dimension_target": "pickup",
+   "od_role": null,
+   "od_ne_dt": false,
+   "bucket": null,
+   "order": "top",
+   "gap": "A",
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 9
+    },
+    "top_raw_diff_fields": {
+     "factor:dimension_target": 9,
+     "factor:aggregation_spec": 6,
+     "places": 2,
+     "measure": 1
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P2: 중요 feature(dt·od_ne_dt·bucket·compile 정지)이고 R70 near family 2개",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "b006-09",
+   "question": "지난주 어디서 타서 어디서 내렸는지를 동 단위 짝으로 묶었을 때 가장 드문 세 가지는?",
+   "source": "augment_dt_event",
+   "priority": 1,
+   "semantic_family": "[\"trip_count\", true, \"both\", null, false, false]",
+   "measure": "trip_count",
+   "dimension": "emd",
+   "dimension_target": "both",
+   "od_role": null,
+   "od_ne_dt": false,
+   "bucket": null,
+   "order": "bottom",
+   "gap": "A",
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 9
+    },
+    "top_raw_diff_fields": {
+     "places": 8,
+     "measure": 3
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P1: exact family가 R70에 없고 near family가 panel regression 문항과 같음",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "b006-15",
+   "question": "2026년 8월 부산에서 손님을 태운 건수가 가장 적은 구 두 곳은?",
+   "source": "augment_dt_event",
+   "priority": 1,
+   "semantic_family": "[\"trip_count\", true, \"pickup\", null, true, false]",
+   "measure": "trip_count",
+   "dimension": "sigungu",
+   "dimension_target": "pickup",
+   "od_role": [
+    "pickup"
+   ],
+   "od_ne_dt": false,
+   "bucket": null,
+   "order": "bottom",
+   "gap": "A",
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 9
+    },
+    "top_raw_diff_fields": {
+     "places": 9,
+     "factor:date": 8,
+     "factor:dimension_target": 7,
+     "factor:dimension": 3
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P1: exact family가 R70에 없고 near family가 panel regression 문항과 같음",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "b006-17",
+   "question": "이번 달 부산 부산진구에서 손님을 내려준 곳 중 하차가 가장 적은 H3 셀 세 개는?",
+   "source": "augment_dt_event",
+   "priority": 1,
+   "semantic_family": "[\"trip_count\", true, \"dropoff\", null, true, false]",
+   "measure": "trip_count",
+   "dimension": "h3",
+   "dimension_target": "dropoff",
+   "od_role": [
+    "dropoff"
+   ],
+   "od_ne_dt": false,
+   "bucket": null,
+   "order": "bottom",
+   "gap": "A",
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "UNPARSEABLE": 1,
+     "SEMANTIC_MISMATCH": 8
+    },
+    "top_raw_diff_fields": {
+     "places": 4,
+     "factor:dimension_target": 3,
+     "factor:aggregation_spec": 3,
+     "factor:dimension": 2
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P1: exact family가 R70에 없고 near family가 panel regression 문항과 같음",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "b006-20",
+   "question": "지난달 대구에서 승차가 가장 적었던 구는?",
+   "source": "augment_dt_event",
+   "priority": 1,
+   "semantic_family": "[\"trip_count\", true, \"pickup\", null, true, false]",
+   "measure": "trip_count",
+   "dimension": "sigungu",
+   "dimension_target": "pickup",
+   "od_role": [
+    "pickup"
+   ],
+   "od_ne_dt": false,
+   "bucket": null,
+   "order": "bottom",
+   "gap": "A",
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 9
+    },
+    "top_raw_diff_fields": {
+     "places": 8,
+     "factor:dimension_target": 6,
+     "factor:aggregation_spec": 2,
+     "factor:date": 1
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P1: exact family가 R70에 없고 near family가 panel regression 문항과 같음",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "b006-21",
+   "question": "지난달 손님이 탄 셀과 내린 셀을 짝지었을 때 가장 흔한 조합 세 개는?",
+   "source": "augment_dt_event",
+   "priority": 1,
+   "semantic_family": "[\"trip_count\", true, \"both\", null, false, false]",
+   "measure": "trip_count",
+   "dimension": "h3",
+   "dimension_target": "both",
+   "od_role": null,
+   "od_ne_dt": false,
+   "bucket": null,
+   "order": "top",
+   "gap": "A",
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 9
+    },
+    "top_raw_diff_fields": {
+     "factor:dimension": 9,
+     "factor:aggregation_spec": 3,
+     "places": 1
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P1: exact family가 R70에 없고 near family가 panel regression 문항과 같음",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "b006-22",
+   "question": "지난주 동대구역으로 온 실차들이 어느 셀에서 출발해 어느 셀에서 끝났는지 짝으로 보면 가장 많은 두 가지는?",
+   "source": "augment_dt_event",
+   "priority": 1,
+   "semantic_family": "[\"trip_count\", true, \"both\", null, true, false]",
+   "measure": "trip_count",
+   "dimension": "h3",
+   "dimension_target": "both",
+   "od_role": [
+    "dropoff"
+   ],
+   "od_ne_dt": true,
+   "bucket": null,
+   "order": "top",
+   "gap": "A",
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 9
+    },
+    "top_raw_diff_fields": {
+     "factor:dimension": 9,
+     "places": 5,
+     "factor:aggregation_spec": 1
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P1: exact family가 R70에 없고 near family가 panel regression 문항과 같음",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "b006-23",
+   "question": "2026년 9월 1일 하루 동안 실차가 어느 동에서 시작됐는지 건수로 보여줘",
+   "source": "augment_dt_event",
+   "priority": 2,
+   "semantic_family": "[\"trip_count\", true, \"pickup\", null, false, false]",
+   "measure": "trip_count",
+   "dimension": "emd",
+   "dimension_target": "pickup",
+   "od_role": null,
+   "od_ne_dt": false,
+   "bucket": null,
+   "order": null,
+   "gap": "A",
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 9
+    },
+    "top_raw_diff_fields": {
+     "places": 7,
+     "factor:aggregation_spec": 5,
+     "factor:dimension_target": 1,
+     "factor:time": 1
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P2: 중요 feature(dt·od_ne_dt·bucket·compile 정지)이고 R70 near family 2개",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "b006-24",
+   "question": "2026년 9월 1일부터 7일까지 손님을 태운 H3 셀 중 가장 적었던 세 곳은?",
+   "source": "augment_dt_event",
+   "priority": 2,
+   "semantic_family": "[\"trip_count\", true, \"pickup\", null, false, false]",
+   "measure": "trip_count",
+   "dimension": "h3",
+   "dimension_target": "pickup",
+   "od_role": null,
+   "od_ne_dt": false,
+   "bucket": null,
+   "order": "bottom",
+   "gap": "A",
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 9
+    },
+    "top_raw_diff_fields": {
+     "factor:dimension_target": 9,
+     "scopes": 6,
+     "factor:date": 5,
+     "factor:aggregation_spec": 2
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P2: 중요 feature(dt·od_ne_dt·bucket·compile 정지)이고 R70 near family 2개",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "b006-26",
+   "question": "이번 달 대구 수성구에서 손님을 가장 적게 태운 H3 셀 세 곳은?",
+   "source": "augment_dt_event",
+   "priority": 1,
+   "semantic_family": "[\"trip_count\", true, \"pickup\", null, true, false]",
+   "measure": "trip_count",
+   "dimension": "h3",
+   "dimension_target": "pickup",
+   "od_role": [
+    "pickup"
+   ],
+   "od_ne_dt": false,
+   "bucket": null,
+   "order": "bottom",
+   "gap": "A",
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 9
+    },
+    "top_raw_diff_fields": {
+     "places": 8,
+     "factor:dimension_target": 7,
+     "scopes": 2,
+     "factor:aggregation_spec": 2
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P1: exact family가 R70에 없고 near family가 panel regression 문항과 같음",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "b006-31",
+   "question": "2026년 8월 대구에서 출발한 실차가 내린 시도 중 가장 적은 두 곳은?",
+   "source": "augment_od_vs_dt",
+   "priority": 1,
+   "semantic_family": "[\"trip_count\", true, \"dropoff\", null, true, false]",
+   "measure": "trip_count",
+   "dimension": "sido",
+   "dimension_target": "dropoff",
+   "od_role": [
+    "pickup"
+   ],
+   "od_ne_dt": true,
+   "bucket": null,
+   "order": "bottom",
+   "gap": "B",
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "STRUCTURALLY_REPAIRABLE": 3,
+     "SEMANTIC_MISMATCH": 6
+    },
+    "top_raw_diff_fields": {
+     "factor:date": 9,
+     "factor:dimension_target": 4,
+     "places": 2,
+     "factor:aggregation_spec": 2
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P1: exact family가 R70에 없고 near family가 panel regression 문항과 같음",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "b006-32",
+   "question": "2026년 8월 부산에 도착한 실차가 어느 시도에서 출발했는지 가장 많은 세 곳은?",
+   "source": "augment_od_vs_dt",
+   "priority": 1,
+   "semantic_family": "[\"trip_count\", true, \"pickup\", null, true, false]",
+   "measure": "trip_count",
+   "dimension": "sido",
+   "dimension_target": "pickup",
+   "od_role": [
+    "dropoff"
+   ],
+   "od_ne_dt": true,
+   "bucket": null,
+   "order": "top",
+   "gap": "B",
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 8,
+     "STRUCTURALLY_REPAIRABLE": 1
+    },
+    "top_raw_diff_fields": {
+     "factor:date": 9,
+     "factor:dimension": 7,
+     "factor:aggregation_spec": 4,
+     "places": 1
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P1: exact family가 R70에 없고 near family가 panel regression 문항과 같음",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  },
+  {
+   "item_id": "b006-43",
+   "question": "지난달 부산 광안리에 내려준 손님을 태웠던 위치 중 가장 많은 H3 셀 세 개는?",
+   "source": "augment_od_vs_dt",
+   "priority": 1,
+   "semantic_family": "[\"trip_count\", true, \"pickup\", null, true, false]",
+   "measure": "trip_count",
+   "dimension": "h3",
+   "dimension_target": "pickup",
+   "od_role": [
+    "dropoff"
+   ],
+   "od_ne_dt": true,
+   "bucket": null,
+   "order": "top",
+   "gap": "B",
+   "compile_stop_target": false,
+   "why_8b_failed": {
+    "samples": 9,
+    "exact": 0,
+    "categories": {
+     "SEMANTIC_MISMATCH": 9
+    },
+    "top_raw_diff_fields": {
+     "factor:dimension_target": 9,
+     "places": 3,
+     "measure": 2,
+     "factor:aggregation_spec": 1
+    }
+   },
+   "why_27b": "8B 9표본 모두 정답 아님(M1). 우선순위 P1: exact family가 R70에 없고 near family가 panel regression 문항과 같음",
+   "planned_calls": {
+    "greedy": 1,
+    "sampling": 4
+   }
+  }
+ ]
+}
