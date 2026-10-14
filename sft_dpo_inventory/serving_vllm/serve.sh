@@ -12,6 +12,8 @@ WORK=/data/hwkim/sftdpo_work/serving_vllm
 ADAPTER=/home/hwkim/sftdpo_work/pilot_003/checkpoints/dpo/checkpoint-174/policy
 VPY=/home/hwkim/sftdpo_work/vllmvenv/bin
 mkdir -p "$WORK"
+# venv bin을 PATH에 둔다(ninja 등). sampler는 vLLM의 PyTorch 구현을 쓴다(flashinfer sampler는 JIT 빌드가 필요해 끈다). 2026-10-14 첫 기동 실패 뒤 추가.
+export PATH="$VPY:$PATH" VLLM_USE_FLASHINFER_SAMPLER=0
 gpu_ok "$G" "vllm serve port $PORT" || { echo "GPU $G not usable"; exit 1; }
 ARGS=(serve Qwen/Qwen3-8B --revision b968826d9c46dd6066d109eabc6255188de91218 --dtype bfloat16 --max-model-len 16384
       --served-model-name base --enable-lora --lora-modules "final=$ADAPTER" --max-lora-rank 16 --max-loras 1
@@ -23,7 +25,8 @@ echo $PID > "$WORK/server_$PORT.pid"
 "$VPY/python" - "$WORK/server_$PORT.json" "$G" "${UUID[$G]}" "$PID" "$ADAPTER" "${ARGS[@]}" <<'PYEOF'
 import hashlib, json, sys, vllm, torch, transformers
 out, g, uuid, pid, adapter, *args = sys.argv[1:]
-json.dump({"gpu_index": g, "gpu_uuid": uuid, "pid": int(pid), "args": args, "vllm": vllm.__version__, "torch": torch.__version__,
+import os
+json.dump({"env": {"VLLM_USE_FLASHINFER_SAMPLER": os.environ.get("VLLM_USE_FLASHINFER_SAMPLER")}, "gpu_index": g, "gpu_uuid": uuid, "pid": int(pid), "args": args, "vllm": vllm.__version__, "torch": torch.__version__,
            "torch_cuda": torch.version.cuda, "transformers": transformers.__version__,
            "adapter": adapter, "adapter_sha256": hashlib.sha256(open(adapter + "/adapter_model.safetensors", "rb").read()).hexdigest()},
           open(out, "w"), indent=1)
