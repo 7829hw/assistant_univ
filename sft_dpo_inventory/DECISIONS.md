@@ -468,3 +468,12 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
       - 27B는 M1의 P1·P2 31문항부터 반입 승인을 요청한다.
       - M2는 8B 추가 sampling, M3는 재필터한다.
       - 다음 SFT는 154 전부 reasoning record로 하고, full_response를 우선 후보로 둔다.
+72. (2026-10-14, 사용자) P0 full-reasoning 데이터 회수 1단계(`sft_dpo_inventory/p0_sft_003_recovery`).
+    - M3 4는 새 생성 없이 기존 raw trace 재검사로 회수를 시도한다. 기존 filter를 소급 완화하지 않는다.
+    - M2 21은 HF Qwen3-8B로 추가 sampling(문항당 8, 새 seed namespace)을 허용한다.
+      - clean-trace ranking과 문항당 1개 사람 검토는 결과 전에 고정한다.
+      - 거부 시 다른 표본으로 바꾸지 않는다.
+    - M1에는 8B 추가 sampling을 하지 않는다. M1의 P1·P2(31 예상)는 27B teacher 우선 후보다.
+    - 27B 실제 반입·호출은 별도 사용자 승인 전 금지한다(이번에는 계획·manifest만).
+    - scope 역조회·refusal family는 별도 future-data issue(batch007 후보)다. 이번에 추가하지 않는다.
+    - 최종 reasoning dataset은 27B 결과 전에는 freeze하지 않는다.
