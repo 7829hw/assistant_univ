@@ -500,3 +500,13 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - blob·model layer 다운로드, `ollama pull`, import, copy는 금지한다.
     - 동일 artifact의 근거는 HTTP `Docker-Content-Digest`가 `sha256:aaee06c39dcf2437cde036998d960e1fc1494b8191be7cc9657d01e509097813`와 전체 일치하는 것뿐이다.
     - digest가 일치해도 pull은 별도 사용자 승인이 필요하다.
+79. (2026-10-14, 사용자) 결정 78을 보완한다(78은 그대로 둔다).
+    - registry `library/qwen3.8:27b`에서 받은 manifest body의 raw bytes sha256 `aaee06c39dcf2437cde036998d960e1fc1494b8191be7cc9657d01e509097813`이 과거 `/api/tags` digest와 64 hex 전체가 같다.
+      이를 동일 artifact의 충분한 근거로 인정한다.
+    - 상태는 PROVENANCE_REGISTRY_BODY_HASH_MATCH다. 이전 판정 PARTIAL·UNRESOLVED는 기록으로 남긴다.
+    - `ollama pull qwen3.8:27b`(기존 컨테이너·store)를 승인한다.
+    - teacher 생성은 반입 뒤 exact digest, metadata, 10문항 compatibility gate를 모두 통과한 경우에만 한다(`IMPORT_AND_TEACHER_PLAN.md`).
+80. (2026-10-14, 사용자) teacher 데이터 수집은 데이터 독립성을 위해 모델을 상주시키지 않는다.
+    - 호출마다 `keep_alive: 0`으로 모델을 내리고, 다음 호출 전 빈 상태를 확인한다. unload_per_question보다 엄격하다.
+    - resident·resident_isolated는 쓰지 않는다.
+    - 일반 throughput 실험의 상주 규칙(CLAUDE.md 14번)은 별도이며 이 결정이 바꾸지 않는다.
