@@ -458,3 +458,13 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - 고정 원칙:
       - 다음 full-data SFT에서 답만 있는 레코드를 reasoning 레코드와 섞어 assistant 첫 token `{`를 대량 학습시키지 않는다(결정 69의 기전).
       - full_response는 다음 full-reasoning SFT의 우선 후보이며, 아직 확정 손실이 아니다.
+71. (2026-10-14) p0_sft_003_prep 분석 결론(`sft_dpo_inventory/p0_sft_003_prep/REPORT.md`). 학습·teacher 호출은 하지 않았다.
+    - R70-full이 Base보다 낮은 이유는 혼합 원인(Path D)이다. coverage 편향이 가장 크고, trace 품질은 부차적이며, specialization은 약하다.
+      - R70은 dimension_target 35%, od_ne_dt 32%, Gap A 19%만 남은 teacher-easy subset이다. panel dimension_target 포함 18 → 10.
+      - regression 11: coverage gap 4(그중 3은 v006에도 없는 scope 역조회·refusal), 구조 오류 7.
+    - 403문항 R70 평가는 하지 않는다(R70은 candidate가 아니고 regression이 대부분 설명됨).
+    - missing 84 = M1 59, M2 21, M3 4. 보충 우선순위 P1 30, P2 17, P3 37(`missing_reasoning_manifest.json`).
+    - 추천(사용자 결정 대기):
+      - 27B는 M1의 P1·P2 31문항부터 반입 승인을 요청한다.
+      - M2는 8B 추가 sampling, M3는 재필터한다.
+      - 다음 SFT는 154 전부 reasoning record로 하고, full_response를 우선 후보로 둔다.
