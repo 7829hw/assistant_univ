@@ -477,3 +477,12 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - 27B 실제 반입·호출은 별도 사용자 승인 전 금지한다(이번에는 계획·manifest만).
     - scope 역조회·refusal family는 별도 future-data issue(batch007 후보)다. 이번에 추가하지 않는다.
     - 최종 reasoning dataset은 27B 결과 전에는 freeze하지 않는다.
+73. (2026-10-14) 회수 1단계 결과(`sft_dpo_inventory/p0_sft_003_recovery/REPORT.md`).
+    - M3: 4 RECOVERABLE(token 분할 차이), 사람 검토 승인 3·거부 1.
+    - M2: 168 호출, 새 정답 17문항, 승인 10·거부 6·후보 없음 5.
+    - reasoning coverage 70 → 83/154. 남은 M1 59, M2 11, M3 1.
+    - 27B 대상은 M1 ∩ {P1, P2} = 31로 고정한다.
+      - 과거 승인 teacher는 Ollama `qwen3.8:27b` digest `aaee06c3…` Q4_K_M 17.7 GB다.
+      - 현재 저장소에 없고 출처 기록도 없어 사용자 지정이 필요하다. 반입하지 않았다.
+    - 사전 등록 자동 clean ranking은 사람 판정과 맞지 않았다(승인 10 중 SELF_CORRECTED 9, 거부 6 중 CLEAN_DIRECT 3).
+      다음 수집 전에 구조 오류 감지 규칙을 별도로 사전 등록할 것을 권한다.
