@@ -46,6 +46,7 @@ def main():
     ap.add_argument("--resume", action="store_true")
     a = ap.parse_args()
     import collect_p0_traces_hf as C
+    from geoflow.planner import parse_planner_json
     if hashlib.sha256(MANIFEST.read_bytes()).hexdigest() != MANIFEST_SHA:
         raise SystemExit("manifest sha256 불일치")
     man = json.loads(MANIFEST.read_text(encoding="utf-8"))["items"]
@@ -78,12 +79,16 @@ def main():
                 opts = {"temperature": 0} if k == 0 else {**SAMPLING, "seed": SEED_BASE + 10 * idx + k}
                 res = O.chat(msgs, opts)
                 calls += 1
+                try:
+                    parsed = parse_planner_json(res["content"]) if res["content"] else None
+                except Exception as error:  # noqa: BLE001 - 판정은 G5에서 한다. 여기서는 기록만
+                    parsed = {"_parse_error": type(error).__name__}
                 row = {"trace_id": f"{x['item_id']}:27b:{'greedy' if k == 0 else 'sample'}:{k}", "item_id": x["item_id"], "item_index": idx,
-                       "sample_index": k, "kind": "greedy" if k == 0 else "sample", "question": q,
+                       "sample_index": k, "kind": "greedy" if k == 0 else "sample", "mode": "greedy" if k == 0 else "sampling", "question": q,
                        "teacher_model": O.MODEL, "teacher_digest": O.EXPECTED_DIGEST, "ollama_version": version,
                        "prompt_sha256": sha, "generation_batch": "p0_sft_003_teacher27b/m1_p12",
                        "seed": opts.get("seed"), "options": opts, "think": True, "keep_alive": 0,
-                       "thinking_chars": len(res["thinking"]), **res, "at": datetime.now(timezone.utc).isoformat()}
+                       "thinking_chars": len(res["thinking"]), **res, "parsed_output": parsed, "at": datetime.now(timezone.utc).isoformat()}
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
                 f.flush()
                 bad = []

@@ -510,3 +510,7 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - 호출마다 `keep_alive: 0`으로 모델을 내리고, 다음 호출 전 빈 상태를 확인한다. unload_per_question보다 엄격하다.
     - resident·resident_isolated는 쓰지 않는다.
     - 일반 throughput 실험의 상주 규칙(CLAUDE.md 14번)은 별도이며 이 결정이 바꾸지 않는다.
+81. (2026-10-14, 사용자) 27B teacher G2 metadata 기준을 보완한다(G2_COMPATIBILITY_RULE_SUPPLEMENTED). 기존 G2 FAIL 기록은 그대로 둔다.
+    - thinking 기준: template 원문에 `<think>`가 있거나(Route A), RENDERER·PARSER가 있고 capabilities에 thinking이 있으면(Route B) 충족한다. `qwen3.8:27b`(digest `aaee06c3…`)는 Route B(`RENDERER qwen3.8`, `PARSER qwen3.5`)다.
+    - `family = qwen35`, `general.architecture = qwen35`를 이 exact-digest artifact의 정상 qwen3 계열 metadata로 인정한다.
+    - G3 이후 hard gate, generation 설정, quality_gate_v1, ranking, 사람 검토 기준은 바꾸지 않는다. 재개 계획은 `p0_sft_003_teacher27b/G2_SUPPLEMENT.md`.

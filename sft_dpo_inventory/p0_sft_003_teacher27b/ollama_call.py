@@ -6,6 +6,7 @@
 - 결과: 응답 원문 필드 + guard 관측값.
 """
 import hashlib
+import subprocess
 import threading
 import time
 
@@ -14,6 +15,8 @@ import httpx
 HOST = "http://localhost:11434"
 MODEL = "qwen3.8:27b"
 EXPECTED_DIGEST = "aaee06c39dcf2437cde036998d960e1fc1494b8191be7cc9657d01e509097813"
+GPU_UUID = "GPU-d4308fbb-d17f-3609-676a-935c6072c831"
+TIMEOUT_S = 3600   # G2_SUPPLEMENT.md 4절: 호출당 1회, 재시도 없음
 
 
 def ps():
@@ -29,7 +32,31 @@ def wait_empty(limit=60):
     raise RuntimeError("Ollama /api/ps가 비지 않는다(다른 모델이 올라와 있음)")
 
 
+def sh(cmd):
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    return r.returncode, r.stdout.strip()
+
+
+def precheck():
+    """호출 전 GPU·컨테이너 확인(G2_SUPPLEMENT.md 4절). 어기면 예외."""
+    rc_h, host = sh(["nvidia-smi", "-L"])
+    rc_c, cont = sh(["docker", "exec", "ollama", "nvidia-smi", "-L"])
+    _, apps = sh(["nvidia-smi", "--query-compute-apps=pid,process_name", "--format=csv,noheader"])
+    _, state = sh(["docker", "inspect", "ollama", "--format", "{{.State.Status}} {{.RestartCount}} {{.State.StartedAt}}"])
+    out = {"host_gpu_visible": rc_h == 0 and GPU_UUID in host, "container_gpu_visible": rc_c == 0 and GPU_UUID in cont,
+           "compute_apps": [x for x in apps.splitlines() if x.strip()], "container_state": state}
+    bad = [k for k in ("host_gpu_visible", "container_gpu_visible") if not out[k]]
+    if out["compute_apps"]:
+        bad.append("compute_apps_nonzero")
+    if not state.startswith("running "):
+        bad.append("container_not_running")
+    if bad:
+        raise RuntimeError(f"precheck 실패: {bad} {out}")
+    return out
+
+
 def chat(messages, options):
+    pre = precheck()
     waited = wait_empty()
     obs, stop = [], threading.Event()
 
@@ -46,17 +73,19 @@ def chat(messages, options):
     th.start()
     t0 = time.perf_counter()
     try:
-        r = httpx.post(f"{HOST}/api/chat", timeout=3600, json={
+        r = httpx.post(f"{HOST}/api/chat", timeout=TIMEOUT_S, json={
             "model": MODEL, "messages": messages, "stream": False, "think": True, "options": options, "keep_alive": 0})
         status = r.status_code
         body = r.json()
+    except Exception as error:  # noqa: BLE001 - 시간 초과·연결 오류는 실패 호출로 기록한다(재시도 없음)
+        status, body = None, {"error": f"{type(error).__name__}: {error}"}
     finally:
         stop.set()
         th.join(timeout=5)
     wall = time.perf_counter() - t0
     msg = body.get("message") or {}
     target = [o for o in obs if o["name"] and o["name"].startswith("qwen3.8:27b")]
-    guard = {"waited_empty_s": waited, "ps_samples": len(target),
+    guard = {"precheck": pre, "waited_empty_s": waited, "ps_samples": len(target),
              "gpu_full": bool(target) and all(o["size"] and o["size_vram"] == o["size"] for o in target),
              "context_length": target[0]["context_length"] if target else None,
              "ps_digest": target[0]["digest"] if target else None}
