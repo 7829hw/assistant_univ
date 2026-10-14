@@ -25,6 +25,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT / "sft_dpo_inventory/logprob_diag"))
 sys.path.insert(0, str(ROOT / "sft_dpo_inventory/pilot_003/vendor100"))
+sys.path.insert(0, str(ROOT / "sft_dpo_inventory/calibration_001"))
 
 S = Path("/data/hwkim/sftdpo_work/serving_vllm_fp8/scores")
 OLD = Path("/data/hwkim/sftdpo_work/serving_vllm/scores")
@@ -203,6 +204,22 @@ def latency():
         if isinstance(out.get(a), dict) and isinstance(out.get(b), dict):
             pairs[f"{a} → {b}"] = {"median_ratio": round(out[b]["item_model_seconds_median"] / out[a]["item_model_seconds_median"], 3),
                                    "tok_s_ratio": round(out[b]["gen_tokens_per_s_median"] / out[a]["gen_tokens_per_s_median"], 3)}
+    # FP8이 BF16보다 빠른지(같은 문항 쌍): 문항별 생성 속도(생성 token 합 / 호출 시간 합)의 비 FP8/BF16, 문항 bootstrap 95% CI
+    import analyze_cal as A  # noqa: E402  (boot_ci)
+
+    def item_speed(name):
+        d = json.loads((lat / f"{name}_s1.json").read_text(encoding="utf-8"))
+        return {r["id"]: sum(c.get("eval_count") or 0 for c in r.get("llm_calls") or []) /
+                max(1e-9, sum((c.get("duration_ms") or 0) for c in r.get("llm_calls") or []) / 1000) for r in d["rows"]}
+    paired = {}
+    for m in ("base", "final"):
+        a, b = item_speed(f"lat-vllm-bf16-{m}"), item_speed(f"lat-vllm-fp8-{m}")
+        ids = sorted(set(a) & set(b))
+        r = np.log(np.array([b[i] / a[i] for i in ids]))
+        lo, hi = A.boot_ci(r, np.random.default_rng(20261109))
+        paired[f"bf16→fp8 {m}"] = {"items": len(ids), "speed_ratio_geomean": round(float(np.exp(r.mean())), 3),
+                                    "ci95": [round(float(np.exp(lo)), 3), round(float(np.exp(hi)), 3)], "fp8_faster_confirmed": bool(lo > 0)}
+    pairs["paired_item_speed"] = paired
     (HERE / "latency.json").write_text(json.dumps({"items": "latency_ids.txt(30)", "cells": out, "ratios": pairs}, ensure_ascii=False, indent=1) + "\n",
                                        encoding="utf-8")
     for k, v in out.items():
