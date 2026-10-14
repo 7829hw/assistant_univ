@@ -1,0 +1,68 @@
+# p0_sft_004 full154 SFT(결정 86). p0_sft_002 recipe와 같고 데이터는 reviewed_reasoning_v001(154, 전부 reasoning), 1 epoch.
+# 두 arm(full154·json154)은 같은 레코드를 쓰고 thinking.loss_scope·data·output·profile 경로만 다르다.
+model:
+  name_or_path: Qwen/Qwen3-8B
+  revision: b968826d9c46dd6066d109eabc6255188de91218
+  trust_remote_code: false
+  load_in_4bit: false
+  attn_implementation: sdpa
+data:
+  train: sft_dpo_inventory/p0_sft_004/datasets/full154.jsonl
+  valid: sft_dpo_inventory/p0_sft_004/datasets/valid_empty.jsonl
+  manifest: sft_dpo_inventory/p0_sft_004/datasets/full154_trainer_manifest.json
+  contract: p0
+  p0_prompt: evaluation/partial_grounding/prompts/partial_p0.yaml
+  p0_prompt_sha256_prefix: d7f4c12a
+chat_template_kwargs:
+  enable_thinking: true
+training:
+  output_dir: /data/hwkim/p0_sft_004/checkpoints/full154
+  num_train_epochs: 1
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 1
+  learning_rate: 5.0e-05
+  warmup_ratio: 0
+  max_seq_length: 11392
+  bf16: true
+  fp16: false
+  gradient_checkpointing: true
+  eval_strategy: steps
+  save_strategy: steps
+  save_total_limit: 6
+  logging_steps: 1
+  report_to: none
+  seed: 42
+  optim: adamw_torch
+  dataloader_num_workers: 0
+  dataloader_pin_memory: false
+  torch_compile: false
+  gradient_checkpointing_kwargs:
+    use_reentrant: false
+  eval_steps: 2
+  save_steps: 0.25
+  warmup_steps: 1
+  disable_tqdm: true
+lora:
+  enabled: true
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+safety:
+  unified_memory: false
+  reserve_fraction: 0.2
+  reserve_gib: 16
+  min_disk_gib: 20
+profiling:
+  enabled: true
+  output: /data/hwkim/p0_sft_004/metrics/full154_sft_profile.json
+thinking:
+  loss_scope: full_response
