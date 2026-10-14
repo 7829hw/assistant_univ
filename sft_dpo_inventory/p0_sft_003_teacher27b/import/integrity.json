@@ -1,0 +1,106 @@
+{
+ "g1_digest": {
+  "expected": "aaee06c39dcf2437cde036998d960e1fc1494b8191be7cc9657d01e509097813",
+  "actual": "aaee06c39dcf2437cde036998d960e1fc1494b8191be7cc9657d01e509097813",
+  "exact_match": true,
+  "size": 17741872154,
+  "size_matches_manifest_layers_plus_config": true,
+  "verdict": "PASS"
+ },
+ "g2_metadata": {
+  "hard": {
+   "quantization_q4_k_m": {
+    "value": "Q4_K_M",
+    "pass": true
+   },
+   "capabilities_thinking": {
+    "value": [
+     "completion",
+     "vision",
+     "tools",
+     "thinking"
+    ],
+    "past": [
+     "completion",
+     "vision",
+     "tools",
+     "thinking"
+    ],
+    "pass": true,
+    "identical_to_past": true
+   },
+   "family_qwen3_lineage": {
+    "family": "qwen35",
+    "general.architecture": "qwen35",
+    "pass": true,
+    "note": "원문 'qwen35'(Qwen3.5 계열 architecture). 'qwen3 계열'로 해석해 PASS로 적되 해석이 들어간 항목임을 밝힌다"
+   },
+   "template_has_think": {
+    "template": "{{ .Prompt }}",
+    "template_sha256": "b507b9c2f6ca642bffcd06665ea7c91f235fd32daeefdf875a0f938db05fb315",
+    "contains_<think>": false,
+    "pass": false,
+    "note": "template 원문은 '{{ .Prompt }}'(통과용)이다. thinking 처리는 Modelfile의 RENDERER qwen3.8 / PARSER qwen3.5(Ollama 내장 코드)가 한다. 사전 등록 기준(template 원문에 <think>)으로는 FAIL"
+   }
+  },
+  "record": {
+   "parameters": {
+    "top_k": "20",
+    "top_p": "0.95",
+    "draft_num_predict": "4",
+    "min_p": "0",
+    "presence_penalty": "0",
+    "repeat_penalty": "1",
+    "temperature": "1"
+   },
+   "parameters_identical_to_past": true,
+   "renderer": "qwen3.8",
+   "parser": "qwen3.5",
+   "thinking_field": {
+    "values": [
+     false,
+     "low",
+     "medium",
+     "xhigh"
+    ],
+    "default": "medium"
+   },
+   "requires": "0.32.12",
+   "modelfile_directives": [
+    "FROM /root/.ollama/models/blobs/sha256-f5f1dd8920d417aac2718b0bda3403da274301efdd6760b4f0f4b864ff2ad57d",
+    "FROM /root/.ollama/models/blobs/sha256-ac3714bfdddeca31351f2752bf1a63f266f4df87c0b68c895e44945ca704448e",
+    "TEMPLATE {{ .Prompt }}",
+    "RENDERER qwen3.8",
+    "PARSER qwen3.5",
+    "PARAMETER temperature 1",
+    "PARAMETER top_k 20",
+    "PARAMETER top_p 0.95",
+    "PARAMETER draft_num_predict 4",
+    "PARAMETER min_p 0",
+    "PARAMETER presence_penalty 0",
+    "PARAMETER repeat_penalty 1"
+   ],
+   "model_info_context_length": 262144,
+   "general.file_type": 15,
+   "parameter_size": "27.3B",
+   "runner": "llamacpp",
+   "model_blob_matches_registry": true,
+   "projector_blob_matches_registry": true,
+   "deviations": [
+    "thinking 필드 values [false, low, medium, xhigh], default medium: 0.40.3 표시 형식. 과거(0.35.1) 기록에는 이 필드가 없어 비교 기준 없음. think:true가 어느 수준으로 매핑되는지는 미확인",
+    "context_length 262,144는 model_info 값. /api/ps 실측은 compatibility 호출이 없어 미측정",
+    "과거 기록(grounding_v11 meta.model_runtime)에는 template·renderer 원문이 없어 비교 기준 없음"
+   ]
+  },
+  "verdict": "FAIL",
+  "failed": [
+   "template_has_think"
+  ]
+ },
+ "ollama_version": "0.40.3",
+ "qwen3_8b_digest_unchanged": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
+ "show_after_sha256": "f481b20feedd1706d7b82c0c70f4acd080b1a3b7dcb204ce62b35df95d6bb3c4",
+ "next_gate": "G3 미실행(hard gate FAIL 뒤 단계는 실행하지 않음)",
+ "model_calls": 0,
+ "model_deleted": false
+}
