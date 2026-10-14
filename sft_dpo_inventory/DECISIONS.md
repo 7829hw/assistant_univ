@@ -536,3 +536,8 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - 최종 답은 frozen v006 P0 gold이고 답만 있는 레코드는 0이다.
     - dataset sha256 `071ccdbe…`, 순서 sha256 `8522deaa…`. 결과를 보고 고치지 않는다.
     - 남은 6에 새 teacher sampling은 하지 않는다.
+86. (2026-10-14, 사용자) p0_sft_004 Full-Reasoning SFT 1차를 사전 등록대로 실행한다(`sft_dpo_inventory/p0_sft_004/PLAN.md`).
+    - FULL154(full_response)와 JSON154(json_only)는 reviewed_reasoning_v001 154를 같은 입력으로 쓰고 loss mask만 다르다. 1 epoch, p0_sft_002 recipe, seed 42.
+    - Base·FULL154·JSON154 셋을 같은 HF harness로 403문항 평가하고, 154 training recall도 잰다.
+    - candidate는 PLAN 9·10절의 gate·규칙으로만 정한다. 둘 다 미달이면 NONE·NOT_READY다.
+    - 결과를 보고 데이터·recipe를 바꾸지 않는다.
