@@ -531,3 +531,8 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - Track B: 모델 호출 0. gold 4/4 CLEAR_GOLD. 기존 20 call의 실패는 모두 생략(dimension_target 14, od_role 15)이고 의미 이해 실패와 P0 prompt coverage gap이다. canonical rationale 후보 4개는 학습 데이터가 아니고 coverage에 넣지 않는다.
     - 남은 6 = IMPLICIT_PICKUP_REPEAT_FAILURE 4 + NO_CORRECT_27B_TRACE 1(b006-19, 하차 쪽 같은 꼴) + TOP1_REJECTED 1(b006-34).
     - 다음 dataset 전략(148만 쓸지, canonical rationale을 섞을지, P0 prompt 실험)은 사용자가 정한다. dataset freeze·SFT·DPO·prompt 변경은 0이고, `qwen3.8:27b`는 store에 둔다.
+85. (2026-10-14, 사용자) reviewed_reasoning_v001(154)을 freeze한다(`sft_dpo_inventory/reviewed_reasoning_v001/`).
+    - 구성은 모델 생성 승인 148 + manual canonical 6이다. 6은 b006-05·15·20·26·19·34이고, gold 6/6 CLEAR_GOLD, canonical 6/6 APPROVE_CANONICAL이다.
+    - 최종 답은 frozen v006 P0 gold이고 답만 있는 레코드는 0이다.
+    - dataset sha256 `071ccdbe…`, 순서 sha256 `8522deaa…`. 결과를 보고 고치지 않는다.
+    - 남은 6에 새 teacher sampling은 하지 않는다.
