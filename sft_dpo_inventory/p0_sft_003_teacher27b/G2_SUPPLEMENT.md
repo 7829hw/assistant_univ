@@ -57,3 +57,13 @@ G2 보완(이 문서) → commit·push → G3 → PASS일 때만 G4 → raw comm
 
 - G3 FAIL이면 G4 이후는 0회다.
 - M1 P3, M2 실패 11, M3 실패 1은 이번 batch에 넣지 않는다. 새 SFT·DPO 0. `qwen3.8:27b`는 store에 둔다.
+
+## 7. G3 첫 실행 중단과 guard 순서 수정(2026-10-14)
+
+- 첫 G3 실행은 1호출 뒤 중단됐다(`compatibility/raw/ABORTED_calls_run1.jsonl`, `compatibility/ABORTED_compat_run1.log`).
+  - 1번째 호출(`ann-d983889cf8c496178106`)은 기준 1–6을 모두 충족했다.
+  - 2번째 호출 전 precheck가 GPU compute 프로세스 1개(pid 963761)를 보고 멈췄다.
+    - 직전 호출의 `keep_alive: 0` 뒤 종료 중이던 Ollama runner였다. 몇 초 뒤 사라졌고 `/api/ps`는 이미 비어 있었다.
+  - 원인: precheck를 `/api/ps` 빈 상태 대기보다 먼저 실행한 순서 오류(guard 구현 문제). G3 기준 실패가 아니다.
+- 수정: 호출 전에 `/api/ps` 빈 상태와 GPU compute 프로세스 0을 함께 기다린 뒤(최대 60초) precheck를 실행한다. precheck 항목·기준은 그대로다.
+- 중단된 출력은 ABORTED로 두고 판정에 쓰지 않는다. G3를 처음부터 다시 측정한다. 무효 측정을 대체하는 것이며 재실행(rerun)이 아니다.

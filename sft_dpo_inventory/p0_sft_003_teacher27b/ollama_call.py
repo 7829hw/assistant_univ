@@ -23,13 +23,20 @@ def ps():
     return httpx.get(f"{HOST}/api/ps", timeout=10).json().get("models") or []
 
 
+def compute_apps():
+    r = subprocess.run(["nvidia-smi", "--query-compute-apps=pid,process_name", "--format=csv,noheader"],
+                       capture_output=True, text=True, timeout=60)
+    return [x for x in r.stdout.splitlines() if x.strip()]
+
+
 def wait_empty(limit=60):
+    """`/api/ps` 빈 상태와 GPU compute 프로세스 0(직전 runner 종료)을 함께 기다린다."""
     t0 = time.time()
     while time.time() - t0 < limit:
-        if not ps():
+        if not ps() and not compute_apps():
             return round(time.time() - t0, 1)
         time.sleep(1)
-    raise RuntimeError("Ollama /api/ps가 비지 않는다(다른 모델이 올라와 있음)")
+    raise RuntimeError("Ollama /api/ps가 비지 않거나 GPU compute 프로세스가 남아 있다")
 
 
 def sh(cmd):
@@ -41,10 +48,9 @@ def precheck():
     """호출 전 GPU·컨테이너 확인(G2_SUPPLEMENT.md 4절). 어기면 예외."""
     rc_h, host = sh(["nvidia-smi", "-L"])
     rc_c, cont = sh(["docker", "exec", "ollama", "nvidia-smi", "-L"])
-    _, apps = sh(["nvidia-smi", "--query-compute-apps=pid,process_name", "--format=csv,noheader"])
     _, state = sh(["docker", "inspect", "ollama", "--format", "{{.State.Status}} {{.RestartCount}} {{.State.StartedAt}}"])
     out = {"host_gpu_visible": rc_h == 0 and GPU_UUID in host, "container_gpu_visible": rc_c == 0 and GPU_UUID in cont,
-           "compute_apps": [x for x in apps.splitlines() if x.strip()], "container_state": state}
+           "compute_apps": compute_apps(), "container_state": state}
     bad = [k for k in ("host_gpu_visible", "container_gpu_visible") if not out[k]]
     if out["compute_apps"]:
         bad.append("compute_apps_nonzero")
@@ -56,8 +62,8 @@ def precheck():
 
 
 def chat(messages, options):
-    pre = precheck()
     waited = wait_empty()
+    pre = precheck()
     obs, stop = [], threading.Event()
 
     def poll():
