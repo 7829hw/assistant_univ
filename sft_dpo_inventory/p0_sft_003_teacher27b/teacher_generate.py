@@ -116,7 +116,7 @@ def main():
                     path.rename(a.raw_dir / "ABORTED_traces.jsonl")
                     raise SystemExit(f"guard 중단: {bad}")
     summary = {"started_at": started, "finished_at": datetime.now(timezone.utc).isoformat(), "calls_this_run": calls,
-               "manifest": str(a.manifest.relative_to(ROOT)), "manifest_sha256": a.manifest_sha, "order_sha256": a.order_sha,
+               "manifest": str(a.manifest.resolve().relative_to(ROOT)), "manifest_sha256": a.manifest_sha, "order_sha256": a.order_sha,
                "seed_base": a.seed_base, "generation_batch": a.batch, "model": O.MODEL, "digest": O.EXPECTED_DIGEST,
                "ollama_version": version, "prompt_sha256": sha, "speed_threshold": a.speed_threshold,
                "traces_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
