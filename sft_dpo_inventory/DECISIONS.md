@@ -514,3 +514,8 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - thinking 기준: template 원문에 `<think>`가 있거나(Route A), RENDERER·PARSER가 있고 capabilities에 thinking이 있으면(Route B) 충족한다. `qwen3.8:27b`(digest `aaee06c3…`)는 Route B(`RENDERER qwen3.8`, `PARSER qwen3.5`)다.
     - `family = qwen35`, `general.architecture = qwen35`를 이 exact-digest artifact의 정상 qwen3 계열 metadata로 인정한다.
     - G3 이후 hard gate, generation 설정, quality_gate_v1, ranking, 사람 검토 기준은 바꾸지 않는다. 재개 계획은 `p0_sft_003_teacher27b/G2_SUPPLEMENT.md`.
+82. (2026-10-14, 결과 기록) 27B teacher recovery(M1 ∩ {P1, P2} 31문항)의 결과를 기록한다. 기준은 결정 79–81과 사전 등록 그대로다.
+    - G3 compatibility PASS 10/10. G4 155호출(stop 155, GPU 100%), EXACT_OR_SEMANTIC_MATCH 123, 정답이 있는 문항 27/31.
+    - 사람 검토 승인 27, 거부 0. 회수 못 한 4문항(b006-05·15·20·26, 모두 Gap A 암시적 pickup)은 TEACHER_RECOVERY_FAILED이다.
+    - reasoning coverage는 83에서 110/154가 됐다(`p0_sft_003_teacher27b/generation/coverage_after.json`). 최종 reasoning dataset은 freeze하지 않았고 SFT·DPO는 0이다.
+    - M1 P3 28문항, M2 실패 11, M3 실패 1의 27B 확대는 하지 않았다. 별도 결정이 필요하다. `qwen3.8:27b`는 store에 둔다.
