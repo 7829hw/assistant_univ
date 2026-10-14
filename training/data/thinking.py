@@ -11,6 +11,9 @@ with ``metadata.format == "thinking"``; the trainer renders them with this modul
   - ``full_response``: completion = whole response + EOS (reasoning and JSON are supervised).
   - ``json_only``: the reasoning is appended to the prompt; completion = JSON + EOS (SFT only). DPO pairs carry
     different reasoning for chosen and rejected, so they cannot share a prompt; ``json_only`` is refused for DPO.
+  - ``by_source`` (decision 86, SFT only): each record's scope follows its source. Teacher records
+    (``metadata.source == "teacher"``) use ``full_response``; HF self traces use ``json_only``. The data builder marks
+    ``metadata.loss_scope`` with ``assign_loss_scope``; rendering refuses a missing or mismatched mark.
 - Teacher traces (decision 40-A, ``source: teacher`` rows from the Ollama teacher collector) carry ``thinking`` and
   ``content`` but no decoded ``raw_text`` or generated token ids. ``normalize_trace`` composes the same response
   layout as the HF traces, ``<think>\n{thinking}\n</think>\n\n{content}``; records built from them are marked
@@ -20,9 +23,12 @@ import hashlib
 import json
 
 FORMAT = "thinking"
-LOSS_SCOPES = ("full_response", "json_only")
+LOSS_SCOPES = ("full_response", "json_only", "by_source")
 THINK_END = "</think>"
 TEACHER = "teacher"
+BY_SOURCE = "by_source"
+#: Decision 86 (AA): SFT loss scope by record source.
+SOURCE_LOSS_SCOPES = {TEACHER: "full_response", "hf": "json_only"}
 
 
 def split_response(text):
@@ -51,6 +57,30 @@ def loss_scope(config):
     return scope
 
 
+def record_source(record):
+    """``teacher`` for teacher-trace records, ``hf`` otherwise (HF self traces)."""
+    return TEACHER if (record.get("metadata") or {}).get("source") == TEACHER else "hf"
+
+
+def assign_loss_scope(record):
+    """Copy of an SFT record with ``metadata.loss_scope`` set from its source (decision 86)."""
+    return {**record, "metadata": {**(record.get("metadata") or {}), "loss_scope": SOURCE_LOSS_SCOPES[record_source(record)]}}
+
+
+def sft_loss_scope(record, config):
+    """Loss scope of one SFT record. ``by_source`` needs the builder's mark and checks it against the source."""
+    scope = loss_scope(config)
+    if scope != BY_SOURCE:
+        return scope
+    want = SOURCE_LOSS_SCOPES[record_source(record)]
+    marked = (record.get("metadata") or {}).get("loss_scope")
+    if marked is None:
+        raise ValueError("loss_scope by_source needs metadata.loss_scope (assign_loss_scope in the data builder)")
+    if marked != want:
+        raise ValueError(f"metadata.loss_scope {marked!r} does not match source {record_source(record)!r} ({want!r})")
+    return want
+
+
 def render_thinking(tokenizer, record, config, stage, prompt, pids, args):
     """Prompt/completion strings for one thinking record; mirrors trainer_common.render_records guards."""
     if not (config.get("chat_template_kwargs") or {}).get("enable_thinking"):
@@ -58,6 +88,7 @@ def render_thinking(tokenizer, record, config, stage, prompt, pids, args):
     scope = loss_scope(config)
     row = {"prompt": prompt}
     if stage == "sft":
+        scope = sft_loss_scope(record, config)
         content = record["messages"][-1]["content"]
         reasoning, answer = split_response(content)
         if scope == "json_only":
