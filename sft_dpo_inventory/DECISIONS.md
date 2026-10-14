@@ -84,7 +84,7 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - 판정 기준: 채점(`grounding_check`)이 보는 핵심 필드(측정값·사건, 집계 구조, 조건, 장소 값)에서 추론이 틀렸는데 JSON만
       맞으면 "우연히 정답"이다. 채점이 보지 않는 필드(role, answer, source, id, text)의 오류는 "경미"로 둔다.
     - 타당 3, 타당(경미) 5, 우연히 정답 2(`ann-d983889cf8c496178106:sample:7`, `ann-ea359d5569ef6070f9e4:sample:3`).
-24. SFT의 loss 범위는 `json_only`다. 결정 3(`full_response`)을 대체한다. 결정 23의 규칙대로라면 `full_response` 유지였지만,
+24. **(결정 86(AA)으로 바뀜: teacher 출처만 `full_response`)** SFT의 loss 범위는 `json_only`다. 결정 3(`full_response`)을 대체한다. 결정 23의 규칙대로라면 `full_response` 유지였지만,
     판정이 경계선이라 사용자가 보수적으로 골랐다.
 25. trace 선별 기준은 바꾸지 않는다. 채점 기준과 같게 두고, role이 gold와 달라도 채택한다.
 26. DPO는 `full_response`로 유지하고, PROTOCOL(결정 22)은 바꾸지 않는다. DPO는 `json_only`를 지원하지 않으므로, 최종 모델은
@@ -448,3 +448,23 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
       멈춘 기록은 `pilot_003/aborted_device_failure/ABORTED_*`로 남긴다. 학습 설정·데이터·선택 규칙은 바꾸지 않는다.
     - GPU 번호가 바뀌었으므로 `gpu_lib.sh`는 host `nvidia-smi`에서 번호 → UUID를 매번 만들고, Ollama GPU는 UUID `48f798cc…`로 정한다. 결정 83의 나머지 규칙은 그대로다.
     - 장치 일치 확인(`device_check/compare.json`)은 남은 세 장치(물리 GPU 동일, 드라이버 동일)에 그대로 적용한다.
+
+## 2026-10-14 — pilot_003 뒤 원인 분석과 서빙 경로 확인(`pilot_003_followup`, `serving_vllm`)
+
+85. (2026-10-14, 사용자) 결정 Z. 다음 작업은 원인 분석과 vLLM 서빙 경로 확인이다. 학습은 하지 않는다.
+86. (2026-10-14, 사용자) 결정 AA. 다음 판(pilot_004)의 SFT 손실 범위를 출처별로 나눈다.
+    - teacher 출처 trace는 `full_response`(추론과 JSON 모두 학습)다.
+    - HF 자체 trace는 `json_only`를 유지한다.
+    - 결정 24를 이렇게 바꾼다. 이번에는 구현과 시험만 하고, 학습에는 쓰지 않는다.
+87. (2026-10-14, 사용자) 결정 AB. Ollama 0.40.3을 앞으로의 기준 버전으로 받아들인다.
+    - E 참고 셀은 0.40.3에서 잰 값을 쓴다.
+    - teacher trace는 0.35.1에서 모았지만 gold로 걸렀으므로 그대로 쓴다.
+    - PROTOCOL_v3 5절 표에 있는데 pilot_003에서 빠진 aux_test_v1의 E 셀을 잰다. 참고 셀이며 판정에는 쓰지 않는다.
+88. (2026-10-14, 사용자) 결정 AC. 운영 규칙.
+    - 실행 중인 스크립트 파일은 고치지 않는다. 바꿔야 하면 새 파일을 만들어 다음 실행부터 쓴다(`CLAUDE.md`에 추가).
+    - 다음 판 데이터는 유형별 상한을 둔다. 개발 셋 대비 분포 차이(TV)를 pilot_002 수준(0.09 이하)으로 맞춘다.
+    - 결정 6에 따라 뺀 batch006 쌍 4개(14·17·18·19)는 그대로 둔다.
+89. (2026-10-14, 사용자) 결정 AD. vLLM 서빙 경로 확인을 승인한다.
+    - vLLM을 저장소 밖 별도 가상환경에 설치한다. 버전을 고정하고, 나온 지 2주 이상 된 버전을 쓴다.
+    - 이 작업에서는 결정 Y(83)처럼 GPU 0–3을 쓸 수 있다(결정 84 뒤 남은 3장). 같은 GPU 확인 규칙을 지키고, Ollama 측정 중에는 Ollama GPU(`48f798cc…`)에서 다른 작업을 하지 않는다.
+    - 업체 100과 aux_test_v1은 쓰지 않는다.

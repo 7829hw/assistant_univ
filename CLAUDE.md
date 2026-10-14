@@ -55,6 +55,7 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
      work across GPUs, compare HF sampling of 5 items with the same seed on each GPU against GPU 3 byte for byte; if any GPU
      differs, measure all samples of a cell on one GPU and both cells of a paired comparison on the same GPU. Record the
      device of every sample.
+     Decision 89 (2026-10-14) allows the same GPUs and checks for the vLLM serving check (`serving_vllm`).
    - HF runs with `CUDA_VISIBLE_DEVICES=3` (or `=2` for the spare); inside the process it appears as `cuda:0`. Do not
      change `CUDA_DEVICE_ORDER`.
    - Never unload Ollama models yourself and never touch the container to free a GPU. If an Ollama measurement is
@@ -126,3 +127,6 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
     - If any file is in both lists, or the rebase hits a conflict, stop (abort the rebase) and report.
     - Before adding a decision, fetch the remote and use the next free number in `sft_dpo_inventory/DECISIONS.md`.
     - Never edit commits or files that another session pushed.
+15. Running scripts (decision 88, 2026-10-14). Never edit a script file while a process is executing it: bash reads scripts
+    incrementally, so an edit can make the running shell execute different or partial lines. If a change is needed, write a new
+    file and use it from the next run.
