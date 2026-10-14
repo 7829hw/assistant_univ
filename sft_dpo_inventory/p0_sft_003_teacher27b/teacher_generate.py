@@ -10,6 +10,8 @@
 - guard: 호출 중 size_vram == size, tok/s ≥ --speed-threshold(compatibility 중앙값의 0.5), GPU compute 프로세스 수 ≤ 1(Ollama runner).
   어기면 중단하고 원문 파일을 ABORTED_로 바꾼다.
 - 이어 받기(기반 장애만): --resume이면 끝난 (item, sample)을 건너뛴다.
+- 다른 대상 batch(예: p0_sft_003_teacher27b_remaining)는 --manifest·--manifest-sha·--order-sha·--n-items·--raw-dir·--summary-dir·
+  --seed-base·--batch로 지정한다. 기본값은 31문항 batch와 같다(기록 경로만 바뀌고 생성 방식은 같다).
 """
 import argparse
 import hashlib
@@ -44,22 +46,30 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--speed-threshold", type=float, required=True)
     ap.add_argument("--resume", action="store_true")
+    ap.add_argument("--manifest", type=Path, default=MANIFEST)
+    ap.add_argument("--manifest-sha", default=MANIFEST_SHA)
+    ap.add_argument("--order-sha", default=ORDER_SHA)
+    ap.add_argument("--n-items", type=int, default=31)
+    ap.add_argument("--raw-dir", type=Path, default=RAW)
+    ap.add_argument("--summary-dir", type=Path, default=HERE / "generation")
+    ap.add_argument("--seed-base", type=int, default=SEED_BASE)
+    ap.add_argument("--batch", default="p0_sft_003_teacher27b/m1_p12")
     a = ap.parse_args()
     import collect_p0_traces_hf as C
     from geoflow.planner import parse_planner_json
-    if hashlib.sha256(MANIFEST.read_bytes()).hexdigest() != MANIFEST_SHA:
+    if hashlib.sha256(a.manifest.read_bytes()).hexdigest() != a.manifest_sha:
         raise SystemExit("manifest sha256 불일치")
-    man = json.loads(MANIFEST.read_text(encoding="utf-8"))["items"]
+    man = json.loads(a.manifest.read_text(encoding="utf-8"))["items"]
     ids = [x["item_id"] for x in man]
-    if hashlib.sha256("\n".join(ids).encode()).hexdigest() != ORDER_SHA or len(ids) != 31:
+    if hashlib.sha256("\n".join(ids).encode()).hexdigest() != a.order_sha or len(ids) != a.n_items:
         raise SystemExit("manifest 순서 hash 불일치")
     tags = {m["name"]: m["digest"] for m in __import__("httpx").get(f"{O.HOST}/api/tags", timeout=10).json()["models"]}
     if tags.get(O.MODEL) != O.EXPECTED_DIGEST:
         raise SystemExit(f"digest 불일치: {tags.get(O.MODEL)}")
     version = __import__("httpx").get(f"{O.HOST}/api/version", timeout=10).json()["version"]
     planner, sha = C.p0_planner()
-    RAW.mkdir(parents=True, exist_ok=True)
-    path = RAW / "traces.jsonl"
+    a.raw_dir.mkdir(parents=True, exist_ok=True)
+    path = a.raw_dir / "traces.jsonl"
     done = set()
     if path.exists():
         if not a.resume:
@@ -76,7 +86,7 @@ def main():
                     continue
                 if gpu_apps() > 1:
                     raise SystemExit("GPU에 다른 compute 프로세스가 있다")
-                opts = {"temperature": 0} if k == 0 else {**SAMPLING, "seed": SEED_BASE + 10 * idx + k}
+                opts = {"temperature": 0} if k == 0 else {**SAMPLING, "seed": a.seed_base + 10 * idx + k}
                 res = O.chat(msgs, opts)
                 calls += 1
                 try:
@@ -85,8 +95,9 @@ def main():
                     parsed = {"_parse_error": type(error).__name__}
                 row = {"trace_id": f"{x['item_id']}:27b:{'greedy' if k == 0 else 'sample'}:{k}", "item_id": x["item_id"], "item_index": idx,
                        "sample_index": k, "kind": "greedy" if k == 0 else "sample", "mode": "greedy" if k == 0 else "sampling", "question": q,
+                       "missing_class": x.get("missing_class"), "group": x.get("group"),
                        "teacher_model": O.MODEL, "teacher_digest": O.EXPECTED_DIGEST, "ollama_version": version,
-                       "prompt_sha256": sha, "generation_batch": "p0_sft_003_teacher27b/m1_p12",
+                       "prompt_sha256": sha, "generation_batch": a.batch,
                        "seed": opts.get("seed"), "options": opts, "think": True, "keep_alive": 0,
                        "thinking_chars": len(res["thinking"]), **res, "parsed_output": parsed, "at": datetime.now(timezone.utc).isoformat()}
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
@@ -102,15 +113,16 @@ def main():
                                   "tps": res["tok_per_s"], "bad": bad}, ensure_ascii=False), flush=True)
                 if bad:
                     f.close()
-                    path.rename(RAW / "ABORTED_traces.jsonl")
+                    path.rename(a.raw_dir / "ABORTED_traces.jsonl")
                     raise SystemExit(f"guard 중단: {bad}")
     summary = {"started_at": started, "finished_at": datetime.now(timezone.utc).isoformat(), "calls_this_run": calls,
-               "manifest_sha256": MANIFEST_SHA, "order_sha256": ORDER_SHA, "model": O.MODEL, "digest": O.EXPECTED_DIGEST,
+               "manifest": str(a.manifest.relative_to(ROOT)), "manifest_sha256": a.manifest_sha, "order_sha256": a.order_sha,
+               "seed_base": a.seed_base, "generation_batch": a.batch, "model": O.MODEL, "digest": O.EXPECTED_DIGEST,
                "ollama_version": version, "prompt_sha256": sha, "speed_threshold": a.speed_threshold,
                "traces_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
                "total_lines": sum(1 for _ in path.read_text(encoding="utf-8").splitlines())}
-    (HERE / "generation").mkdir(exist_ok=True)
-    (HERE / "generation" / "generation_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    a.summary_dir.mkdir(parents=True, exist_ok=True)
+    (a.summary_dir / "generation_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     print("GENERATION_DONE", json.dumps(summary, ensure_ascii=False), flush=True)
 
 

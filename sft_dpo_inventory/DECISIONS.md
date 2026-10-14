@@ -519,3 +519,9 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - 사람 검토 승인 27, 거부 0. 회수 못 한 4문항(b006-05·15·20·26, 모두 Gap A 암시적 pickup)은 TEACHER_RECOVERY_FAILED이다.
     - reasoning coverage는 83에서 110/154가 됐다(`p0_sft_003_teacher27b/generation/coverage_after.json`). 최종 reasoning dataset은 freeze하지 않았고 SFT·DPO는 0이다.
     - M1 P3 28문항, M2 실패 11, M3 실패 1의 27B 확대는 하지 않았다. 별도 결정이 필요하다. `qwen3.8:27b`는 store에 둔다.
+83. (2026-10-14, 사용자) 남은 reasoning 공백 44문항을 두 track으로 나눈다(`p0_sft_003_teacher27b_remaining/PLAN.md`).
+    - 근거: P1/P2 31문항에 exact-digest `qwen3.8:27b`를 쓴 결과는 정답이 있는 문항 27/31, 사람 승인 27/27이었다.
+    - Track A: M1 P3 28 + M2 실패 11 + M3 실패 1 = 40문항에 같은 설정·gate로 27B recovery batch를 한 번 허용한다. seed는 2026101600 + 10 × item_index + sample_index다.
+    - Track B: 같은 조건에서 5/5 실패한 implicit-pickup 4문항(b006-05·15·20·26)은 재생성하지 않는다. 기존 trace로 semantic·contract 진단만 한다.
+    - Track B의 canonical rationale candidate는 학습 데이터가 아니다. coverage에 넣지 않는다.
+    - SFT·DPO, dataset freeze, P0 prompt 변경은 하지 않는다.

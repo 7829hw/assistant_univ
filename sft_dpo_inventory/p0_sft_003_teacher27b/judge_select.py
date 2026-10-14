@@ -9,7 +9,9 @@
   - 학습 원문: `<think>\\n{thinking}\\n</think>\\n\\n{content}`(training.data.thinking.normalize_trace와 같은 꼴).
   - 길이: prompt token(같은 문항 p0_v006_hf trace의 prompt_tokens, P0 messages 동일) + 원문 + eos token + 1 ≤ CAP_SFT_TOTAL.
 - ranking: quality_gate_v1.rank_key. 문항당 1개.
+- 다른 batch는 --raw·--out-dir로 지정한다(기본값은 31문항 batch). 판정·필터·ranking은 같다.
 """
+import argparse
 import collections
 import hashlib
 import json
@@ -29,6 +31,11 @@ GATE_SHA = "f57e2d3e1045fcf7cb00cfd577b5b8850281158bee52c6d3bd3787bd828bf392"
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--raw", type=Path, default=RAW)
+    ap.add_argument("--out-dir", type=Path, default=HERE / "generation")
+    a = ap.parse_args()
+    raw = a.raw
     if hashlib.sha256((HERE / "quality_gate_v1.py").read_bytes()).hexdigest() != GATE_SHA:
         raise SystemExit("quality_gate_v1 sha256 불일치")
     import quality_gate_v1 as G
@@ -36,7 +43,7 @@ def main():
     from build_v004_thinking import CAP_SFT_TOTAL, tokenizer
     from apply_filter import is_loop, loop_metrics
     tok = tokenizer()
-    rows = [json.loads(x) for x in RAW.read_text(encoding="utf-8").splitlines() if x.strip()]
+    rows = [json.loads(x) for x in raw.read_text(encoding="utf-8").splitlines() if x.strip()]
     v006 = {json.loads(x)["metadata"]["source_record_id"]: json.loads(x) for x in
             (ROOT / "training/generated/reviewed_gold_v006_p0/sft_train.jsonl").read_text(encoding="utf-8").splitlines()}
     prompt_tokens = {}
@@ -102,7 +109,7 @@ def main():
                        "selected_flags": pick[0]["quality_gate_v1_flags"] if pick else None, "traces": detail}
         if pick:
             d, r, text = pick
-            selected.append({"item_id": item, "item_index": r["item_index"], "trace_id": r["trace_id"], "kind": r["kind"],
+            selected.append({"item_id": item, "item_index": r["item_index"], "missing_class": r.get("missing_class"), "group": r.get("group"), "trace_id": r["trace_id"], "kind": r["kind"],
                              "sample_index": r["sample_index"], "seed": r["seed"], "options": r["options"],
                              "teacher_model": r["teacher_model"], "teacher_digest": r["teacher_digest"],
                              "ollama_version": r["ollama_version"], "generation_batch": r["generation_batch"],
@@ -120,9 +127,9 @@ def main():
                "selected_flag_counts": dict(collections.Counter(f for s in selected for f in s["quality_gate_v1_flags"])),
                "exclusion_counts": dict(collections.Counter(x for v in items.values() for d in v["traces"] for x in d["excluded"])),
                "not_stop": sum(r["done_reason"] != "stop" for r in rows),
-               "quality_gate_sha256": GATE_SHA, "raw_sha256": hashlib.sha256(RAW.read_bytes()).hexdigest()}
-    out = HERE / "generation"
-    out.mkdir(exist_ok=True)
+               "quality_gate_sha256": GATE_SHA, "raw_sha256": hashlib.sha256(raw.read_bytes()).hexdigest()}
+    out = a.out_dir
+    out.mkdir(parents=True, exist_ok=True)
     (out / "judge.json").write_text(json.dumps({"summary": summary, "items": items}, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     with open(out / "selected_candidates.jsonl", "w", encoding="utf-8") as f:
         for s in selected:
