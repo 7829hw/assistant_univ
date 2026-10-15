@@ -13,6 +13,8 @@
   답하지 않은 문항은 "비교 불가"로 센다. 첫 응답이 실제로 구조 필드(id·concept·role·source)를 생략했는지(Partial 형태)와
   completion 기록(``partial_grounding_completed``)이 남았는지도 센다(보고).
   통과 = 비교 가능한 문항에서 불일치 0, 그리고 셀 meta의 grounding_target이 partial이고 prompt가 ``8b157c9a``. 불일치가 있으면 R2를 시작하지 않는다.
+  **2026-10-15 22:30 고침(결함, 기준을 엄격하게)**: 첫 J5S는 모든 요청이 HTTP 400(입력 8,729 + max_tokens 8,192 > max_model_len 16,384)이라 모델 호출 0건이었는데,
+  비교 가능 0문항에서 "불일치 0"으로 통과했다(무효, ABORTED_*). 이제 비교 가능 문항 ≥ 8/10과 서버 요청 수 > 0도 요구한다.
 """
 import json
 import statistics
@@ -75,7 +77,9 @@ def j5(cell):
     checks = {"grounding_target_partial": cell["meta"].get("grounding_target") == "partial",
               "prompt_8b157c9a": cell["meta"]["planner_prompt_sha256"].startswith("8b157c9a"),
               "fingerprint_791c4a68": cell["meta"]["code_fingerprint"].startswith("791c4a68"),
-              "no_signature_mismatch": all(r["same"] for r in comparable)}
+              "no_signature_mismatch": all(r["same"] for r in comparable),
+              "comparable_at_least_8": len(comparable) >= 8,
+              "server_requests_gt_0": (cell["meta"].get("vllm", {}).get("request_log") or {}).get("requests", 0) > 0}
     return {"pass": all(checks.values()), "checks": checks, "items": len(rows), "comparable": len(comparable),
             "first_response_partial": sum(bool(r.get("first_response_partial")) for r in results),
             "completion_recorded": sum(bool(r.get("completion_recorded")) for r in results),
