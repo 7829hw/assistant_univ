@@ -1,0 +1,566 @@
+# batch007 annotation 후보 초안. Claude가 2026-10-15에 새로 썼다. 사람 검토 전이며 승인이 아니다(결정 104).
+# - 결정 104: "실차"라는 말 없이 운행 상태를 표현한 통행량 질문 + 헷갈리는 대조. 의도 7개 × 4 = 28건
+#   (occupied 10, vacant 7, plain 3, trip_pickup 5, trip_dropoff 3).
+# - 계기는 selection_v2 indepv2/n33이지만 n33·보호 셋의 문장을 보거나 바꿔 쓰지 않았다. batch006과 같은 표현은 피했다.
+# - 다음 판에서 이 데이터로 학습하면 selection_v2 결과를 n33을 넣은 것과 뺀 것 둘 다로 보고한다(결정 104).
+# - 기준일: 2026-09-25(평가 harness와 같다).
+reference_date: '2026-09-25'
+candidates:
+- id: b007-01
+  type: passage_status_paraphrase
+  family: b007-i1
+  intent: b007-i1-occupied-01
+  variant: occupied
+  question: 2026년 8월 한 달 동안 대구에서 손님이 타고 있던 택시의 통행량을 시군구별로 알려줘
+  rationale: 8월=20260801-20260831. 손님이 타고 있던 택시=occupied. 손님·승객이 탄 상태의 택시 = 실차 상태 → taxi_status occupied. '실차'라는 말이 없어도 같다. 측정은 건수가 아니라 통행량이므로 trip_count가 아니다. 통행량(지나간 양)=passage_count(EVENT passage). passage는
+    출발·도착이 없어 장소에 od_role을 붙이지 않는다. 묶음 기준에 dimension_target은 없다.
+  gold:
+    concepts:
+    - id: place
+      text: 대구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 대구, region: ''}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 손님이 타고 있던 택시의 통행량, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+    factors: {date: 20260801-20260831, dimension: sigungu, taxi_status: occupied}
+- id: b007-02
+  type: passage_status_paraphrase
+  family: b007-i1
+  intent: b007-i1-occupied-02
+  variant: occupied
+  question: 2026년 8월 대구 시군구별로 승객이 탄 택시가 지나간 양은 얼마야?
+  rationale: 승객이 탄 택시가 지나간 양=occupied 통행량. 손님·승객이 탄 상태의 택시 = 실차 상태 → taxi_status occupied. '실차'라는 말이 없어도 같다. 측정은 건수가 아니라 통행량이므로 trip_count가 아니다. 통행량(지나간 양)=passage_count(EVENT passage). passage는 출발·도착이
+    없어 장소에 od_role을 붙이지 않는다. 묶음 기준에 dimension_target은 없다.
+  gold:
+    concepts:
+    - id: place
+      text: 대구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 대구, region: ''}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 승객이 탄 택시가 지나간 양, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+    factors: {date: 20260801-20260831, dimension: sigungu, taxi_status: occupied}
+- id: b007-03
+  type: passage_status_paraphrase
+  family: b007-i1
+  intent: b007-i1-vacant-03
+  variant: vacant
+  question: 2026년 8월 대구 시군구별로 손님 없이 돌아다닌 택시의 통행량을 알려줘
+  rationale: 손님 없이 돌아다닌 택시=vacant. 손님·승객 없이 다닌 택시 = 공차 상태 → taxi_status vacant. 통행량(지나간 양)=passage_count(EVENT passage). passage는 출발·도착이 없어 장소에 od_role을 붙이지 않는다. 묶음 기준에 dimension_target은 없다.
+  gold:
+    concepts:
+    - id: place
+      text: 대구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 대구, region: ''}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 손님 없이 돌아다닌 택시의 통행량, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+    factors: {date: 20260801-20260831, dimension: sigungu, taxi_status: vacant}
+- id: b007-04
+  type: passage_status_paraphrase
+  family: b007-i1
+  intent: b007-i1-trip_pickup-04
+  variant: trip_pickup
+  question: 2026년 8월 대구에서 손님을 태운 건수를 승차 시군구별로 알려줘
+  rationale: 대구에서 손님을 태운=od_role pickup, 승차 시군구별=dimension sigungu + dimension_target pickup. 손님을 태운/내려준 '건수'=실차 운행 구간의 수=trip_count(EVENT trip). trip은 실차 구간 자체라 taxi_status를 붙이지 않는다. 장소가 제한하는 끝=od_role,
+    묶는 끝=dimension_target. 통행량(passage_count)이 아니다.
+  gold:
+    concepts:
+    - id: origin
+      text: 대구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 대구, region: ''}
+      attributes: {od_role: pickup}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 손님을 태운 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: 20260801-20260831, dimension: sigungu, dimension_target: pickup}
+- id: b007-05
+  type: passage_status_paraphrase
+  family: b007-i2
+  intent: b007-i2-occupied-05
+  variant: occupied
+  question: 지난주 밤 9시부터 11시까지 부산 시군구별로 승객을 싣고 다닌 택시의 통행량은?
+  rationale: 밤 9–11시=210000-230000. 승객을 싣고 다닌 택시=occupied. 손님·승객이 탄 상태의 택시 = 실차 상태 → taxi_status occupied. '실차'라는 말이 없어도 같다. 측정은 건수가 아니라 통행량이므로 trip_count가 아니다. 통행량(지나간 양)=passage_count(EVENT passage).
+    passage는 출발·도착이 없어 장소에 od_role을 붙이지 않는다. 묶음 기준에 dimension_target은 없다.
+  gold:
+    concepts:
+    - id: place
+      text: 부산
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 부산, region: ''}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 승객을 싣고 다닌 택시의 통행량, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+    factors: {date: last_week, time: 210000-230000, dimension: sigungu, taxi_status: occupied}
+- id: b007-06
+  type: passage_status_paraphrase
+  family: b007-i2
+  intent: b007-i2-vacant-06
+  variant: vacant
+  question: 지난주 밤 9시부터 11시까지 부산 시군구별로 승객이 타지 않은 택시가 지나간 양은?
+  rationale: 승객이 타지 않은 택시=vacant. 손님·승객 없이 다닌 택시 = 공차 상태 → taxi_status vacant. 통행량(지나간 양)=passage_count(EVENT passage). passage는 출발·도착이 없어 장소에 od_role을 붙이지 않는다. 묶음 기준에 dimension_target은 없다.
+  gold:
+    concepts:
+    - id: place
+      text: 부산
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 부산, region: ''}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 승객이 타지 않은 택시가 지나간 양, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+    factors: {date: last_week, time: 210000-230000, dimension: sigungu, taxi_status: vacant}
+- id: b007-07
+  type: passage_status_paraphrase
+  family: b007-i2
+  intent: b007-i2-plain-07
+  variant: plain
+  question: 지난주 밤 9시부터 11시까지 부산 시군구별로 택시가 지나간 양은?
+  rationale: 운행 상태가 없는 통행량=passage_count만. taxi_status를 만들지 않는다. 통행량(지나간 양)=passage_count(EVENT passage). passage는 출발·도착이 없어 장소에 od_role을 붙이지 않는다. 묶음 기준에 dimension_target은 없다.
+  gold:
+    concepts:
+    - id: place
+      text: 부산
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 부산, region: ''}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 택시가 지나간 양, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+    factors: {date: last_week, time: 210000-230000, dimension: sigungu}
+- id: b007-08
+  type: passage_status_paraphrase
+  family: b007-i2
+  intent: b007-i2-trip_dropoff-08
+  variant: trip_dropoff
+  question: 지난주 밤 9시부터 11시까지 부산에서 손님을 내려준 건수를 하차 시군구별로 보여줘
+  rationale: 부산에서 손님을 내려준=od_role dropoff, 하차 시군구별=dimension_target dropoff. 손님을 태운/내려준 '건수'=실차 운행 구간의 수=trip_count(EVENT trip). trip은 실차 구간 자체라 taxi_status를 붙이지 않는다. 장소가 제한하는 끝=od_role, 묶는 끝=dimension_target.
+    통행량(passage_count)이 아니다.
+  gold:
+    concepts:
+    - id: destination
+      text: 부산
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 부산, region: ''}
+      attributes: {od_role: dropoff}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 손님을 내려준 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: last_week, time: 210000-230000, dimension: sigungu, dimension_target: dropoff}
+- id: b007-09
+  type: passage_status_paraphrase
+  family: b007-i3
+  intent: b007-i3-occupied-09
+  variant: occupied
+  question: 2026년 9월 19일 밤 9시부터 11시까지 광안리 근처에서 손님 태운 택시들이 얼마나 지나갔는지 H3 셀별로 알려줘
+  rationale: 근처→vicinity. 지역이 발화에 없어 region 빈 값. 손님 태운 택시들이 얼마나 지나갔는지=occupied 통행량. 손님·승객이 탄 상태의 택시 = 실차 상태 → taxi_status occupied. '실차'라는 말이 없어도 같다. 측정은 건수가 아니라 통행량이므로 trip_count가 아니다. 통행량(지나간 양)=passage_count(EVENT
+    passage). passage는 출발·도착이 없어 장소에 od_role을 붙이지 않는다. 묶음 기준에 dimension_target은 없다.
+  gold:
+    concepts:
+    - id: place
+      text: 광안리
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 광안리, region: ''}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 손님 태운 택시들이 얼마나 지나갔는지, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+    factors: {date: '20260919', time: 210000-230000, dimension: h3, vicinity: true, taxi_status: occupied}
+- id: b007-10
+  type: passage_status_paraphrase
+  family: b007-i3
+  intent: b007-i3-occupied-10
+  variant: occupied
+  question: 2026년 9월 19일 밤 9시~11시 광안리 근처 H3 셀별 승객 탑승 택시 통행량은?
+  rationale: 근처→vicinity. 승객 탑승 택시=occupied. 손님·승객이 탄 상태의 택시 = 실차 상태 → taxi_status occupied. '실차'라는 말이 없어도 같다. 측정은 건수가 아니라 통행량이므로 trip_count가 아니다. 통행량(지나간 양)=passage_count(EVENT passage). passage는 출발·도착이
+    없어 장소에 od_role을 붙이지 않는다. 묶음 기준에 dimension_target은 없다.
+  gold:
+    concepts:
+    - id: place
+      text: 광안리
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 광안리, region: ''}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 승객 탑승 택시 통행량, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+    factors: {date: '20260919', time: 210000-230000, dimension: h3, vicinity: true, taxi_status: occupied}
+- id: b007-11
+  type: passage_status_paraphrase
+  family: b007-i3
+  intent: b007-i3-vacant-11
+  variant: vacant
+  question: 2026년 9월 19일 밤 9시부터 11시까지 광안리 근처에서 손님을 찾아 다닌 빈 차의 통행량을 H3 셀별로 알려줘
+  rationale: 근처→vicinity. 손님을 찾아 다닌 빈 차=vacant. 손님·승객 없이 다닌 택시 = 공차 상태 → taxi_status vacant. 통행량(지나간 양)=passage_count(EVENT passage). passage는 출발·도착이 없어 장소에 od_role을 붙이지 않는다. 묶음 기준에 dimension_target은 없다.
+  gold:
+    concepts:
+    - id: place
+      text: 광안리
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 광안리, region: ''}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 손님을 찾아 다닌 빈 차의 통행량, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+    factors: {date: '20260919', time: 210000-230000, dimension: h3, vicinity: true, taxi_status: vacant}
+- id: b007-12
+  type: passage_status_paraphrase
+  family: b007-i3
+  intent: b007-i3-trip_pickup-12
+  variant: trip_pickup
+  question: 2026년 9월 19일 밤 9시부터 11시까지 광안리 근처에서 손님을 태운 건수를 승차 H3 셀별로 알려줘
+  rationale: 광안리 근처에서 손님을 태운=od_role pickup + vicinity, 승차 H3 셀별=dimension_target pickup. 손님을 태운/내려준 '건수'=실차 운행 구간의 수=trip_count(EVENT trip). trip은 실차 구간 자체라 taxi_status를 붙이지 않는다. 장소가 제한하는 끝=od_role, 묶는
+    끝=dimension_target. 통행량(passage_count)이 아니다.
+  gold:
+    concepts:
+    - id: origin
+      text: 광안리
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 광안리, region: ''}
+      attributes: {od_role: pickup}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 손님을 태운 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: '20260919', time: 210000-230000, dimension: h3, vicinity: true, dimension_target: pickup}
+- id: b007-13
+  type: passage_status_paraphrase
+  family: b007-i4
+  intent: b007-i4-occupied-13
+  variant: occupied
+  question: 2026년 9월 20일 오후 2시부터 5시까지 대구 동성로를 손님을 태우고 지나간 택시의 양을 H3 셀별로 보여줘
+  rationale: 오후 2–5시=140000-170000. 손님을 태우고 지나간 택시의 양=occupied 통행량. 손님·승객이 탄 상태의 택시 = 실차 상태 → taxi_status occupied. '실차'라는 말이 없어도 같다. 측정은 건수가 아니라 통행량이므로 trip_count가 아니다. 통행량(지나간 양)=passage_count(EVENT passage).
+    passage는 출발·도착이 없어 장소에 od_role을 붙이지 않는다. 묶음 기준에 dimension_target은 없다.
+  gold:
+    concepts:
+    - id: place
+      text: 동성로
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 동성로, region: 대구}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 손님을 태우고 지나간 택시의 양, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+    factors: {date: '20260920', time: 140000-170000, dimension: h3, taxi_status: occupied}
+- id: b007-14
+  type: passage_status_paraphrase
+  family: b007-i4
+  intent: b007-i4-vacant-14
+  variant: vacant
+  question: 2026년 9월 20일 오후 2시부터 5시까지 대구 동성로를 빈 채로 지나간 택시의 양을 H3 셀별로 보여줘
+  rationale: 빈 채로 지나간 택시=vacant. 손님·승객 없이 다닌 택시 = 공차 상태 → taxi_status vacant. 통행량(지나간 양)=passage_count(EVENT passage). passage는 출발·도착이 없어 장소에 od_role을 붙이지 않는다. 묶음 기준에 dimension_target은 없다.
+  gold:
+    concepts:
+    - id: place
+      text: 동성로
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 동성로, region: 대구}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 빈 채로 지나간 택시의 양, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+    factors: {date: '20260920', time: 140000-170000, dimension: h3, taxi_status: vacant}
+- id: b007-15
+  type: passage_status_paraphrase
+  family: b007-i4
+  intent: b007-i4-trip_pickup-15
+  variant: trip_pickup
+  question: 2026년 9월 20일 오후 2시부터 5시까지 대구 동성로에서 손님을 태운 건수를 승차 H3 셀별로 보여줘
+  rationale: 동성로에서 손님을 태운=od_role pickup, 승차 H3 셀별=dimension_target pickup. 손님을 태운/내려준 '건수'=실차 운행 구간의 수=trip_count(EVENT trip). trip은 실차 구간 자체라 taxi_status를 붙이지 않는다. 장소가 제한하는 끝=od_role, 묶는 끝=dimension_target.
+    통행량(passage_count)이 아니다.
+  gold:
+    concepts:
+    - id: origin
+      text: 동성로
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 동성로, region: 대구}
+      attributes: {od_role: pickup}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 손님을 태운 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: '20260920', time: 140000-170000, dimension: h3, dimension_target: pickup}
+- id: b007-16
+  type: passage_status_paraphrase
+  family: b007-i4
+  intent: b007-i4-trip_dropoff-16
+  variant: trip_dropoff
+  question: 2026년 9월 20일 오후 2시부터 5시까지 대구 동성로에서 손님을 내려준 건수를 하차 H3 셀별로 보여줘
+  rationale: 동성로에서 손님을 내려준=od_role dropoff, 하차 H3 셀별=dimension_target dropoff. 손님을 태운/내려준 '건수'=실차 운행 구간의 수=trip_count(EVENT trip). trip은 실차 구간 자체라 taxi_status를 붙이지 않는다. 장소가 제한하는 끝=od_role, 묶는 끝=dimension_target.
+    통행량(passage_count)이 아니다.
+  gold:
+    concepts:
+    - id: destination
+      text: 동성로
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 동성로, region: 대구}
+      attributes: {od_role: dropoff}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 손님을 내려준 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: '20260920', time: 140000-170000, dimension: h3, dimension_target: dropoff}
+- id: b007-17
+  type: passage_status_paraphrase
+  family: b007-i5
+  intent: b007-i5-occupied-17
+  variant: occupied
+  question: 이번 달 부산 어린이대공원 주변을 지나간, 승객이 타고 있는 택시의 통행량을 H3 셀별로 알려줘
+  rationale: 주변→vicinity. 승객이 타고 있는 택시=occupied. 손님·승객이 탄 상태의 택시 = 실차 상태 → taxi_status occupied. '실차'라는 말이 없어도 같다. 측정은 건수가 아니라 통행량이므로 trip_count가 아니다. 통행량(지나간 양)=passage_count(EVENT passage). passage는 출발·도착이
+    없어 장소에 od_role을 붙이지 않는다. 묶음 기준에 dimension_target은 없다.
+  gold:
+    concepts:
+    - id: place
+      text: 어린이대공원
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 어린이대공원, region: 부산}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 승객이 타고 있는 택시의 통행량, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+    factors: {date: this_month, dimension: h3, vicinity: true, taxi_status: occupied}
+- id: b007-18
+  type: passage_status_paraphrase
+  family: b007-i5
+  intent: b007-i5-vacant-18
+  variant: vacant
+  question: 이번 달 부산 어린이대공원 주변을 지나간 빈 택시 통행량을 H3 셀별로 알려줘
+  rationale: 주변→vicinity. 빈 택시=vacant. 손님·승객 없이 다닌 택시 = 공차 상태 → taxi_status vacant. 통행량(지나간 양)=passage_count(EVENT passage). passage는 출발·도착이 없어 장소에 od_role을 붙이지 않는다. 묶음 기준에 dimension_target은 없다.
+  gold:
+    concepts:
+    - id: place
+      text: 어린이대공원
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 어린이대공원, region: 부산}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 빈 택시 통행량, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+    factors: {date: this_month, dimension: h3, vicinity: true, taxi_status: vacant}
+- id: b007-19
+  type: passage_status_paraphrase
+  family: b007-i5
+  intent: b007-i5-plain-19
+  variant: plain
+  question: 이번 달 부산 어린이대공원 주변을 지나간 택시 통행량을 H3 셀별로 알려줘
+  rationale: 주변→vicinity. 운행 상태가 없는 통행량. 통행량(지나간 양)=passage_count(EVENT passage). passage는 출발·도착이 없어 장소에 od_role을 붙이지 않는다. 묶음 기준에 dimension_target은 없다.
+  gold:
+    concepts:
+    - id: place
+      text: 어린이대공원
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 어린이대공원, region: 부산}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 택시 통행량, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+    factors: {date: this_month, dimension: h3, vicinity: true}
+- id: b007-20
+  type: passage_status_paraphrase
+  family: b007-i5
+  intent: b007-i5-trip_pickup-20
+  variant: trip_pickup
+  question: 이번 달 부산 어린이대공원 주변에서 승객을 태운 건수를 승차 H3 셀별로 알려줘
+  rationale: 주변에서 승객을 태운=od_role pickup + vicinity, 승차 H3 셀별=dimension_target pickup. 손님을 태운/내려준 '건수'=실차 운행 구간의 수=trip_count(EVENT trip). trip은 실차 구간 자체라 taxi_status를 붙이지 않는다. 장소가 제한하는 끝=od_role, 묶는 끝=dimension_target.
+    통행량(passage_count)이 아니다.
+  gold:
+    concepts:
+    - id: origin
+      text: 어린이대공원
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 어린이대공원, region: 부산}
+      attributes: {od_role: pickup}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 승객을 태운 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: this_month, dimension: h3, vicinity: true, dimension_target: pickup}
+- id: b007-21
+  type: passage_status_paraphrase
+  family: b007-i6
+  intent: b007-i6-occupied-21
+  variant: occupied
+  question: 2026년 9월 1일부터 7일까지 대구 달서구에서 손님을 모시고 달린 택시의 통행량을 H3 셀별로 알려줘
+  rationale: 날짜 범위 20260901-20260907. 손님을 모시고 달린 택시=occupied. 손님·승객이 탄 상태의 택시 = 실차 상태 → taxi_status occupied. '실차'라는 말이 없어도 같다. 측정은 건수가 아니라 통행량이므로 trip_count가 아니다. 통행량(지나간 양)=passage_count(EVENT passage).
+    passage는 출발·도착이 없어 장소에 od_role을 붙이지 않는다. 묶음 기준에 dimension_target은 없다.
+  gold:
+    concepts:
+    - id: place
+      text: 달서구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 달서구, region: 대구}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 손님을 모시고 달린 택시의 통행량, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+    factors: {date: 20260901-20260907, dimension: h3, taxi_status: occupied}
+- id: b007-22
+  type: passage_status_paraphrase
+  family: b007-i6
+  intent: b007-i6-occupied-22
+  variant: occupied
+  question: 2026년 9월 1일부터 7일까지 대구 달서구 H3 셀별로 손님 있는 택시가 지나간 양을 보여줘
+  rationale: 손님 있는 택시=occupied. 손님·승객이 탄 상태의 택시 = 실차 상태 → taxi_status occupied. '실차'라는 말이 없어도 같다. 측정은 건수가 아니라 통행량이므로 trip_count가 아니다. 통행량(지나간 양)=passage_count(EVENT passage). passage는 출발·도착이 없어 장소에 od_role을
+    붙이지 않는다. 묶음 기준에 dimension_target은 없다.
+  gold:
+    concepts:
+    - id: place
+      text: 달서구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 달서구, region: 대구}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 손님 있는 택시가 지나간 양, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+    factors: {date: 20260901-20260907, dimension: h3, taxi_status: occupied}
+- id: b007-23
+  type: passage_status_paraphrase
+  family: b007-i6
+  intent: b007-i6-vacant-23
+  variant: vacant
+  question: 2026년 9월 1일부터 7일까지 대구 달서구 H3 셀별로 손님 없는 택시가 지나간 양을 보여줘
+  rationale: 손님 없는 택시=vacant. 손님·승객 없이 다닌 택시 = 공차 상태 → taxi_status vacant. 통행량(지나간 양)=passage_count(EVENT passage). passage는 출발·도착이 없어 장소에 od_role을 붙이지 않는다. 묶음 기준에 dimension_target은 없다.
+  gold:
+    concepts:
+    - id: place
+      text: 달서구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 달서구, region: 대구}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 손님 없는 택시가 지나간 양, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+    factors: {date: 20260901-20260907, dimension: h3, taxi_status: vacant}
+- id: b007-24
+  type: passage_status_paraphrase
+  family: b007-i6
+  intent: b007-i6-trip_dropoff-24
+  variant: trip_dropoff
+  question: 2026년 9월 1일부터 7일까지 대구 달서구에 손님을 내려준 건수를 하차 H3 셀별로 알려줘
+  rationale: 달서구에 손님을 내려준=od_role dropoff, 하차 H3 셀별=dimension_target dropoff. 손님을 태운/내려준 '건수'=실차 운행 구간의 수=trip_count(EVENT trip). trip은 실차 구간 자체라 taxi_status를 붙이지 않는다. 장소가 제한하는 끝=od_role, 묶는 끝=dimension_target.
+    통행량(passage_count)이 아니다.
+  gold:
+    concepts:
+    - id: destination
+      text: 달서구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 달서구, region: 대구}
+      attributes: {od_role: dropoff}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 손님을 내려준 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: 20260901-20260907, dimension: h3, dimension_target: dropoff}
+- id: b007-25
+  type: passage_status_paraphrase
+  family: b007-i7
+  intent: b007-i7-occupied-25
+  variant: occupied
+  question: 2026년 9월 24일 오전 7시부터 9시까지 부산 수영구에서 승객을 태운 택시가 지나간 양을 H3 셀별로 알려줘
+  rationale: 오전 7–9시=070000-090000. 승객을 태운 택시가 지나간 양=occupied 통행량('태운'이 있어도 건수가 아니다). 손님·승객이 탄 상태의 택시 = 실차 상태 → taxi_status occupied. '실차'라는 말이 없어도 같다. 측정은 건수가 아니라 통행량이므로 trip_count가 아니다. 통행량(지나간 양)=passage_count(EVENT
+    passage). passage는 출발·도착이 없어 장소에 od_role을 붙이지 않는다. 묶음 기준에 dimension_target은 없다.
+  gold:
+    concepts:
+    - id: place
+      text: 수영구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 수영구, region: 부산}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 승객을 태운 택시가 지나간 양, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+    factors: {date: '20260924', time: 070000-090000, dimension: h3, taxi_status: occupied}
+- id: b007-26
+  type: passage_status_paraphrase
+  family: b007-i7
+  intent: b007-i7-vacant-26
+  variant: vacant
+  question: 2026년 9월 24일 오전 7시부터 9시까지 부산 수영구에서 승객을 기다리며 다닌 빈 택시의 통행량을 H3 셀별로 알려줘
+  rationale: 승객을 기다리며 다닌 빈 택시=vacant. 손님·승객 없이 다닌 택시 = 공차 상태 → taxi_status vacant. 통행량(지나간 양)=passage_count(EVENT passage). passage는 출발·도착이 없어 장소에 od_role을 붙이지 않는다. 묶음 기준에 dimension_target은 없다.
+  gold:
+    concepts:
+    - id: place
+      text: 수영구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 수영구, region: 부산}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 승객을 기다리며 다닌 빈 택시의 통행량, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+    factors: {date: '20260924', time: 070000-090000, dimension: h3, taxi_status: vacant}
+- id: b007-27
+  type: passage_status_paraphrase
+  family: b007-i7
+  intent: b007-i7-trip_pickup-27
+  variant: trip_pickup
+  question: 2026년 9월 24일 오전 7시부터 9시까지 부산 수영구에서 승객을 태운 건수를 승차 H3 셀별로 알려줘
+  rationale: 수영구에서 승객을 태운=od_role pickup, 승차 H3 셀별=dimension_target pickup. 25번과 '태운'은 같지만 측정이 건수다. 손님을 태운/내려준 '건수'=실차 운행 구간의 수=trip_count(EVENT trip). trip은 실차 구간 자체라 taxi_status를 붙이지 않는다. 장소가 제한하는 끝=od_role,
+    묶는 끝=dimension_target. 통행량(passage_count)이 아니다.
+  gold:
+    concepts:
+    - id: origin
+      text: 수영구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 수영구, region: 부산}
+      attributes: {od_role: pickup}
+    - {id: trip, concept: EVENT, subtype: trip, role: SUPPORT, source: implicit}
+    - {id: measure, text: 승객을 태운 건수, concept: AMOUNT, subtype: trip_count, role: MEASURE, source: implicit}
+    factors: {date: '20260924', time: 070000-090000, dimension: h3, dimension_target: pickup}
+- id: b007-28
+  type: passage_status_paraphrase
+  family: b007-i7
+  intent: b007-i7-plain-28
+  variant: plain
+  question: 2026년 9월 24일 오전 7시부터 9시까지 부산 수영구의 택시 통행량을 H3 셀별로 알려줘
+  rationale: 운행 상태가 없는 통행량. 통행량(지나간 양)=passage_count(EVENT passage). passage는 출발·도착이 없어 장소에 od_role을 붙이지 않는다. 묶음 기준에 dimension_target은 없다.
+  gold:
+    concepts:
+    - id: place
+      text: 수영구
+      concept: LOCATION
+      subtype: place
+      role: SUBCOND
+      source: user
+      value: {name: 수영구, region: 부산}
+    - {id: passage, concept: EVENT, subtype: passage, role: SUPPORT, source: implicit}
+    - {id: measure, text: 택시 통행량, concept: AMOUNT, subtype: passage_count, role: MEASURE, source: implicit}
+    factors: {date: '20260924', time: 070000-090000, dimension: h3}
