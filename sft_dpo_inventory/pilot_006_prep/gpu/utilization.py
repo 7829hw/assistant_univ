@@ -2,6 +2,7 @@
 """세션 GPU 사용률과 10분 넘는 유휴 구간(지시 5.2). ``timeline.jsonl``과 ``runs.log``(서버 기동·종료 시각)에서 계산한다.
 
     python3 sft_dpo_inventory/pilot_006_prep/gpu/utilization.py --end ISO
+    python3 sft_dpo_inventory/pilot_006_prep/gpu/utilization.py --session 2 --end ISO   # 세션 2: 시작 = session2_check.txt(01:14:23), 출력 utilization_s2.json
 
 - 세션 시간: ``initial_check.txt``의 확인 시각(2026-10-15 21:39:17) ~ ``--end``.
 - 작업 시간: timeline의 작업 시작~끝(서버 기동·종료 제외). 상태 정정(``status_correction``) 줄은 시간에 더하지 않는다(원래 줄과 같은 구간).
@@ -32,13 +33,32 @@ REASONS = {
 }
 
 
+#: 세션 2(지시 "pilot_006 준비 세션 2", 시작 확인 2026-10-16 01:14:23)
+START_S2 = datetime.fromisoformat("2026-10-16T01:14:23+09:00")
+REASONS_S2 = {
+    "2445b100(index 0)": [("2026-10-16T01:14", "시작 준비(결정 기록·도구 커밋 뒤 큐 시작)"),
+                          ("2026-10-16T03:18", "의존 대기: M1은 C6 시험 빌드(L_req·M1 세트)가 시작 조건이고, C6은 J6 판정(C3) 뒤에 만들 수 있었다. "
+                                               "J6 판정·대조·검토 자료(C2–C4)와 빌드 도구·학습 코드 분기(C6)를 CPU에서 차례로 하느라 길어졌다"),
+                          ("2026-10-16T07:30", "M1 결함(12,288 세트·torch 값) 수정 뒤 M1b")],
+    "a5ce83d0(index 1)": [("2026-10-16T01:14", "시작 준비"),
+                          ("2026-10-16T02:52", "준비된 작업 없음: 세션 2 GPU 큐 소진(M1·M1b는 한 GPU 단독, GPU 0에 배정). 학습·teacher 수집은 세션 3")],
+    "48f798cc(index 2, Ollama GPU)": [("2026-10-16T01:14", "시작 준비"),
+                                      ("2026-10-16T02:53", "준비된 작업 없음: 세션 2 GPU 큐 소진. 학습·teacher 수집은 세션 3")],
+}
+
+
 def main():
+    global START, REASONS
     p = argparse.ArgumentParser()
     p.add_argument("--end", required=True)
+    p.add_argument("--session", choices=("1", "2"), default="1")
     a = p.parse_args()
     end = datetime.fromisoformat(a.end)
+    out_name = "utilization.json"
+    if a.session == "2":
+        START, REASONS, out_name = START_S2, REASONS_S2, "utilization_s2.json"
     rows = [json.loads(line) for line in (HERE / "timeline.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
-    rows = [r for r in rows if r["kind"] != "status_correction"]
+    rows = [r for r in rows if r["kind"] != "status_correction" and datetime.fromisoformat(r["start"]) >= START]
     session = (end - START).total_seconds()
     out = {"session": {"start": START.isoformat(), "end": end.isoformat(), "hours": round(session / 3600, 2)}, "gpus": {}}
     for uuid, name in GPUS.items():
@@ -54,7 +74,7 @@ def main():
         out["gpus"][name] = {"jobs": [{"job": j, "start": s.isoformat(), "end": e.isoformat(), "minutes": round((e - s).total_seconds() / 60, 1),
                                        "status": st} for s, e, j, st in jobs],
                              "busy_hours": round(busy / 3600, 2), "utilization": round(busy / session, 3), "idle_over_10min": gaps}
-    (HERE / "utilization.json").write_text(json.dumps(out, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    (HERE / out_name).write_text(json.dumps(out, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     print(json.dumps(out, ensure_ascii=False, indent=1))
 
 
