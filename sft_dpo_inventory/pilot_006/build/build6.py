@@ -68,6 +68,7 @@ def main():
     p.add_argument("--mode", choices=("provisional",), required=True)
     p.add_argument("--with-j6", action="store_true")
     p.add_argument("--out", default=str(HERE / "PROVISIONAL"))
+    p.add_argument("--max-seq-length", type=int, default=None, help="결정 125 규칙 3·4: 이 길이를 넘는 레코드를 arm마다 뺀다(상한 선택 전)")
     a = p.parse_args()
     out = Path(a.out)
     rng = random.Random(SEED)
@@ -212,6 +213,18 @@ def main():
     all_len = cand_lengths + extra
     max_tok = max(x["tokens"] for x in all_len)
     l_req = int(math.ceil(max_tok / 256) * 256)
+    # ---- 길이 한도(결정 125 규칙 3·4): 한도를 넘는 레코드만 뺀다. 상한(질문당 최대 4개) 선택 전에 빼므로 짧은 레코드가 그 자리를 채운다.
+    #      질문이 어느 arm에서든 레코드가 없어지면 아래 "두 arm 질문 목록" 규칙으로 두 arm 모두에서 빠진다.
+    over_limit = []
+    if a.max_seq_length:
+        over_ids = {id(x["_rec"]) for x in cand_lengths if x["tokens"] > a.max_seq_length}
+        over_limit = [{k: x[k] for k in ("arm", "kind", "qid", "trace_id", "tokens")} for x in cand_lengths if x["tokens"] > a.max_seq_length]
+        had = {arm: {q for pool in (teacher[arm], selfrec[arm]) for q, v in pool.items() if v} for arm in ("full", "partial")}
+        for arm in ("full", "partial"):
+            for pool in (teacher[arm], selfrec[arm]):
+                for qid in list(pool):
+                    pool[qid] = [r for r in pool[qid] if id(r) not in over_ids]
+        lost = {arm: sorted(had[arm] - {q for pool in (teacher[arm], selfrec[arm]) for q, v in pool.items() if v}) for arm in ("full", "partial")}
 
     # ---- 선택(상한)
     def pick(recs, cap):
@@ -333,15 +346,19 @@ def main():
                                                        "dpo": {}}, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     lengths = {"L_req": l_req, "max_tokens": max_tok, "argmax": {k: v for k, v in max(all_len, key=lambda x: x["tokens"]).items() if k != "_rec"},
                "by_arm_kind": {}, "m1_longest_10_per_arm": m1_list}
+    if a.max_seq_length:
+        lengths["max_seq_length"] = a.max_seq_length
+        lengths["over_limit_build_candidates"] = over_limit
+        lengths["questions_without_records_after_limit"] = lost
     for arm in ("full", "partial"):
         for kind in ("teacher", "self", "self_all_correct"):
             v = [x["tokens"] for x in all_len if x["arm"] == arm and x["kind"] == kind]
             if v:
                 v.sort()
                 lengths["by_arm_kind"][f"{arm}:{kind}"] = {"n": len(v), "p50": v[len(v) // 2], "p99": v[int(0.99 * (len(v) - 1))], "max": v[-1],
-                                                           "over_11392": sum(t > 11392 for t in v)}
+                                                           "over_11392": sum(t > 11392 for t in v), "over_12288": sum(t > 12288 for t in v)}
     (out / "lengths.json").write_text(json.dumps(lengths, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    summary = {"mode": a.mode, "with_j6": a.with_j6, "provisional_note": "학습에 쓰지 않음", "questions_pool": len(questions), "dropped_pool": dict(dropped),
+    summary = {"mode": a.mode, "with_j6": a.with_j6, "max_seq_length": a.max_seq_length, "provisional_note": "학습에 쓰지 않음", "questions_pool": len(questions), "dropped_pool": dict(dropped),
                "questions_with_records_both_arms": len(both), "questions_one_side_only": {k: v for k, v in one_side.items()},
                "one_side_count": dict(Counter("+".join(v) or "none" for v in one_side.values())),
                "strong_overlap_dropped": strong, "type_cap": {"tau": 0.09, "caps(non-exempt)": caps, "exempt": len(exempt & set(kept_q)), "kept": len(final_q)},
