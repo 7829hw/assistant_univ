@@ -1,0 +1,279 @@
+{
+ "summary": {
+  "final6": [
+   "b006-05",
+   "b006-15",
+   "b006-20",
+   "b006-26",
+   "b006-19",
+   "b006-34"
+  ],
+  "gold_review": {
+   "b006-05": "CLEAR_GOLD",
+   "b006-15": "CLEAR_GOLD",
+   "b006-20": "CLEAR_GOLD",
+   "b006-26": "CLEAR_GOLD",
+   "b006-19": "CLEAR_GOLD",
+   "b006-34": "CLEAR_GOLD"
+  },
+  "approved": 6,
+  "rejected": 0,
+  "new_model_calls": 0,
+  "language": "영어 thinking(다른 148 trace와 같음), 질문 표현은 한국어 인용"
+ },
+ "items": {
+  "b006-05": {
+   "question": "지난달 택시를 탄 건수가 가장 많은 시도는?",
+   "gold_p0": {
+    "concepts": [
+     {
+      "subtype": "trip_count",
+      "text": "택시를 탄 건수"
+     }
+    ],
+    "factors": {
+     "date": "last_month",
+     "dimension": "sido",
+     "dimension_target": "pickup",
+     "limit": 1,
+     "order": "top"
+    }
+   },
+   "gold_review": "CLEAR_GOLD",
+   "gold_review_note": "'택시를 탄 건수'는 승차 사건 건수(trip_count). '시도는?'은 한 끝의 시도 하나를 묻고 '탄'이 승차 끝을 정한다 → dimension_target pickup. 장소 제한 없음. order top·limit 1. gold와 일치",
+   "canonical_reason": "implicit endpoint(pickup, 장소 없음): 27B P1/P2 batch 5/5 dimension_target 생략",
+   "review_decision": "APPROVE_CANONICAL",
+   "review_checks": [
+    "질문 표현 근거",
+    "gold와 의미 충돌 없음",
+    "없는 ontology 규칙 없음",
+    "od_role·dimension_target 구분",
+    "묶음 단위어를 concept로 만들지 않음",
+    "장문 reasoning 아님"
+   ],
+   "review_note": "slot이 질문 표현('탄', '시도는?', '가장 많은')에서 나온다. 장소가 없어 od_role 없음을 명시",
+   "rationale_chars": 504,
+   "rationale_sha256": "a43894d340dc5398917fe0085c79fab7a4857d17a49754851a4cb921e462764b"
+  },
+  "b006-15": {
+   "question": "2026년 8월 부산에서 손님을 태운 건수가 가장 적은 구 두 곳은?",
+   "gold_p0": {
+    "concepts": [
+     {
+      "attributes": {
+       "od_role": "pickup"
+      },
+      "subtype": "place",
+      "text": "부산",
+      "value": {
+       "name": "부산",
+       "region": ""
+      }
+     },
+     {
+      "subtype": "trip_count",
+      "text": "손님을 태운 건수"
+     }
+    ],
+    "factors": {
+     "date": "20260801-20260831",
+     "dimension": "sigungu",
+     "dimension_target": "pickup",
+     "limit": 2,
+     "order": "bottom"
+    }
+   },
+   "gold_review": "CLEAR_GOLD",
+   "gold_review_note": "'부산에서 손님을 태운'의 '에서'는 승차 위치 제한 → 부산 od_role pickup. 구(sigungu)는 '태운' 사건 끝으로 묶음 → dimension_target pickup. 두 slot은 따로 판단해도 같은 끝. bottom 2. gold와 일치",
+   "canonical_reason": "implicit endpoint(pickup): 27B 5/5 dimension_target·od_role 생략",
+   "review_decision": "APPROVE_CANONICAL",
+   "review_checks": [
+    "질문 표현 근거",
+    "gold와 의미 충돌 없음",
+    "없는 ontology 규칙 없음",
+    "od_role·dimension_target 구분",
+    "묶음 단위어를 concept로 만들지 않음",
+    "장문 reasoning 아님"
+   ],
+   "review_note": "od_role(부산에서 → 승차 위치)과 dimension_target(태운 → 묶는 끝)을 따로 결정한다고 적음. taxi_status를 넣지 않는 이유를 P0 규칙 범위 안에서만 씀",
+   "rationale_chars": 601,
+   "rationale_sha256": "2d358d253a1cabb4e29d910e139b06500c511d78202285079abfc6dc38ab4793"
+  },
+  "b006-20": {
+   "question": "지난달 대구에서 승차가 가장 적었던 구는?",
+   "gold_p0": {
+    "concepts": [
+     {
+      "attributes": {
+       "od_role": "pickup"
+      },
+      "subtype": "place",
+      "text": "대구",
+      "value": {
+       "name": "대구",
+       "region": ""
+      }
+     },
+     {
+      "subtype": "trip_count",
+      "text": "승차"
+     }
+    ],
+    "factors": {
+     "date": "last_month",
+     "dimension": "sigungu",
+     "dimension_target": "pickup",
+     "limit": 1,
+     "order": "bottom"
+    }
+   },
+   "gold_review": "CLEAR_GOLD",
+   "gold_review_note": "'대구에서 승차'는 'A에서 출발'과 같은 꼴 → 대구 od_role pickup. '승차가 가장 적었던 구' → sigungu·pickup. bottom 1. gold와 일치",
+   "canonical_reason": "implicit endpoint(pickup): 27B 5/5 od_role 생략",
+   "review_decision": "APPROVE_CANONICAL",
+   "review_checks": [
+    "질문 표현 근거",
+    "gold와 의미 충돌 없음",
+    "없는 ontology 규칙 없음",
+    "od_role·dimension_target 구분",
+    "묶음 단위어를 concept로 만들지 않음",
+    "장문 reasoning 아님"
+   ],
+   "review_note": "'A에서 출발' 예시와의 대응만 사용. 새 규칙 없음",
+   "rationale_chars": 511,
+   "rationale_sha256": "67959dae20ae146a0adf9c67896d9297a0562bd3a9d131000eb5e5d88c742475"
+  },
+  "b006-26": {
+   "question": "이번 달 대구 수성구에서 손님을 가장 적게 태운 H3 셀 세 곳은?",
+   "gold_p0": {
+    "concepts": [
+     {
+      "attributes": {
+       "od_role": "pickup"
+      },
+      "subtype": "place",
+      "text": "대구 수성구",
+      "value": {
+       "name": "수성구",
+       "region": "대구"
+      }
+     },
+     {
+      "subtype": "trip_count",
+      "text": "손님을 가장 적게 태운"
+     }
+    ],
+    "factors": {
+     "date": "this_month",
+     "dimension": "h3",
+     "dimension_target": "pickup",
+     "limit": 3,
+     "order": "bottom"
+    }
+   },
+   "gold_review": "CLEAR_GOLD",
+   "gold_review_note": "'대구 수성구에서 손님을 … 태운' → 수성구(region 대구) od_role pickup. 'H3 셀' → h3, '태운' 사건 끝 → dimension_target pickup (P0 정의는 trip을 나누는 모든 dimension에 적용). bottom 3. gold와 일치",
+   "canonical_reason": "implicit endpoint(pickup, h3): 27B 5/5 od_role 생략, 4/5 dimension_target 생략",
+   "review_decision": "APPROVE_CANONICAL",
+   "review_checks": [
+    "질문 표현 근거",
+    "gold와 의미 충돌 없음",
+    "없는 ontology 규칙 없음",
+    "od_role·dimension_target 구분",
+    "묶음 단위어를 concept로 만들지 않음",
+    "장문 reasoning 아님"
+   ],
+   "review_note": "h3에도 dimension_target이 적용됨을 P0 정의('trip을 dimension으로 나누면') 범위에서 씀",
+   "rationale_chars": 554,
+   "rationale_sha256": "399a4c62d0c1f484beaf47cb05e80f487037e005008c8c7701aba8bfef4f0e69"
+  },
+  "b006-19": {
+   "question": "지난달 대구에서 하차가 가장 적었던 구는?",
+   "gold_p0": {
+    "concepts": [
+     {
+      "attributes": {
+       "od_role": "dropoff"
+      },
+      "subtype": "place",
+      "text": "대구",
+      "value": {
+       "name": "대구",
+       "region": ""
+      }
+     },
+     {
+      "subtype": "trip_count",
+      "text": "하차"
+     }
+    ],
+    "factors": {
+     "date": "last_month",
+     "dimension": "sigungu",
+     "dimension_target": "dropoff",
+     "limit": 1,
+     "order": "bottom"
+    }
+   },
+   "gold_review": "CLEAR_GOLD",
+   "gold_review_note": "'대구에서 하차'의 '에서'는 하차 위치 제한 → 대구 od_role dropoff. '하차가 가장 적었던 구' → sigungu·dropoff. bottom 1. b006-20과 대칭이지만 질문 표현(하차)에서 직접 읽음. gold와 일치",
+   "canonical_reason": "implicit endpoint(dropoff): 27B remaining batch 5/5 od_role 생략",
+   "review_decision": "APPROVE_CANONICAL",
+   "review_checks": [
+    "질문 표현 근거",
+    "gold와 의미 충돌 없음",
+    "없는 ontology 규칙 없음",
+    "od_role·dimension_target 구분",
+    "묶음 단위어를 concept로 만들지 않음",
+    "장문 reasoning 아님"
+   ],
+   "review_note": "pickup 문장 치환이 아니라 '하차' 표현에서 두 slot을 각각 읽음",
+   "rationale_chars": 569,
+   "rationale_sha256": "f1eb983d369a41e0a0f4feb15d92be969b887412612af1d4b152d9fe6b6c4e5b"
+  },
+  "b006-34": {
+   "question": "지난달 대구 수성구에서 탄 손님들이 내린 곳 중 가장 드문 H3 셀 두 곳은?",
+   "gold_p0": {
+    "concepts": [
+     {
+      "attributes": {
+       "od_role": "pickup"
+      },
+      "subtype": "place",
+      "text": "대구 수성구",
+      "value": {
+       "name": "수성구",
+       "region": "대구"
+      }
+     },
+     {
+      "subtype": "trip_count",
+      "text": "손님"
+     }
+    ],
+    "factors": {
+     "date": "last_month",
+     "dimension": "h3",
+     "dimension_target": "dropoff",
+     "limit": 2,
+     "order": "bottom"
+    }
+   },
+   "gold_review": "CLEAR_GOLD",
+   "gold_review_note": "'대구 수성구에서 탄 손님들' → 수성구 od_role pickup(장소 제한 끝). '내린 곳 중 … H3 셀' → h3·dimension_target dropoff(묶는 끝). '가장 드문 … 두 곳' → bottom 2. measure는 그 손님들의 실차 건수(trip_count, text '손님'). 'H3 셀'은 dimension이지 concept·measure text가 아니다. gold와 일치",
+   "canonical_reason": "27B top-1이 'H3 셀'을 measure text로 써서 거부(reasoning-final 충돌), 규칙상 대체 없음",
+   "review_decision": "APPROVE_CANONICAL",
+   "review_checks": [
+    "질문 표현 근거",
+    "gold와 의미 충돌 없음",
+    "없는 ontology 규칙 없음",
+    "od_role·dimension_target 구분",
+    "묶음 단위어를 concept로 만들지 않음",
+    "장문 reasoning 아님"
+   ],
+   "review_note": "'H3 셀'이 dimension이고 concept·measure text가 아님을 명시. measure text '손님'은 gold와 같음",
+   "rationale_chars": 650,
+   "rationale_sha256": "8c5cb56edb952d42fad78a3f64a2f68f12f26880d9989ae3a6dc235ff3730d1d"
+  }
+ }
+}
