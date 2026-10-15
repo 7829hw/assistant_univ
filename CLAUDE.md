@@ -59,6 +59,9 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
      Decision 100 (AN, 2026-10-14) allows all three GPUs for pilot_004: training on one GPU; sample collection, checkpoint
      evaluation and vendor 100 evaluation split across the three. Same checks every time; nothing else on the Ollama GPU
      during an Ollama measurement (E, 27b); cells of one comparison use the same backend, sampler and concurrency.
+     Decision 105 (AS, 2026-10-15) continues this for pilot_005: one GPU per training variant (three variants at once); before
+     training on the Ollama GPU confirm no Ollama model is loaded; evaluation starts on GPUs freed by finished training; one vLLM
+     server may hold several LoRA adapters.
    - HF runs with `CUDA_VISIBLE_DEVICES=3` (or `=2` for the spare); inside the process it appears as `cuda:0`. Do not
      change `CUDA_DEVICE_ORDER`.
    - Never unload Ollama models yourself and never touch the container to free a GPU. If an Ollama measurement is
