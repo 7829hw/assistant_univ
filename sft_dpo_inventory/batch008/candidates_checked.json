@@ -1,0 +1,2394 @@
+{
+ "summary": {
+  "prompt_hash": "87048d0c554c365e0e7994d09a4515c1cc646785708ce6dc9d1f120b4b5e8c2c",
+  "drafted": 38,
+  "kept": 10,
+  "excluded": 28,
+  "kept_by_gap": {
+   "g1_dt_no_rank": 1,
+   "g2_implicit_endpoint": 2,
+   "g4_bucket_dimension": 7
+  },
+  "excluded_by_gap": {
+   "g1_dt_no_rank": 7,
+   "g2_implicit_endpoint": 8,
+   "g3_valueless_place": 8,
+   "g4_bucket_dimension": 5
+  },
+  "excluded_reasons": {
+   "extended_template": 12,
+   "extended_family": 24,
+   "valid98:template": 7,
+   "valid98:family": 17,
+   "batch007:jaccard>=0.5": 1,
+   "validation_chain_failed": 4,
+   "full_path_not_answered:UNSUPPORTED_COMBINATION": 3,
+   "selection_v1:template": 6,
+   "selection_v1:family": 9,
+   "selection_v2:template": 6,
+   "selection_v2:family": 9,
+   "aux_test_v1:template": 6,
+   "aux_test_v1:family": 8,
+   "vendor100:family": 10,
+   "thor:protected_semantic_template": 4,
+   "thor:protected_semantic_family": 5,
+   "selection_v1:jaccard>=0.5": 1,
+   "selection_v1:same_grounding": 2,
+   "selection_v2:jaccard>=0.5": 1,
+   "selection_v2:same_grounding": 2,
+   "vendor100:template": 6,
+   "aug300:same_grounding": 2,
+   "aux_test_v1:jaccard>=0.5": 1,
+   "aug300:jaccard>=0.5": 1,
+   "full_path_not_answered:PARAM_VALUE_REQUIRES_INPUT": 1
+  },
+  "chain_ok_kept": 10,
+  "t2pc_outcomes_kept": {
+   "answered:None": 10
+  },
+  "jaccard_max_any_target": 0.647,
+  "target_sets": {
+   "selection_v1": 100,
+   "selection_v2": 98,
+   "aux_test_v1": 51,
+   "valid98": 98,
+   "vendor100": 100,
+   "batch007": 27,
+   "train_v006_t2pc": 135,
+   "train_thinking_pilot004_t2pc": 467,
+   "pg_batch006": 43,
+   "pg_reviewed_reasoning_v001": 154,
+   "pg_reviewed_gold_v006_p0": 154,
+   "aug300": 300
+  },
+  "protection_sources": 54,
+  "inputs": {
+   "candidates_draft.yaml": "b83a2f44374e9bdc2c1657612f4325938ce7e98e79f56588bde3e3d69f530460",
+   "aug300": "abb9d63ee363753945c83ab83aca5197041f7753d4892b1599cda01179aa8c3b",
+   "pg_batch006": "d1899344e210840665fc87422657b83f47b41874c3cdc118b36da19e4c27289e",
+   "pg_reviewed_reasoning_v001": "071ccdbee8c74694a189e861bb572975c6198da9c79b7cc93a558f531decea49",
+   "pg_reviewed_gold_v006_p0": "e792ee5e5093bd57c234cb982f4a558d4ed0a109b2666ccb9350b7eb38bb2b41"
+  }
+ },
+ "candidates": [
+  {
+   "id": "b008-02",
+   "gap": "g1_dt_no_rank",
+   "group": "g1",
+   "question": "이번 달 부산 수영구에 도착한 실차 건수를 출발 시군구별로 나눠줘",
+   "gold_text": "get_place_scope(name=수영구, region=부산)\nget_trip_count(scope_dropoff=$dropoff.scope, date=this_month, dimension=sigungu, dimension_target=pickup)",
+   "rationale": "실차 건수(trip_count). 장소가 제한하는 끝=od_role(scope_pickup/scope_dropoff), 묶는 끝=dimension_target. 수영구 도착=dropoff, 출발 시군구별=pickup으로 묶음. 순위·개수 제한이 없으므로 order·limit 없음. ",
+   "gold": [
+    {
+     "tool": "get_place_scope",
+     "args": {
+      "name": "수영구",
+      "region": "부산"
+     }
+    },
+    {
+     "tool": "get_trip_count",
+     "args": {
+      "scope_dropoff": "$dropoff.scope",
+      "date": "this_month",
+      "dimension": "sigungu",
+      "dimension_target": "pickup"
+     }
+    }
+   ],
+   "draft_grounding": {
+    "concepts": [
+     {
+      "id": "place_scope_dropoff",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "수영구",
+       "region": "부산"
+      },
+      "attributes": {
+       "od_role": "dropoff"
+      },
+      "text": "부산 수영구"
+     },
+     {
+      "id": "event",
+      "concept": "EVENT",
+      "subtype": "trip",
+      "role": "SUPPORT",
+      "source": "implicit"
+     },
+     {
+      "id": "measure",
+      "concept": "AMOUNT",
+      "subtype": "trip_count",
+      "role": "MEASURE",
+      "source": "implicit",
+      "text": "실차 건수"
+     }
+    ],
+    "factors": {
+     "date": "this_month",
+     "dimension": "sigungu",
+     "dimension_target": "pickup"
+    }
+   },
+   "span_flags": [],
+   "semantics": {
+    "nodes": [
+     {
+      "subtype": "place",
+      "value": {
+       "name": "수영구",
+       "region": "부산"
+      },
+      "text": "부산 수영구",
+      "attributes": {
+       "od_role": "dropoff"
+      }
+     },
+     {
+      "subtype": "trip_count",
+      "text": "실차 건수"
+     }
+    ],
+    "event": "trip",
+    "factors": {
+     "date": "this_month",
+     "dimension": "sigungu",
+     "dimension_target": "pickup"
+    },
+    "unsupported": null
+   },
+   "view": {
+    "measure": {
+     "subtype": "trip_count",
+     "text": "실차 건수"
+    },
+    "conditions": [
+     {
+      "subtype": "place",
+      "span": "부산 수영구",
+      "value": {
+       "name": "수영구",
+       "region": "부산"
+      },
+      "od_role": "dropoff"
+     },
+     {
+      "subtype": "date",
+      "span": null,
+      "value": "this_month",
+      "od_role": null
+     }
+    ],
+    "dimension": "sigungu",
+    "dimension_target": "pickup",
+    "refusal": null
+   },
+   "validation_chain": {
+    "ok": true,
+    "assess_same": true,
+    "mock_same": true,
+    "execution_match": true,
+    "full_answered": true
+   },
+   "t2pc": {
+    "parse_ok": true,
+    "compose_ok": true,
+    "validation_ok": true,
+    "validation_codes": [],
+    "error_code": null,
+    "outcome": "answered",
+    "compile_ok": true,
+    "compile_error_code": null,
+    "condition_actions": {},
+    "operators": [
+     "RESOLVE_PLACE_SCOPE",
+     "TRIP_COUNT"
+    ],
+    "condition_changed_meaning": false,
+    "condition_changed_outcome": false
+   },
+   "leakage": {
+    "thor_policy_reasons": [],
+    "per_set": {
+     "selection_v1": {
+      "question": [],
+      "jaccard_max": 0.146,
+      "jaccard_nearest": "indepv4/k32",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "selection_v2": {
+      "question": [],
+      "jaccard_max": 0.068,
+      "jaccard_nearest": "indepv3/m05",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "aux_test_v1": {
+      "question": [],
+      "jaccard_max": 0.115,
+      "jaccard_nearest": "final_v12/f24",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "valid98": {
+      "question": [],
+      "jaccard_max": 0.091,
+      "jaccard_nearest": "heldout_v9/h08",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "vendor100": {
+      "question": [],
+      "jaccard_max": 0.119,
+      "jaccard_nearest": "005",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "batch007": {
+      "question": [],
+      "jaccard_max": 0.083,
+      "jaccard_nearest": "b007-04",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "train_v006_t2pc": {
+      "question": [],
+      "jaccard_max": 0.286,
+      "jaccard_nearest": "b006-08",
+      "same_grounding": [],
+      "template": 1,
+      "family": 1
+     },
+     "train_thinking_pilot004_t2pc": {
+      "question": [],
+      "jaccard_max": 0.286,
+      "jaccard_nearest": "b006-08",
+      "same_grounding": [],
+      "template": 4,
+      "family": 4
+     },
+     "pg_batch006": {
+      "question": [],
+      "jaccard_max": 0.256,
+      "jaccard_nearest": "pg-b006-37",
+      "same_grounding": [],
+      "template": 1,
+      "family": 1
+     },
+     "pg_reviewed_reasoning_v001": {
+      "question": [],
+      "jaccard_max": 0.262,
+      "jaccard_nearest": "b005-45",
+      "same_grounding": [],
+      "template": 2,
+      "family": 2
+     },
+     "pg_reviewed_gold_v006_p0": {
+      "question": [],
+      "jaccard_max": 0.262,
+      "jaccard_nearest": "b005-45",
+      "same_grounding": [],
+      "template": 2,
+      "family": 2
+     },
+     "aug300": {
+      "question": [],
+      "jaccard_max": 0.19,
+      "jaccard_nearest": "aug300-292",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     }
+    }
+   },
+   "overlap_info": {
+    "training_and_other_template_family": {
+     "train_v006_t2pc": {
+      "template": 1,
+      "family": 1
+     },
+     "train_thinking_pilot004_t2pc": {
+      "template": 4,
+      "family": 4
+     },
+     "pg_batch006": {
+      "template": 1,
+      "family": 1
+     },
+     "pg_reviewed_reasoning_v001": {
+      "template": 2,
+      "family": 2
+     },
+     "pg_reviewed_gold_v006_p0": {
+      "template": 2,
+      "family": 2
+     }
+    }
+   },
+   "template_key": "d518e0dc741df659e200d13c2a30f1fddc798cbb4da2dad45711215938ee8566",
+   "family_key": "aeda52a8e5766dd56a608fa6894582789d332a4734fc040e97a161cede3b152a"
+  },
+  {
+   "id": "b008-14",
+   "gap": "g2_implicit_endpoint",
+   "group": "g2",
+   "question": "2026년 9월 1일부터 15일까지 부산 수영구에 내려준 손님을 어디서 태웠는지 읍면동별로 보여줘",
+   "gold_text": "get_place_scope(name=수영구, region=부산)\nget_trip_count(scope_dropoff=$dropoff.scope, date=20260901-20260915, dimension=emd, dimension_target=pickup)",
+   "rationale": "승차·하차·출발·도착이라는 말이 없다. 손님을 태운 곳=승차 끝(pickup), 내려준·내린 곳=하차 끝(dropoff). 건수이므로 trip_count. 수영구에 내려준=dropoff(장소 제한), 어디서 태웠는지=pickup으로 묶음.",
+   "gold": [
+    {
+     "tool": "get_place_scope",
+     "args": {
+      "name": "수영구",
+      "region": "부산"
+     }
+    },
+    {
+     "tool": "get_trip_count",
+     "args": {
+      "scope_dropoff": "$dropoff.scope",
+      "date": "20260901-20260915",
+      "dimension": "emd",
+      "dimension_target": "pickup"
+     }
+    }
+   ],
+   "draft_grounding": {
+    "concepts": [
+     {
+      "id": "place_scope_dropoff",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "수영구",
+       "region": "부산"
+      },
+      "attributes": {
+       "od_role": "dropoff"
+      },
+      "text": "부산 수영구"
+     },
+     {
+      "id": "event",
+      "concept": "EVENT",
+      "subtype": "trip",
+      "role": "SUPPORT",
+      "source": "implicit"
+     },
+     {
+      "id": "measure",
+      "concept": "AMOUNT",
+      "subtype": "trip_count",
+      "role": "MEASURE",
+      "source": "implicit"
+     }
+    ],
+    "factors": {
+     "date": "20260901-20260915",
+     "dimension": "emd",
+     "dimension_target": "pickup"
+    }
+   },
+   "span_flags": [
+    "span_missing:measure:trip_count"
+   ],
+   "semantics": {
+    "nodes": [
+     {
+      "subtype": "place",
+      "value": {
+       "name": "수영구",
+       "region": "부산"
+      },
+      "text": "부산 수영구",
+      "attributes": {
+       "od_role": "dropoff"
+      }
+     },
+     {
+      "subtype": "trip_count"
+     }
+    ],
+    "event": "trip",
+    "factors": {
+     "date": "20260901-20260915",
+     "dimension": "emd",
+     "dimension_target": "pickup"
+    },
+    "unsupported": null
+   },
+   "view": {
+    "measure": {
+     "subtype": "trip_count",
+     "text": null
+    },
+    "conditions": [
+     {
+      "subtype": "place",
+      "span": "부산 수영구",
+      "value": {
+       "name": "수영구",
+       "region": "부산"
+      },
+      "od_role": "dropoff"
+     },
+     {
+      "subtype": "date",
+      "span": null,
+      "value": "20260901-20260915",
+      "od_role": null
+     }
+    ],
+    "dimension": "emd",
+    "dimension_target": "pickup",
+    "refusal": null
+   },
+   "validation_chain": {
+    "ok": true,
+    "assess_same": true,
+    "mock_same": true,
+    "execution_match": true,
+    "full_answered": true
+   },
+   "t2pc": {
+    "parse_ok": true,
+    "compose_ok": true,
+    "validation_ok": true,
+    "validation_codes": [],
+    "error_code": null,
+    "outcome": "answered",
+    "compile_ok": true,
+    "compile_error_code": null,
+    "condition_actions": {},
+    "operators": [
+     "RESOLVE_PLACE_SCOPE",
+     "TRIP_COUNT"
+    ],
+    "condition_changed_meaning": false,
+    "condition_changed_outcome": false
+   },
+   "leakage": {
+    "thor_policy_reasons": [],
+    "per_set": {
+     "selection_v1": {
+      "question": [],
+      "jaccard_max": 0.186,
+      "jaccard_nearest": "indepv3/m08",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "selection_v2": {
+      "question": [],
+      "jaccard_max": 0.186,
+      "jaccard_nearest": "indepv3/m08",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "aux_test_v1": {
+      "question": [],
+      "jaccard_max": 0.197,
+      "jaccard_nearest": "final_v12/f11",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "valid98": {
+      "question": [],
+      "jaccard_max": 0.063,
+      "jaccard_nearest": "heldout_v9/h17",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "vendor100": {
+      "question": [],
+      "jaccard_max": 0.09,
+      "jaccard_nearest": "030",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "batch007": {
+      "question": [],
+      "jaccard_max": 0.179,
+      "jaccard_nearest": "b007-24",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "train_v006_t2pc": {
+      "question": [],
+      "jaccard_max": 0.194,
+      "jaccard_nearest": "b005-10",
+      "same_grounding": [],
+      "template": 2,
+      "family": 2
+     },
+     "train_thinking_pilot004_t2pc": {
+      "question": [],
+      "jaccard_max": 0.194,
+      "jaccard_nearest": "b005-10",
+      "same_grounding": [],
+      "template": 10,
+      "family": 10
+     },
+     "pg_batch006": {
+      "question": [],
+      "jaccard_max": 0.2,
+      "jaccard_nearest": "pg-b006-25",
+      "same_grounding": [],
+      "template": 1,
+      "family": 1
+     },
+     "pg_reviewed_reasoning_v001": {
+      "question": [],
+      "jaccard_max": 0.2,
+      "jaccard_nearest": "b006-25",
+      "same_grounding": [],
+      "template": 3,
+      "family": 3
+     },
+     "pg_reviewed_gold_v006_p0": {
+      "question": [],
+      "jaccard_max": 0.2,
+      "jaccard_nearest": "b006-25",
+      "same_grounding": [],
+      "template": 3,
+      "family": 3
+     },
+     "aug300": {
+      "question": [],
+      "jaccard_max": 0.217,
+      "jaccard_nearest": "aug300-254",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     }
+    }
+   },
+   "overlap_info": {
+    "training_and_other_template_family": {
+     "train_v006_t2pc": {
+      "template": 2,
+      "family": 2
+     },
+     "train_thinking_pilot004_t2pc": {
+      "template": 10,
+      "family": 10
+     },
+     "pg_batch006": {
+      "template": 1,
+      "family": 1
+     },
+     "pg_reviewed_reasoning_v001": {
+      "template": 3,
+      "family": 3
+     },
+     "pg_reviewed_gold_v006_p0": {
+      "template": 3,
+      "family": 3
+     }
+    }
+   },
+   "template_key": "5012b8ab94ae0ee7fbdfde8c6c8bdfdac312505596c28ee87b165c97e16e6c41",
+   "family_key": "d34012728e3411dc8b18f3259667dd3c74e68907550e4d85d32c67f7cce3654d"
+  },
+  {
+   "id": "b008-18",
+   "gap": "g2_implicit_endpoint",
+   "group": "g2",
+   "question": "지난달 대구에서 손님을 내려준 데가 가장 적은 시군구 2곳은?",
+   "gold_text": "get_place_scope(name=대구)\nget_trip_count(scope_dropoff=$dropoff.scope, date=last_month, dimension=sigungu, dimension_target=dropoff, order=bottom, limit=2)",
+   "rationale": "승차·하차·출발·도착이라는 말이 없다. 손님을 태운 곳=승차 끝(pickup), 내려준·내린 곳=하차 끝(dropoff). 건수이므로 trip_count. 내려준 데=dropoff.",
+   "gold": [
+    {
+     "tool": "get_place_scope",
+     "args": {
+      "name": "대구"
+     }
+    },
+    {
+     "tool": "get_trip_count",
+     "args": {
+      "scope_dropoff": "$dropoff.scope",
+      "date": "last_month",
+      "dimension": "sigungu",
+      "dimension_target": "dropoff",
+      "order": "bottom",
+      "limit": 2
+     }
+    }
+   ],
+   "draft_grounding": {
+    "concepts": [
+     {
+      "id": "place_scope_dropoff",
+      "concept": "LOCATION",
+      "subtype": "place",
+      "role": "SUBCOND",
+      "source": "user",
+      "value": {
+       "name": "대구",
+       "region": ""
+      },
+      "attributes": {
+       "od_role": "dropoff"
+      },
+      "text": "대구"
+     },
+     {
+      "id": "event",
+      "concept": "EVENT",
+      "subtype": "trip",
+      "role": "SUPPORT",
+      "source": "implicit"
+     },
+     {
+      "id": "measure",
+      "concept": "AMOUNT",
+      "subtype": "trip_count",
+      "role": "MEASURE",
+      "source": "implicit"
+     }
+    ],
+    "factors": {
+     "date": "last_month",
+     "dimension": "sigungu",
+     "dimension_target": "dropoff",
+     "order": "bottom",
+     "limit": 2
+    }
+   },
+   "span_flags": [
+    "span_missing:measure:trip_count"
+   ],
+   "semantics": {
+    "nodes": [
+     {
+      "subtype": "place",
+      "value": {
+       "name": "대구",
+       "region": ""
+      },
+      "text": "대구",
+      "attributes": {
+       "od_role": "dropoff"
+      }
+     },
+     {
+      "subtype": "trip_count"
+     }
+    ],
+    "event": "trip",
+    "factors": {
+     "date": "last_month",
+     "dimension": "sigungu",
+     "dimension_target": "dropoff",
+     "order": "bottom",
+     "limit": 2
+    },
+    "unsupported": null
+   },
+   "view": {
+    "measure": {
+     "subtype": "trip_count",
+     "text": null
+    },
+    "conditions": [
+     {
+      "subtype": "place",
+      "span": "대구",
+      "value": {
+       "name": "대구",
+       "region": ""
+      },
+      "od_role": "dropoff"
+     },
+     {
+      "subtype": "date",
+      "span": null,
+      "value": "last_month",
+      "od_role": null
+     }
+    ],
+    "dimension": "sigungu",
+    "dimension_target": "dropoff",
+    "order": "bottom",
+    "limit": 2,
+    "refusal": null
+   },
+   "validation_chain": {
+    "ok": true,
+    "assess_same": true,
+    "mock_same": true,
+    "execution_match": true,
+    "full_answered": true
+   },
+   "t2pc": {
+    "parse_ok": true,
+    "compose_ok": true,
+    "validation_ok": true,
+    "validation_codes": [],
+    "error_code": null,
+    "outcome": "answered",
+    "compile_ok": true,
+    "compile_error_code": null,
+    "condition_actions": {},
+    "operators": [
+     "RESOLVE_PLACE_SCOPE",
+     "TRIP_COUNT"
+    ],
+    "condition_changed_meaning": false,
+    "condition_changed_outcome": false
+   },
+   "leakage": {
+    "thor_policy_reasons": [],
+    "per_set": {
+     "selection_v1": {
+      "question": [],
+      "jaccard_max": 0.206,
+      "jaccard_nearest": "contrast/c05c",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "selection_v2": {
+      "question": [],
+      "jaccard_max": 0.206,
+      "jaccard_nearest": "contrast/c05c",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "aux_test_v1": {
+      "question": [],
+      "jaccard_max": 0.097,
+      "jaccard_nearest": "at/t05d",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "valid98": {
+      "question": [],
+      "jaccard_max": 0.119,
+      "jaccard_nearest": "heldout_v9/h30",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "vendor100": {
+      "question": [],
+      "jaccard_max": 0.139,
+      "jaccard_nearest": "007",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "batch007": {
+      "question": [],
+      "jaccard_max": 0.136,
+      "jaccard_nearest": "b007-04",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "train_v006_t2pc": {
+      "question": [],
+      "jaccard_max": 0.158,
+      "jaccard_nearest": "b004-41",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "train_thinking_pilot004_t2pc": {
+      "question": [],
+      "jaccard_max": 0.158,
+      "jaccard_nearest": "b004-41",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "pg_batch006": {
+      "question": [],
+      "jaccard_max": 0.233,
+      "jaccard_nearest": "pg-b006-17",
+      "same_grounding": [],
+      "template": 1,
+      "family": 1
+     },
+     "pg_reviewed_reasoning_v001": {
+      "question": [],
+      "jaccard_max": 0.233,
+      "jaccard_nearest": "b006-17",
+      "same_grounding": [],
+      "template": 1,
+      "family": 1
+     },
+     "pg_reviewed_gold_v006_p0": {
+      "question": [],
+      "jaccard_max": 0.233,
+      "jaccard_nearest": "b006-17",
+      "same_grounding": [],
+      "template": 1,
+      "family": 1
+     },
+     "aug300": {
+      "question": [],
+      "jaccard_max": 0.097,
+      "jaccard_nearest": "aug300-306",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     }
+    }
+   },
+   "overlap_info": {
+    "training_and_other_template_family": {
+     "pg_batch006": {
+      "template": 1,
+      "family": 1
+     },
+     "pg_reviewed_reasoning_v001": {
+      "template": 1,
+      "family": 1
+     },
+     "pg_reviewed_gold_v006_p0": {
+      "template": 1,
+      "family": 1
+     }
+    }
+   },
+   "template_key": "c26775b57f76f2ac08ad21257af13c8035849c550a58600ffd6003a2136cf81d",
+   "family_key": "603d193eced21a56a950c981b7d2b31eb63e79883579bf0558859ac804073c8a"
+  },
+  {
+   "id": "b008-29",
+   "gap": "g4_bucket_dimension",
+   "group": "g4-p2",
+   "question": "올해 법인택시 운행 일수를 월별로 평균 낸 값 가운데 가장 큰 값은?",
+   "gold_text": "get_billing_metrics(metric=operating_days, date=this_year, taxi_type=corporate, aggregation=avg, bucket=month, rollup=max)",
+   "rationale": "기간을 주·월 단위로 나눠 1차 집계(aggregation)한 뒤 그 값들을 다시 집계(rollup) = bucket + rollup. 요일·지역별 묶음(dimension)이 아니다. 월별 평균=avg, month; 가장 큰 값=rollup max.",
+   "gold": [
+    {
+     "tool": "get_billing_metrics",
+     "args": {
+      "metric": "operating_days",
+      "date": "this_year",
+      "taxi_type": "corporate",
+      "aggregation": "avg",
+      "bucket": "month",
+      "rollup": "max"
+     }
+    }
+   ],
+   "draft_grounding": {
+    "concepts": [
+     {
+      "id": "event",
+      "concept": "EVENT",
+      "subtype": "operation",
+      "role": "SUPPORT",
+      "source": "implicit"
+     },
+     {
+      "id": "measure",
+      "concept": "AMOUNT",
+      "subtype": "operating_days",
+      "role": "MEASURE",
+      "source": "implicit",
+      "text": "운행 일수"
+     }
+    ],
+    "factors": {
+     "date": "this_year",
+     "taxi_type": "corporate",
+     "aggregation": "avg",
+     "bucket": "month",
+     "rollup": "max"
+    }
+   },
+   "span_flags": [],
+   "semantics": {
+    "nodes": [
+     {
+      "subtype": "operating_days",
+      "text": "운행 일수"
+     }
+    ],
+    "event": "operation",
+    "factors": {
+     "date": "this_year",
+     "taxi_type": "corporate",
+     "aggregation": "avg",
+     "bucket": "month",
+     "rollup": "max"
+    },
+    "unsupported": null
+   },
+   "view": {
+    "measure": {
+     "subtype": "operating_days",
+     "text": "운행 일수"
+    },
+    "conditions": [
+     {
+      "subtype": "date",
+      "span": null,
+      "value": "this_year",
+      "od_role": null
+     },
+     {
+      "subtype": "taxi_type",
+      "span": null,
+      "value": "corporate",
+      "od_role": null
+     }
+    ],
+    "bucket": "month",
+    "rollup": "max",
+    "aggregation": "avg",
+    "refusal": null
+   },
+   "validation_chain": {
+    "ok": true,
+    "assess_same": true,
+    "mock_same": true,
+    "execution_match": true,
+    "full_answered": true
+   },
+   "t2pc": {
+    "parse_ok": true,
+    "compose_ok": true,
+    "validation_ok": true,
+    "validation_codes": [],
+    "error_code": null,
+    "outcome": "answered",
+    "compile_ok": true,
+    "compile_error_code": null,
+    "condition_actions": {},
+    "operators": [
+     "OPERATION_METRIC",
+     "REDUCE_GROUPS"
+    ],
+    "condition_changed_meaning": false,
+    "condition_changed_outcome": false
+   },
+   "leakage": {
+    "thor_policy_reasons": [],
+    "per_set": {
+     "selection_v1": {
+      "question": [],
+      "jaccard_max": 0.2,
+      "jaccard_nearest": "old44/g42",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "selection_v2": {
+      "question": [],
+      "jaccard_max": 0.2,
+      "jaccard_nearest": "old44/g42",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "aux_test_v1": {
+      "question": [],
+      "jaccard_max": 0.077,
+      "jaccard_nearest": "at/t01c",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "valid98": {
+      "question": [],
+      "jaccard_max": 0.122,
+      "jaccard_nearest": "stage_v7/s03a",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "vendor100": {
+      "question": [],
+      "jaccard_max": 0.125,
+      "jaccard_nearest": "100",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "batch007": {
+      "question": [],
+      "jaccard_max": 0.0,
+      "jaccard_nearest": "b007-28",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "train_v006_t2pc": {
+      "question": [],
+      "jaccard_max": 0.116,
+      "jaccard_nearest": "ann-cc38d74754ba7eab68a8",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "train_thinking_pilot004_t2pc": {
+      "question": [],
+      "jaccard_max": 0.116,
+      "jaccard_nearest": "ann-cc38d74754ba7eab68a8",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "pg_batch006": {
+      "question": [],
+      "jaccard_max": 0.0,
+      "jaccard_nearest": "pg-b006-43",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "pg_reviewed_reasoning_v001": {
+      "question": [],
+      "jaccard_max": 0.116,
+      "jaccard_nearest": "ann-cc38d74754ba7eab68a8",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "pg_reviewed_gold_v006_p0": {
+      "question": [],
+      "jaccard_max": 0.116,
+      "jaccard_nearest": "ann-cc38d74754ba7eab68a8",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "aug300": {
+      "question": [],
+      "jaccard_max": 0.114,
+      "jaccard_nearest": "aug300-352",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     }
+    }
+   },
+   "overlap_info": {
+    "training_and_other_template_family": {}
+   },
+   "template_key": "1152534fe03832b9c482ad663308cd101d5dbccc36167b2a2d0d66253489e0bc",
+   "family_key": "ecd522b09f5d1b8dec705bf579b0c8b7c106872f68aa449d54740cd9e649b8db"
+  },
+  {
+   "id": "b008-30",
+   "gap": "g4_bucket_dimension",
+   "group": "g4-p2",
+   "question": "올해 법인택시 운행 일수의 평균을 시도별로 알려줘",
+   "gold_text": "get_billing_metrics(metric=operating_days, date=this_year, taxi_type=corporate, aggregation=avg, dimension=sido)",
+   "rationale": "요일·지역별로 나눠 보이는 것 = dimension. 기간 구간(bucket)이 아니고 rollup도 없다. 시도별 평균.",
+   "gold": [
+    {
+     "tool": "get_billing_metrics",
+     "args": {
+      "metric": "operating_days",
+      "date": "this_year",
+      "taxi_type": "corporate",
+      "aggregation": "avg",
+      "dimension": "sido"
+     }
+    }
+   ],
+   "draft_grounding": {
+    "concepts": [
+     {
+      "id": "event",
+      "concept": "EVENT",
+      "subtype": "operation",
+      "role": "SUPPORT",
+      "source": "implicit"
+     },
+     {
+      "id": "measure",
+      "concept": "AMOUNT",
+      "subtype": "operating_days",
+      "role": "MEASURE",
+      "source": "implicit",
+      "text": "운행 일수"
+     }
+    ],
+    "factors": {
+     "date": "this_year",
+     "taxi_type": "corporate",
+     "dimension": "sido",
+     "aggregation": "avg"
+    }
+   },
+   "span_flags": [],
+   "semantics": {
+    "nodes": [
+     {
+      "subtype": "operating_days",
+      "text": "운행 일수"
+     }
+    ],
+    "event": "operation",
+    "factors": {
+     "date": "this_year",
+     "taxi_type": "corporate",
+     "dimension": "sido",
+     "aggregation": "avg"
+    },
+    "unsupported": null
+   },
+   "view": {
+    "measure": {
+     "subtype": "operating_days",
+     "text": "운행 일수"
+    },
+    "conditions": [
+     {
+      "subtype": "date",
+      "span": null,
+      "value": "this_year",
+      "od_role": null
+     },
+     {
+      "subtype": "taxi_type",
+      "span": null,
+      "value": "corporate",
+      "od_role": null
+     }
+    ],
+    "dimension": "sido",
+    "aggregation": "avg",
+    "refusal": null
+   },
+   "validation_chain": {
+    "ok": true,
+    "assess_same": true,
+    "mock_same": true,
+    "execution_match": true,
+    "full_answered": true
+   },
+   "t2pc": {
+    "parse_ok": true,
+    "compose_ok": true,
+    "validation_ok": true,
+    "validation_codes": [],
+    "error_code": null,
+    "outcome": "answered",
+    "compile_ok": true,
+    "compile_error_code": null,
+    "condition_actions": {},
+    "operators": [
+     "OPERATION_METRIC"
+    ],
+    "condition_changed_meaning": false,
+    "condition_changed_outcome": false
+   },
+   "leakage": {
+    "thor_policy_reasons": [],
+    "per_set": {
+     "selection_v1": {
+      "question": [],
+      "jaccard_max": 0.167,
+      "jaccard_nearest": "indepv4/k17",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "selection_v2": {
+      "question": [],
+      "jaccard_max": 0.167,
+      "jaccard_nearest": "indepv4/k17",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "aux_test_v1": {
+      "question": [],
+      "jaccard_max": 0.077,
+      "jaccard_nearest": "at/t02c",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "valid98": {
+      "question": [],
+      "jaccard_max": 0.161,
+      "jaccard_nearest": "heldout_v9/h45",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "vendor100": {
+      "question": [],
+      "jaccard_max": 0.143,
+      "jaccard_nearest": "063",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "batch007": {
+      "question": [],
+      "jaccard_max": 0.07,
+      "jaccard_nearest": "b007-04",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "train_v006_t2pc": {
+      "question": [],
+      "jaccard_max": 0.125,
+      "jaccard_nearest": "ann-9d8392a4f8ca9ff8cfc2",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "train_thinking_pilot004_t2pc": {
+      "question": [],
+      "jaccard_max": 0.125,
+      "jaccard_nearest": "ann-9d8392a4f8ca9ff8cfc2",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "pg_batch006": {
+      "question": [],
+      "jaccard_max": 0.0,
+      "jaccard_nearest": "pg-b006-43",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "pg_reviewed_reasoning_v001": {
+      "question": [],
+      "jaccard_max": 0.125,
+      "jaccard_nearest": "ann-9d8392a4f8ca9ff8cfc2",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "pg_reviewed_gold_v006_p0": {
+      "question": [],
+      "jaccard_max": 0.125,
+      "jaccard_nearest": "ann-9d8392a4f8ca9ff8cfc2",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "aug300": {
+      "question": [],
+      "jaccard_max": 0.16,
+      "jaccard_nearest": "aug300-324",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     }
+    }
+   },
+   "overlap_info": {
+    "training_and_other_template_family": {}
+   },
+   "template_key": "5a71689a97905648ea50398073c5bd7874bb552996c660e2f7b7451725e639f2",
+   "family_key": "c93c3720a74b7c0c27f18e8ebfad529f53c900f3b5cab700915f8319f0f751d7"
+  },
+  {
+   "id": "b008-32",
+   "gap": "g4_bucket_dimension",
+   "group": "g4-p3",
+   "question": "이번 달 택시 가동률 평균을 요일별로 보여줘",
+   "gold_text": "get_billing_metrics(metric=active_taxi_ratio, date=this_month, aggregation=avg, dimension=dayofweek)",
+   "rationale": "요일·지역별로 나눠 보이는 것 = dimension. 기간 구간(bucket)이 아니고 rollup도 없다. 요일별 평균.",
+   "gold": [
+    {
+     "tool": "get_billing_metrics",
+     "args": {
+      "metric": "active_taxi_ratio",
+      "date": "this_month",
+      "aggregation": "avg",
+      "dimension": "dayofweek"
+     }
+    }
+   ],
+   "draft_grounding": {
+    "concepts": [
+     {
+      "id": "event",
+      "concept": "EVENT",
+      "subtype": "operation",
+      "role": "SUPPORT",
+      "source": "implicit"
+     },
+     {
+      "id": "measure",
+      "concept": "PROPORTION",
+      "subtype": "active_taxi_ratio",
+      "role": "MEASURE",
+      "source": "implicit",
+      "text": "가동률"
+     }
+    ],
+    "factors": {
+     "date": "this_month",
+     "dimension": "dayofweek",
+     "aggregation": "avg"
+    }
+   },
+   "span_flags": [],
+   "semantics": {
+    "nodes": [
+     {
+      "subtype": "active_taxi_ratio",
+      "text": "가동률"
+     }
+    ],
+    "event": "operation",
+    "factors": {
+     "date": "this_month",
+     "dimension": "dayofweek",
+     "aggregation": "avg"
+    },
+    "unsupported": null
+   },
+   "view": {
+    "measure": {
+     "subtype": "active_taxi_ratio",
+     "text": "가동률"
+    },
+    "conditions": [
+     {
+      "subtype": "date",
+      "span": null,
+      "value": "this_month",
+      "od_role": null
+     }
+    ],
+    "dimension": "dayofweek",
+    "aggregation": "avg",
+    "refusal": null
+   },
+   "validation_chain": {
+    "ok": true,
+    "assess_same": true,
+    "mock_same": true,
+    "execution_match": true,
+    "full_answered": true
+   },
+   "t2pc": {
+    "parse_ok": true,
+    "compose_ok": true,
+    "validation_ok": true,
+    "validation_codes": [],
+    "error_code": null,
+    "outcome": "answered",
+    "compile_ok": true,
+    "compile_error_code": null,
+    "condition_actions": {},
+    "operators": [
+     "OPERATION_METRIC"
+    ],
+    "condition_changed_meaning": false,
+    "condition_changed_outcome": false
+   },
+   "leakage": {
+    "thor_policy_reasons": [],
+    "per_set": {
+     "selection_v1": {
+      "question": [],
+      "jaccard_max": 0.143,
+      "jaccard_nearest": "indepv4/k17",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "selection_v2": {
+      "question": [],
+      "jaccard_max": 0.143,
+      "jaccard_nearest": "indepv4/k17",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "aux_test_v1": {
+      "question": [],
+      "jaccard_max": 0.1,
+      "jaccard_nearest": "final_v12/f55",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "valid98": {
+      "question": [],
+      "jaccard_max": 0.171,
+      "jaccard_nearest": "heldout_v8/r03",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "vendor100": {
+      "question": [],
+      "jaccard_max": 0.088,
+      "jaccard_nearest": "015",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "batch007": {
+      "question": [],
+      "jaccard_max": 0.054,
+      "jaccard_nearest": "b007-15",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "train_v006_t2pc": {
+      "question": [],
+      "jaccard_max": 0.125,
+      "jaccard_nearest": "b005-60",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "train_thinking_pilot004_t2pc": {
+      "question": [],
+      "jaccard_max": 0.103,
+      "jaccard_nearest": "b005-51",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "pg_batch006": {
+      "question": [],
+      "jaccard_max": 0.047,
+      "jaccard_nearest": "pg-b006-35",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "pg_reviewed_reasoning_v001": {
+      "question": [],
+      "jaccard_max": 0.125,
+      "jaccard_nearest": "b005-60",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "pg_reviewed_gold_v006_p0": {
+      "question": [],
+      "jaccard_max": 0.125,
+      "jaccard_nearest": "b005-60",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "aug300": {
+      "question": [],
+      "jaccard_max": 0.065,
+      "jaccard_nearest": "aug300-340",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     }
+    }
+   },
+   "overlap_info": {
+    "training_and_other_template_family": {}
+   },
+   "template_key": "03e0147dea2376aaef5aa9ca025435b47449f5fce1120100ae1c7dacdc488f8b",
+   "family_key": "3cb6b8ab559ef9055632c6061abf4265967163bf90a23066de04f244cec4a059"
+  },
+  {
+   "id": "b008-33",
+   "gap": "g4_bucket_dimension",
+   "group": "g4-p4",
+   "question": "지난해 활성택시 대수를 월마다 평균 낸 뒤 그 중간값을 구해줘",
+   "gold_text": "get_billing_metrics(metric=active_taxi_count, date=last_year, aggregation=avg, bucket=month, rollup=med)",
+   "rationale": "기간을 주·월 단위로 나눠 1차 집계(aggregation)한 뒤 그 값들을 다시 집계(rollup) = bucket + rollup. 요일·지역별 묶음(dimension)이 아니다. 월마다 평균 → 중간값.",
+   "gold": [
+    {
+     "tool": "get_billing_metrics",
+     "args": {
+      "metric": "active_taxi_count",
+      "date": "last_year",
+      "aggregation": "avg",
+      "bucket": "month",
+      "rollup": "med"
+     }
+    }
+   ],
+   "draft_grounding": {
+    "concepts": [
+     {
+      "id": "event",
+      "concept": "EVENT",
+      "subtype": "operation",
+      "role": "SUPPORT",
+      "source": "implicit"
+     },
+     {
+      "id": "measure",
+      "concept": "AMOUNT",
+      "subtype": "active_taxi_count",
+      "role": "MEASURE",
+      "source": "implicit",
+      "text": "활성택시 대수"
+     }
+    ],
+    "factors": {
+     "date": "last_year",
+     "aggregation": "avg",
+     "bucket": "month",
+     "rollup": "med"
+    }
+   },
+   "span_flags": [],
+   "semantics": {
+    "nodes": [
+     {
+      "subtype": "active_taxi_count",
+      "text": "활성택시 대수"
+     }
+    ],
+    "event": "operation",
+    "factors": {
+     "date": "last_year",
+     "aggregation": "avg",
+     "bucket": "month",
+     "rollup": "med"
+    },
+    "unsupported": null
+   },
+   "view": {
+    "measure": {
+     "subtype": "active_taxi_count",
+     "text": "활성택시 대수"
+    },
+    "conditions": [
+     {
+      "subtype": "date",
+      "span": null,
+      "value": "last_year",
+      "od_role": null
+     }
+    ],
+    "bucket": "month",
+    "rollup": "med",
+    "aggregation": "avg",
+    "refusal": null
+   },
+   "validation_chain": {
+    "ok": true,
+    "assess_same": true,
+    "mock_same": true,
+    "execution_match": true,
+    "full_answered": true
+   },
+   "t2pc": {
+    "parse_ok": true,
+    "compose_ok": true,
+    "validation_ok": true,
+    "validation_codes": [],
+    "error_code": null,
+    "outcome": "answered",
+    "compile_ok": true,
+    "compile_error_code": null,
+    "condition_actions": {},
+    "operators": [
+     "OPERATION_METRIC",
+     "REDUCE_GROUPS"
+    ],
+    "condition_changed_meaning": false,
+    "condition_changed_outcome": false
+   },
+   "leakage": {
+    "thor_policy_reasons": [],
+    "per_set": {
+     "selection_v1": {
+      "question": [],
+      "jaccard_max": 0.16,
+      "jaccard_nearest": "indepv2/n20",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "selection_v2": {
+      "question": [],
+      "jaccard_max": 0.16,
+      "jaccard_nearest": "indepv2/n20",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "aux_test_v1": {
+      "question": [],
+      "jaccard_max": 0.056,
+      "jaccard_nearest": "final_v12/f51",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "valid98": {
+      "question": [],
+      "jaccard_max": 0.116,
+      "jaccard_nearest": "heldout_v9/h42",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "vendor100": {
+      "question": [],
+      "jaccard_max": 0.143,
+      "jaccard_nearest": "017",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "batch007": {
+      "question": [],
+      "jaccard_max": 0.0,
+      "jaccard_nearest": "b007-28",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "train_v006_t2pc": {
+      "question": [],
+      "jaccard_max": 0.032,
+      "jaccard_nearest": "ann-2b2cbf79d7247f63e67a",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "train_thinking_pilot004_t2pc": {
+      "question": [],
+      "jaccard_max": 0.032,
+      "jaccard_nearest": "ann-2b2cbf79d7247f63e67a",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "pg_batch006": {
+      "question": [],
+      "jaccard_max": 0.0,
+      "jaccard_nearest": "pg-b006-43",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "pg_reviewed_reasoning_v001": {
+      "question": [],
+      "jaccard_max": 0.032,
+      "jaccard_nearest": "ann-2b2cbf79d7247f63e67a",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "pg_reviewed_gold_v006_p0": {
+      "question": [],
+      "jaccard_max": 0.032,
+      "jaccard_nearest": "ann-2b2cbf79d7247f63e67a",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "aug300": {
+      "question": [],
+      "jaccard_max": 0.152,
+      "jaccard_nearest": "aug300-326",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     }
+    }
+   },
+   "overlap_info": {
+    "training_and_other_template_family": {}
+   },
+   "template_key": "ff0ae44b36c540e436e0318e96dea44e39239256dba98ab1623a8f75468861d2",
+   "family_key": "b64696f8d4c55288a90f8f1e76d21e666c7155731552cba5c6f2a68287a840a0"
+  },
+  {
+   "id": "b008-35",
+   "gap": "g4_bucket_dimension",
+   "group": "g4-p5",
+   "question": "지난달 법인택시 수입을 주마다 합한 값 중 최솟값은?",
+   "gold_text": "get_billing_metrics(metric=revenue, date=last_month, taxi_type=corporate, aggregation=sum, bucket=week, rollup=min)",
+   "rationale": "기간을 주·월 단위로 나눠 1차 집계(aggregation)한 뒤 그 값들을 다시 집계(rollup) = bucket + rollup. 요일·지역별 묶음(dimension)이 아니다. 주마다 합 → 최솟값.",
+   "gold": [
+    {
+     "tool": "get_billing_metrics",
+     "args": {
+      "metric": "revenue",
+      "date": "last_month",
+      "taxi_type": "corporate",
+      "aggregation": "sum",
+      "bucket": "week",
+      "rollup": "min"
+     }
+    }
+   ],
+   "draft_grounding": {
+    "concepts": [
+     {
+      "id": "event",
+      "concept": "EVENT",
+      "subtype": "operation",
+      "role": "SUPPORT",
+      "source": "implicit"
+     },
+     {
+      "id": "measure",
+      "concept": "AMOUNT",
+      "subtype": "revenue",
+      "role": "MEASURE",
+      "source": "implicit",
+      "text": "수입"
+     }
+    ],
+    "factors": {
+     "date": "last_month",
+     "taxi_type": "corporate",
+     "aggregation": "sum",
+     "bucket": "week",
+     "rollup": "min"
+    }
+   },
+   "span_flags": [],
+   "semantics": {
+    "nodes": [
+     {
+      "subtype": "revenue",
+      "text": "수입"
+     }
+    ],
+    "event": "operation",
+    "factors": {
+     "date": "last_month",
+     "taxi_type": "corporate",
+     "aggregation": "sum",
+     "bucket": "week",
+     "rollup": "min"
+    },
+    "unsupported": null
+   },
+   "view": {
+    "measure": {
+     "subtype": "revenue",
+     "text": "수입"
+    },
+    "conditions": [
+     {
+      "subtype": "date",
+      "span": null,
+      "value": "last_month",
+      "od_role": null
+     },
+     {
+      "subtype": "taxi_type",
+      "span": null,
+      "value": "corporate",
+      "od_role": null
+     }
+    ],
+    "bucket": "week",
+    "rollup": "min",
+    "aggregation": "sum",
+    "refusal": null
+   },
+   "validation_chain": {
+    "ok": true,
+    "assess_same": true,
+    "mock_same": true,
+    "execution_match": true,
+    "full_answered": true
+   },
+   "t2pc": {
+    "parse_ok": true,
+    "compose_ok": true,
+    "validation_ok": true,
+    "validation_codes": [],
+    "error_code": null,
+    "outcome": "answered",
+    "compile_ok": true,
+    "compile_error_code": null,
+    "condition_actions": {},
+    "operators": [
+     "OPERATION_METRIC",
+     "REDUCE_GROUPS"
+    ],
+    "condition_changed_meaning": false,
+    "condition_changed_outcome": false
+   },
+   "leakage": {
+    "thor_policy_reasons": [],
+    "per_set": {
+     "selection_v1": {
+      "question": [],
+      "jaccard_max": 0.152,
+      "jaccard_nearest": "indepv3/m35",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "selection_v2": {
+      "question": [],
+      "jaccard_max": 0.152,
+      "jaccard_nearest": "indepv3/m35",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "aux_test_v1": {
+      "question": [],
+      "jaccard_max": 0.143,
+      "jaccard_nearest": "at/t03a",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "valid98": {
+      "question": [],
+      "jaccard_max": 0.114,
+      "jaccard_nearest": "stage_v7/s04c",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "vendor100": {
+      "question": [],
+      "jaccard_max": 0.1,
+      "jaccard_nearest": "077",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "batch007": {
+      "question": [],
+      "jaccard_max": 0.0,
+      "jaccard_nearest": "b007-28",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "train_v006_t2pc": {
+      "question": [],
+      "jaccard_max": 0.094,
+      "jaccard_nearest": "b005-51",
+      "same_grounding": [],
+      "template": 0,
+      "family": 1
+     },
+     "train_thinking_pilot004_t2pc": {
+      "question": [],
+      "jaccard_max": 0.094,
+      "jaccard_nearest": "b005-51",
+      "same_grounding": [],
+      "template": 0,
+      "family": 1
+     },
+     "pg_batch006": {
+      "question": [],
+      "jaccard_max": 0.03,
+      "jaccard_nearest": "pg-b006-20",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "pg_reviewed_reasoning_v001": {
+      "question": [],
+      "jaccard_max": 0.094,
+      "jaccard_nearest": "b005-51",
+      "same_grounding": [],
+      "template": 0,
+      "family": 1
+     },
+     "pg_reviewed_gold_v006_p0": {
+      "question": [],
+      "jaccard_max": 0.094,
+      "jaccard_nearest": "b005-51",
+      "same_grounding": [],
+      "template": 0,
+      "family": 1
+     },
+     "aug300": {
+      "question": [],
+      "jaccard_max": 0.172,
+      "jaccard_nearest": "aug300-329",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     }
+    }
+   },
+   "overlap_info": {
+    "training_and_other_template_family": {
+     "train_v006_t2pc": {
+      "family": 1
+     },
+     "train_thinking_pilot004_t2pc": {
+      "family": 1
+     },
+     "pg_reviewed_reasoning_v001": {
+      "family": 1
+     },
+     "pg_reviewed_gold_v006_p0": {
+      "family": 1
+     }
+    }
+   },
+   "template_key": "1ed43b62b48f029248f14e9f54882cdb7778f1694b13b124b5dbd9cc8c53dd96",
+   "family_key": "325188a1a219eb19951f51e8f3de9ce3319c378657a11bdd2eb918855ae6dc47"
+  },
+  {
+   "id": "b008-37",
+   "gap": "g4_bucket_dimension",
+   "group": "g4-p6",
+   "question": "올해 개인택시 가동률의 월별 최댓값을 구한 뒤 평균을 내줘",
+   "gold_text": "get_billing_metrics(metric=active_taxi_ratio, date=this_year, taxi_type=private, aggregation=max, bucket=month, rollup=avg)",
+   "rationale": "기간을 주·월 단위로 나눠 1차 집계(aggregation)한 뒤 그 값들을 다시 집계(rollup) = bucket + rollup. 요일·지역별 묶음(dimension)이 아니다. 월별 최댓값=max, month → 평균=rollup avg.",
+   "gold": [
+    {
+     "tool": "get_billing_metrics",
+     "args": {
+      "metric": "active_taxi_ratio",
+      "date": "this_year",
+      "taxi_type": "private",
+      "aggregation": "max",
+      "bucket": "month",
+      "rollup": "avg"
+     }
+    }
+   ],
+   "draft_grounding": {
+    "concepts": [
+     {
+      "id": "event",
+      "concept": "EVENT",
+      "subtype": "operation",
+      "role": "SUPPORT",
+      "source": "implicit"
+     },
+     {
+      "id": "measure",
+      "concept": "PROPORTION",
+      "subtype": "active_taxi_ratio",
+      "role": "MEASURE",
+      "source": "implicit",
+      "text": "가동률"
+     }
+    ],
+    "factors": {
+     "date": "this_year",
+     "taxi_type": "private",
+     "aggregation": "max",
+     "bucket": "month",
+     "rollup": "avg"
+    }
+   },
+   "span_flags": [],
+   "semantics": {
+    "nodes": [
+     {
+      "subtype": "active_taxi_ratio",
+      "text": "가동률"
+     }
+    ],
+    "event": "operation",
+    "factors": {
+     "date": "this_year",
+     "taxi_type": "private",
+     "aggregation": "max",
+     "bucket": "month",
+     "rollup": "avg"
+    },
+    "unsupported": null
+   },
+   "view": {
+    "measure": {
+     "subtype": "active_taxi_ratio",
+     "text": "가동률"
+    },
+    "conditions": [
+     {
+      "subtype": "date",
+      "span": null,
+      "value": "this_year",
+      "od_role": null
+     },
+     {
+      "subtype": "taxi_type",
+      "span": null,
+      "value": "private",
+      "od_role": null
+     }
+    ],
+    "bucket": "month",
+    "rollup": "avg",
+    "aggregation": "max",
+    "refusal": null
+   },
+   "validation_chain": {
+    "ok": true,
+    "assess_same": true,
+    "mock_same": true,
+    "execution_match": true,
+    "full_answered": true
+   },
+   "t2pc": {
+    "parse_ok": true,
+    "compose_ok": true,
+    "validation_ok": true,
+    "validation_codes": [],
+    "error_code": null,
+    "outcome": "answered",
+    "compile_ok": true,
+    "compile_error_code": null,
+    "condition_actions": {},
+    "operators": [
+     "OPERATION_METRIC",
+     "REDUCE_GROUPS"
+    ],
+    "condition_changed_meaning": false,
+    "condition_changed_outcome": false
+   },
+   "leakage": {
+    "thor_policy_reasons": [],
+    "per_set": {
+     "selection_v1": {
+      "question": [],
+      "jaccard_max": 0.135,
+      "jaccard_nearest": "indepv3/m34",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "selection_v2": {
+      "question": [],
+      "jaccard_max": 0.135,
+      "jaccard_nearest": "indepv3/m34",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "aux_test_v1": {
+      "question": [],
+      "jaccard_max": 0.194,
+      "jaccard_nearest": "at/t03a",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "valid98": {
+      "question": [],
+      "jaccard_max": 0.108,
+      "jaccard_nearest": "heldout_v9/h38",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "vendor100": {
+      "question": [],
+      "jaccard_max": 0.097,
+      "jaccard_nearest": "014",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "batch007": {
+      "question": [],
+      "jaccard_max": 0.021,
+      "jaccard_nearest": "b007-07",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "train_v006_t2pc": {
+      "question": [],
+      "jaccard_max": 0.182,
+      "jaccard_nearest": "b005-52",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "train_thinking_pilot004_t2pc": {
+      "question": [],
+      "jaccard_max": 0.182,
+      "jaccard_nearest": "b005-52",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "pg_batch006": {
+      "question": [],
+      "jaccard_max": 0.019,
+      "jaccard_nearest": "pg-b006-27",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "pg_reviewed_reasoning_v001": {
+      "question": [],
+      "jaccard_max": 0.182,
+      "jaccard_nearest": "b005-52",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "pg_reviewed_gold_v006_p0": {
+      "question": [],
+      "jaccard_max": 0.182,
+      "jaccard_nearest": "b005-52",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "aug300": {
+      "question": [],
+      "jaccard_max": 0.083,
+      "jaccard_nearest": "aug300-319",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     }
+    }
+   },
+   "overlap_info": {
+    "training_and_other_template_family": {}
+   },
+   "template_key": "91a8f98a2ba9af0309263829da812e8647aad9d1c5a9108c8f71dd87c773f379",
+   "family_key": "9d4f5be8807e912719c34e81d0497b5c53ced6e016898c07d27e70901de53de2"
+  },
+  {
+   "id": "b008-38",
+   "gap": "g4_bucket_dimension",
+   "group": "g4-p6",
+   "question": "올해 개인택시 가동률 최댓값을 요일별로 알려줘",
+   "gold_text": "get_billing_metrics(metric=active_taxi_ratio, date=this_year, taxi_type=private, aggregation=max, dimension=dayofweek)",
+   "rationale": "요일·지역별로 나눠 보이는 것 = dimension. 기간 구간(bucket)이 아니고 rollup도 없다. 요일별 최댓값.",
+   "gold": [
+    {
+     "tool": "get_billing_metrics",
+     "args": {
+      "metric": "active_taxi_ratio",
+      "date": "this_year",
+      "taxi_type": "private",
+      "aggregation": "max",
+      "dimension": "dayofweek"
+     }
+    }
+   ],
+   "draft_grounding": {
+    "concepts": [
+     {
+      "id": "event",
+      "concept": "EVENT",
+      "subtype": "operation",
+      "role": "SUPPORT",
+      "source": "implicit"
+     },
+     {
+      "id": "measure",
+      "concept": "PROPORTION",
+      "subtype": "active_taxi_ratio",
+      "role": "MEASURE",
+      "source": "implicit",
+      "text": "가동률"
+     }
+    ],
+    "factors": {
+     "date": "this_year",
+     "taxi_type": "private",
+     "dimension": "dayofweek",
+     "aggregation": "max"
+    }
+   },
+   "span_flags": [],
+   "semantics": {
+    "nodes": [
+     {
+      "subtype": "active_taxi_ratio",
+      "text": "가동률"
+     }
+    ],
+    "event": "operation",
+    "factors": {
+     "date": "this_year",
+     "taxi_type": "private",
+     "dimension": "dayofweek",
+     "aggregation": "max"
+    },
+    "unsupported": null
+   },
+   "view": {
+    "measure": {
+     "subtype": "active_taxi_ratio",
+     "text": "가동률"
+    },
+    "conditions": [
+     {
+      "subtype": "date",
+      "span": null,
+      "value": "this_year",
+      "od_role": null
+     },
+     {
+      "subtype": "taxi_type",
+      "span": null,
+      "value": "private",
+      "od_role": null
+     }
+    ],
+    "dimension": "dayofweek",
+    "aggregation": "max",
+    "refusal": null
+   },
+   "validation_chain": {
+    "ok": true,
+    "assess_same": true,
+    "mock_same": true,
+    "execution_match": true,
+    "full_answered": true
+   },
+   "t2pc": {
+    "parse_ok": true,
+    "compose_ok": true,
+    "validation_ok": true,
+    "validation_codes": [],
+    "error_code": null,
+    "outcome": "answered",
+    "compile_ok": true,
+    "compile_error_code": null,
+    "condition_actions": {},
+    "operators": [
+     "OPERATION_METRIC"
+    ],
+    "condition_changed_meaning": false,
+    "condition_changed_outcome": false
+   },
+   "leakage": {
+    "thor_policy_reasons": [],
+    "per_set": {
+     "selection_v1": {
+      "question": [],
+      "jaccard_max": 0.152,
+      "jaccard_nearest": "indepv3/m34",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "selection_v2": {
+      "question": [],
+      "jaccard_max": 0.152,
+      "jaccard_nearest": "indepv3/m34",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "aux_test_v1": {
+      "question": [],
+      "jaccard_max": 0.147,
+      "jaccard_nearest": "at/t03a",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "valid98": {
+      "question": [],
+      "jaccard_max": 0.121,
+      "jaccard_nearest": "heldout_v9/h38",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "vendor100": {
+      "question": [],
+      "jaccard_max": 0.111,
+      "jaccard_nearest": "014",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "batch007": {
+      "question": [],
+      "jaccard_max": 0.071,
+      "jaccard_nearest": "b007-04",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "train_v006_t2pc": {
+      "question": [],
+      "jaccard_max": 0.226,
+      "jaccard_nearest": "b005-60",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "train_thinking_pilot004_t2pc": {
+      "question": [],
+      "jaccard_max": 0.167,
+      "jaccard_nearest": "b005-52",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "pg_batch006": {
+      "question": [],
+      "jaccard_max": 0.021,
+      "jaccard_nearest": "pg-b006-27",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "pg_reviewed_reasoning_v001": {
+      "question": [],
+      "jaccard_max": 0.226,
+      "jaccard_nearest": "b005-60",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "pg_reviewed_gold_v006_p0": {
+      "question": [],
+      "jaccard_max": 0.226,
+      "jaccard_nearest": "b005-60",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     },
+     "aug300": {
+      "question": [],
+      "jaccard_max": 0.115,
+      "jaccard_nearest": "aug300-192",
+      "same_grounding": [],
+      "template": 0,
+      "family": 0
+     }
+    }
+   },
+   "overlap_info": {
+    "training_and_other_template_family": {}
+   },
+   "template_key": "2a1224888d7d4330d711627e6063b9955e36a3154301da04e1fb8f1f57c1abe5",
+   "family_key": "22c88c5a80ccef570aada666c1939e1c4682a9230097c0cf9b174bea5e641ca8"
+  }
+ ]
+}

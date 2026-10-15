@@ -1,0 +1,287 @@
+authored_by: Claude 2026-10-15(pilot_006 준비 W7b)
+approval: none
+reference_date: '2026-09-25'
+candidates:
+- id: b008-01
+  gap: g1_dt_no_rank
+  group: g1
+  question: 지난주 대구 중구에서 출발한 실차 이동 건수를 도착한 읍면동별로 보여줘
+  gold_text: 'get_place_scope(name=중구, region=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=last_week, dimension=emd, dimension_target=dropoff)'
+  rationale: '실차 건수(trip_count). 장소가 제한하는 끝=od_role(scope_pickup/scope_dropoff), 묶는 끝=dimension_target. 중구 출발=pickup, 도착한 읍면동별=dropoff로 묶음. 순위·개수
+    제한이 없으므로 order·limit 없음. '
+- id: b008-02
+  gap: g1_dt_no_rank
+  group: g1
+  question: 이번 달 부산 수영구에 도착한 실차 건수를 출발 시군구별로 나눠줘
+  gold_text: 'get_place_scope(name=수영구, region=부산)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, date=this_month, dimension=sigungu, dimension_target=pickup)'
+  rationale: '실차 건수(trip_count). 장소가 제한하는 끝=od_role(scope_pickup/scope_dropoff), 묶는 끝=dimension_target. 수영구 도착=dropoff, 출발 시군구별=pickup으로 묶음. 순위·개수
+    제한이 없으므로 order·limit 없음. '
+- id: b008-03
+  gap: g1_dt_no_rank
+  group: g1
+  question: 2026년 9월 1일부터 7일까지 대구 달서구에서 승차한 실차 건수를 승차 H3 셀별로 알려줘
+  gold_text: 'get_place_scope(name=달서구, region=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=20260901-20260907, dimension=h3, dimension_target=pickup)'
+  rationale: '실차 건수(trip_count). 장소가 제한하는 끝=od_role(scope_pickup/scope_dropoff), 묶는 끝=dimension_target. 달서구 승차=pickup, 승차 H3별=pickup. 순위·개수 제한이
+    없으므로 order·limit 없음. '
+- id: b008-04
+  gap: g1_dt_no_rank
+  group: g1
+  question: 주말 동안 부산진구로 들어온 실차 이동을 하차 읍면동 기준으로 세어줘
+  gold_text: 'get_place_scope(name=부산진구, region=부산)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, date=weekend, dimension=emd, dimension_target=dropoff)'
+  rationale: '실차 건수(trip_count). 장소가 제한하는 끝=od_role(scope_pickup/scope_dropoff), 묶는 끝=dimension_target. 부산진구로 들어온=dropoff, 하차 읍면동 기준=dropoff.
+    순위·개수 제한이 없으므로 order·limit 없음. '
+- id: b008-05
+  gap: g1_dt_no_rank
+  group: g1
+  question: 평일 오전 7시부터 9시까지 대구 수성구 출발 실차 건수를 출발 읍면동별로 정리해줘
+  gold_text: 'get_place_scope(name=수성구, region=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=weekday, time=070000-090000, dimension=emd, dimension_target=pickup)'
+  rationale: '실차 건수(trip_count). 장소가 제한하는 끝=od_role(scope_pickup/scope_dropoff), 묶는 끝=dimension_target. 수성구 출발=pickup, 출발 읍면동별=pickup. 순위·개수 제한이
+    없으므로 order·limit 없음. '
+- id: b008-06
+  gap: g1_dt_no_rank
+  group: g1
+  question: 지난달 인천에서 끝난 실차 운행 건수를 하차 시군구별로 보여줘
+  gold_text: 'get_place_scope(name=인천)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, date=last_month, dimension=sigungu, dimension_target=dropoff)'
+  rationale: '실차 건수(trip_count). 장소가 제한하는 끝=od_role(scope_pickup/scope_dropoff), 묶는 끝=dimension_target. 인천에서 끝난=dropoff, 하차 시군구별=dropoff. 순위·개수
+    제한이 없으므로 order·limit 없음. '
+- id: b008-07
+  gap: g1_dt_no_rank
+  group: g1
+  question: 2026년 9월 20일 대구 동구에서 태워 부산으로 간 실차 건수를 하차 읍면동별로 보여줘
+  gold_text: 'get_place_scope(name=동구, region=대구)
+
+    get_place_scope(name=부산)
+
+    get_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, date=20260920, dimension=emd, dimension_target=dropoff)'
+  rationale: '실차 건수(trip_count). 장소가 제한하는 끝=od_role(scope_pickup/scope_dropoff), 묶는 끝=dimension_target. 대구 동구에서 태워=pickup, 부산으로 간=dropoff, 하차
+    읍면동별=dropoff(od 둘 중 하나로 묶음). 순위·개수 제한이 없으므로 order·limit 없음. '
+- id: b008-08
+  gap: g1_dt_no_rank
+  group: g1
+  question: 이번 주 서울에서 출발한 실차 이동 건수를 출발지 H3 기준으로 묶어줘
+  gold_text: 'get_place_scope(name=서울)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=this_week, dimension=h3, dimension_target=pickup)'
+  rationale: '실차 건수(trip_count). 장소가 제한하는 끝=od_role(scope_pickup/scope_dropoff), 묶는 끝=dimension_target. 서울 출발=pickup, 출발지 H3 기준=pickup. 순위·개수
+    제한이 없으므로 order·limit 없음. '
+- id: b008-09
+  gap: g2_implicit_endpoint
+  group: g2
+  question: 지난주 대구에서 손님을 태운 곳을 읍면동별로 세어줘
+  gold_text: 'get_place_scope(name=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=last_week, dimension=emd, dimension_target=pickup)'
+  rationale: 승차·하차·출발·도착이라는 말이 없다. 손님을 태운 곳=승차 끝(pickup), 내려준·내린 곳=하차 끝(dropoff). 건수이므로 trip_count. 대구에서 태운=pickup, 태운 곳 읍면동별=pickup.
+- id: b008-10
+  gap: g2_implicit_endpoint
+  group: g2
+  question: 이번 달 부산에서 손님을 내려준 곳을 시군구별로 보여줘
+  gold_text: 'get_place_scope(name=부산)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, date=this_month, dimension=sigungu, dimension_target=dropoff)'
+  rationale: 승차·하차·출발·도착이라는 말이 없다. 손님을 태운 곳=승차 끝(pickup), 내려준·내린 곳=하차 끝(dropoff). 건수이므로 trip_count. 부산에서 내려준=dropoff, 내려준 곳 시군구별=dropoff.
+- id: b008-11
+  gap: g2_implicit_endpoint
+  group: g2
+  question: 주말 동안 손님을 가장 많이 태운 H3 셀 5곳은?
+  gold_text: get_trip_count(date=weekend, dimension=h3, dimension_target=pickup, order=top, limit=5)
+  rationale: 승차·하차·출발·도착이라는 말이 없다. 손님을 태운 곳=승차 끝(pickup), 내려준·내린 곳=하차 끝(dropoff). 건수이므로 trip_count. 장소 제한 없음. 태운 곳=pickup으로 H3 묶음, 상위 5.
+- id: b008-12
+  gap: g2_implicit_endpoint
+  group: g2
+  question: 평일 저녁 6시부터 9시까지 손님을 내려준 곳이 가장 적은 읍면동 3곳은?
+  gold_text: get_trip_count(date=weekday, time=180000-210000, dimension=emd, dimension_target=dropoff, order=bottom, limit=3)
+  rationale: 승차·하차·출발·도착이라는 말이 없다. 손님을 태운 곳=승차 끝(pickup), 내려준·내린 곳=하차 끝(dropoff). 건수이므로 trip_count. 내려준 곳=dropoff로 읍면동 묶음, 하위 3.
+- id: b008-13
+  gap: g2_implicit_endpoint
+  group: g2
+  question: 지난달 대구 수성구에서 태운 손님을 내려준 곳을 시군구별로 알려줘
+  gold_text: 'get_place_scope(name=수성구, region=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=last_month, dimension=sigungu, dimension_target=dropoff)'
+  rationale: 승차·하차·출발·도착이라는 말이 없다. 손님을 태운 곳=승차 끝(pickup), 내려준·내린 곳=하차 끝(dropoff). 건수이므로 trip_count. 수성구에서 태운=pickup(장소 제한), 내려준 곳으로 묶음=dropoff(od_role
+    ≠ dimension_target).
+- id: b008-14
+  gap: g2_implicit_endpoint
+  group: g2
+  question: 2026년 9월 1일부터 15일까지 부산 수영구에 내려준 손님을 어디서 태웠는지 읍면동별로 보여줘
+  gold_text: 'get_place_scope(name=수영구, region=부산)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, date=20260901-20260915, dimension=emd, dimension_target=pickup)'
+  rationale: 승차·하차·출발·도착이라는 말이 없다. 손님을 태운 곳=승차 끝(pickup), 내려준·내린 곳=하차 끝(dropoff). 건수이므로 trip_count. 수영구에 내려준=dropoff(장소 제한), 어디서 태웠는지=pickup으로
+    묶음.
+- id: b008-15
+  gap: g2_implicit_endpoint
+  group: g2
+  question: 이번 주 서울에서 손님이 차에 오른 곳을 H3 단위로 나눠 보여줘
+  gold_text: 'get_place_scope(name=서울)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=this_week, dimension=h3, dimension_target=pickup)'
+  rationale: 승차·하차·출발·도착이라는 말이 없다. 손님을 태운 곳=승차 끝(pickup), 내려준·내린 곳=하차 끝(dropoff). 건수이므로 trip_count. 손님이 차에 오른 곳=pickup.
+- id: b008-16
+  gap: g2_implicit_endpoint
+  group: g2
+  question: 지난주 대구에서 손님이 내린 곳을 구별로 보여줘
+  gold_text: 'get_place_scope(name=대구)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, date=last_week, dimension=sigungu, dimension_target=dropoff)'
+  rationale: 승차·하차·출발·도착이라는 말이 없다. 손님을 태운 곳=승차 끝(pickup), 내려준·내린 곳=하차 끝(dropoff). 건수이므로 trip_count. 손님이 내린 곳=dropoff. 구별=sigungu.
+- id: b008-17
+  gap: g2_implicit_endpoint
+  group: g2
+  question: 휴일에 부산에서 손님을 많이 태운 동네 상위 3곳은?
+  gold_text: 'get_place_scope(name=부산)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=holiday, dimension=emd, dimension_target=pickup, order=top, limit=3)'
+  rationale: 승차·하차·출발·도착이라는 말이 없다. 손님을 태운 곳=승차 끝(pickup), 내려준·내린 곳=하차 끝(dropoff). 건수이므로 trip_count. 동네=읍면동. 태운=pickup.
+- id: b008-18
+  gap: g2_implicit_endpoint
+  group: g2
+  question: 지난달 대구에서 손님을 내려준 데가 가장 적은 시군구 2곳은?
+  gold_text: 'get_place_scope(name=대구)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, date=last_month, dimension=sigungu, dimension_target=dropoff, order=bottom, limit=2)'
+  rationale: 승차·하차·출발·도착이라는 말이 없다. 손님을 태운 곳=승차 끝(pickup), 내려준·내린 곳=하차 끝(dropoff). 건수이므로 trip_count. 내려준 데=dropoff.
+- id: b008-19
+  gap: g3_valueless_place
+  group: g3-p1
+  question: scope:gz:3982는 어디야?
+  gold_text: get_scope_name(scope=scope:gz:3982)
+  rationale: '답이 장소 이름이다: scope 이름 조회(get_scope_name). Full 계약에서 value 없는 place가 측정값(MEASURE)이고 scope는 조건이다. '
+- id: b008-20
+  gap: g3_valueless_place
+  group: g3-p1
+  question: 이번 주 부산 수영구에서 택시가 가장 많이 지나간 읍면동은 어디야?
+  gold_text: 'get_place_scope(name=수영구, region=부산)
+
+    get_passage_count(scope=$resolve.scope, date=this_week, dimension=emd, order=top, limit=1)'
+  rationale: '''어디야''로 묻지만 답은 묶음 단위(dimension)의 순위 1곳이다. value 없는 place 개념을 만들지 않는다(측정값은 하나). 통행량(passage_count), 수영구는 값 있는 장소 조건.'
+- id: b008-21
+  gap: g3_valueless_place
+  group: g3-p2
+  question: scope:district:2726010100은 어느 동네를 가리켜?
+  gold_text: get_scope_name(scope=scope:district:2726010100)
+  rationale: '답이 장소 이름이다: scope 이름 조회(get_scope_name). Full 계약에서 value 없는 place가 측정값(MEASURE)이고 scope는 조건이다. '
+- id: b008-22
+  gap: g3_valueless_place
+  group: g3-p2
+  question: 지난달 대구 수성구에서 손님을 가장 적게 태운 동네는 어디야?
+  gold_text: 'get_place_scope(name=수성구, region=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=last_month, dimension=emd, dimension_target=pickup, order=bottom, limit=1)'
+  rationale: '''어디야''로 묻지만 답은 묶음 단위(dimension)의 순위 1곳이다. value 없는 place 개념을 만들지 않는다(측정값은 하나). 실차 건수(태운=pickup), 동네=읍면동.'
+- id: b008-23
+  gap: g3_valueless_place
+  group: g3-p3
+  question: scope:h3:8830e1d8dffffff가 어떤 곳인지 이름을 알려줘
+  gold_text: get_scope_name(scope=scope:h3:8830e1d8dffffff)
+  rationale: '답이 장소 이름이다: scope 이름 조회(get_scope_name). Full 계약에서 value 없는 place가 측정값(MEASURE)이고 scope는 조건이다. '
+- id: b008-24
+  gap: g3_valueless_place
+  group: g3-p3
+  question: 주말에 대구 중구에서 빈 택시가 가장 많이 다닌 H3 셀은 어디야?
+  gold_text: 'get_place_scope(name=중구, region=대구)
+
+    get_passage_count(scope=$resolve.scope, date=weekend, taxi_status=vacant, dimension=h3, order=top, limit=1)'
+  rationale: '''어디야''로 묻지만 답은 묶음 단위(dimension)의 순위 1곳이다. value 없는 place 개념을 만들지 않는다(측정값은 하나). 빈 택시=vacant 통행량.'
+- id: b008-25
+  gap: g3_valueless_place
+  group: g3-p4
+  question: scope:edge:1742에 해당하는 장소 이름이 뭐야?
+  gold_text: get_scope_name(scope=scope:edge:1742)
+  rationale: '답이 장소 이름이다: scope 이름 조회(get_scope_name). Full 계약에서 value 없는 place가 측정값(MEASURE)이고 scope는 조건이다. '
+- id: b008-26
+  gap: g3_valueless_place
+  group: g3-p4
+  question: 지난주 부산에서 택시 통행량이 가장 적은 구는 어디야?
+  gold_text: 'get_place_scope(name=부산)
+
+    get_passage_count(scope=$resolve.scope, date=last_week, dimension=sigungu, order=bottom, limit=1)'
+  rationale: '''어디야''로 묻지만 답은 묶음 단위(dimension)의 순위 1곳이다. value 없는 place 개념을 만들지 않는다(측정값은 하나). 구=시군구.'
+- id: b008-27
+  gap: g4_bucket_dimension
+  group: g4-p1
+  question: 지난달 개인택시 수입을 주 단위로 합한 다음 그 평균을 내줘
+  gold_text: get_billing_metrics(metric=revenue, date=last_month, taxi_type=private, aggregation=sum, bucket=week, rollup=avg)
+  rationale: 기간을 주·월 단위로 나눠 1차 집계(aggregation)한 뒤 그 값들을 다시 집계(rollup) = bucket + rollup. 요일·지역별 묶음(dimension)이 아니다. 주 단위로 합한=sum, week; 평균=rollup
+    avg.
+- id: b008-28
+  gap: g4_bucket_dimension
+  group: g4-p1
+  question: 지난달 개인택시 수입을 요일별로 합해서 보여줘
+  gold_text: get_billing_metrics(metric=revenue, date=last_month, taxi_type=private, aggregation=sum, dimension=dayofweek)
+  rationale: 요일·지역별로 나눠 보이는 것 = dimension. 기간 구간(bucket)이 아니고 rollup도 없다. 요일별 합계.
+- id: b008-29
+  gap: g4_bucket_dimension
+  group: g4-p2
+  question: 올해 법인택시 운행 일수를 월별로 평균 낸 값 가운데 가장 큰 값은?
+  gold_text: get_billing_metrics(metric=operating_days, date=this_year, taxi_type=corporate, aggregation=avg, bucket=month, rollup=max)
+  rationale: 기간을 주·월 단위로 나눠 1차 집계(aggregation)한 뒤 그 값들을 다시 집계(rollup) = bucket + rollup. 요일·지역별 묶음(dimension)이 아니다. 월별 평균=avg, month; 가장 큰 값=rollup
+    max.
+- id: b008-30
+  gap: g4_bucket_dimension
+  group: g4-p2
+  question: 올해 법인택시 운행 일수의 평균을 시도별로 알려줘
+  gold_text: get_billing_metrics(metric=operating_days, date=this_year, taxi_type=corporate, aggregation=avg, dimension=sido)
+  rationale: 요일·지역별로 나눠 보이는 것 = dimension. 기간 구간(bucket)이 아니고 rollup도 없다. 시도별 평균.
+- id: b008-31
+  gap: g4_bucket_dimension
+  group: g4-p3
+  question: 이번 달 택시 가동률을 주별로 평균 내고 그중 가장 낮은 값을 알려줘
+  gold_text: get_billing_metrics(metric=active_taxi_ratio, date=this_month, aggregation=avg, bucket=week, rollup=min)
+  rationale: 기간을 주·월 단위로 나눠 1차 집계(aggregation)한 뒤 그 값들을 다시 집계(rollup) = bucket + rollup. 요일·지역별 묶음(dimension)이 아니다. 주별 평균 → 최솟값.
+- id: b008-32
+  gap: g4_bucket_dimension
+  group: g4-p3
+  question: 이번 달 택시 가동률 평균을 요일별로 보여줘
+  gold_text: get_billing_metrics(metric=active_taxi_ratio, date=this_month, aggregation=avg, dimension=dayofweek)
+  rationale: 요일·지역별로 나눠 보이는 것 = dimension. 기간 구간(bucket)이 아니고 rollup도 없다. 요일별 평균.
+- id: b008-33
+  gap: g4_bucket_dimension
+  group: g4-p4
+  question: 지난해 활성택시 대수를 월마다 평균 낸 뒤 그 중간값을 구해줘
+  gold_text: get_billing_metrics(metric=active_taxi_count, date=last_year, aggregation=avg, bucket=month, rollup=med)
+  rationale: 기간을 주·월 단위로 나눠 1차 집계(aggregation)한 뒤 그 값들을 다시 집계(rollup) = bucket + rollup. 요일·지역별 묶음(dimension)이 아니다. 월마다 평균 → 중간값.
+- id: b008-34
+  gap: g4_bucket_dimension
+  group: g4-p4
+  question: 지난해 활성택시 대수 평균이 가장 많은 요일은?
+  gold_text: get_billing_metrics(metric=active_taxi_count, date=last_year, aggregation=avg, dimension=dayofweek, order=top, limit=1)
+  rationale: 요일·지역별로 나눠 보이는 것 = dimension. 기간 구간(bucket)이 아니고 rollup도 없다. 요일별 평균 중 상위 1.
+- id: b008-35
+  gap: g4_bucket_dimension
+  group: g4-p5
+  question: 지난달 법인택시 수입을 주마다 합한 값 중 최솟값은?
+  gold_text: get_billing_metrics(metric=revenue, date=last_month, taxi_type=corporate, aggregation=sum, bucket=week, rollup=min)
+  rationale: 기간을 주·월 단위로 나눠 1차 집계(aggregation)한 뒤 그 값들을 다시 집계(rollup) = bucket + rollup. 요일·지역별 묶음(dimension)이 아니다. 주마다 합 → 최솟값.
+- id: b008-36
+  gap: g4_bucket_dimension
+  group: g4-p5
+  question: 지난달 법인택시 수입 합계를 시군구별로 알려줘
+  gold_text: get_billing_metrics(metric=revenue, date=last_month, taxi_type=corporate, aggregation=sum, dimension=sigungu)
+  rationale: 요일·지역별로 나눠 보이는 것 = dimension. 기간 구간(bucket)이 아니고 rollup도 없다. 시군구별 합계.
+- id: b008-37
+  gap: g4_bucket_dimension
+  group: g4-p6
+  question: 올해 개인택시 가동률의 월별 최댓값을 구한 뒤 평균을 내줘
+  gold_text: get_billing_metrics(metric=active_taxi_ratio, date=this_year, taxi_type=private, aggregation=max, bucket=month, rollup=avg)
+  rationale: 기간을 주·월 단위로 나눠 1차 집계(aggregation)한 뒤 그 값들을 다시 집계(rollup) = bucket + rollup. 요일·지역별 묶음(dimension)이 아니다. 월별 최댓값=max, month → 평균=rollup
+    avg.
+- id: b008-38
+  gap: g4_bucket_dimension
+  group: g4-p6
+  question: 올해 개인택시 가동률 최댓값을 요일별로 알려줘
+  gold_text: get_billing_metrics(metric=active_taxi_ratio, date=this_year, taxi_type=private, aggregation=max, dimension=dayofweek)
+  rationale: 요일·지역별로 나눠 보이는 것 = dimension. 기간 구간(bucket)이 아니고 rollup도 없다. 요일별 최댓값.

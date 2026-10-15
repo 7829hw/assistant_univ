@@ -1,0 +1,6960 @@
+[
+ {
+  "id": "b008-01",
+  "gap": "g1_dt_no_rank",
+  "group": "g1",
+  "question": "지난주 대구 중구에서 출발한 실차 이동 건수를 도착한 읍면동별로 보여줘",
+  "gold_text": "get_place_scope(name=중구, region=대구)\nget_trip_count(scope_pickup=$pickup.scope, date=last_week, dimension=emd, dimension_target=dropoff)",
+  "rationale": "실차 건수(trip_count). 장소가 제한하는 끝=od_role(scope_pickup/scope_dropoff), 묶는 끝=dimension_target. 중구 출발=pickup, 도착한 읍면동별=dropoff로 묶음. 순위·개수 제한이 없으므로 order·limit 없음. ",
+  "gold": [
+   {
+    "tool": "get_place_scope",
+    "args": {
+     "name": "중구",
+     "region": "대구"
+    }
+   },
+   {
+    "tool": "get_trip_count",
+    "args": {
+     "scope_pickup": "$pickup.scope",
+     "date": "last_week",
+     "dimension": "emd",
+     "dimension_target": "dropoff"
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "place_scope_pickup",
+     "concept": "LOCATION",
+     "subtype": "place",
+     "role": "SUBCOND",
+     "source": "user",
+     "value": {
+      "name": "중구",
+      "region": "대구"
+     },
+     "attributes": {
+      "od_role": "pickup"
+     },
+     "text": "대구 중구"
+    },
+    {
+     "id": "event",
+     "concept": "EVENT",
+     "subtype": "trip",
+     "role": "SUPPORT",
+     "source": "implicit"
+    },
+    {
+     "id": "measure",
+     "concept": "AMOUNT",
+     "subtype": "trip_count",
+     "role": "MEASURE",
+     "source": "implicit",
+     "text": "실차 이동 건수"
+    }
+   ],
+   "factors": {
+    "date": "last_week",
+    "dimension": "emd",
+    "dimension_target": "dropoff"
+   }
+  },
+  "span_flags": [],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "place",
+     "value": {
+      "name": "중구",
+      "region": "대구"
+     },
+     "text": "대구 중구",
+     "attributes": {
+      "od_role": "pickup"
+     }
+    },
+    {
+     "subtype": "trip_count",
+     "text": "실차 이동 건수"
+    }
+   ],
+   "event": "trip",
+   "factors": {
+    "date": "last_week",
+    "dimension": "emd",
+    "dimension_target": "dropoff"
+   },
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "trip_count",
+    "text": "실차 이동 건수"
+   },
+   "conditions": [
+    {
+     "subtype": "place",
+     "span": "대구 중구",
+     "value": {
+      "name": "중구",
+      "region": "대구"
+     },
+     "od_role": "pickup"
+    },
+    {
+     "subtype": "date",
+     "span": null,
+     "value": "last_week",
+     "od_role": null
+    }
+   ],
+   "dimension": "emd",
+   "dimension_target": "dropoff",
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": true,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": true,
+   "full_answered": true
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "RESOLVE_PLACE_SCOPE",
+    "TRIP_COUNT"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.163,
+     "jaccard_nearest": "old44/g06",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.163,
+     "jaccard_nearest": "old44/g06",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.2,
+     "jaccard_nearest": "final_v12/f20",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.2,
+     "jaccard_nearest": "heldout_v9/h17",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.162,
+     "jaccard_nearest": "071",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.06,
+     "jaccard_nearest": "b007-15",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.22,
+     "jaccard_nearest": "b005-33",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.22,
+     "jaccard_nearest": "b005-33",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.295,
+     "jaccard_nearest": "pg-b006-35",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.295,
+     "jaccard_nearest": "b006-35",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.295,
+     "jaccard_nearest": "b006-35",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.167,
+     "jaccard_nearest": "aug300-120",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {}
+  },
+  "template_key": "5468e747f0a3d39aec779aea45d252d2169b32f6217fe267f9161e0ff917cd39",
+  "family_key": "6364e710b31b2d72a700fb539d5cf87ea2b1b04dfd6d9ede2a8c96675f14209a",
+  "excluded_reasons": [
+   "extended_template",
+   "extended_family",
+   "valid98:template",
+   "valid98:family"
+  ]
+ },
+ {
+  "id": "b008-03",
+  "gap": "g1_dt_no_rank",
+  "group": "g1",
+  "question": "2026년 9월 1일부터 7일까지 대구 달서구에서 승차한 실차 건수를 승차 H3 셀별로 알려줘",
+  "gold_text": "get_place_scope(name=달서구, region=대구)\nget_trip_count(scope_pickup=$pickup.scope, date=20260901-20260907, dimension=h3, dimension_target=pickup)",
+  "rationale": "실차 건수(trip_count). 장소가 제한하는 끝=od_role(scope_pickup/scope_dropoff), 묶는 끝=dimension_target. 달서구 승차=pickup, 승차 H3별=pickup. 순위·개수 제한이 없으므로 order·limit 없음. ",
+  "gold": [
+   {
+    "tool": "get_place_scope",
+    "args": {
+     "name": "달서구",
+     "region": "대구"
+    }
+   },
+   {
+    "tool": "get_trip_count",
+    "args": {
+     "scope_pickup": "$pickup.scope",
+     "date": "20260901-20260907",
+     "dimension": "h3",
+     "dimension_target": "pickup"
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "place_scope_pickup",
+     "concept": "LOCATION",
+     "subtype": "place",
+     "role": "SUBCOND",
+     "source": "user",
+     "value": {
+      "name": "달서구",
+      "region": "대구"
+     },
+     "attributes": {
+      "od_role": "pickup"
+     },
+     "text": "대구 달서구"
+    },
+    {
+     "id": "event",
+     "concept": "EVENT",
+     "subtype": "trip",
+     "role": "SUPPORT",
+     "source": "implicit"
+    },
+    {
+     "id": "measure",
+     "concept": "AMOUNT",
+     "subtype": "trip_count",
+     "role": "MEASURE",
+     "source": "implicit",
+     "text": "실차 건수"
+    }
+   ],
+   "factors": {
+    "date": "20260901-20260907",
+    "dimension": "h3",
+    "dimension_target": "pickup"
+   }
+  },
+  "span_flags": [],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "place",
+     "value": {
+      "name": "달서구",
+      "region": "대구"
+     },
+     "text": "대구 달서구",
+     "attributes": {
+      "od_role": "pickup"
+     }
+    },
+    {
+     "subtype": "trip_count",
+     "text": "실차 건수"
+    }
+   ],
+   "event": "trip",
+   "factors": {
+    "date": "20260901-20260907",
+    "dimension": "h3",
+    "dimension_target": "pickup"
+   },
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "trip_count",
+    "text": "실차 건수"
+   },
+   "conditions": [
+    {
+     "subtype": "place",
+     "span": "대구 달서구",
+     "value": {
+      "name": "달서구",
+      "region": "대구"
+     },
+     "od_role": "pickup"
+    },
+    {
+     "subtype": "date",
+     "span": null,
+     "value": "20260901-20260907",
+     "od_role": null
+    }
+   ],
+   "dimension": "h3",
+   "dimension_target": "pickup",
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": true,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": true,
+   "full_answered": true
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "RESOLVE_PLACE_SCOPE",
+    "TRIP_COUNT"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.231,
+     "jaccard_nearest": "old44/g08",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.231,
+     "jaccard_nearest": "old44/g08",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.167,
+     "jaccard_nearest": "final_v12/f11",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.13,
+     "jaccard_nearest": "heldout_v9/h08",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.093,
+     "jaccard_nearest": "050",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.551,
+     "jaccard_nearest": "b007-24",
+     "same_grounding": [],
+     "template": 0,
+     "family": 2
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.278,
+     "jaccard_nearest": "b005-36",
+     "same_grounding": [],
+     "template": 0,
+     "family": 1
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.278,
+     "jaccard_nearest": "b005-36",
+     "same_grounding": [],
+     "template": 0,
+     "family": 4
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.259,
+     "jaccard_nearest": "pg-b006-24",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.278,
+     "jaccard_nearest": "b005-36",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.278,
+     "jaccard_nearest": "b005-36",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.148,
+     "jaccard_nearest": "aug300-337",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {
+    "batch007": {
+     "family": 2
+    },
+    "train_v006_t2pc": {
+     "family": 1
+    },
+    "train_thinking_pilot004_t2pc": {
+     "family": 4
+    },
+    "pg_batch006": {
+     "template": 1,
+     "family": 1
+    },
+    "pg_reviewed_reasoning_v001": {
+     "template": 1,
+     "family": 1
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "template": 1,
+     "family": 1
+    }
+   }
+  },
+  "template_key": "4ddc352778b2fc4c5ae70c7f800562cb71e667e4b73f91a9af241a288c288943",
+  "family_key": "08d1664a67a104a6f333be3d48f58df918a39bd74a69915cbc31cf7ae801ceb9",
+  "excluded_reasons": [
+   "batch007:jaccard>=0.5(b007-24,0.551)"
+  ]
+ },
+ {
+  "id": "b008-04",
+  "gap": "g1_dt_no_rank",
+  "group": "g1",
+  "question": "주말 동안 부산진구로 들어온 실차 이동을 하차 읍면동 기준으로 세어줘",
+  "gold_text": "get_place_scope(name=부산진구, region=부산)\nget_trip_count(scope_dropoff=$dropoff.scope, date=weekend, dimension=emd, dimension_target=dropoff)",
+  "rationale": "실차 건수(trip_count). 장소가 제한하는 끝=od_role(scope_pickup/scope_dropoff), 묶는 끝=dimension_target. 부산진구로 들어온=dropoff, 하차 읍면동 기준=dropoff. 순위·개수 제한이 없으므로 order·limit 없음. ",
+  "gold": [
+   {
+    "tool": "get_place_scope",
+    "args": {
+     "name": "부산진구",
+     "region": "부산"
+    }
+   },
+   {
+    "tool": "get_trip_count",
+    "args": {
+     "scope_dropoff": "$dropoff.scope",
+     "date": "weekend",
+     "dimension": "emd",
+     "dimension_target": "dropoff"
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "place_scope_dropoff",
+     "concept": "LOCATION",
+     "subtype": "place",
+     "role": "SUBCOND",
+     "source": "user",
+     "value": {
+      "name": "부산진구",
+      "region": "부산"
+     },
+     "attributes": {
+      "od_role": "dropoff"
+     },
+     "text": "부산진구"
+    },
+    {
+     "id": "event",
+     "concept": "EVENT",
+     "subtype": "trip",
+     "role": "SUPPORT",
+     "source": "implicit"
+    },
+    {
+     "id": "measure",
+     "concept": "AMOUNT",
+     "subtype": "trip_count",
+     "role": "MEASURE",
+     "source": "implicit",
+     "text": "하차"
+    }
+   ],
+   "factors": {
+    "date": "weekend",
+    "dimension": "emd",
+    "dimension_target": "dropoff"
+   }
+  },
+  "span_flags": [],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "place",
+     "value": {
+      "name": "부산진구",
+      "region": "부산"
+     },
+     "text": "부산진구",
+     "attributes": {
+      "od_role": "dropoff"
+     }
+    },
+    {
+     "subtype": "trip_count",
+     "text": "하차"
+    }
+   ],
+   "event": "trip",
+   "factors": {
+    "date": "weekend",
+    "dimension": "emd",
+    "dimension_target": "dropoff"
+   },
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "trip_count",
+    "text": "하차"
+   },
+   "conditions": [
+    {
+     "subtype": "place",
+     "span": "부산진구",
+     "value": {
+      "name": "부산진구",
+      "region": "부산"
+     },
+     "od_role": "dropoff"
+    },
+    {
+     "subtype": "date",
+     "span": null,
+     "value": "weekend",
+     "od_role": null
+    }
+   ],
+   "dimension": "emd",
+   "dimension_target": "dropoff",
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": true,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": true,
+   "full_answered": true
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "RESOLVE_PLACE_SCOPE",
+    "TRIP_COUNT"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.1,
+     "jaccard_nearest": "old44/g11",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.1,
+     "jaccard_nearest": "old44/g11",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.081,
+     "jaccard_nearest": "final_v12/f04",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.163,
+     "jaccard_nearest": "heldout_v9/h09",
+     "same_grounding": [],
+     "template": 1,
+     "family": 2
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.06,
+     "jaccard_nearest": "085",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.0,
+     "jaccard_nearest": "b007-28",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.14,
+     "jaccard_nearest": "b005-34",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.14,
+     "jaccard_nearest": "b005-34",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.041,
+     "jaccard_nearest": "pg-b006-33",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.14,
+     "jaccard_nearest": "b005-34",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.14,
+     "jaccard_nearest": "b005-34",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.064,
+     "jaccard_nearest": "aug300-130",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {}
+  },
+  "template_key": "ac82fe4d954a97a96cc2bbe45b6e6058ee30492c27bd6391fc83233bc3a0573c",
+  "family_key": "35c51bdc5657848f14d7ea782831842063bc4df87b436c3c1edb198c002a1eaa",
+  "excluded_reasons": [
+   "extended_template",
+   "extended_family",
+   "valid98:template",
+   "valid98:family"
+  ]
+ },
+ {
+  "id": "b008-05",
+  "gap": "g1_dt_no_rank",
+  "group": "g1",
+  "question": "평일 오전 7시부터 9시까지 대구 수성구 출발 실차 건수를 출발 읍면동별로 정리해줘",
+  "gold_text": "get_place_scope(name=수성구, region=대구)\nget_trip_count(scope_pickup=$pickup.scope, date=weekday, time=070000-090000, dimension=emd, dimension_target=pickup)",
+  "rationale": "실차 건수(trip_count). 장소가 제한하는 끝=od_role(scope_pickup/scope_dropoff), 묶는 끝=dimension_target. 수성구 출발=pickup, 출발 읍면동별=pickup. 순위·개수 제한이 없으므로 order·limit 없음. ",
+  "gold": [
+   {
+    "tool": "get_place_scope",
+    "args": {
+     "name": "수성구",
+     "region": "대구"
+    }
+   },
+   {
+    "tool": "get_trip_count",
+    "args": {
+     "scope_pickup": "$pickup.scope",
+     "date": "weekday",
+     "time": "070000-090000",
+     "dimension": "emd",
+     "dimension_target": "pickup"
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "place_scope_pickup",
+     "concept": "LOCATION",
+     "subtype": "place",
+     "role": "SUBCOND",
+     "source": "user",
+     "value": {
+      "name": "수성구",
+      "region": "대구"
+     },
+     "attributes": {
+      "od_role": "pickup"
+     },
+     "text": "대구 수성구"
+    },
+    {
+     "id": "event",
+     "concept": "EVENT",
+     "subtype": "trip",
+     "role": "SUPPORT",
+     "source": "implicit"
+    },
+    {
+     "id": "measure",
+     "concept": "AMOUNT",
+     "subtype": "trip_count",
+     "role": "MEASURE",
+     "source": "implicit",
+     "text": "실차 건수"
+    }
+   ],
+   "factors": {
+    "date": "weekday",
+    "time": "070000-090000",
+    "dimension": "emd",
+    "dimension_target": "pickup"
+   }
+  },
+  "span_flags": [],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "place",
+     "value": {
+      "name": "수성구",
+      "region": "대구"
+     },
+     "text": "대구 수성구",
+     "attributes": {
+      "od_role": "pickup"
+     }
+    },
+    {
+     "subtype": "trip_count",
+     "text": "실차 건수"
+    }
+   ],
+   "event": "trip",
+   "factors": {
+    "date": "weekday",
+    "time": "070000-090000",
+    "dimension": "emd",
+    "dimension_target": "pickup"
+   },
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "trip_count",
+    "text": "실차 건수"
+   },
+   "conditions": [
+    {
+     "subtype": "place",
+     "span": "대구 수성구",
+     "value": {
+      "name": "수성구",
+      "region": "대구"
+     },
+     "od_role": "pickup"
+    },
+    {
+     "subtype": "date",
+     "span": null,
+     "value": "weekday",
+     "od_role": null
+    },
+    {
+     "subtype": "time",
+     "span": null,
+     "value": "070000-090000",
+     "od_role": null
+    }
+   ],
+   "dimension": "emd",
+   "dimension_target": "pickup",
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": true,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": true,
+   "full_answered": true
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "RESOLVE_PLACE_SCOPE",
+    "TRIP_COUNT"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.093,
+     "jaccard_nearest": "old44/g08",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.093,
+     "jaccard_nearest": "old44/g08",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.153,
+     "jaccard_nearest": "final_v12/f54",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.143,
+     "jaccard_nearest": "heldout_v9/h21",
+     "same_grounding": [],
+     "template": 0,
+     "family": 1
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.227,
+     "jaccard_nearest": "050",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.152,
+     "jaccard_nearest": "b007-27",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.26,
+     "jaccard_nearest": "b005-17",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.26,
+     "jaccard_nearest": "b005-17",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.107,
+     "jaccard_nearest": "pg-b006-12",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.26,
+     "jaccard_nearest": "b005-17",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.26,
+     "jaccard_nearest": "b005-17",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.208,
+     "jaccard_nearest": "aug300-126",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {}
+  },
+  "template_key": "5f34385f4734fe71e872ca6014be42a350f074c9b9bd72556609023988c6e4d3",
+  "family_key": "b6b9bdc1d7d7de8cb45fa5608a1cec51705ea13bbc6500342af86ceb83672aad",
+  "excluded_reasons": [
+   "extended_family",
+   "valid98:family"
+  ]
+ },
+ {
+  "id": "b008-06",
+  "gap": "g1_dt_no_rank",
+  "group": "g1",
+  "question": "지난달 인천에서 끝난 실차 운행 건수를 하차 시군구별로 보여줘",
+  "gold_text": "get_place_scope(name=인천)\nget_trip_count(scope_dropoff=$dropoff.scope, date=last_month, dimension=sigungu, dimension_target=dropoff)",
+  "rationale": "실차 건수(trip_count). 장소가 제한하는 끝=od_role(scope_pickup/scope_dropoff), 묶는 끝=dimension_target. 인천에서 끝난=dropoff, 하차 시군구별=dropoff. 순위·개수 제한이 없으므로 order·limit 없음. ",
+  "gold": [
+   {
+    "tool": "get_place_scope",
+    "args": {
+     "name": "인천"
+    }
+   },
+   {
+    "tool": "get_trip_count",
+    "args": {
+     "scope_dropoff": "$dropoff.scope",
+     "date": "last_month",
+     "dimension": "sigungu",
+     "dimension_target": "dropoff"
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "place_scope_dropoff",
+     "concept": "LOCATION",
+     "subtype": "place",
+     "role": "SUBCOND",
+     "source": "user",
+     "value": {
+      "name": "인천",
+      "region": ""
+     },
+     "attributes": {
+      "od_role": "dropoff"
+     },
+     "text": "인천"
+    },
+    {
+     "id": "event",
+     "concept": "EVENT",
+     "subtype": "trip",
+     "role": "SUPPORT",
+     "source": "implicit"
+    },
+    {
+     "id": "measure",
+     "concept": "AMOUNT",
+     "subtype": "trip_count",
+     "role": "MEASURE",
+     "source": "implicit",
+     "text": "건수"
+    }
+   ],
+   "factors": {
+    "date": "last_month",
+    "dimension": "sigungu",
+    "dimension_target": "dropoff"
+   }
+  },
+  "span_flags": [],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "place",
+     "value": {
+      "name": "인천",
+      "region": ""
+     },
+     "text": "인천",
+     "attributes": {
+      "od_role": "dropoff"
+     }
+    },
+    {
+     "subtype": "trip_count",
+     "text": "건수"
+    }
+   ],
+   "event": "trip",
+   "factors": {
+    "date": "last_month",
+    "dimension": "sigungu",
+    "dimension_target": "dropoff"
+   },
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "trip_count",
+    "text": "건수"
+   },
+   "conditions": [
+    {
+     "subtype": "place",
+     "span": "인천",
+     "value": {
+      "name": "인천",
+      "region": ""
+     },
+     "od_role": "dropoff"
+    },
+    {
+     "subtype": "date",
+     "span": null,
+     "value": "last_month",
+     "od_role": null
+    }
+   ],
+   "dimension": "sigungu",
+   "dimension_target": "dropoff",
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": false,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": false,
+   "full_answered": false
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "RESOLVE_PLACE_SCOPE",
+    "TRIP_COUNT"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.064,
+     "jaccard_nearest": "indepv3/m33",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.064,
+     "jaccard_nearest": "indepv3/m33",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.116,
+     "jaccard_nearest": "final_v12/f03",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.111,
+     "jaccard_nearest": "heldout_v9/h17",
+     "same_grounding": [],
+     "template": 0,
+     "family": 1
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.045,
+     "jaccard_nearest": "005",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.109,
+     "jaccard_nearest": "b007-04",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.152,
+     "jaccard_nearest": "b006-08",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.152,
+     "jaccard_nearest": "b006-08",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.068,
+     "jaccard_nearest": "pg-b006-11",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.1,
+     "jaccard_nearest": "b005-44",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.1,
+     "jaccard_nearest": "b005-44",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.07,
+     "jaccard_nearest": "aug300-116",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {}
+  },
+  "template_key": "78e814e8025d5e0c6c6dba0ea4bf1edda8554dfbfbeaa8a3bfe0486f5fc33d40",
+  "family_key": "17430684b5ee2c41418fa5c994a04c3926a6908784bd07e382c37cca5e005920",
+  "excluded_reasons": [
+   "extended_family",
+   "valid98:family",
+   "validation_chain_failed",
+   "full_path_not_answered:UNSUPPORTED_COMBINATION"
+  ]
+ },
+ {
+  "id": "b008-07",
+  "gap": "g1_dt_no_rank",
+  "group": "g1",
+  "question": "2026년 9월 20일 대구 동구에서 태워 부산으로 간 실차 건수를 하차 읍면동별로 보여줘",
+  "gold_text": "get_place_scope(name=동구, region=대구)\nget_place_scope(name=부산)\nget_trip_count(scope_pickup=$pickup.scope, scope_dropoff=$dropoff.scope, date=20260920, dimension=emd, dimension_target=dropoff)",
+  "rationale": "실차 건수(trip_count). 장소가 제한하는 끝=od_role(scope_pickup/scope_dropoff), 묶는 끝=dimension_target. 대구 동구에서 태워=pickup, 부산으로 간=dropoff, 하차 읍면동별=dropoff(od 둘 중 하나로 묶음). 순위·개수 제한이 없으므로 order·limit 없음. ",
+  "gold": [
+   {
+    "tool": "get_place_scope",
+    "args": {
+     "name": "동구",
+     "region": "대구"
+    }
+   },
+   {
+    "tool": "get_place_scope",
+    "args": {
+     "name": "부산"
+    }
+   },
+   {
+    "tool": "get_trip_count",
+    "args": {
+     "scope_pickup": "$pickup.scope",
+     "scope_dropoff": "$dropoff.scope",
+     "date": "20260920",
+     "dimension": "emd",
+     "dimension_target": "dropoff"
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "place_scope_pickup",
+     "concept": "LOCATION",
+     "subtype": "place",
+     "role": "SUBCOND",
+     "source": "user",
+     "value": {
+      "name": "동구",
+      "region": "대구"
+     },
+     "attributes": {
+      "od_role": "pickup"
+     },
+     "text": "대구 동구"
+    },
+    {
+     "id": "place_scope_dropoff",
+     "concept": "LOCATION",
+     "subtype": "place",
+     "role": "SUBCOND",
+     "source": "user",
+     "value": {
+      "name": "부산",
+      "region": ""
+     },
+     "attributes": {
+      "od_role": "dropoff"
+     },
+     "text": "부산"
+    },
+    {
+     "id": "event",
+     "concept": "EVENT",
+     "subtype": "trip",
+     "role": "SUPPORT",
+     "source": "implicit"
+    },
+    {
+     "id": "measure",
+     "concept": "AMOUNT",
+     "subtype": "trip_count",
+     "role": "MEASURE",
+     "source": "implicit",
+     "text": "실차 건수"
+    }
+   ],
+   "factors": {
+    "date": "20260920",
+    "dimension": "emd",
+    "dimension_target": "dropoff"
+   }
+  },
+  "span_flags": [],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "place",
+     "value": {
+      "name": "동구",
+      "region": "대구"
+     },
+     "text": "대구 동구",
+     "attributes": {
+      "od_role": "pickup"
+     }
+    },
+    {
+     "subtype": "place",
+     "value": {
+      "name": "부산",
+      "region": ""
+     },
+     "text": "부산",
+     "attributes": {
+      "od_role": "dropoff"
+     }
+    },
+    {
+     "subtype": "trip_count",
+     "text": "실차 건수"
+    }
+   ],
+   "event": "trip",
+   "factors": {
+    "date": "20260920",
+    "dimension": "emd",
+    "dimension_target": "dropoff"
+   },
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "trip_count",
+    "text": "실차 건수"
+   },
+   "conditions": [
+    {
+     "subtype": "place",
+     "span": "대구 동구",
+     "value": {
+      "name": "동구",
+      "region": "대구"
+     },
+     "od_role": "pickup"
+    },
+    {
+     "subtype": "place",
+     "span": "부산",
+     "value": {
+      "name": "부산",
+      "region": ""
+     },
+     "od_role": "dropoff"
+    },
+    {
+     "subtype": "date",
+     "span": null,
+     "value": "20260920",
+     "od_role": null
+    }
+   ],
+   "dimension": "emd",
+   "dimension_target": "dropoff",
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": true,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": true,
+   "full_answered": true
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "RESOLVE_PLACE_SCOPE",
+    "RESOLVE_PLACE_SCOPE",
+    "TRIP_COUNT"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.099,
+     "jaccard_nearest": "indepv3/m08",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.099,
+     "jaccard_nearest": "indepv3/m08",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.09,
+     "jaccard_nearest": "final_v12/f40",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.107,
+     "jaccard_nearest": "heldout_v9/h17",
+     "same_grounding": [],
+     "template": 0,
+     "family": 1
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.122,
+     "jaccard_nearest": "027",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.231,
+     "jaccard_nearest": "b007-16",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.25,
+     "jaccard_nearest": "b005-41",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.25,
+     "jaccard_nearest": "b005-41",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.119,
+     "jaccard_nearest": "pg-b006-23",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.25,
+     "jaccard_nearest": "b005-41",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.25,
+     "jaccard_nearest": "b005-41",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.109,
+     "jaccard_nearest": "aug300-345",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {}
+  },
+  "template_key": "2b0c3019c54ef2e2cad4df5ada903a16fbd381a03496e12f6f8071f7e88245a8",
+  "family_key": "a5a3c342921c4b9dbb162bf5aa184bd781d2696da8d1015d12736be0a30c91d1",
+  "excluded_reasons": [
+   "extended_family",
+   "valid98:family"
+  ]
+ },
+ {
+  "id": "b008-08",
+  "gap": "g1_dt_no_rank",
+  "group": "g1",
+  "question": "이번 주 서울에서 출발한 실차 이동 건수를 출발지 H3 기준으로 묶어줘",
+  "gold_text": "get_place_scope(name=서울)\nget_trip_count(scope_pickup=$pickup.scope, date=this_week, dimension=h3, dimension_target=pickup)",
+  "rationale": "실차 건수(trip_count). 장소가 제한하는 끝=od_role(scope_pickup/scope_dropoff), 묶는 끝=dimension_target. 서울 출발=pickup, 출발지 H3 기준=pickup. 순위·개수 제한이 없으므로 order·limit 없음. ",
+  "gold": [
+   {
+    "tool": "get_place_scope",
+    "args": {
+     "name": "서울"
+    }
+   },
+   {
+    "tool": "get_trip_count",
+    "args": {
+     "scope_pickup": "$pickup.scope",
+     "date": "this_week",
+     "dimension": "h3",
+     "dimension_target": "pickup"
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "place_scope_pickup",
+     "concept": "LOCATION",
+     "subtype": "place",
+     "role": "SUBCOND",
+     "source": "user",
+     "value": {
+      "name": "서울",
+      "region": ""
+     },
+     "attributes": {
+      "od_role": "pickup"
+     },
+     "text": "서울"
+    },
+    {
+     "id": "event",
+     "concept": "EVENT",
+     "subtype": "trip",
+     "role": "SUPPORT",
+     "source": "implicit"
+    },
+    {
+     "id": "measure",
+     "concept": "AMOUNT",
+     "subtype": "trip_count",
+     "role": "MEASURE",
+     "source": "implicit",
+     "text": "실차 이동 건수"
+    }
+   ],
+   "factors": {
+    "date": "this_week",
+    "dimension": "h3",
+    "dimension_target": "pickup"
+   }
+  },
+  "span_flags": [],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "place",
+     "value": {
+      "name": "서울",
+      "region": ""
+     },
+     "text": "서울",
+     "attributes": {
+      "od_role": "pickup"
+     }
+    },
+    {
+     "subtype": "trip_count",
+     "text": "실차 이동 건수"
+    }
+   ],
+   "event": "trip",
+   "factors": {
+    "date": "this_week",
+    "dimension": "h3",
+    "dimension_target": "pickup"
+   },
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "trip_count",
+    "text": "실차 이동 건수"
+   },
+   "conditions": [
+    {
+     "subtype": "place",
+     "span": "서울",
+     "value": {
+      "name": "서울",
+      "region": ""
+     },
+     "od_role": "pickup"
+    },
+    {
+     "subtype": "date",
+     "span": null,
+     "value": "this_week",
+     "od_role": null
+    }
+   ],
+   "dimension": "h3",
+   "dimension_target": "pickup",
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": false,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": false,
+   "full_answered": false
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "RESOLVE_PLACE_SCOPE",
+    "TRIP_COUNT"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.043,
+     "jaccard_nearest": "old44/g35",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.043,
+     "jaccard_nearest": "old44/g35",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.073,
+     "jaccard_nearest": "final_v12/f20",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.104,
+     "jaccard_nearest": "heldout_v9/h17",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.154,
+     "jaccard_nearest": "031",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.019,
+     "jaccard_nearest": "b007-04",
+     "same_grounding": [],
+     "template": 0,
+     "family": 2
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.145,
+     "jaccard_nearest": "b006-12",
+     "same_grounding": [],
+     "template": 0,
+     "family": 1
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.145,
+     "jaccard_nearest": "b006-12",
+     "same_grounding": [],
+     "template": 0,
+     "family": 4
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.128,
+     "jaccard_nearest": "pg-b006-29",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.128,
+     "jaccard_nearest": "b006-29",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.128,
+     "jaccard_nearest": "b006-29",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.194,
+     "jaccard_nearest": "aug300-273",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {
+    "batch007": {
+     "family": 2
+    },
+    "train_v006_t2pc": {
+     "family": 1
+    },
+    "train_thinking_pilot004_t2pc": {
+     "family": 4
+    },
+    "pg_batch006": {
+     "template": 1,
+     "family": 1
+    },
+    "pg_reviewed_reasoning_v001": {
+     "template": 1,
+     "family": 1
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "template": 1,
+     "family": 1
+    }
+   }
+  },
+  "template_key": "4ddc352778b2fc4c5ae70c7f800562cb71e667e4b73f91a9af241a288c288943",
+  "family_key": "08d1664a67a104a6f333be3d48f58df918a39bd74a69915cbc31cf7ae801ceb9",
+  "excluded_reasons": [
+   "validation_chain_failed",
+   "full_path_not_answered:UNSUPPORTED_COMBINATION"
+  ]
+ },
+ {
+  "id": "b008-09",
+  "gap": "g2_implicit_endpoint",
+  "group": "g2",
+  "question": "지난주 대구에서 손님을 태운 곳을 읍면동별로 세어줘",
+  "gold_text": "get_place_scope(name=대구)\nget_trip_count(scope_pickup=$pickup.scope, date=last_week, dimension=emd, dimension_target=pickup)",
+  "rationale": "승차·하차·출발·도착이라는 말이 없다. 손님을 태운 곳=승차 끝(pickup), 내려준·내린 곳=하차 끝(dropoff). 건수이므로 trip_count. 대구에서 태운=pickup, 태운 곳 읍면동별=pickup.",
+  "gold": [
+   {
+    "tool": "get_place_scope",
+    "args": {
+     "name": "대구"
+    }
+   },
+   {
+    "tool": "get_trip_count",
+    "args": {
+     "scope_pickup": "$pickup.scope",
+     "date": "last_week",
+     "dimension": "emd",
+     "dimension_target": "pickup"
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "place_scope_pickup",
+     "concept": "LOCATION",
+     "subtype": "place",
+     "role": "SUBCOND",
+     "source": "user",
+     "value": {
+      "name": "대구",
+      "region": ""
+     },
+     "attributes": {
+      "od_role": "pickup"
+     },
+     "text": "대구"
+    },
+    {
+     "id": "event",
+     "concept": "EVENT",
+     "subtype": "trip",
+     "role": "SUPPORT",
+     "source": "implicit"
+    },
+    {
+     "id": "measure",
+     "concept": "AMOUNT",
+     "subtype": "trip_count",
+     "role": "MEASURE",
+     "source": "implicit"
+    }
+   ],
+   "factors": {
+    "date": "last_week",
+    "dimension": "emd",
+    "dimension_target": "pickup"
+   }
+  },
+  "span_flags": [
+   "span_missing:measure:trip_count"
+  ],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "place",
+     "value": {
+      "name": "대구",
+      "region": ""
+     },
+     "text": "대구",
+     "attributes": {
+      "od_role": "pickup"
+     }
+    },
+    {
+     "subtype": "trip_count"
+    }
+   ],
+   "event": "trip",
+   "factors": {
+    "date": "last_week",
+    "dimension": "emd",
+    "dimension_target": "pickup"
+   },
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "trip_count",
+    "text": null
+   },
+   "conditions": [
+    {
+     "subtype": "place",
+     "span": "대구",
+     "value": {
+      "name": "대구",
+      "region": ""
+     },
+     "od_role": "pickup"
+    },
+    {
+     "subtype": "date",
+     "span": null,
+     "value": "last_week",
+     "od_role": null
+    }
+   ],
+   "dimension": "emd",
+   "dimension_target": "pickup",
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": true,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": true,
+   "full_answered": true
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "RESOLVE_PLACE_SCOPE",
+    "TRIP_COUNT"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.135,
+     "jaccard_nearest": "old44/g06",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.135,
+     "jaccard_nearest": "old44/g06",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.114,
+     "jaccard_nearest": "final_v12/f36",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.128,
+     "jaccard_nearest": "heldout_v9/h30",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.176,
+     "jaccard_nearest": "044",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.175,
+     "jaccard_nearest": "b007-04",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.143,
+     "jaccard_nearest": "b005-31",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.143,
+     "jaccard_nearest": "b005-31",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.135,
+     "jaccard_nearest": "pg-b006-14",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.143,
+     "jaccard_nearest": "b005-31",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.143,
+     "jaccard_nearest": "b005-31",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.176,
+     "jaccard_nearest": "aug300-291",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {}
+  },
+  "template_key": "34fb82a583619ab491f78214c1f8a70a148e9fec2d73326ffd336d6ef9b40ff3",
+  "family_key": "b6b9bdc1d7d7de8cb45fa5608a1cec51705ea13bbc6500342af86ceb83672aad",
+  "excluded_reasons": [
+   "extended_template",
+   "extended_family",
+   "valid98:template",
+   "valid98:family"
+  ]
+ },
+ {
+  "id": "b008-10",
+  "gap": "g2_implicit_endpoint",
+  "group": "g2",
+  "question": "이번 달 부산에서 손님을 내려준 곳을 시군구별로 보여줘",
+  "gold_text": "get_place_scope(name=부산)\nget_trip_count(scope_dropoff=$dropoff.scope, date=this_month, dimension=sigungu, dimension_target=dropoff)",
+  "rationale": "승차·하차·출발·도착이라는 말이 없다. 손님을 태운 곳=승차 끝(pickup), 내려준·내린 곳=하차 끝(dropoff). 건수이므로 trip_count. 부산에서 내려준=dropoff, 내려준 곳 시군구별=dropoff.",
+  "gold": [
+   {
+    "tool": "get_place_scope",
+    "args": {
+     "name": "부산"
+    }
+   },
+   {
+    "tool": "get_trip_count",
+    "args": {
+     "scope_dropoff": "$dropoff.scope",
+     "date": "this_month",
+     "dimension": "sigungu",
+     "dimension_target": "dropoff"
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "place_scope_dropoff",
+     "concept": "LOCATION",
+     "subtype": "place",
+     "role": "SUBCOND",
+     "source": "user",
+     "value": {
+      "name": "부산",
+      "region": ""
+     },
+     "attributes": {
+      "od_role": "dropoff"
+     },
+     "text": "부산"
+    },
+    {
+     "id": "event",
+     "concept": "EVENT",
+     "subtype": "trip",
+     "role": "SUPPORT",
+     "source": "implicit"
+    },
+    {
+     "id": "measure",
+     "concept": "AMOUNT",
+     "subtype": "trip_count",
+     "role": "MEASURE",
+     "source": "implicit"
+    }
+   ],
+   "factors": {
+    "date": "this_month",
+    "dimension": "sigungu",
+    "dimension_target": "dropoff"
+   }
+  },
+  "span_flags": [
+   "span_missing:measure:trip_count"
+  ],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "place",
+     "value": {
+      "name": "부산",
+      "region": ""
+     },
+     "text": "부산",
+     "attributes": {
+      "od_role": "dropoff"
+     }
+    },
+    {
+     "subtype": "trip_count"
+    }
+   ],
+   "event": "trip",
+   "factors": {
+    "date": "this_month",
+    "dimension": "sigungu",
+    "dimension_target": "dropoff"
+   },
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "trip_count",
+    "text": null
+   },
+   "conditions": [
+    {
+     "subtype": "place",
+     "span": "부산",
+     "value": {
+      "name": "부산",
+      "region": ""
+     },
+     "od_role": "dropoff"
+    },
+    {
+     "subtype": "date",
+     "span": null,
+     "value": "this_month",
+     "od_role": null
+    }
+   ],
+   "dimension": "sigungu",
+   "dimension_target": "dropoff",
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": true,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": true,
+   "full_answered": true
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "RESOLVE_PLACE_SCOPE",
+    "TRIP_COUNT"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.087,
+     "jaccard_nearest": "indepv4/k26",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.087,
+     "jaccard_nearest": "indepv4/k26",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.089,
+     "jaccard_nearest": "final_v12/f37",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.125,
+     "jaccard_nearest": "heldout_v9/h30",
+     "same_grounding": [],
+     "template": 0,
+     "family": 1
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.139,
+     "jaccard_nearest": "041",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.161,
+     "jaccard_nearest": "b007-16",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.22,
+     "jaccard_nearest": "b006-08",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.22,
+     "jaccard_nearest": "b006-08",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.244,
+     "jaccard_nearest": "pg-b006-17",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.244,
+     "jaccard_nearest": "b006-17",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.244,
+     "jaccard_nearest": "b006-17",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.163,
+     "jaccard_nearest": "aug300-132",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {}
+  },
+  "template_key": "78e814e8025d5e0c6c6dba0ea4bf1edda8554dfbfbeaa8a3bfe0486f5fc33d40",
+  "family_key": "17430684b5ee2c41418fa5c994a04c3926a6908784bd07e382c37cca5e005920",
+  "excluded_reasons": [
+   "extended_family",
+   "valid98:family"
+  ]
+ },
+ {
+  "id": "b008-11",
+  "gap": "g2_implicit_endpoint",
+  "group": "g2",
+  "question": "주말 동안 손님을 가장 많이 태운 H3 셀 5곳은?",
+  "gold_text": "get_trip_count(date=weekend, dimension=h3, dimension_target=pickup, order=top, limit=5)",
+  "rationale": "승차·하차·출발·도착이라는 말이 없다. 손님을 태운 곳=승차 끝(pickup), 내려준·내린 곳=하차 끝(dropoff). 건수이므로 trip_count. 장소 제한 없음. 태운 곳=pickup으로 H3 묶음, 상위 5.",
+  "gold": [
+   {
+    "tool": "get_trip_count",
+    "args": {
+     "date": "weekend",
+     "dimension": "h3",
+     "dimension_target": "pickup",
+     "order": "top",
+     "limit": 5
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "event",
+     "concept": "EVENT",
+     "subtype": "trip",
+     "role": "SUPPORT",
+     "source": "implicit"
+    },
+    {
+     "id": "measure",
+     "concept": "AMOUNT",
+     "subtype": "trip_count",
+     "role": "MEASURE",
+     "source": "implicit"
+    }
+   ],
+   "factors": {
+    "date": "weekend",
+    "dimension": "h3",
+    "dimension_target": "pickup",
+    "order": "top",
+    "limit": 5
+   }
+  },
+  "span_flags": [
+   "span_missing:measure:trip_count"
+  ],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "trip_count"
+    }
+   ],
+   "event": "trip",
+   "factors": {
+    "date": "weekend",
+    "dimension": "h3",
+    "dimension_target": "pickup",
+    "order": "top",
+    "limit": 5
+   },
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "trip_count",
+    "text": null
+   },
+   "conditions": [
+    {
+     "subtype": "date",
+     "span": null,
+     "value": "weekend",
+     "od_role": null
+    }
+   ],
+   "dimension": "h3",
+   "dimension_target": "pickup",
+   "order": "top",
+   "limit": 5,
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": true,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": true,
+   "full_answered": true
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "TRIP_COUNT"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.06,
+     "jaccard_nearest": "indepv2/n02",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.06,
+     "jaccard_nearest": "indepv2/n02",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.071,
+     "jaccard_nearest": "final_v12/f37",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.059,
+     "jaccard_nearest": "heldout_v8/t04",
+     "same_grounding": [],
+     "template": 0,
+     "family": 1
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.056,
+     "jaccard_nearest": "038",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.038,
+     "jaccard_nearest": "b007-24",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.175,
+     "jaccard_nearest": "b004-19",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.05,
+     "jaccard_nearest": "b004-06",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.176,
+     "jaccard_nearest": "pg-b006-26",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.176,
+     "jaccard_nearest": "b006-26",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.176,
+     "jaccard_nearest": "b006-26",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.03,
+     "jaccard_nearest": "aug300-113",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {}
+  },
+  "template_key": "ea170c92a77931e5448ec660578421a47e57f68b87b1b41bae571a4c49742dcc",
+  "family_key": "d2803b058a8e9af8b7f23ab60957484f59158d5f5792009bc2119383cdf62ad4",
+  "excluded_reasons": [
+   "extended_family",
+   "valid98:family"
+  ]
+ },
+ {
+  "id": "b008-12",
+  "gap": "g2_implicit_endpoint",
+  "group": "g2",
+  "question": "평일 저녁 6시부터 9시까지 손님을 내려준 곳이 가장 적은 읍면동 3곳은?",
+  "gold_text": "get_trip_count(date=weekday, time=180000-210000, dimension=emd, dimension_target=dropoff, order=bottom, limit=3)",
+  "rationale": "승차·하차·출발·도착이라는 말이 없다. 손님을 태운 곳=승차 끝(pickup), 내려준·내린 곳=하차 끝(dropoff). 건수이므로 trip_count. 내려준 곳=dropoff로 읍면동 묶음, 하위 3.",
+  "gold": [
+   {
+    "tool": "get_trip_count",
+    "args": {
+     "date": "weekday",
+     "time": "180000-210000",
+     "dimension": "emd",
+     "dimension_target": "dropoff",
+     "order": "bottom",
+     "limit": 3
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "event",
+     "concept": "EVENT",
+     "subtype": "trip",
+     "role": "SUPPORT",
+     "source": "implicit"
+    },
+    {
+     "id": "measure",
+     "concept": "AMOUNT",
+     "subtype": "trip_count",
+     "role": "MEASURE",
+     "source": "implicit"
+    }
+   ],
+   "factors": {
+    "date": "weekday",
+    "time": "180000-210000",
+    "dimension": "emd",
+    "dimension_target": "dropoff",
+    "order": "bottom",
+    "limit": 3
+   }
+  },
+  "span_flags": [
+   "span_missing:measure:trip_count"
+  ],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "trip_count"
+    }
+   ],
+   "event": "trip",
+   "factors": {
+    "date": "weekday",
+    "time": "180000-210000",
+    "dimension": "emd",
+    "dimension_target": "dropoff",
+    "order": "bottom",
+    "limit": 3
+   },
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "trip_count",
+    "text": null
+   },
+   "conditions": [
+    {
+     "subtype": "date",
+     "span": null,
+     "value": "weekday",
+     "od_role": null
+    },
+    {
+     "subtype": "time",
+     "span": null,
+     "value": "180000-210000",
+     "od_role": null
+    }
+   ],
+   "dimension": "emd",
+   "dimension_target": "dropoff",
+   "order": "bottom",
+   "limit": 3,
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": true,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": true,
+   "full_answered": true
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "TRIP_COUNT"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.115,
+     "jaccard_nearest": "old44/g18",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.115,
+     "jaccard_nearest": "old44/g18",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.118,
+     "jaccard_nearest": "final_v12/f31",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.109,
+     "jaccard_nearest": "heldout_v9/h35",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.154,
+     "jaccard_nearest": "030",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.091,
+     "jaccard_nearest": "b007-16",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.094,
+     "jaccard_nearest": "b005-17",
+     "same_grounding": [],
+     "template": 0,
+     "family": 1
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.094,
+     "jaccard_nearest": "b005-17",
+     "same_grounding": [],
+     "template": 0,
+     "family": 4
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.137,
+     "jaccard_nearest": "pg-b006-17",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.137,
+     "jaccard_nearest": "b006-17",
+     "same_grounding": [],
+     "template": 0,
+     "family": 1
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.137,
+     "jaccard_nearest": "b006-17",
+     "same_grounding": [],
+     "template": 0,
+     "family": 1
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.111,
+     "jaccard_nearest": "aug300-139",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {
+    "train_v006_t2pc": {
+     "family": 1
+    },
+    "train_thinking_pilot004_t2pc": {
+     "family": 4
+    },
+    "pg_reviewed_reasoning_v001": {
+     "family": 1
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "family": 1
+    }
+   }
+  },
+  "template_key": "d425551cf4e8792acb4ef6b2d53c6b661d6caf7f865a44d7f6035719fc557f4d",
+  "family_key": "6fe62c869ac6eb46a2643268aad4a3bf942116550b805b653ce20d5f148fab4c",
+  "excluded_reasons": [
+   "extended_family"
+  ]
+ },
+ {
+  "id": "b008-13",
+  "gap": "g2_implicit_endpoint",
+  "group": "g2",
+  "question": "지난달 대구 수성구에서 태운 손님을 내려준 곳을 시군구별로 알려줘",
+  "gold_text": "get_place_scope(name=수성구, region=대구)\nget_trip_count(scope_pickup=$pickup.scope, date=last_month, dimension=sigungu, dimension_target=dropoff)",
+  "rationale": "승차·하차·출발·도착이라는 말이 없다. 손님을 태운 곳=승차 끝(pickup), 내려준·내린 곳=하차 끝(dropoff). 건수이므로 trip_count. 수성구에서 태운=pickup(장소 제한), 내려준 곳으로 묶음=dropoff(od_role ≠ dimension_target).",
+  "gold": [
+   {
+    "tool": "get_place_scope",
+    "args": {
+     "name": "수성구",
+     "region": "대구"
+    }
+   },
+   {
+    "tool": "get_trip_count",
+    "args": {
+     "scope_pickup": "$pickup.scope",
+     "date": "last_month",
+     "dimension": "sigungu",
+     "dimension_target": "dropoff"
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "place_scope_pickup",
+     "concept": "LOCATION",
+     "subtype": "place",
+     "role": "SUBCOND",
+     "source": "user",
+     "value": {
+      "name": "수성구",
+      "region": "대구"
+     },
+     "attributes": {
+      "od_role": "pickup"
+     },
+     "text": "대구 수성구"
+    },
+    {
+     "id": "event",
+     "concept": "EVENT",
+     "subtype": "trip",
+     "role": "SUPPORT",
+     "source": "implicit"
+    },
+    {
+     "id": "measure",
+     "concept": "AMOUNT",
+     "subtype": "trip_count",
+     "role": "MEASURE",
+     "source": "implicit"
+    }
+   ],
+   "factors": {
+    "date": "last_month",
+    "dimension": "sigungu",
+    "dimension_target": "dropoff"
+   }
+  },
+  "span_flags": [
+   "span_missing:measure:trip_count"
+  ],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "place",
+     "value": {
+      "name": "수성구",
+      "region": "대구"
+     },
+     "text": "대구 수성구",
+     "attributes": {
+      "od_role": "pickup"
+     }
+    },
+    {
+     "subtype": "trip_count"
+    }
+   ],
+   "event": "trip",
+   "factors": {
+    "date": "last_month",
+    "dimension": "sigungu",
+    "dimension_target": "dropoff"
+   },
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "trip_count",
+    "text": null
+   },
+   "conditions": [
+    {
+     "subtype": "place",
+     "span": "대구 수성구",
+     "value": {
+      "name": "수성구",
+      "region": "대구"
+     },
+     "od_role": "pickup"
+    },
+    {
+     "subtype": "date",
+     "span": null,
+     "value": "last_month",
+     "od_role": null
+    }
+   ],
+   "dimension": "sigungu",
+   "dimension_target": "dropoff",
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": true,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": true,
+   "full_answered": true
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "RESOLVE_PLACE_SCOPE",
+    "TRIP_COUNT"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.12,
+     "jaccard_nearest": "indepv4/k27",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.12,
+     "jaccard_nearest": "indepv4/k27",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.088,
+     "jaccard_nearest": "at/t05d",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.094,
+     "jaccard_nearest": "heldout_v8/t12",
+     "same_grounding": [],
+     "template": 0,
+     "family": 1
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.229,
+     "jaccard_nearest": "087",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.178,
+     "jaccard_nearest": "b007-04",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.132,
+     "jaccard_nearest": "b004-40",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.132,
+     "jaccard_nearest": "b004-40",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.196,
+     "jaccard_nearest": "pg-b006-42",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.196,
+     "jaccard_nearest": "b006-42",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.196,
+     "jaccard_nearest": "b006-42",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.176,
+     "jaccard_nearest": "aug300-161",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {}
+  },
+  "template_key": "72d63e69fbe821deb4c1a9c4ca9e76fe0499a047b2dc865d7d4fb09cf10f534b",
+  "family_key": "03a9aef7e1fbaf9786625e5cc80671eb69b888a3fee427af82d193dfe28b1fda",
+  "excluded_reasons": [
+   "extended_family",
+   "valid98:family"
+  ]
+ },
+ {
+  "id": "b008-15",
+  "gap": "g2_implicit_endpoint",
+  "group": "g2",
+  "question": "이번 주 서울에서 손님이 차에 오른 곳을 H3 단위로 나눠 보여줘",
+  "gold_text": "get_place_scope(name=서울)\nget_trip_count(scope_pickup=$pickup.scope, date=this_week, dimension=h3, dimension_target=pickup)",
+  "rationale": "승차·하차·출발·도착이라는 말이 없다. 손님을 태운 곳=승차 끝(pickup), 내려준·내린 곳=하차 끝(dropoff). 건수이므로 trip_count. 손님이 차에 오른 곳=pickup.",
+  "gold": [
+   {
+    "tool": "get_place_scope",
+    "args": {
+     "name": "서울"
+    }
+   },
+   {
+    "tool": "get_trip_count",
+    "args": {
+     "scope_pickup": "$pickup.scope",
+     "date": "this_week",
+     "dimension": "h3",
+     "dimension_target": "pickup"
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "place_scope_pickup",
+     "concept": "LOCATION",
+     "subtype": "place",
+     "role": "SUBCOND",
+     "source": "user",
+     "value": {
+      "name": "서울",
+      "region": ""
+     },
+     "attributes": {
+      "od_role": "pickup"
+     },
+     "text": "서울"
+    },
+    {
+     "id": "event",
+     "concept": "EVENT",
+     "subtype": "trip",
+     "role": "SUPPORT",
+     "source": "implicit"
+    },
+    {
+     "id": "measure",
+     "concept": "AMOUNT",
+     "subtype": "trip_count",
+     "role": "MEASURE",
+     "source": "implicit"
+    }
+   ],
+   "factors": {
+    "date": "this_week",
+    "dimension": "h3",
+    "dimension_target": "pickup"
+   }
+  },
+  "span_flags": [
+   "span_missing:measure:trip_count"
+  ],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "place",
+     "value": {
+      "name": "서울",
+      "region": ""
+     },
+     "text": "서울",
+     "attributes": {
+      "od_role": "pickup"
+     }
+    },
+    {
+     "subtype": "trip_count"
+    }
+   ],
+   "event": "trip",
+   "factors": {
+    "date": "this_week",
+    "dimension": "h3",
+    "dimension_target": "pickup"
+   },
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "trip_count",
+    "text": null
+   },
+   "conditions": [
+    {
+     "subtype": "place",
+     "span": "서울",
+     "value": {
+      "name": "서울",
+      "region": ""
+     },
+     "od_role": "pickup"
+    },
+    {
+     "subtype": "date",
+     "span": null,
+     "value": "this_week",
+     "od_role": null
+    }
+   ],
+   "dimension": "h3",
+   "dimension_target": "pickup",
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": false,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": false,
+   "full_answered": false
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "RESOLVE_PLACE_SCOPE",
+    "TRIP_COUNT"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.042,
+     "jaccard_nearest": "indepv3/m03",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.042,
+     "jaccard_nearest": "indepv3/m03",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.057,
+     "jaccard_nearest": "final_v12/f20",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.083,
+     "jaccard_nearest": "heldout_v8/t13",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.027,
+     "jaccard_nearest": "062",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.054,
+     "jaccard_nearest": "b007-01",
+     "same_grounding": [],
+     "template": 0,
+     "family": 2
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.039,
+     "jaccard_nearest": "b006-19",
+     "same_grounding": [],
+     "template": 0,
+     "family": 1
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.039,
+     "jaccard_nearest": "b006-19",
+     "same_grounding": [],
+     "template": 0,
+     "family": 4
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.15,
+     "jaccard_nearest": "pg-b006-14",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.15,
+     "jaccard_nearest": "b006-14",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.15,
+     "jaccard_nearest": "b006-14",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.077,
+     "jaccard_nearest": "aug300-202",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {
+    "batch007": {
+     "family": 2
+    },
+    "train_v006_t2pc": {
+     "family": 1
+    },
+    "train_thinking_pilot004_t2pc": {
+     "family": 4
+    },
+    "pg_batch006": {
+     "template": 1,
+     "family": 1
+    },
+    "pg_reviewed_reasoning_v001": {
+     "template": 1,
+     "family": 1
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "template": 1,
+     "family": 1
+    }
+   }
+  },
+  "template_key": "4ddc352778b2fc4c5ae70c7f800562cb71e667e4b73f91a9af241a288c288943",
+  "family_key": "08d1664a67a104a6f333be3d48f58df918a39bd74a69915cbc31cf7ae801ceb9",
+  "excluded_reasons": [
+   "validation_chain_failed",
+   "full_path_not_answered:UNSUPPORTED_COMBINATION"
+  ]
+ },
+ {
+  "id": "b008-16",
+  "gap": "g2_implicit_endpoint",
+  "group": "g2",
+  "question": "지난주 대구에서 손님이 내린 곳을 구별로 보여줘",
+  "gold_text": "get_place_scope(name=대구)\nget_trip_count(scope_dropoff=$dropoff.scope, date=last_week, dimension=sigungu, dimension_target=dropoff)",
+  "rationale": "승차·하차·출발·도착이라는 말이 없다. 손님을 태운 곳=승차 끝(pickup), 내려준·내린 곳=하차 끝(dropoff). 건수이므로 trip_count. 손님이 내린 곳=dropoff. 구별=sigungu.",
+  "gold": [
+   {
+    "tool": "get_place_scope",
+    "args": {
+     "name": "대구"
+    }
+   },
+   {
+    "tool": "get_trip_count",
+    "args": {
+     "scope_dropoff": "$dropoff.scope",
+     "date": "last_week",
+     "dimension": "sigungu",
+     "dimension_target": "dropoff"
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "place_scope_dropoff",
+     "concept": "LOCATION",
+     "subtype": "place",
+     "role": "SUBCOND",
+     "source": "user",
+     "value": {
+      "name": "대구",
+      "region": ""
+     },
+     "attributes": {
+      "od_role": "dropoff"
+     },
+     "text": "대구"
+    },
+    {
+     "id": "event",
+     "concept": "EVENT",
+     "subtype": "trip",
+     "role": "SUPPORT",
+     "source": "implicit"
+    },
+    {
+     "id": "measure",
+     "concept": "AMOUNT",
+     "subtype": "trip_count",
+     "role": "MEASURE",
+     "source": "implicit"
+    }
+   ],
+   "factors": {
+    "date": "last_week",
+    "dimension": "sigungu",
+    "dimension_target": "dropoff"
+   }
+  },
+  "span_flags": [
+   "span_missing:measure:trip_count"
+  ],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "place",
+     "value": {
+      "name": "대구",
+      "region": ""
+     },
+     "text": "대구",
+     "attributes": {
+      "od_role": "dropoff"
+     }
+    },
+    {
+     "subtype": "trip_count"
+    }
+   ],
+   "event": "trip",
+   "factors": {
+    "date": "last_week",
+    "dimension": "sigungu",
+    "dimension_target": "dropoff"
+   },
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "trip_count",
+    "text": null
+   },
+   "conditions": [
+    {
+     "subtype": "place",
+     "span": "대구",
+     "value": {
+      "name": "대구",
+      "region": ""
+     },
+     "od_role": "dropoff"
+    },
+    {
+     "subtype": "date",
+     "span": null,
+     "value": "last_week",
+     "od_role": null
+    }
+   ],
+   "dimension": "sigungu",
+   "dimension_target": "dropoff",
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": true,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": true,
+   "full_answered": true
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "RESOLVE_PLACE_SCOPE",
+    "TRIP_COUNT"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.081,
+     "jaccard_nearest": "old44/g06",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.081,
+     "jaccard_nearest": "old44/g06",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.075,
+     "jaccard_nearest": "final_v12/f06",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.132,
+     "jaccard_nearest": "heldout_v8/r07",
+     "same_grounding": [],
+     "template": 0,
+     "family": 1
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.152,
+     "jaccard_nearest": "044",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.128,
+     "jaccard_nearest": "b007-01",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.111,
+     "jaccard_nearest": "b005-33",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.111,
+     "jaccard_nearest": "b005-33",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.212,
+     "jaccard_nearest": "pg-b006-14",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.212,
+     "jaccard_nearest": "b006-14",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.212,
+     "jaccard_nearest": "b006-14",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.152,
+     "jaccard_nearest": "aug300-291",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {}
+  },
+  "template_key": "78e814e8025d5e0c6c6dba0ea4bf1edda8554dfbfbeaa8a3bfe0486f5fc33d40",
+  "family_key": "17430684b5ee2c41418fa5c994a04c3926a6908784bd07e382c37cca5e005920",
+  "excluded_reasons": [
+   "extended_family",
+   "valid98:family"
+  ]
+ },
+ {
+  "id": "b008-17",
+  "gap": "g2_implicit_endpoint",
+  "group": "g2",
+  "question": "휴일에 부산에서 손님을 많이 태운 동네 상위 3곳은?",
+  "gold_text": "get_place_scope(name=부산)\nget_trip_count(scope_pickup=$pickup.scope, date=holiday, dimension=emd, dimension_target=pickup, order=top, limit=3)",
+  "rationale": "승차·하차·출발·도착이라는 말이 없다. 손님을 태운 곳=승차 끝(pickup), 내려준·내린 곳=하차 끝(dropoff). 건수이므로 trip_count. 동네=읍면동. 태운=pickup.",
+  "gold": [
+   {
+    "tool": "get_place_scope",
+    "args": {
+     "name": "부산"
+    }
+   },
+   {
+    "tool": "get_trip_count",
+    "args": {
+     "scope_pickup": "$pickup.scope",
+     "date": "holiday",
+     "dimension": "emd",
+     "dimension_target": "pickup",
+     "order": "top",
+     "limit": 3
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "place_scope_pickup",
+     "concept": "LOCATION",
+     "subtype": "place",
+     "role": "SUBCOND",
+     "source": "user",
+     "value": {
+      "name": "부산",
+      "region": ""
+     },
+     "attributes": {
+      "od_role": "pickup"
+     },
+     "text": "부산"
+    },
+    {
+     "id": "event",
+     "concept": "EVENT",
+     "subtype": "trip",
+     "role": "SUPPORT",
+     "source": "implicit"
+    },
+    {
+     "id": "measure",
+     "concept": "AMOUNT",
+     "subtype": "trip_count",
+     "role": "MEASURE",
+     "source": "implicit"
+    }
+   ],
+   "factors": {
+    "date": "holiday",
+    "dimension": "emd",
+    "dimension_target": "pickup",
+    "order": "top",
+    "limit": 3
+   }
+  },
+  "span_flags": [
+   "span_missing:measure:trip_count"
+  ],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "place",
+     "value": {
+      "name": "부산",
+      "region": ""
+     },
+     "text": "부산",
+     "attributes": {
+      "od_role": "pickup"
+     }
+    },
+    {
+     "subtype": "trip_count"
+    }
+   ],
+   "event": "trip",
+   "factors": {
+    "date": "holiday",
+    "dimension": "emd",
+    "dimension_target": "pickup",
+    "order": "top",
+    "limit": 3
+   },
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "trip_count",
+    "text": null
+   },
+   "conditions": [
+    {
+     "subtype": "place",
+     "span": "부산",
+     "value": {
+      "name": "부산",
+      "region": ""
+     },
+     "od_role": "pickup"
+    },
+    {
+     "subtype": "date",
+     "span": null,
+     "value": "holiday",
+     "od_role": null
+    }
+   ],
+   "dimension": "emd",
+   "dimension_target": "pickup",
+   "order": "top",
+   "limit": 3,
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": true,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": true,
+   "full_answered": true
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "RESOLVE_PLACE_SCOPE",
+    "TRIP_COUNT"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.156,
+     "jaccard_nearest": "contrast/c01a",
+     "same_grounding": [],
+     "template": 2,
+     "family": 4
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.156,
+     "jaccard_nearest": "contrast/c01a",
+     "same_grounding": [],
+     "template": 2,
+     "family": 4
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.067,
+     "jaccard_nearest": "final_v12/f36",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.132,
+     "jaccard_nearest": "heldout_v9/h30",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.172,
+     "jaccard_nearest": "073",
+     "same_grounding": [],
+     "template": 0,
+     "family": 2
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.07,
+     "jaccard_nearest": "b007-04",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.14,
+     "jaccard_nearest": "b004-19",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.051,
+     "jaccard_nearest": "b004-31",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.128,
+     "jaccard_nearest": "pg-b006-15",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.14,
+     "jaccard_nearest": "b004-19",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.14,
+     "jaccard_nearest": "b004-19",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.132,
+     "jaccard_nearest": "aug300-305",
+     "same_grounding": [],
+     "template": 1,
+     "family": 2
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {
+    "aug300": {
+     "template": 1,
+     "family": 2
+    }
+   }
+  },
+  "template_key": "2a31153dbac512e6a0e8e104c7548951b009183607646a708eb19398aa797b1a",
+  "family_key": "31d2adfe9eb97ac3270b66d88fa010f7d229bd903829f006fe06b6a95a406e0d",
+  "excluded_reasons": [
+   "extended_template",
+   "extended_family",
+   "selection_v1:template",
+   "selection_v1:family",
+   "selection_v2:template",
+   "selection_v2:family",
+   "aux_test_v1:template",
+   "aux_test_v1:family",
+   "vendor100:family"
+  ]
+ },
+ {
+  "id": "b008-19",
+  "gap": "g3_valueless_place",
+  "group": "g3-p1",
+  "question": "scope:gz:3982는 어디야?",
+  "gold_text": "get_scope_name(scope=scope:gz:3982)",
+  "rationale": "답이 장소 이름이다: scope 이름 조회(get_scope_name). Full 계약에서 value 없는 place가 측정값(MEASURE)이고 scope는 조건이다. ",
+  "gold": [
+   {
+    "tool": "get_scope_name",
+    "args": {
+     "scope": "scope:gz:3982"
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "scope_scope",
+     "concept": "LOCATION",
+     "subtype": "scope",
+     "role": "COND",
+     "source": "user",
+     "value": "scope:gz:3982",
+     "text": "scope:gz:3982"
+    },
+    {
+     "id": "place_name",
+     "concept": "LOCATION",
+     "subtype": "place",
+     "role": "MEASURE",
+     "source": "implicit"
+    }
+   ],
+   "factors": {}
+  },
+  "span_flags": [
+   "span_missing:measure:place"
+  ],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "scope",
+     "value": "scope:gz:3982",
+     "text": "scope:gz:3982"
+    },
+    {
+     "subtype": "place"
+    }
+   ],
+   "event": null,
+   "factors": {},
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "place",
+    "text": null
+   },
+   "conditions": [
+    {
+     "subtype": "scope",
+     "span": "scope:gz:3982",
+     "value": "scope:gz:3982",
+     "od_role": null
+    }
+   ],
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": true,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": true,
+   "full_answered": true
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "SCOPE_NAME"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [
+    "protected_semantic_template",
+    "protected_semantic_family"
+   ],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.647,
+     "jaccard_nearest": "indepv2/n40",
+     "same_grounding": [
+      "indepv2/n40"
+     ],
+     "template": 4,
+     "family": 4
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.647,
+     "jaccard_nearest": "indepv2/n40",
+     "same_grounding": [
+      "indepv2/n40"
+     ],
+     "template": 4,
+     "family": 4
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.162,
+     "jaccard_nearest": "final_v12/f18",
+     "same_grounding": [],
+     "template": 2,
+     "family": 2
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.071,
+     "jaccard_nearest": "heldout_v9/h36",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.1,
+     "jaccard_nearest": "094",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.0,
+     "jaccard_nearest": "b007-28",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.062,
+     "jaccard_nearest": "b004-41",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.062,
+     "jaccard_nearest": "b004-41",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.0,
+     "jaccard_nearest": "pg-b006-43",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.062,
+     "jaccard_nearest": "b004-41",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.062,
+     "jaccard_nearest": "b004-41",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.45,
+     "jaccard_nearest": "aug300-376",
+     "same_grounding": [
+      "aug300-372",
+      "aug300-376",
+      "aug300-387"
+     ],
+     "template": 42,
+     "family": 42
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {
+    "aug300": {
+     "template": 42,
+     "family": 42
+    }
+   }
+  },
+  "template_key": "1c6ac5653b6a0169acac29afe5538528284a3d196fdfe8433b53196be0d25af3",
+  "family_key": "0ea46a83e4349a67070da7195064f090559f4c8a9318913088c05f609016f862",
+  "excluded_reasons": [
+   "thor:protected_semantic_template",
+   "thor:protected_semantic_family",
+   "extended_template",
+   "extended_family",
+   "selection_v1:jaccard>=0.5(indepv2/n40,0.647)",
+   "selection_v1:same_grounding",
+   "selection_v1:template",
+   "selection_v1:family",
+   "selection_v2:jaccard>=0.5(indepv2/n40,0.647)",
+   "selection_v2:same_grounding",
+   "selection_v2:template",
+   "selection_v2:family",
+   "aux_test_v1:template",
+   "aux_test_v1:family",
+   "valid98:template",
+   "valid98:family",
+   "vendor100:template",
+   "vendor100:family",
+   "aug300:same_grounding"
+  ]
+ },
+ {
+  "id": "b008-20",
+  "gap": "g3_valueless_place",
+  "group": "g3-p1",
+  "question": "이번 주 부산 수영구에서 택시가 가장 많이 지나간 읍면동은 어디야?",
+  "gold_text": "get_place_scope(name=수영구, region=부산)\nget_passage_count(scope=$resolve.scope, date=this_week, dimension=emd, order=top, limit=1)",
+  "rationale": "'어디야'로 묻지만 답은 묶음 단위(dimension)의 순위 1곳이다. value 없는 place 개념을 만들지 않는다(측정값은 하나). 통행량(passage_count), 수영구는 값 있는 장소 조건.",
+  "gold": [
+   {
+    "tool": "get_place_scope",
+    "args": {
+     "name": "수영구",
+     "region": "부산"
+    }
+   },
+   {
+    "tool": "get_passage_count",
+    "args": {
+     "scope": "$resolve.scope",
+     "date": "this_week",
+     "dimension": "emd",
+     "order": "top",
+     "limit": 1
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "place_scope",
+     "concept": "LOCATION",
+     "subtype": "place",
+     "role": "SUBCOND",
+     "source": "user",
+     "value": {
+      "name": "수영구",
+      "region": "부산"
+     },
+     "text": "부산 수영구"
+    },
+    {
+     "id": "event",
+     "concept": "EVENT",
+     "subtype": "passage",
+     "role": "SUPPORT",
+     "source": "implicit"
+    },
+    {
+     "id": "measure",
+     "concept": "AMOUNT",
+     "subtype": "passage_count",
+     "role": "MEASURE",
+     "source": "implicit",
+     "text": "지나간"
+    }
+   ],
+   "factors": {
+    "date": "this_week",
+    "dimension": "emd",
+    "order": "top",
+    "limit": 1
+   }
+  },
+  "span_flags": [],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "place",
+     "value": {
+      "name": "수영구",
+      "region": "부산"
+     },
+     "text": "부산 수영구"
+    },
+    {
+     "subtype": "passage_count",
+     "text": "지나간"
+    }
+   ],
+   "event": "passage",
+   "factors": {
+    "date": "this_week",
+    "dimension": "emd",
+    "order": "top",
+    "limit": 1
+   },
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "passage_count",
+    "text": "지나간"
+   },
+   "conditions": [
+    {
+     "subtype": "place",
+     "span": "부산 수영구",
+     "value": {
+      "name": "수영구",
+      "region": "부산"
+     },
+     "od_role": null
+    },
+    {
+     "subtype": "date",
+     "span": null,
+     "value": "this_week",
+     "od_role": null
+    }
+   ],
+   "dimension": "emd",
+   "order": "top",
+   "limit": 1,
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": true,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": true,
+   "full_answered": true
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "RESOLVE_PLACE_SCOPE",
+    "PASSAGE_COUNT"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.139,
+     "jaccard_nearest": "old44/g12",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.139,
+     "jaccard_nearest": "old44/g12",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.208,
+     "jaccard_nearest": "final_v12/f07",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.111,
+     "jaccard_nearest": "heldout_v8/r07",
+     "same_grounding": [],
+     "template": 0,
+     "family": 1
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.07,
+     "jaccard_nearest": "092",
+     "same_grounding": [],
+     "template": 0,
+     "family": 5
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.109,
+     "jaccard_nearest": "b007-25",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.25,
+     "jaccard_nearest": "b004-06",
+     "same_grounding": [],
+     "template": 2,
+     "family": 2
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.25,
+     "jaccard_nearest": "b004-06",
+     "same_grounding": [],
+     "template": 6,
+     "family": 9
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.237,
+     "jaccard_nearest": "pg-b006-13",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.25,
+     "jaccard_nearest": "b004-06",
+     "same_grounding": [],
+     "template": 2,
+     "family": 2
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.25,
+     "jaccard_nearest": "b004-06",
+     "same_grounding": [],
+     "template": 2,
+     "family": 2
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.094,
+     "jaccard_nearest": "aug300-306",
+     "same_grounding": [],
+     "template": 0,
+     "family": 4
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {
+    "train_v006_t2pc": {
+     "template": 2,
+     "family": 2
+    },
+    "train_thinking_pilot004_t2pc": {
+     "template": 6,
+     "family": 9
+    },
+    "pg_reviewed_reasoning_v001": {
+     "template": 2,
+     "family": 2
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "template": 2,
+     "family": 2
+    },
+    "aug300": {
+     "family": 4
+    }
+   }
+  },
+  "template_key": "746f5adf05115d8aeb4c1ad50e750e454893b338dd00700d0626f4b943addc5c",
+  "family_key": "872cff5c55d8dfb70eb73a659ed4da2416d6515f832fea3d2d698314c5e16657",
+  "excluded_reasons": [
+   "extended_template",
+   "extended_family",
+   "valid98:family",
+   "vendor100:family"
+  ]
+ },
+ {
+  "id": "b008-21",
+  "gap": "g3_valueless_place",
+  "group": "g3-p2",
+  "question": "scope:district:2726010100은 어느 동네를 가리켜?",
+  "gold_text": "get_scope_name(scope=scope:district:2726010100)",
+  "rationale": "답이 장소 이름이다: scope 이름 조회(get_scope_name). Full 계약에서 value 없는 place가 측정값(MEASURE)이고 scope는 조건이다. ",
+  "gold": [
+   {
+    "tool": "get_scope_name",
+    "args": {
+     "scope": "scope:district:2726010100"
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "scope_scope",
+     "concept": "LOCATION",
+     "subtype": "scope",
+     "role": "COND",
+     "source": "user",
+     "value": "scope:district:2726010100",
+     "text": "scope:district:2726010100"
+    },
+    {
+     "id": "place_name",
+     "concept": "LOCATION",
+     "subtype": "place",
+     "role": "MEASURE",
+     "source": "implicit"
+    }
+   ],
+   "factors": {}
+  },
+  "span_flags": [
+   "span_missing:measure:place"
+  ],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "scope",
+     "value": "scope:district:2726010100",
+     "text": "scope:district:2726010100"
+    },
+    {
+     "subtype": "place"
+    }
+   ],
+   "event": null,
+   "factors": {},
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "place",
+    "text": null
+   },
+   "conditions": [
+    {
+     "subtype": "scope",
+     "span": "scope:district:2726010100",
+     "value": "scope:district:2726010100",
+     "od_role": null
+    }
+   ],
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": true,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": true,
+   "full_answered": true
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "SCOPE_NAME"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [
+    "protected_semantic_template",
+    "protected_semantic_family"
+   ],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.36,
+     "jaccard_nearest": "indepv4/k21",
+     "same_grounding": [],
+     "template": 4,
+     "family": 4
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.36,
+     "jaccard_nearest": "indepv4/k21",
+     "same_grounding": [],
+     "template": 4,
+     "family": 4
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.543,
+     "jaccard_nearest": "final_v12/f17",
+     "same_grounding": [],
+     "template": 2,
+     "family": 2
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.356,
+     "jaccard_nearest": "heldout_v9/h36",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.378,
+     "jaccard_nearest": "097",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.0,
+     "jaccard_nearest": "b007-28",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.047,
+     "jaccard_nearest": "ann-b33f24e179cb6f5d84fd",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.047,
+     "jaccard_nearest": "ann-b33f24e179cb6f5d84fd",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.017,
+     "jaccard_nearest": "pg-b006-23",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.047,
+     "jaccard_nearest": "ann-b33f24e179cb6f5d84fd",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.047,
+     "jaccard_nearest": "ann-b33f24e179cb6f5d84fd",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.425,
+     "jaccard_nearest": "aug300-369",
+     "same_grounding": [],
+     "template": 42,
+     "family": 42
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {
+    "aug300": {
+     "template": 42,
+     "family": 42
+    }
+   }
+  },
+  "template_key": "1c6ac5653b6a0169acac29afe5538528284a3d196fdfe8433b53196be0d25af3",
+  "family_key": "0ea46a83e4349a67070da7195064f090559f4c8a9318913088c05f609016f862",
+  "excluded_reasons": [
+   "thor:protected_semantic_template",
+   "thor:protected_semantic_family",
+   "extended_template",
+   "extended_family",
+   "selection_v1:template",
+   "selection_v1:family",
+   "selection_v2:template",
+   "selection_v2:family",
+   "aux_test_v1:jaccard>=0.5(final_v12/f17,0.543)",
+   "aux_test_v1:template",
+   "aux_test_v1:family",
+   "valid98:template",
+   "valid98:family",
+   "vendor100:template",
+   "vendor100:family"
+  ]
+ },
+ {
+  "id": "b008-22",
+  "gap": "g3_valueless_place",
+  "group": "g3-p2",
+  "question": "지난달 대구 수성구에서 손님을 가장 적게 태운 동네는 어디야?",
+  "gold_text": "get_place_scope(name=수성구, region=대구)\nget_trip_count(scope_pickup=$pickup.scope, date=last_month, dimension=emd, dimension_target=pickup, order=bottom, limit=1)",
+  "rationale": "'어디야'로 묻지만 답은 묶음 단위(dimension)의 순위 1곳이다. value 없는 place 개념을 만들지 않는다(측정값은 하나). 실차 건수(태운=pickup), 동네=읍면동.",
+  "gold": [
+   {
+    "tool": "get_place_scope",
+    "args": {
+     "name": "수성구",
+     "region": "대구"
+    }
+   },
+   {
+    "tool": "get_trip_count",
+    "args": {
+     "scope_pickup": "$pickup.scope",
+     "date": "last_month",
+     "dimension": "emd",
+     "dimension_target": "pickup",
+     "order": "bottom",
+     "limit": 1
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "place_scope_pickup",
+     "concept": "LOCATION",
+     "subtype": "place",
+     "role": "SUBCOND",
+     "source": "user",
+     "value": {
+      "name": "수성구",
+      "region": "대구"
+     },
+     "attributes": {
+      "od_role": "pickup"
+     },
+     "text": "대구 수성구"
+    },
+    {
+     "id": "event",
+     "concept": "EVENT",
+     "subtype": "trip",
+     "role": "SUPPORT",
+     "source": "implicit"
+    },
+    {
+     "id": "measure",
+     "concept": "AMOUNT",
+     "subtype": "trip_count",
+     "role": "MEASURE",
+     "source": "implicit"
+    }
+   ],
+   "factors": {
+    "date": "last_month",
+    "dimension": "emd",
+    "dimension_target": "pickup",
+    "order": "bottom",
+    "limit": 1
+   }
+  },
+  "span_flags": [
+   "span_missing:measure:trip_count"
+  ],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "place",
+     "value": {
+      "name": "수성구",
+      "region": "대구"
+     },
+     "text": "대구 수성구",
+     "attributes": {
+      "od_role": "pickup"
+     }
+    },
+    {
+     "subtype": "trip_count"
+    }
+   ],
+   "event": "trip",
+   "factors": {
+    "date": "last_month",
+    "dimension": "emd",
+    "dimension_target": "pickup",
+    "order": "bottom",
+    "limit": 1
+   },
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "trip_count",
+    "text": null
+   },
+   "conditions": [
+    {
+     "subtype": "place",
+     "span": "대구 수성구",
+     "value": {
+      "name": "수성구",
+      "region": "대구"
+     },
+     "od_role": "pickup"
+    },
+    {
+     "subtype": "date",
+     "span": null,
+     "value": "last_month",
+     "od_role": null
+    }
+   ],
+   "dimension": "emd",
+   "dimension_target": "pickup",
+   "order": "bottom",
+   "limit": 1,
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": true,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": true,
+   "full_answered": true
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "RESOLVE_PLACE_SCOPE",
+    "TRIP_COUNT"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.13,
+     "jaccard_nearest": "indepv4/k26",
+     "same_grounding": [],
+     "template": 0,
+     "family": 1
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.13,
+     "jaccard_nearest": "indepv4/k26",
+     "same_grounding": [],
+     "template": 0,
+     "family": 1
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.097,
+     "jaccard_nearest": "at/t05d",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.119,
+     "jaccard_nearest": "heldout_v9/h30",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.25,
+     "jaccard_nearest": "087",
+     "same_grounding": [],
+     "template": 1,
+     "family": 2
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.087,
+     "jaccard_nearest": "b007-04",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.158,
+     "jaccard_nearest": "b004-41",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.158,
+     "jaccard_nearest": "b004-41",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.484,
+     "jaccard_nearest": "pg-b006-26",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.484,
+     "jaccard_nearest": "b006-26",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.484,
+     "jaccard_nearest": "b006-26",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.194,
+     "jaccard_nearest": "aug300-161",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {
+    "aug300": {
+     "template": 1,
+     "family": 1
+    }
+   }
+  },
+  "template_key": "a64361bd9b258072cc8b7f7f7facdb31dfd6883349ac9f914b82cc1204073d5b",
+  "family_key": "9c805d8dfbadf049f5a4adde08c42b1fe775264c01c8d0b120345b4030bf7e08",
+  "excluded_reasons": [
+   "extended_template",
+   "extended_family",
+   "selection_v1:family",
+   "selection_v2:family",
+   "vendor100:template",
+   "vendor100:family"
+  ]
+ },
+ {
+  "id": "b008-23",
+  "gap": "g3_valueless_place",
+  "group": "g3-p3",
+  "question": "scope:h3:8830e1d8dffffff가 어떤 곳인지 이름을 알려줘",
+  "gold_text": "get_scope_name(scope=scope:h3:8830e1d8dffffff)",
+  "rationale": "답이 장소 이름이다: scope 이름 조회(get_scope_name). Full 계약에서 value 없는 place가 측정값(MEASURE)이고 scope는 조건이다. ",
+  "gold": [
+   {
+    "tool": "get_scope_name",
+    "args": {
+     "scope": "scope:h3:8830e1d8dffffff"
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "scope_scope",
+     "concept": "LOCATION",
+     "subtype": "scope",
+     "role": "COND",
+     "source": "user",
+     "value": "scope:h3:8830e1d8dffffff",
+     "text": "scope:h3:8830e1d8dffffff"
+    },
+    {
+     "id": "place_name",
+     "concept": "LOCATION",
+     "subtype": "place",
+     "role": "MEASURE",
+     "source": "implicit",
+     "text": "이름"
+    }
+   ],
+   "factors": {}
+  },
+  "span_flags": [],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "scope",
+     "value": "scope:h3:8830e1d8dffffff",
+     "text": "scope:h3:8830e1d8dffffff"
+    },
+    {
+     "subtype": "place",
+     "text": "이름"
+    }
+   ],
+   "event": null,
+   "factors": {},
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "place",
+    "text": "이름"
+   },
+   "conditions": [
+    {
+     "subtype": "scope",
+     "span": "scope:h3:8830e1d8dffffff",
+     "value": "scope:h3:8830e1d8dffffff",
+     "od_role": null
+    }
+   ],
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": true,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": true,
+   "full_answered": true
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "SCOPE_NAME"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [
+    "protected_semantic_template",
+    "protected_semantic_family"
+   ],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.37,
+     "jaccard_nearest": "indepv3/m28",
+     "same_grounding": [],
+     "template": 4,
+     "family": 4
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.37,
+     "jaccard_nearest": "indepv3/m28",
+     "same_grounding": [],
+     "template": 4,
+     "family": 4
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.059,
+     "jaccard_nearest": "final_v12/f17",
+     "same_grounding": [],
+     "template": 2,
+     "family": 2
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.109,
+     "jaccard_nearest": "heldout_v9/h36",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.415,
+     "jaccard_nearest": "082",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.035,
+     "jaccard_nearest": "b007-03",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.041,
+     "jaccard_nearest": "b004-31",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.041,
+     "jaccard_nearest": "b004-31",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.0,
+     "jaccard_nearest": "pg-b006-43",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.041,
+     "jaccard_nearest": "b004-31",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.041,
+     "jaccard_nearest": "b004-31",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.439,
+     "jaccard_nearest": "aug300-386",
+     "same_grounding": [],
+     "template": 42,
+     "family": 42
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {
+    "aug300": {
+     "template": 42,
+     "family": 42
+    }
+   }
+  },
+  "template_key": "1c6ac5653b6a0169acac29afe5538528284a3d196fdfe8433b53196be0d25af3",
+  "family_key": "0ea46a83e4349a67070da7195064f090559f4c8a9318913088c05f609016f862",
+  "excluded_reasons": [
+   "thor:protected_semantic_template",
+   "thor:protected_semantic_family",
+   "extended_template",
+   "extended_family",
+   "selection_v1:template",
+   "selection_v1:family",
+   "selection_v2:template",
+   "selection_v2:family",
+   "aux_test_v1:template",
+   "aux_test_v1:family",
+   "valid98:template",
+   "valid98:family",
+   "vendor100:template",
+   "vendor100:family"
+  ]
+ },
+ {
+  "id": "b008-24",
+  "gap": "g3_valueless_place",
+  "group": "g3-p3",
+  "question": "주말에 대구 중구에서 빈 택시가 가장 많이 다닌 H3 셀은 어디야?",
+  "gold_text": "get_place_scope(name=중구, region=대구)\nget_passage_count(scope=$resolve.scope, date=weekend, taxi_status=vacant, dimension=h3, order=top, limit=1)",
+  "rationale": "'어디야'로 묻지만 답은 묶음 단위(dimension)의 순위 1곳이다. value 없는 place 개념을 만들지 않는다(측정값은 하나). 빈 택시=vacant 통행량.",
+  "gold": [
+   {
+    "tool": "get_place_scope",
+    "args": {
+     "name": "중구",
+     "region": "대구"
+    }
+   },
+   {
+    "tool": "get_passage_count",
+    "args": {
+     "scope": "$resolve.scope",
+     "date": "weekend",
+     "taxi_status": "vacant",
+     "dimension": "h3",
+     "order": "top",
+     "limit": 1
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "place_scope",
+     "concept": "LOCATION",
+     "subtype": "place",
+     "role": "SUBCOND",
+     "source": "user",
+     "value": {
+      "name": "중구",
+      "region": "대구"
+     },
+     "text": "대구 중구"
+    },
+    {
+     "id": "event",
+     "concept": "EVENT",
+     "subtype": "passage",
+     "role": "SUPPORT",
+     "source": "implicit"
+    },
+    {
+     "id": "measure",
+     "concept": "AMOUNT",
+     "subtype": "passage_count",
+     "role": "MEASURE",
+     "source": "implicit"
+    }
+   ],
+   "factors": {
+    "date": "weekend",
+    "taxi_status": "vacant",
+    "dimension": "h3",
+    "order": "top",
+    "limit": 1
+   }
+  },
+  "span_flags": [
+   "span_missing:measure:passage_count"
+  ],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "place",
+     "value": {
+      "name": "중구",
+      "region": "대구"
+     },
+     "text": "대구 중구"
+    },
+    {
+     "subtype": "passage_count"
+    }
+   ],
+   "event": "passage",
+   "factors": {
+    "date": "weekend",
+    "taxi_status": "vacant",
+    "dimension": "h3",
+    "order": "top",
+    "limit": 1
+   },
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "passage_count",
+    "text": null
+   },
+   "conditions": [
+    {
+     "subtype": "place",
+     "span": "대구 중구",
+     "value": {
+      "name": "중구",
+      "region": "대구"
+     },
+     "od_role": null
+    },
+    {
+     "subtype": "date",
+     "span": null,
+     "value": "weekend",
+     "od_role": null
+    },
+    {
+     "subtype": "taxi_status",
+     "span": null,
+     "value": "vacant",
+     "od_role": null
+    }
+   ],
+   "dimension": "h3",
+   "order": "top",
+   "limit": 1,
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": true,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": true,
+   "full_answered": true
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {
+    "taxi_status": {
+     "action": "held",
+     "basis": "unlisted_expression_possible_on_consuming_measure",
+     "llm_value": "vacant",
+     "value": "vacant"
+    }
+   },
+   "operators": [
+    "RESOLVE_PLACE_SCOPE",
+    "PASSAGE_COUNT"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.119,
+     "jaccard_nearest": "indepv2/n18",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.119,
+     "jaccard_nearest": "indepv2/n18",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.239,
+     "jaccard_nearest": "final_v12/f07",
+     "same_grounding": [],
+     "template": 0,
+     "family": 1
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.233,
+     "jaccard_nearest": "heldout_v8/t19",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.071,
+     "jaccard_nearest": "032",
+     "same_grounding": [],
+     "template": 0,
+     "family": 1
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.045,
+     "jaccard_nearest": "b007-25",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.114,
+     "jaccard_nearest": "b004-06",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.114,
+     "jaccard_nearest": "b004-06",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.108,
+     "jaccard_nearest": "pg-b006-03",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.114,
+     "jaccard_nearest": "b004-06",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.114,
+     "jaccard_nearest": "b004-06",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.103,
+     "jaccard_nearest": "aug300-162",
+     "same_grounding": [],
+     "template": 0,
+     "family": 1
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {
+    "aug300": {
+     "family": 1
+    }
+   }
+  },
+  "template_key": "64420f4893b02d1a43c9a1e09025e4b61e1855490025d242bb95b494df9f5ca6",
+  "family_key": "90676b93b13daf15d1c8a1ae3744db30e67553bb851b75e217852b8f1d7ed3be",
+  "excluded_reasons": [
+   "extended_family",
+   "aux_test_v1:family",
+   "vendor100:family"
+  ]
+ },
+ {
+  "id": "b008-25",
+  "gap": "g3_valueless_place",
+  "group": "g3-p4",
+  "question": "scope:edge:1742에 해당하는 장소 이름이 뭐야?",
+  "gold_text": "get_scope_name(scope=scope:edge:1742)",
+  "rationale": "답이 장소 이름이다: scope 이름 조회(get_scope_name). Full 계약에서 value 없는 place가 측정값(MEASURE)이고 scope는 조건이다. ",
+  "gold": [
+   {
+    "tool": "get_scope_name",
+    "args": {
+     "scope": "scope:edge:1742"
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "scope_scope",
+     "concept": "LOCATION",
+     "subtype": "scope",
+     "role": "COND",
+     "source": "user",
+     "value": "scope:edge:1742",
+     "text": "scope:edge:1742"
+    },
+    {
+     "id": "place_name",
+     "concept": "LOCATION",
+     "subtype": "place",
+     "role": "MEASURE",
+     "source": "implicit",
+     "text": "장소 이름"
+    }
+   ],
+   "factors": {}
+  },
+  "span_flags": [],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "scope",
+     "value": "scope:edge:1742",
+     "text": "scope:edge:1742"
+    },
+    {
+     "subtype": "place",
+     "text": "장소 이름"
+    }
+   ],
+   "event": null,
+   "factors": {},
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "place",
+    "text": "장소 이름"
+   },
+   "conditions": [
+    {
+     "subtype": "scope",
+     "span": "scope:edge:1742",
+     "value": "scope:edge:1742",
+     "od_role": null
+    }
+   ],
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": true,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": true,
+   "full_answered": true
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "SCOPE_NAME"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [
+    "protected_semantic_template",
+    "protected_semantic_family"
+   ],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.355,
+     "jaccard_nearest": "old44/g36",
+     "same_grounding": [
+      "old44/g36"
+     ],
+     "template": 4,
+     "family": 4
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.355,
+     "jaccard_nearest": "old44/g36",
+     "same_grounding": [
+      "old44/g36"
+     ],
+     "template": 4,
+     "family": 4
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.067,
+     "jaccard_nearest": "final_v12/f17",
+     "same_grounding": [],
+     "template": 2,
+     "family": 2
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.058,
+     "jaccard_nearest": "heldout_v9/h36",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.344,
+     "jaccard_nearest": "094",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.0,
+     "jaccard_nearest": "b007-28",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.091,
+     "jaccard_nearest": "ann-b33f24e179cb6f5d84fd",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.091,
+     "jaccard_nearest": "ann-b33f24e179cb6f5d84fd",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.0,
+     "jaccard_nearest": "pg-b006-43",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.091,
+     "jaccard_nearest": "ann-b33f24e179cb6f5d84fd",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.091,
+     "jaccard_nearest": "ann-b33f24e179cb6f5d84fd",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.516,
+     "jaccard_nearest": "aug300-381",
+     "same_grounding": [
+      "aug300-381",
+      "aug300-385",
+      "aug300-396"
+     ],
+     "template": 42,
+     "family": 42
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {
+    "aug300": {
+     "template": 42,
+     "family": 42
+    }
+   }
+  },
+  "template_key": "1c6ac5653b6a0169acac29afe5538528284a3d196fdfe8433b53196be0d25af3",
+  "family_key": "0ea46a83e4349a67070da7195064f090559f4c8a9318913088c05f609016f862",
+  "excluded_reasons": [
+   "thor:protected_semantic_template",
+   "thor:protected_semantic_family",
+   "extended_template",
+   "extended_family",
+   "selection_v1:same_grounding",
+   "selection_v1:template",
+   "selection_v1:family",
+   "selection_v2:same_grounding",
+   "selection_v2:template",
+   "selection_v2:family",
+   "aux_test_v1:template",
+   "aux_test_v1:family",
+   "valid98:template",
+   "valid98:family",
+   "vendor100:template",
+   "vendor100:family",
+   "aug300:jaccard>=0.5(aug300-381,0.516)",
+   "aug300:same_grounding"
+  ]
+ },
+ {
+  "id": "b008-26",
+  "gap": "g3_valueless_place",
+  "group": "g3-p4",
+  "question": "지난주 부산에서 택시 통행량이 가장 적은 구는 어디야?",
+  "gold_text": "get_place_scope(name=부산)\nget_passage_count(scope=$resolve.scope, date=last_week, dimension=sigungu, order=bottom, limit=1)",
+  "rationale": "'어디야'로 묻지만 답은 묶음 단위(dimension)의 순위 1곳이다. value 없는 place 개념을 만들지 않는다(측정값은 하나). 구=시군구.",
+  "gold": [
+   {
+    "tool": "get_place_scope",
+    "args": {
+     "name": "부산"
+    }
+   },
+   {
+    "tool": "get_passage_count",
+    "args": {
+     "scope": "$resolve.scope",
+     "date": "last_week",
+     "dimension": "sigungu",
+     "order": "bottom",
+     "limit": 1
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "place_scope",
+     "concept": "LOCATION",
+     "subtype": "place",
+     "role": "SUBCOND",
+     "source": "user",
+     "value": {
+      "name": "부산",
+      "region": ""
+     },
+     "text": "부산"
+    },
+    {
+     "id": "event",
+     "concept": "EVENT",
+     "subtype": "passage",
+     "role": "SUPPORT",
+     "source": "implicit"
+    },
+    {
+     "id": "measure",
+     "concept": "AMOUNT",
+     "subtype": "passage_count",
+     "role": "MEASURE",
+     "source": "implicit",
+     "text": "통행량"
+    }
+   ],
+   "factors": {
+    "date": "last_week",
+    "dimension": "sigungu",
+    "order": "bottom",
+    "limit": 1
+   }
+  },
+  "span_flags": [],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "place",
+     "value": {
+      "name": "부산",
+      "region": ""
+     },
+     "text": "부산"
+    },
+    {
+     "subtype": "passage_count",
+     "text": "통행량"
+    }
+   ],
+   "event": "passage",
+   "factors": {
+    "date": "last_week",
+    "dimension": "sigungu",
+    "order": "bottom",
+    "limit": 1
+   },
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "passage_count",
+    "text": "통행량"
+   },
+   "conditions": [
+    {
+     "subtype": "place",
+     "span": "부산",
+     "value": {
+      "name": "부산",
+      "region": ""
+     },
+     "od_role": null
+    },
+    {
+     "subtype": "date",
+     "span": null,
+     "value": "last_week",
+     "od_role": null
+    }
+   ],
+   "dimension": "sigungu",
+   "order": "bottom",
+   "limit": 1,
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": true,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": true,
+   "full_answered": true
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "RESOLVE_PLACE_SCOPE",
+    "PASSAGE_COUNT"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.357,
+     "jaccard_nearest": "contrast/c05c",
+     "same_grounding": [],
+     "template": 1,
+     "family": 2
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.357,
+     "jaccard_nearest": "contrast/c05c",
+     "same_grounding": [],
+     "template": 1,
+     "family": 2
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.231,
+     "jaccard_nearest": "final_v12/f35",
+     "same_grounding": [],
+     "template": 1,
+     "family": 2
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.375,
+     "jaccard_nearest": "heldout_v9/h30",
+     "same_grounding": [],
+     "template": 0,
+     "family": 1
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.129,
+     "jaccard_nearest": "019",
+     "same_grounding": [],
+     "template": 2,
+     "family": 2
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.065,
+     "jaccard_nearest": "b007-19",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.25,
+     "jaccard_nearest": "b004-05",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.25,
+     "jaccard_nearest": "b004-05",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.125,
+     "jaccard_nearest": "pg-b006-15",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.25,
+     "jaccard_nearest": "b004-05",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.25,
+     "jaccard_nearest": "b004-05",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.115,
+     "jaccard_nearest": "aug300-101",
+     "same_grounding": [],
+     "template": 0,
+     "family": 2
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {
+    "aug300": {
+     "family": 2
+    }
+   }
+  },
+  "template_key": "0ed56ac05e56876bfea520e4dd4af6b6f77604d2ef4d28508aef482101226881",
+  "family_key": "ef84fa7e5df23bf4ca07b93b3e85363f7422addb7c7ef64c49bc0a1513729edd",
+  "excluded_reasons": [
+   "extended_template",
+   "extended_family",
+   "selection_v1:template",
+   "selection_v1:family",
+   "selection_v2:template",
+   "selection_v2:family",
+   "aux_test_v1:template",
+   "aux_test_v1:family",
+   "valid98:family",
+   "vendor100:template",
+   "vendor100:family"
+  ]
+ },
+ {
+  "id": "b008-27",
+  "gap": "g4_bucket_dimension",
+  "group": "g4-p1",
+  "question": "지난달 개인택시 수입을 주 단위로 합한 다음 그 평균을 내줘",
+  "gold_text": "get_billing_metrics(metric=revenue, date=last_month, taxi_type=private, aggregation=sum, bucket=week, rollup=avg)",
+  "rationale": "기간을 주·월 단위로 나눠 1차 집계(aggregation)한 뒤 그 값들을 다시 집계(rollup) = bucket + rollup. 요일·지역별 묶음(dimension)이 아니다. 주 단위로 합한=sum, week; 평균=rollup avg.",
+  "gold": [
+   {
+    "tool": "get_billing_metrics",
+    "args": {
+     "metric": "revenue",
+     "date": "last_month",
+     "taxi_type": "private",
+     "aggregation": "sum",
+     "bucket": "week",
+     "rollup": "avg"
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "event",
+     "concept": "EVENT",
+     "subtype": "operation",
+     "role": "SUPPORT",
+     "source": "implicit"
+    },
+    {
+     "id": "measure",
+     "concept": "AMOUNT",
+     "subtype": "revenue",
+     "role": "MEASURE",
+     "source": "implicit",
+     "text": "수입"
+    }
+   ],
+   "factors": {
+    "date": "last_month",
+    "taxi_type": "private",
+    "aggregation": "sum",
+    "bucket": "week",
+    "rollup": "avg"
+   }
+  },
+  "span_flags": [],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "revenue",
+     "text": "수입"
+    }
+   ],
+   "event": "operation",
+   "factors": {
+    "date": "last_month",
+    "taxi_type": "private",
+    "aggregation": "sum",
+    "bucket": "week",
+    "rollup": "avg"
+   },
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "revenue",
+    "text": "수입"
+   },
+   "conditions": [
+    {
+     "subtype": "date",
+     "span": null,
+     "value": "last_month",
+     "od_role": null
+    },
+    {
+     "subtype": "taxi_type",
+     "span": null,
+     "value": "private",
+     "od_role": null
+    }
+   ],
+   "bucket": "week",
+   "rollup": "avg",
+   "aggregation": "sum",
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": true,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": true,
+   "full_answered": true
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "OPERATION_METRIC",
+    "REDUCE_GROUPS"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [
+    "protected_semantic_family"
+   ],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.167,
+     "jaccard_nearest": "old44/g44",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.167,
+     "jaccard_nearest": "old44/g44",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.143,
+     "jaccard_nearest": "at/t04a",
+     "same_grounding": [],
+     "template": 0,
+     "family": 1
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.159,
+     "jaccard_nearest": "heldout_v8/r05",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.093,
+     "jaccard_nearest": "065",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.0,
+     "jaccard_nearest": "b007-28",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.075,
+     "jaccard_nearest": "ann-f8d44f2cfa96200b5a95",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.075,
+     "jaccard_nearest": "ann-f8d44f2cfa96200b5a95",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.038,
+     "jaccard_nearest": "pg-b006-16",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.075,
+     "jaccard_nearest": "ann-f8d44f2cfa96200b5a95",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.075,
+     "jaccard_nearest": "ann-f8d44f2cfa96200b5a95",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.15,
+     "jaccard_nearest": "aug300-338",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {}
+  },
+  "template_key": "33ef9e0f2bb66d5fb85e9d615fc2a9a59fa4f73f47a6fb715f3d5d7483fd6a9b",
+  "family_key": "516ab7a038084fe20b60fd9e9e6dde3a01a8dab7e2e2a507229d25aa3306dd50",
+  "excluded_reasons": [
+   "thor:protected_semantic_family",
+   "extended_family",
+   "aux_test_v1:family"
+  ]
+ },
+ {
+  "id": "b008-28",
+  "gap": "g4_bucket_dimension",
+  "group": "g4-p1",
+  "question": "지난달 개인택시 수입을 요일별로 합해서 보여줘",
+  "gold_text": "get_billing_metrics(metric=revenue, date=last_month, taxi_type=private, aggregation=sum, dimension=dayofweek)",
+  "rationale": "요일·지역별로 나눠 보이는 것 = dimension. 기간 구간(bucket)이 아니고 rollup도 없다. 요일별 합계.",
+  "gold": [
+   {
+    "tool": "get_billing_metrics",
+    "args": {
+     "metric": "revenue",
+     "date": "last_month",
+     "taxi_type": "private",
+     "aggregation": "sum",
+     "dimension": "dayofweek"
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "event",
+     "concept": "EVENT",
+     "subtype": "operation",
+     "role": "SUPPORT",
+     "source": "implicit"
+    },
+    {
+     "id": "measure",
+     "concept": "AMOUNT",
+     "subtype": "revenue",
+     "role": "MEASURE",
+     "source": "implicit",
+     "text": "수입"
+    }
+   ],
+   "factors": {
+    "date": "last_month",
+    "taxi_type": "private",
+    "dimension": "dayofweek",
+    "aggregation": "sum"
+   }
+  },
+  "span_flags": [],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "revenue",
+     "text": "수입"
+    }
+   ],
+   "event": "operation",
+   "factors": {
+    "date": "last_month",
+    "taxi_type": "private",
+    "dimension": "dayofweek",
+    "aggregation": "sum"
+   },
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "revenue",
+    "text": "수입"
+   },
+   "conditions": [
+    {
+     "subtype": "date",
+     "span": null,
+     "value": "last_month",
+     "od_role": null
+    },
+    {
+     "subtype": "taxi_type",
+     "span": null,
+     "value": "private",
+     "od_role": null
+    }
+   ],
+   "dimension": "dayofweek",
+   "aggregation": "sum",
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": true,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": true,
+   "full_answered": true
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "OPERATION_METRIC"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.321,
+     "jaccard_nearest": "indepv3/m35",
+     "same_grounding": [],
+     "template": 0,
+     "family": 1
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.321,
+     "jaccard_nearest": "indepv3/m35",
+     "same_grounding": [],
+     "template": 0,
+     "family": 1
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.161,
+     "jaccard_nearest": "at/t04a",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.152,
+     "jaccard_nearest": "stage_v7/s04c",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.132,
+     "jaccard_nearest": "065",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.018,
+     "jaccard_nearest": "b007-23",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.083,
+     "jaccard_nearest": "ann-f8d44f2cfa96200b5a95",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.083,
+     "jaccard_nearest": "ann-f8d44f2cfa96200b5a95",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.054,
+     "jaccard_nearest": "pg-b006-01",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.083,
+     "jaccard_nearest": "ann-f8d44f2cfa96200b5a95",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.083,
+     "jaccard_nearest": "ann-f8d44f2cfa96200b5a95",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.167,
+     "jaccard_nearest": "aug300-338",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {}
+  },
+  "template_key": "84e7aa99780a805ebf715b12e77a7489a7020664f761bfd94ece6db3be71e290",
+  "family_key": "55998a417cbd43888dc08d02a10a27bbd4b37f8e12888c9ac613291731fa3bff",
+  "excluded_reasons": [
+   "extended_family",
+   "selection_v1:family",
+   "selection_v2:family"
+  ]
+ },
+ {
+  "id": "b008-31",
+  "gap": "g4_bucket_dimension",
+  "group": "g4-p3",
+  "question": "이번 달 택시 가동률을 주별로 평균 내고 그중 가장 낮은 값을 알려줘",
+  "gold_text": "get_billing_metrics(metric=active_taxi_ratio, date=this_month, aggregation=avg, bucket=week, rollup=min)",
+  "rationale": "기간을 주·월 단위로 나눠 1차 집계(aggregation)한 뒤 그 값들을 다시 집계(rollup) = bucket + rollup. 요일·지역별 묶음(dimension)이 아니다. 주별 평균 → 최솟값.",
+  "gold": [
+   {
+    "tool": "get_billing_metrics",
+    "args": {
+     "metric": "active_taxi_ratio",
+     "date": "this_month",
+     "aggregation": "avg",
+     "bucket": "week",
+     "rollup": "min"
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "event",
+     "concept": "EVENT",
+     "subtype": "operation",
+     "role": "SUPPORT",
+     "source": "implicit"
+    },
+    {
+     "id": "measure",
+     "concept": "PROPORTION",
+     "subtype": "active_taxi_ratio",
+     "role": "MEASURE",
+     "source": "implicit",
+     "text": "가동률"
+    }
+   ],
+   "factors": {
+    "date": "this_month",
+    "aggregation": "avg",
+    "bucket": "week",
+    "rollup": "min"
+   }
+  },
+  "span_flags": [],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "active_taxi_ratio",
+     "text": "가동률"
+    }
+   ],
+   "event": "operation",
+   "factors": {
+    "date": "this_month",
+    "aggregation": "avg",
+    "bucket": "week",
+    "rollup": "min"
+   },
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "active_taxi_ratio",
+    "text": "가동률"
+   },
+   "conditions": [
+    {
+     "subtype": "date",
+     "span": null,
+     "value": "this_month",
+     "od_role": null
+    }
+   ],
+   "bucket": "week",
+   "rollup": "min",
+   "aggregation": "avg",
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": true,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": true,
+   "full_answered": true
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "OPERATION_METRIC",
+    "REDUCE_GROUPS"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.163,
+     "jaccard_nearest": "indepv4/k37",
+     "same_grounding": [],
+     "template": 0,
+     "family": 2
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.163,
+     "jaccard_nearest": "indepv4/k37",
+     "same_grounding": [],
+     "template": 0,
+     "family": 2
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.179,
+     "jaccard_nearest": "at/t03a",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.227,
+     "jaccard_nearest": "heldout_v9/h44",
+     "same_grounding": [],
+     "template": 0,
+     "family": 2
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.154,
+     "jaccard_nearest": "043",
+     "same_grounding": [],
+     "template": 0,
+     "family": 1
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.038,
+     "jaccard_nearest": "b007-19",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.114,
+     "jaccard_nearest": "b005-59",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.114,
+     "jaccard_nearest": "b005-59",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.026,
+     "jaccard_nearest": "pg-b006-05",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.114,
+     "jaccard_nearest": "b005-59",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.114,
+     "jaccard_nearest": "b005-59",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.111,
+     "jaccard_nearest": "aug300-213",
+     "same_grounding": [],
+     "template": 0,
+     "family": 1
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {
+    "aug300": {
+     "family": 1
+    }
+   }
+  },
+  "template_key": "c31b6196d0bca4e0556c49259695575e1d18ac1626d3f0fcd8e80af5922bbcad",
+  "family_key": "cabd68ef902be0881ba60b825781c24ecb37ae3f5851ac12ab74332689d9eaf1",
+  "excluded_reasons": [
+   "extended_family",
+   "selection_v1:family",
+   "selection_v2:family",
+   "valid98:family",
+   "vendor100:family"
+  ]
+ },
+ {
+  "id": "b008-34",
+  "gap": "g4_bucket_dimension",
+  "group": "g4-p4",
+  "question": "지난해 활성택시 대수 평균이 가장 많은 요일은?",
+  "gold_text": "get_billing_metrics(metric=active_taxi_count, date=last_year, aggregation=avg, dimension=dayofweek, order=top, limit=1)",
+  "rationale": "요일·지역별로 나눠 보이는 것 = dimension. 기간 구간(bucket)이 아니고 rollup도 없다. 요일별 평균 중 상위 1.",
+  "gold": [
+   {
+    "tool": "get_billing_metrics",
+    "args": {
+     "metric": "active_taxi_count",
+     "date": "last_year",
+     "aggregation": "avg",
+     "dimension": "dayofweek",
+     "order": "top",
+     "limit": 1
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "event",
+     "concept": "EVENT",
+     "subtype": "operation",
+     "role": "SUPPORT",
+     "source": "implicit"
+    },
+    {
+     "id": "measure",
+     "concept": "AMOUNT",
+     "subtype": "active_taxi_count",
+     "role": "MEASURE",
+     "source": "implicit",
+     "text": "활성택시 대수"
+    }
+   ],
+   "factors": {
+    "date": "last_year",
+    "dimension": "dayofweek",
+    "order": "top",
+    "limit": 1,
+    "aggregation": "avg"
+   }
+  },
+  "span_flags": [],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "active_taxi_count",
+     "text": "활성택시 대수"
+    }
+   ],
+   "event": "operation",
+   "factors": {
+    "date": "last_year",
+    "dimension": "dayofweek",
+    "order": "top",
+    "limit": 1,
+    "aggregation": "avg"
+   },
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "active_taxi_count",
+    "text": "활성택시 대수"
+   },
+   "conditions": [
+    {
+     "subtype": "date",
+     "span": null,
+     "value": "last_year",
+     "od_role": null
+    }
+   ],
+   "dimension": "dayofweek",
+   "aggregation": "avg",
+   "order": "top",
+   "limit": 1,
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": true,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": true,
+   "full_answered": true
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "OPERATION_METRIC"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.118,
+     "jaccard_nearest": "old44/g30",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.118,
+     "jaccard_nearest": "old44/g30",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.088,
+     "jaccard_nearest": "at/t04b",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.235,
+     "jaccard_nearest": "heldout_v9/h42",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.172,
+     "jaccard_nearest": "017",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.0,
+     "jaccard_nearest": "b007-28",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.114,
+     "jaccard_nearest": "ann-aa1d7fd59c1d3d2ea97b",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.114,
+     "jaccard_nearest": "ann-aa1d7fd59c1d3d2ea97b",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.067,
+     "jaccard_nearest": "pg-b006-05",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.114,
+     "jaccard_nearest": "ann-aa1d7fd59c1d3d2ea97b",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.114,
+     "jaccard_nearest": "ann-aa1d7fd59c1d3d2ea97b",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.143,
+     "jaccard_nearest": "aug300-326",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {}
+  },
+  "template_key": "d2634648fd369bb5b63cdac65e5b3b9ac344bb718812720b54e6cb6d090e3bb2",
+  "family_key": "56fd72ee1bbdbd8b4f94a19fa9058e02ee9b575eb42090d587e4796642dce6aa",
+  "excluded_reasons": [
+   "extended_template",
+   "extended_family"
+  ]
+ },
+ {
+  "id": "b008-36",
+  "gap": "g4_bucket_dimension",
+  "group": "g4-p5",
+  "question": "지난달 법인택시 수입 합계를 시군구별로 알려줘",
+  "gold_text": "get_billing_metrics(metric=revenue, date=last_month, taxi_type=corporate, aggregation=sum, dimension=sigungu)",
+  "rationale": "요일·지역별로 나눠 보이는 것 = dimension. 기간 구간(bucket)이 아니고 rollup도 없다. 시군구별 합계.",
+  "gold": [
+   {
+    "tool": "get_billing_metrics",
+    "args": {
+     "metric": "revenue",
+     "date": "last_month",
+     "taxi_type": "corporate",
+     "aggregation": "sum",
+     "dimension": "sigungu"
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "event",
+     "concept": "EVENT",
+     "subtype": "operation",
+     "role": "SUPPORT",
+     "source": "implicit"
+    },
+    {
+     "id": "measure",
+     "concept": "AMOUNT",
+     "subtype": "revenue",
+     "role": "MEASURE",
+     "source": "implicit",
+     "text": "수입"
+    }
+   ],
+   "factors": {
+    "date": "last_month",
+    "taxi_type": "corporate",
+    "dimension": "sigungu",
+    "aggregation": "sum"
+   }
+  },
+  "span_flags": [],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "revenue",
+     "text": "수입"
+    }
+   ],
+   "event": "operation",
+   "factors": {
+    "date": "last_month",
+    "taxi_type": "corporate",
+    "dimension": "sigungu",
+    "aggregation": "sum"
+   },
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "revenue",
+    "text": "수입"
+   },
+   "conditions": [
+    {
+     "subtype": "date",
+     "span": null,
+     "value": "last_month",
+     "od_role": null
+    },
+    {
+     "subtype": "taxi_type",
+     "span": null,
+     "value": "corporate",
+     "od_role": null
+    }
+   ],
+   "dimension": "sigungu",
+   "aggregation": "sum",
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": false,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": false,
+   "full_answered": false
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": false,
+   "validation_ok": null,
+   "validation_codes": [],
+   "error_code": "PARAM_VALUE_REQUIRES_INPUT",
+   "outcome": null,
+   "compile_ok": null,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "error_detail": "OPERATION_METRIC의 dimension='sigungu'는 area input이 채워져야 쓸 수 있습니다. (채워진 input: event)",
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.222,
+     "jaccard_nearest": "contrast/c08a",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.222,
+     "jaccard_nearest": "contrast/c08a",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.2,
+     "jaccard_nearest": "at/t04a",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.188,
+     "jaccard_nearest": "stage_v7/s04c",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.103,
+     "jaccard_nearest": "077",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.154,
+     "jaccard_nearest": "b007-04",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.118,
+     "jaccard_nearest": "b005-44",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.118,
+     "jaccard_nearest": "b005-44",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.031,
+     "jaccard_nearest": "pg-b006-20",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.118,
+     "jaccard_nearest": "b005-44",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.118,
+     "jaccard_nearest": "b005-44",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.179,
+     "jaccard_nearest": "aug300-329",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {}
+  },
+  "template_key": "538d282c58aa85d803713d0c2a452d4df648d774ef90a7da888063bb533c5e70",
+  "family_key": "7c1f26fa139aac17e7d352468164d77111db4769417e13375930a82932cdb860",
+  "excluded_reasons": [
+   "validation_chain_failed",
+   "full_path_not_answered:PARAM_VALUE_REQUIRES_INPUT"
+  ]
+ }
+]
