@@ -81,8 +81,26 @@ def token_parts(path, meta):
     return out
 
 
+def scorer():
+    """judge_v3(pilot_003)·judge5(pilot_005)와 같은 채점 준비: U 분류기가 원본 gold를 찾도록 셋 파일을 등록한다.
+    judge_v3 import가 final_v12 등록과 업체 100 id(“/” 없음) → dev/<id> 보정을 한다. 더해서 valid98 원본 셋 셋(judge5와 같음)과
+    augmentation_holdout_v1(id ``aug300-NNN`` → ``aug300/aug300-NNN``, pilot_006에서 더함)."""
+    sys.path.insert(0, str(ROOT / "sft_dpo_inventory/pilot_003/vendor100"))
+    import judge_v3 as J
+    A = J.A
+    if not getattr(A, "_pilot006_registered", False):
+        A.C.R.C.GOLD_FILES.update({"stage_v7": "evaluation/grounding_v7/stage_contrast_questions.yaml",
+                                   "heldout_v8": "evaluation/grounding_v8/heldout_questions.yaml",
+                                   "heldout_v9": "evaluation/grounding_v9/heldout_questions.yaml",
+                                   "aug300": "sft_dpo_inventory/pilot_006_prep/aug300/augmentation_holdout_v1_gold.yaml"})
+        inner = A.C.R.unacceptable
+        A.C.R.unacceptable = lambda key, row, src: inner(f"aug300/{key}" if key.startswith("aug300-") else key, row, src)
+        A._pilot006_registered = True
+    return A
+
+
 def load_arm(spec_cells, sets, with_tokens=True):
-    import analyze_cal as A
+    A = scorer()
     import evaluate_vendor100 as EV
     items, mats = [], {}
     fields = ("ok", "U", "silent", "dt_missing", "mm_nm", "struct", "gfail", "repair", "input_tokens", "gen_tokens", "thinking_tokens", "json_tokens")

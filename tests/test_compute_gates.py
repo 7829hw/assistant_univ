@@ -67,3 +67,11 @@ class GateTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ScorerRegistrationTest(unittest.TestCase):
+    def test_holdout_and_valid98_sets_resolve(self):
+        A = CG.scorer()
+        hold = A.C.R.C._gold("aug300", None)
+        self.assertEqual(len(hold), 53)
+        self.assertIn("heldout_v9", A.C.R.C.GOLD_FILES)
