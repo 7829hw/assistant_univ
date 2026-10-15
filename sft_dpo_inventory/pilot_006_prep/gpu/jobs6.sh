@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # pilot_006 준비 GPU 작업 큐(결정 114: 작업 하나 = GPU 하나). GPU 한 장에 vLLM 서버(serve6.sh) 하나를 띄우고 주어진 작업을 순서대로 돌린 뒤 서버를 내린다.
-#   bash <worktree>/sft_dpo_inventory/pilot_006_prep/gpu/jobs6.sh GPU_INDEX PORT JOB [JOB ...]      (JOB: J1 J2 J3)
+#   bash <worktree>/sft_dpo_inventory/pilot_006_prep/gpu/jobs6.sh GPU_INDEX PORT JOB [JOB ...]      (JOB: J1 J2 J3 J4 J5S J5R J6 J7)
+# - J4: Full 회귀 selection_v2 1표본(seed 20261101) → check_gpu_smoke.py j4. J5S: Partial smoke 10문항 → check_gpu_smoke.py j5(불통과면 큐의 J5R을 건너뜀).
+#   J5R: R2 참고 셀(selection_v2, P0.3, k=4). J6: Partial arm 8b 자체 표본(J1과 같은 문항·설정). J7: batch008 첫 응답.
 # - 이 파일은 고정 커밋의 git worktree에서 실행한다(규칙 15). 코드는 worktree(WT), 출력·기록은 본 저장소(MAIN)의 정해진 경로에 쓴다.
 # - 서버 시작 때 gpu_ok(UUID·메모리·다른 프로세스·Ollama GPU면 /api/ps 비었는지, torch UUID). 작업마다 시작 전에 그 GPU에 서버 말고 다른 프로세스가 없는지 다시 본다.
 # - 작업이 끝나면 timeline.jsonl에 한 줄(작업 ID, 종류, UUID, worktree 커밋, 시작, 끝, 상태, 출력). 실패한 작업의 출력은 ABORTED_*로 바꾸고 다음 작업으로 간다.
@@ -54,6 +56,41 @@ for J in "$@"; do
           --gold sft_dpo_inventory/pilot_006_prep/aug300/augmentation_holdout_v1_gold.yaml --all-items --sealed \
           --out-dir $MAIN/sft_dpo_inventory/pilot_006_prep/cells --raw-dir $RAWP > $P3/J2_s$k.log 2>&1 || { rc=1; break; }
       done ;;
+    J4)
+      O=$MAIN/sft_dpo_inventory/pilot_006_prep/integration/gpu_full_smoke; kind=regression_full_selection_v2_s1
+      outs=($O/full_smoke_s1.json $O/full_smoke_s1.log $RAWP/full_smoke_s1_raw.jsonl $O/check_j4.json)
+      "$PY" sft_dpo_inventory/pilot_006_prep/gpu/run_cell6v.py --port $PORT --model base --label full_smoke --k 1 --concurrency 8 \
+        --out-dir $O --raw-dir $RAWP > $P3/J4.log 2>&1 \
+        && "$PY" sft_dpo_inventory/pilot_006_prep/gpu/check_gpu_smoke.py j4 $O/full_smoke_s1.json $O/check_j4.json >> $P3/J4.log 2>&1; rc=$? ;;
+    J5S)
+      O=$MAIN/sft_dpo_inventory/pilot_006_prep/integration/gpu_partial_smoke; kind=smoke_partial_10
+      IDS=$(head -c 100000 sft_dpo_inventory/pilot_003/selection/selection_v2_ids.txt | tr ',' '\n' | head -10 | paste -sd,)
+      outs=($O/partial_smoke_s1.json $O/partial_smoke_s1.log $RAWP/partial_smoke_s1_raw.jsonl $O/check_j5.json)
+      "$PY" sft_dpo_inventory/pilot_006_prep/gpu/run_cell6v.py --port $PORT --model base --label partial_smoke --k 1 --concurrency 8 \
+        --grounding-target partial --only "$IDS" --out-dir $O --raw-dir $RAWP > $P3/J5S.log 2>&1 \
+        && "$PY" sft_dpo_inventory/pilot_006_prep/gpu/check_gpu_smoke.py j5 $O/partial_smoke_s1.json $O/check_j5.json >> $P3/J5S.log 2>&1; rc=$?
+      [ $rc -eq 0 ] || SKIP_J5R=1 ;;
+    J5R)
+      kind=cell_r2_partial_base_k4; outs=()
+      if [ "${SKIP_J5R:-0}" = 1 ]; then p3log "J5R skipped (J5S failed)"; rc=1
+      else rc=0
+        for k in 1 2 3 4; do
+          outs+=($MAIN/sft_dpo_inventory/pilot_006_prep/cells/r2_partial_base_s$k.json $MAIN/sft_dpo_inventory/pilot_006_prep/cells/r2_partial_base_s$k.log
+                 $RAWP/r2_partial_base_s${k}_raw.jsonl)
+          "$PY" sft_dpo_inventory/pilot_006_prep/gpu/run_cell6v.py --port $PORT --model base --label r2_partial_base --k $k --concurrency 8 \
+            --grounding-target partial --out-dir $MAIN/sft_dpo_inventory/pilot_006_prep/cells --raw-dir $RAWP > $P3/J5R_s$k.log 2>&1 || { rc=1; break; }
+        done
+      fi ;;
+    J6)
+      O=$MAIN/training/generated/pilot_006/self_partial; outs=($O/raw/self_partial_raw.jsonl $O/manifest.json); kind=self_samples_partial
+      "$PY" sft_dpo_inventory/pilot_006_prep/gpu/collect6.py --mode self --grounding-target partial --port $PORT --label J6_self_partial \
+        --inputs sft_dpo_inventory/pilot_006_prep/gpu/inputs/self_questions.jsonl --raw-out ${outs[0]} --out ${outs[1]} \
+        > $P3/J6.log 2>&1; rc=$? ;;
+    J7)
+      outs=($RAWP/batch008_base_first_raw.jsonl $MAIN/sft_dpo_inventory/batch008/base_first_response.jsonl); kind=first_response_batch008
+      "$PY" sft_dpo_inventory/pilot_006_prep/gpu/collect6.py --mode first --port $PORT --label J7_batch008_first \
+        --inputs sft_dpo_inventory/batch008/inputs_first_response.jsonl --raw-out ${outs[0]} --out ${outs[1]} \
+        > $P3/J7.log 2>&1; rc=$? ;;
     *) p3log "unknown job $J"; rc=1; outs=(); kind=unknown ;;
   esac
   if [ $rc -eq 0 ]; then tl $J $kind "$S" ok "${outs[@]}"; p3log "$J done GPU $G"

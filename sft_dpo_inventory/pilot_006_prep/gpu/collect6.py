@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""pilot_006 준비 vLLM base 수집(J1·J3·J7, Full prompt). 학습 없음, 필터·import 없음, 승인 아님.
+"""pilot_006 준비 vLLM base 수집(J1·J3·J7 Full prompt, J6 Partial prompt). 학습 없음, 필터·import 없음, 승인 아님.
 
     hfvenv/bin/python sft_dpo_inventory/pilot_006_prep/gpu/collect6.py --mode self|first --port P --inputs JSONL \
         --raw-out RAW.jsonl --out OUT.json [--samples 8] [--round-seed 20261015] [--concurrency 8] [--server-meta DIR]
@@ -13,6 +13,8 @@
 - ``--mode first``(J3·J7, batch007과 같은 방식): 문항마다 greedy 첫 응답 하나. ``thinking_prep_001/collect_traces.judge``로 입력의 gold와 비교한
   결과를 ``--out``(jsonl, 원문 없이 sha256·길이·파싱한 JSON·채점)에 쓴다. gold는 승인이 아니다(초안·역산).
 - vLLM은 seed로 바이트 재현되지 않는다(결정 93). 동시 요청 최대 C개(작업자마다 client 하나). 결과는 끝나는 대로 원문 파일에 한 줄씩 쓴다.
+- ``--grounding-target partial``(J6): messages를 ``grounding.make_planner("partial")``(P0.3 prompt, system prompt ``8b157c9a``)로 만든다.
+  그 밖(문항, 표본 수, sampling, seed 규칙)은 J1과 같다(지시 5.3: J1과 같은 sampling 설정). 기본값 full은 J1과 같다.
 - 출력이 있으면 멈춘다.
 """
 import argparse
@@ -54,11 +56,12 @@ def main():
     p.add_argument("--concurrency", type=int, default=8)
     p.add_argument("--server-meta", default="/data/hwkim/sftdpo_work/pilot_006_prep/vllm")
     p.add_argument("--label", default="")
+    p.add_argument("--grounding-target", choices=("full", "partial"), default="full")
     args = p.parse_args()
     import collect_traces as T
     import evaluate_vendor100 as EV
     import execution_spec
-    from geoflow.planner import GeoFlowPlanner
+    import grounding as GT
     from training.data.common import check_expected_prompt
     from vllm_thinking import VLLMThinkingClient
 
@@ -68,8 +71,9 @@ def main():
     raw_out.parent.mkdir(parents=True, exist_ok=True)
     out.parent.mkdir(parents=True, exist_ok=True)
     prompt_hash = check_expected_prompt()
+    planner = GT.make_planner(args.grounding_target, client=None)
+    system_sha = hashlib.sha256(planner.system_prompt().encode("utf-8")).hexdigest()
     items = [json.loads(line) for line in Path(args.inputs).read_text(encoding="utf-8").splitlines() if line.strip()]
-    planner = GeoFlowPlanner(client=None)
     server = json.loads((Path(args.server_meta) / f"server_{args.port}.json").read_text(encoding="utf-8"))
     jobs = []
     for item in items:
@@ -117,7 +121,10 @@ def main():
                             "round_seed": args.round_seed if args.mode == "self" else None, "seed_rule": "EV.call_seed(round_seed, id, s)",
                             "seed_reproducible": False,
                             "source_of_setting": "pilot_004 8b 자체 출처 = pilot_003 trace(greedy 1 + 표본 8, 0.6/0.95/20, 8192), vLLM 인자는 pilot_004/realtrip"},
-               "enable_thinking": True, "prompt": "Full(GeoFlowPlanner.messages)", "prompt_sha256": prompt_hash,
+               "enable_thinking": True, "grounding_target": args.grounding_target,
+               "prompt": "Full(GeoFlowPlanner.messages)" if args.grounding_target == "full" else "Partial P0.3(grounding.make_planner)",
+               "prompt_sha256": prompt_hash, "system_prompt_sha256": system_sha,
+               "partial_fingerprint": GT.partial_fingerprint() if args.grounding_target == "partial" else None,
                "code_fingerprint": execution_spec.code_fingerprint(ROOT)["sha256"], "code_root": str(ROOT),
                "concurrency": args.concurrency, "wall_seconds": round(wall, 1), "inputs": str(args.inputs), "inputs_sha256": sha(args.inputs),
                "raw_out": str(raw_out), "raw_out_sha256": sha(raw_out), "started_at": started_at,
