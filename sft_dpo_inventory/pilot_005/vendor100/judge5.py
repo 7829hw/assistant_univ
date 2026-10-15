@@ -93,20 +93,22 @@ def run(name):
     gold = {i["id"]: i for i in A.EV.load_gold(cfg["gold"])["items"]}
     data = {}
     for cell, (label, k) in cfg["cells"].items():
-        if not (cfg["dir"] / f"{label}_s1.json").exists():
+        # vLLM 셀은 <set>/runs, Ollama 셀(run_vendor5.sh ollama_cell)은 <set>/에 쓴다. 둘 다 본다(2026-10-15 판정 전 수정).
+        cdir = next((d for d in (cfg["dir"], cfg["dir"].parent) if (d / f"{label}_s1.json").exists()), None)
+        if cdir is None:
             continue
         A.RAW = RAW
-        samples, metas = J.load_cell({"runs": cfg["dir"], "prefix": "", "k": k}, label, gold)
+        samples, metas = J.load_cell({"runs": cdir, "prefix": "", "k": k}, label, gold)
         if samples is None:
             continue
-        data[cell] = {"samples": samples, "meta": metas, "label": label, "k": k}
+        data[cell] = {"samples": samples, "meta": metas, "label": label, "k": k, "dir": cdir}
     common = set.intersection(*[set(s) for c in data.values() for s in c["samples"]])
     ids = [i for i in gold if i in common]
     for cell, d in data.items():
         d["m"] = J.mats(d["samples"], ids)
         d["stats"] = J.cell_summary(d["samples"], d["m"], ids, d["k"])
-        d["stats"]["vicinity_missing(decision 94·97)"], d["m"]["vic"] = F.vicinity(cfg["dir"], d["label"], ids, gold, d["k"])
-        d["stats"]["run_meta"] = F.run_meta(cfg["dir"], d["label"]) if d["label"].split("-")[-1] in ("base", "final") else None
+        d["stats"]["vicinity_missing(decision 94·97)"], d["m"]["vic"] = F.vicinity(d["dir"], d["label"], ids, gold, d["k"])
+        d["stats"]["run_meta"] = F.run_meta(d["dir"], d["label"]) if d["label"].split("-")[-1] in ("base", "final") else None
     out = {"set": name, "items": len(ids), "cells": {c: {"k": d["k"], "stats": d["stats"], "samples": d["meta"]} for c, d in data.items()},
            "missing_cells": [c for c in cfg["cells"] if c not in data], "comparisons": {}}
     pairs = ([cfg["judged"]] if cfg["judged"] else []) + cfg["reference"]
