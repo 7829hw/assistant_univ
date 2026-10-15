@@ -77,6 +77,10 @@ dt·조용한 오답·구조 오류를 악화시키지 않고 생성 비용(지�
    J1 원문(세션 1b 시점까지) Full 1 / Partial 12(Partial만 11, 0.45%). Partial만 넘는 비율 전체 0.48%(5% 기준 아래). 선택지(고르지 않음):
    (A) 두 arm 모두 max_seq_length를 같은 값(예: 13,312 이상)으로 올린다 — 메모리 확인(다음 세션 GPU, pilot_004 peak 43.9 GB / 48 GB),
    (B) 어느 arm에서든 넘는 레코드가 있는 질문은 두 arm 모두에서 뺀다(질문 목록은 seq_length.json).
+9. **teacher 수집(N1)의 결정 55 속도 기준**: 27b는 Ollama 0.35.1(pilot_003 teacher, 128호출)에서 최저 77.8 tok/s였지만, 0.40.3(pilot_005 27b 참고 셀)에서는
+   첫 호출이 27.6 tok/s로 기준 30 아래라 멈췄다(`../pilot_005/vendor100/ABORTED_gpu_v100-27b_s1_gpu_guard.json`). 같은 조건이면 N1도 guard에 걸릴 수 있다.
+   27b 전용 기준(기존 GPU 기록에서 미리 정해 plan-deviation 기록에 적음, 규칙 13)이나 원인 확인(0.40.3에서 27b 속도)이 먼저 필요하다.
+   세션 1b의 선택 작업 T0(teacher 지시 smoke)도 같은 이유로 돌리지 않았다.
 
 ## 5. 평가 셀과 판정
 
