@@ -74,7 +74,8 @@ dt·조용한 오답·구조 오류를 악화시키지 않고 생성 비용(지�
    경로 불일치 0"으로 보고 J5R'·J6 진행(이 기준은 harness 확인용이었다), (ii) 다른 10문항으로 smoke를 다시, (iii) Partial 쪽 GPU 작업을 멈춘 채 둔다.
 8. **학습 길이(2a, `../pilot_006_prep/analysis/seq_length.json`)**: max_seq_length 11,392에서 응답(thinking + JSON)에 쓸 수 있는 몫은 Full 약 4,065–4,122,
    Partial 약 2,606–2,663 token(질문 길이에 따라). 한도를 넘는 레코드: pilot_004 판 Full 0 / Partial 4(0.86%, 모두 8b 자체 json_only, 4질문),
-   J1 원문(세션 1b 시점까지) Full 1 / Partial 12(Partial만 11, 0.45%). Partial만 넘는 비율 전체 0.48%(5% 기준 아래). 선택지(고르지 않음):
+   J1 원문 전체(3,602레코드, 401질문) Full 3 / Partial 36(1.0%; Partial만 33, 0.92%; 출처별 Partial만 aug300 7·batch007 3·pg 23).
+   Partial만 넘는 비율 전체 0.91%(5% 기준 아래). 넘는 레코드가 있는 질문: pilot_004 판 4, J1 26. 선택지(고르지 않음):
    (A) 두 arm 모두 max_seq_length를 같은 값(예: 13,312 이상)으로 올린다 — 메모리 확인(다음 세션 GPU, pilot_004 peak 43.9 GB / 48 GB),
    (B) 어느 arm에서든 넘는 레코드가 있는 질문은 두 arm 모두에서 뺀다(질문 목록은 seq_length.json).
 9. **teacher 수집(N1)의 결정 55 속도 기준**: 27b는 Ollama 0.35.1(pilot_003 teacher, 128호출)에서 최저 77.8 tok/s였지만, 0.40.3(pilot_005 27b 참고 셀)에서는

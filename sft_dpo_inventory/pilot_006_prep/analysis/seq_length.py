@@ -100,6 +100,8 @@ def main():
              (ROOT / "sft_dpo_inventory/pilot_006_prep/gpu/inputs/self_questions.jsonl").read_text(encoding="utf-8").splitlines()}
     j1_rows, j1_q, no_json = [], defaultdict(lambda: {"full": 0, "partial": 0, "records": 0}), 0
     raw = ROOT / "training/generated/pilot_006/self_full/raw/self_full_raw.jsonl"
+    if not raw.exists():  # 세션 1b: 큐가 manifest 단계 실패 뒤 이름을 바꿈(원문은 완전, j1_posthoc_manifest.py)
+        raw = raw.with_name("ABORTED_self_full_raw.jsonl")
     for line in raw.read_text(encoding="utf-8").splitlines():
         r = json.loads(line)
         if "</think>" not in r["raw_text"]:
