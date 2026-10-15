@@ -67,10 +67,26 @@ def load_config(path, stage):
     return config
 
 
+def grounding_target(config):
+    """pilot_006 결정 111: ``data.grounding_target``(기본 full). partial이면 P0.3 system prompt와 Partial 답(completion 뒤 같은 계약 검사)."""
+    target = (config.get("data") or {}).get("grounding_target", "full")
+    if target not in ("full", "partial"):
+        raise ValueError(f"Unknown grounding_target: {target}")
+    return target
+
+
+def expected_system_prompt(target="full"):
+    if target == "full":
+        return production_prompt()
+    import grounding
+    return grounding.make_planner(target, client=None).system_prompt()
+
+
 def load_records(config, stage):
     paths = config["data"]
     manifest = json.loads(Path(paths["manifest"]).read_text(encoding="utf-8"))[stage]
-    current = check_expected_prompt()
+    target_kind = grounding_target(config)
+    current = check_expected_prompt() if target_kind == "full" else hashlib.sha256(expected_system_prompt(target_kind).encode()).hexdigest()
     if manifest["prompt_hash"] != current or manifest["representation"] != "flat":
         raise ValueError("Production prompt/schema drift; rebuild data before training")
     if any(issue.get("severity") == "error" for issue in manifest.get("issues", [])):
@@ -83,8 +99,10 @@ def load_records(config, stage):
         raise ValueError("Empty training dataset")
     check_split(records["train"], records["valid"])
     if manifest.get("format") == thinking.FORMAT:
-        _check_thinking_records(records, stage)
+        _check_thinking_records(records, stage, target_kind)
         return records, manifest
+    if target_kind != "full":
+        raise ValueError("Partial grounding_target supports thinking corpora only")
     for split in records.values():
         for record in split:
             messages = record["messages"] if stage == "sft" else record["prompt"] + record["chosen"]
@@ -108,8 +126,12 @@ def load_records(config, stage):
     return records, manifest
 
 
-def _check_thinking_records(records, stage):
-    """Thinking corpus: answer JSON passes the existing (thor) contract check; chosen != rejected answer."""
+def _check_thinking_records(records, stage, target_kind="full"):
+    """Thinking corpus: answer JSON passes the existing (thor) contract check; chosen != rejected answer.
+
+    ``target_kind`` partial(결정 111): system은 P0.3 결합 prompt, 답 JSON은 ``grounding.completion``으로 구조 필드를 채운 뒤 같은 검사.
+    """
+    system = expected_system_prompt(target_kind)
     for split in records.values():
         for record in split:
             if not thinking.is_thinking(record):
@@ -117,9 +139,12 @@ def _check_thinking_records(records, stage):
             messages = record["messages"] if stage == "sft" else record["prompt"] + record["chosen"]
             if [m.get("role") for m in messages] != ["system", "user", "assistant"]:
                 raise ValueError("Expected system/user/assistant chat")
-            if messages[0]["content"] != production_prompt():
+            if messages[0]["content"] != system:
                 raise ValueError("Record system prompt drift")
             target = thinking.response_json(messages[-1]["content"])
+            if target_kind == "partial":
+                from grounding.completion import complete_grounding_payload
+                target = complete_grounding_payload(target)
             if not target_ok(assess(target, messages[1]["content"]), record.get("metadata")):
                 raise ValueError("Invalid chosen grounding in thinking response")
             if stage == "dpo":
