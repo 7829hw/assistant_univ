@@ -45,3 +45,34 @@
 - 2026-10-15 22:36–22:37, GPU `a5ce83d0…`(다른 프로세스 없음), vLLM 0.30.0 BF16 flashinfer, base Qwen3-8B@b968826d, thinking 켬, greedy, max_tokens 8192, 동시 요청 8.
 - 10건 중 초안과 같음 5(b008-02·30·32·33·35), 다름 5: 장소 od_role(places) 2(b008-14·18, g2 동사형), taxi_type 3(b008-29·37·38, g4).
 - 검토 시트는 다음 세션에 batch007 형식으로 만든다(약한 겹침 20건의 처리가 정해진 뒤).
+
+## 5. 결정 120(E5) 재분류(2026-10-15, 세션 1b, `apply_e5.py` → `e5_reclassification.json`)
+
+약한 겹침(template·family)만으로 뺀 20건. 계속 뺌 = selection_v2·augmentation_holdout_v1·valid98·aux_test_v1 중 하나와 family 겹침. 되살림 = 업체 100만 또는 template 수준만 겹침.
+
+| id | gap | 결과 | 근거 |
+|---|---|---|---|
+| b008-01 | g1_dt_no_rank | 계속 뺌 | family 겹침: valid98 |
+| b008-04 | g1_dt_no_rank | 계속 뺌 | family 겹침: valid98 |
+| b008-05 | g1_dt_no_rank | 계속 뺌 | family 겹침: valid98 |
+| b008-07 | g1_dt_no_rank | 계속 뺌 | family 겹침: valid98 |
+| b008-09 | g2_implicit_endpoint | 계속 뺌 | family 겹침: valid98 |
+| b008-10 | g2_implicit_endpoint | 계속 뺌 | family 겹침: valid98 |
+| b008-11 | g2_implicit_endpoint | 계속 뺌 | family 겹침: valid98 |
+| b008-12 | g2_implicit_endpoint | 분류 밖(빼 둔 채 보고) | 넷 밖의 family 겹침만: extended_family |
+| b008-13 | g2_implicit_endpoint | 계속 뺌 | family 겹침: valid98 |
+| b008-16 | g2_implicit_endpoint | 계속 뺌 | family 겹침: valid98 |
+| b008-17 | g2_implicit_endpoint | 계속 뺌 | family 겹침: aux_test_v1, holdout, selection_v2 |
+| b008-20 | g3_valueless_place | 계속 뺌 | family 겹침: holdout, valid98 |
+| b008-22 | g3_valueless_place | 계속 뺌 | family 겹침: selection_v2 |
+| b008-23 | g3_valueless_place | 계속 뺌 | family 겹침: aux_test_v1, holdout, selection_v2, valid98 |
+| b008-24 | g3_valueless_place | 계속 뺌 | family 겹침: aux_test_v1, holdout |
+| b008-26 | g3_valueless_place | 계속 뺌 | family 겹침: aux_test_v1, selection_v2, valid98 |
+| b008-27 | g4_bucket_dimension | 계속 뺌 | family 겹침: aux_test_v1 |
+| b008-28 | g4_bucket_dimension | 계속 뺌 | family 겹침: selection_v2 |
+| b008-31 | g4_bucket_dimension | 계속 뺌 | family 겹침: holdout, selection_v2, valid98 |
+| b008-34 | g4_bucket_dimension | 분류 밖(빼 둔 채 보고) | 넷 밖의 family 겹침만: extended_family |
+
+- **되살린 문항 0건**(계속 뺌 18, 분류 밖 2). 그래서 J7b(되살린 문항의 base 첫 응답)는 대상이 없어 돌리지 않았다(`inputs_first_response_revived.jsonl` 빈 파일).
+- 분류 밖 2건(b008-12, b008-34)은 보호 원본 `evaluation/grounding_v10/heldout_questions.yaml`과의 확장 family 겹침만 남는다. 결정 120의 두 경우(업체 100만, template 수준만) 어디에도 들지 않아 빼 둔 채 보고한다(사용자 확인).
+- 남은 후보는 그대로 10건이다.
