@@ -242,3 +242,51 @@ PROTOCOL_v2는 U·조용한 오답 순증 3 이상을 악화로 봅니다. pilot
 
 - HF-base → HF-최종: +2.94 [−2.94, 8.82], U +4.90 [1.47, 8.82](U 증가가 CI로 확인됨), 조용한 오답 +0.98 [−2.94, 4.90](`pilot_003/aux_test/comparison.json`).
 - aux_test_v1의 E 셀은 pilot_003에서 재지 않았습니다.
+
+## pilot_005(2026-10-15 추가)
+
+> **이 절의 값은 앞 절들과 지표·경로가 다릅니다.** 표 1–6은 greedy 한 번 값(문항 수), 표 7–9(pilot_003)는 HF transformers BF16 경로의 sampling k표본 평균입니다.
+> 이 절은 **vLLM 0.30.0 BF16(flashinfer attention·sampler, adapter는 LoRA, 동시 요청 8)** 경로의 sampling k표본 평균(%)이고, 판정은 PROTOCOL_v5(= v4 6절, 지연 조건은
+> 고정 30문항 순차 측정)입니다. 경로가 달라 표 7–9의 HF 값과 직접 비교하지 않습니다.
+
+위 표는 고치지 않았습니다. 이 절의 숫자는 아래 스크립트가 원본 기록에서 다시 센 값입니다.
+- 업체 100: `pilot_005/vendor100/judge5.py vendor100` → `pilot_005/vendor100/judgment.json`(PROTOCOL_v5 5절 판정).
+- aux_test_v1: `pilot_005/vendor100/judge5.py aux` → `pilot_005/aux_test/comparison.json`(보고만).
+- 보고서: `pilot_005/REPORT.md`.
+
+공통 조건: prompt `87048d0c`, 기준일 2026-09-25, 조건 계층 켬, mock provider, 코드 지문 791c4a68.
+- 생성: sampling(temperature 0.6, top_p 0.95, top_k 20, min_p 0, repetition_penalty 1), 표본 k의 회차 seed 20261100+k(vLLM은 seed로 바이트 재현되지 않음, 결정 93), thinking 켬, 생성 상한 8192.
+- vLLM-고른 후보: pilot_005 V1 checkpoint-467 adapter(sha256 `1e74eea0…`, 병합하지 않음). selection_v2에서 후보 7개 중 Bonferroni 보정 중단 규칙(결정 103)을 통과해 골랐습니다.
+- E: 공식 qwen3:8b(digest `500a1f067a9f`, Q4_K_M), Ollama 0.40.3, 연속 방식(결정 79). 참고 셀이라 판정하지 않습니다. 27b 참고 셀은 결정 55 guard로 멈춰 값이 없습니다.
+
+### 표 10. 업체 100: pilot_005(k=8, 문항 평균 %)
+
+| 셀 | grounding_ok 평균 | 표본별 grounding_ok(문항 수) | U | 조용한 오답 | 안정 정답(8/8) | 장치 | 원본 기록 경로 |
+|---|---:|---|---:|---:|---:|---|---|
+| vLLM-base(전) | 83.88 | 86, 82, 82, 87, 85, 78, 83, 88 | 2.50 | 0.88 | 55 | GPU `2445b100`·`a5ce83d0`·`48f798cc` | `pilot_005/vendor100/runs/v100-base_s1–8.json` |
+| vLLM-고른 후보(후) | 88.00 | 86, 87, 90, 88, 88, 87, 89, 89 | 4.38 | 0.12 | 60 | GPU `2445b100`·`a5ce83d0`·`48f798cc` | `pilot_005/vendor100/runs/v100-final_s1–8.json` |
+| E(참고) | 81.12 | 87, 87, 72, 78, 79, 82, 81, 83 | 4.50 | 1.12 | 50 | GPU `48f798cc`(Ollama) | `pilot_005/vendor100/v100-E_s1–8.json` |
+
+- U·조용한 오답은 문항·표본 비율(%)입니다. 표본별 장치는 셀 meta `vllm.server_meta.gpu_uuid`에 있습니다.
+
+### 표 11. 업체 100: pilot_005 비교(PROTOCOL_v5)
+
+| 비교 | 차이(%p) [95% CI] | U 차이 [CI] | 조용한 오답 차이 [CI] | 지연 비(고정 30문항 순차) | 판정 | 원본 기록 경로 |
+|---|---|---|---|---:|---|---|
+| 주: vLLM-base → vLLM-고른 후보 | +4.12 [−0.88, 9.25] | +1.88 [−0.38, 4.12] | −0.75 [−1.75, −0.12] | **1.567** | **악화** | `pilot_005/vendor100/judgment.json` |
+| 참고: E → vLLM-base | +2.75 [−0.38, 5.88] | −2.00 [−4.62, 0.25] | −0.25 [−1.62, 0.88] | – | – | 같은 파일 |
+| 참고: E → vLLM-고른 후보 | +6.88 [1.25, 12.62] | −0.12 [−3.88, 3.38] | −1.00 [−2.25, −0.12] | – | – | 같은 파일 |
+
+- "악화"의 이유는 지연 조건 하나입니다. 고정 30문항 순차 측정의 문항 모델 시간 중앙값이 base 16.32초, 고른 후보 25.58초로 1.5배를 넘었습니다(생성 token이 늘어난 것이 주원인).
+  정답률 차이는 업체 100·k=8에서 구분되지 않았고, 조용한 오답은 줄었습니다.
+- 각 표본은 한 번씩만 쟀습니다.
+
+### 표 12. aux_test_v1(51문항, k=4, 보고만)
+
+| 셀 | grounding_ok 평균 | 표본별 | U | 조용한 오답 | 원본 기록 경로 |
+|---|---:|---|---:|---:|---|
+| vLLM-base | 58.82 | 25, 32, 30, 33 | 5.39 | 7.84 | `pilot_005/aux_test/runs/aux-base_s1–4.json` |
+| vLLM-고른 후보 | 74.51 | 37, 38, 40, 37 | 1.96 | 1.96 | `pilot_005/aux_test/runs/aux-final_s1–4.json` |
+| E(참고) | 53.92 | 28, 27, 26, 29 | 10.78 | 5.88 | `pilot_005/aux_test/aux-E_s1–4.json` |
+
+- vLLM-base → vLLM-고른 후보: +15.69 [5.88, 25.49], U −3.43 [−6.86, −0.49], 조용한 오답 −5.88 [−11.76, −0.98](`pilot_005/aux_test/comparison.json`).
