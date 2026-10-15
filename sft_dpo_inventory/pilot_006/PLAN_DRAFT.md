@@ -2,7 +2,7 @@
 
 # pilot_006 계획 초안(Full vs Partial, SFT만)
 
-작성: 2026-10-15(pilot_006 준비 세션 1, W9). **고정하지 않았다.** 학습·teacher 수집을 시작하기 전에 사용자가 고치고 확정한다.
+작성: 2026-10-15(pilot_006 준비 세션 1, W9), 갱신 2026-10-15(세션 1b: 결정 116–121 = E1–E6 반영, 2a·2b). **고정하지 않았다.** 학습·teacher 수집을 시작하기 전에 사용자가 고치고 확정한다.
 따르는 것: `CLAUDE.md`(SFT/DPO 규칙 1–15), `../DECISIONS.md`(결정 1–115, 특히 106–114 = D1–D9), `../vendor100_protocol/PROTOCOL_v5.md`(v4·v3를 이어받음),
 계획서 v2(`../pilot_006_prep/inputs/two_branch_integration_and_300_dataset_plan_v2.md`, 지시 3절 보정이 우선).
 
@@ -16,13 +16,13 @@ dt·조용한 오답·구조 오류를 악화시키지 않고 생성 비용(지�
 | 출처 | 질문 | canonical 검증 사슬 통과 | 상태 |
 |---|---:|---:|---|
 | trunk pilot_004 판(`reviewed_gold_v006_t2pc`) | 131 | 131 | 승인됨 |
-| pg `reviewed_reasoning_v001`(trunk와 겹치는 v005 111 제외, pg batch006 Gap A·B) | 47 | 47 | pg 승인 상태 그대로(trunk 승인 아님, 사용자 확인 필요). pg batch006 43 + v005 질문 중 trunk pilot_004 판에 없는 4(b004-19·35, b005-11·60) |
-| aug300 train(결정 106 적용) | 220 | 218(134·135 실패) | 초안(검토 필요) |
+| pg `reviewed_reasoning_v001`(trunk와 겹치는 v005 111 제외, pg batch006 Gap A·B) | ~~47~~ **40** | 40 | pg 승인 상태 그대로(trunk 승인 아님, 사용자 확인 필요). pg batch006 43 + v005 질문 중 trunk pilot_004 판에 없는 4(b004-19·35, b005-11·60) |
+| aug300 train(결정 106 → 결정 119 E4 적용) | ~~220~~ **207** | 207 | 초안(검토 필요). E4: 134·135와 평가·보호 셋 강한 겹침 11건 제외, 학습 데이터와만 겹쳐 병합할 문항 0 |
 | batch007 | 27 | 27 | 초안(검토 필요) |
-| batch008 남은 후보 | 10 | 10 | 초안(검토 필요). 약한 겹침으로 뺀 20건의 처리 결정 필요 |
-| **합계(모두 승인될 때 최대)** | **435** | 433 | |
+| batch008 남은 후보 | 10 | 10 | 초안(검토 필요). 결정 120(E5) 재분류: 되살림 0, 계속 뺌 18, 분류 밖 2(b008-12·34, 보고) |
+| **합계(모두 승인될 때 최대)** | ~~435~~ **415** | 415 | E6: pg EDIT_REQUIRED 7행(pg-b006-09·17·21·26·27·33·39)은 사람 검토 전까지 뺌 |
 
-- 유형 상한(결정 88·92, τ 0.09, 결정 92 예외 = trunk 실차 대조 + batch007, 51질문): 상한 전 TV 0.145 → 상한 뒤 예상 **약 402질문, TV 0.111**
+- 유형 상한(결정 88·92, τ 0.09, 결정 92 예외 = trunk 실차 대조 + batch007, 51질문): 상한 전 TV 0.145 → 상한 뒤 예상 **약 402질문, TV 0.111**(세션 1의 435 기준; E4·E6 뒤 415 기준으로 다음 세션에 다시 계산)
   (예외 때문에 0.09를 넘는다. 결정 92대로 그 값을 기록한다). 상한이 줄이는 칸: "집계 있음·dim 없음" 160 → 127, "집계 없음·dim 있음·dt 있음" 비예외 115 → 102 등.
 - 두 arm의 질문 목록은 sha256까지 같아야 한다(계획서 v2 7절). Full·Partial target은 같은 canonical semantics에서 렌더링한다(W5, 466/466 + aug300 271/273 통과).
 - 평가 셋 겹침 검사: W6 기준(강한 겹침 = 질문·Jaccard ≥ 0.5·같은 grounding)과 결정 54식 약한 겹침 기록. aug300 제안 15건(`../pilot_006_prep/aug300/status_proposals.json`)은 사용자 결정 뒤 반영.
@@ -55,18 +55,28 @@ dt·조용한 오답·구조 오류를 악화시키지 않고 생성 비용(지�
 
 ## 4. 먼저 정해야 하는 것(사용자 결정)
 
-1. **Partial 경로 생성 길이 한도.** P0.3 입력이 8,729 token이라 PROTOCOL_v5 서버(`--max-model-len 16384`, max_tokens 8,192)에서 모든 요청이 400으로 거부된다
+1. ~~**Partial 경로 생성 길이 한도.**~~ **결정 117(E2)로 (a) 채택**: 모든 vLLM 셀·표본 수집 `--max-model-len` 17,408(`serve6b.sh`). base 셀 B1–B4 재측정(세션 1b).
+   J2(16,384)는 봉인한 채 참고만, J1(16,384)은 학습 데이터 후보로 그대로(요청이 모두 한도 안). 원래 내용: P0.3 입력이 8,729 token이라 PROTOCOL_v5 서버(`--max-model-len 16384`, max_tokens 8,192)에서 모든 요청이 400으로 거부된다
    (J5S·J5R 무효, `../pilot_006_prep/integration/gpu_partial_smoke/ABORTED_*`). Full 입력은 7,270 token(합 15,462). 선택지:
    - (a) **권장**: pilot_006 모든 vLLM 셀(base·F·P·참고)과 표본 수집의 `--max-model-len`을 17,408(입력 최대 + 8,192 + 여유)로 올린다. sampling·정밀도·커널·동시 요청은 그대로.
      요청별 출력에는 영향이 없을 것으로 보지만 서버 인자가 바뀌므로, 비교에 쓰는 base 셀(selection_v2, holdout, valid98, aux)은 새 인자로 다시 잰다(PROTOCOL_v5 재측정 규칙).
      J2 holdout base 셀(이번 세션, 16,384)은 그때 참고로 두거나 다시 잰다.
    - (b) Partial만 max_tokens를 16,384 − 입력(약 7,650)으로 줄인다. 생성 한도가 arm마다 달라져 Gate E·잘림 비교가 흐려진다.
    - (c) P0.3 prompt를 줄인다. Partial 계약이 바뀌어 pg 기록과 이어지지 않는다.
-2. aug300 semantics 초안 273(`../pilot_006_prep/aug300_review/`), 상태 제안 15(그중 코드 실패 134·135).
-3. batch007 27(검토 전), batch008 10 + **약한 겹침만으로 뺀 20건을 결정 54식 예외로 둘지**.
-4. pg 자산(`../pg_imports/`)을 trunk 학습 데이터로 받아들일지(pg 승인 상태 그대로, EDIT_REQUIRED 7행 포함 여부), conflicts(0건).
+2. aug300 semantics 초안 273(E4로 train 207·holdout 53 대상)(`../pilot_006_prep/aug300_review/`), 상태 제안 15(그중 코드 실패 134·135).
+3. batch007 27(검토 전), batch008 10. 약한 겹침 20건은 결정 120(E5)으로 재분류(되살림 0, 분류 밖 2건은 사용자 확인).
+4. ~~pg 자산 수용~~ 결정 121(E6): pg 승인 상태 그대로 후보 147(`../pg_imports/acceptance_e6.json`), EDIT_REQUIRED 7행은 사람 검토 대기. conflicts 0건.
 5. 이 초안의 Gate·주 셋·seed·중단 규칙(5절), `protected_final_v1` 계획(8절).
-6. W4 6(b) 해석(`../pilot_006_prep/integration/integration_check.json`): Partial grounding_ok 출력 51건이 gold 호출과 다르지만 모두 Full arm과 같다(경로 차이 0). 통과로 볼지.
+6. ~~W4 6(b) 해석~~ 결정 118(E3): 통과("Partial 경로가 같은 출력에 대해 Full 경로와 다른 호출을 만들지 않는다").
+7. **J5S'(Partial smoke, 17,408 서버) 불통과**(세션 1b): 요청 10/10 처리, 비교 가능 6건은 경로 불일치 0, 그러나 base 모델의 P0.3 출력 4건이 실패
+   (MISSING_RELATION_QUALIFIER 3 — old44/g02·g04·g12, Full 경로 J4에서는 셋 다 정답; UNCONSUMED_CONDITION 1 — g17, Full과 같은 올바른 거부)
+   → 미리 정한 "비교 가능 ≥ 8/10"에 못 미침. J5R'(R2)와 J6(Partial 8b 자체 표본)은 시작하지 않았다. 선택지: (i) smoke 기준을 "요청 > 0이고 비교 가능한 문항의
+   경로 불일치 0"으로 보고 J5R'·J6 진행(이 기준은 harness 확인용이었다), (ii) 다른 10문항으로 smoke를 다시, (iii) Partial 쪽 GPU 작업을 멈춘 채 둔다.
+8. **학습 길이(2a, `../pilot_006_prep/analysis/seq_length.json`)**: max_seq_length 11,392에서 응답(thinking + JSON)에 쓸 수 있는 몫은 Full 약 4,065–4,122,
+   Partial 약 2,606–2,663 token(질문 길이에 따라). 한도를 넘는 레코드: pilot_004 판 Full 0 / Partial 4(0.86%, 모두 8b 자체 json_only, 4질문),
+   J1 원문(세션 1b 시점까지) Full 1 / Partial 12(Partial만 11, 0.45%). Partial만 넘는 비율 전체 0.48%(5% 기준 아래). 선택지(고르지 않음):
+   (A) 두 arm 모두 max_seq_length를 같은 값(예: 13,312 이상)으로 올린다 — 메모리 확인(다음 세션 GPU, pilot_004 peak 43.9 GB / 48 GB),
+   (B) 어느 arm에서든 넘는 레코드가 있는 질문은 두 arm 모두에서 뺀다(질문 목록은 seq_length.json).
 
 ## 5. 평가 셀과 판정
 
@@ -99,6 +109,8 @@ U 비율 차이 95% CI 하한 ≤ 0. F가 통과하지 못하면 F vs P는 해�
 | D 구조 | first-response 구조 오류(MULTIPLE_MEASURES, NO_MEASURE, INVALID_*, JSON_NOT_FOUND), grounding failure, repair 호출 비율 | (1) MULTIPLE_MEASURES + NO_MEASURE: P − F 95% CI 하한 ≤ 0, **그리고** (2) 셋 중 하나 이상에서 P − F 95% CI 상한 < 0 |
 | E 효율(지시 3절 3) | 지연·token | (1) **P와 F 각각** 순차 고정 30문항 base 대비 중앙값 비 ≤ **1.5**(D8, 가장 중요), (2) 최종 JSON token 중앙값 P가 F보다 **30% 이상** 적음, (3) 생성 token 중앙값 P ≤ F |
 
+- Gate E 함께 보고(판정에 쓰지 않음): 입력 token(Full 7,270 / Partial 8,729, 질문에 따라 ±40), prefix cache 상태(vLLM 0.30.0 기본값 켜짐, 적중률),
+  thinking·최종 JSON token(D8), 첫 문항(캐시 없음) 시간. 2b 추정(`latency_v2.json`): 입력 증가 비용은 캐시 있음 ≈ 0, 캐시 없음 문항당 약 0.20초(prefill ≈ 7,300 tok/s).
 - 채택 조건: A–E 모두 통과. JSON token 감소만으로 채택하지 않는다.
 - W8 검정력(`../pilot_006_prep/analysis/power.json`): 151문항 예상 반폭 약 2.6–4.2%p. 진짜 차이 0일 때 Gate A 통과 확률 약 0.81(−1%p 0.63, −2%p 0.44).
   반폭이 마진보다 크게 나오면 Gate A 불통과는 "열등"이 아니라 "판정 불가"로 보고한다.
@@ -151,6 +163,17 @@ GPU별 예상 유휴 구간과 이유:
 | batch008 | `../batch008/candidates_checked.json`(남음 10), `../batch008/excluded.json`(약한 겹침만 20, 강한 사유 8) | 10 + 20 결정 |
 | conflicts | `../pilot_006_prep/canonical/conflicts.json` | 0 |
 | pg 자산 수용 | `../pg_imports/README.md` | pg_batch006 43(EDIT_REQUIRED 7 포함), reasoning 154 |
+
+## 7b. 결정 116–121(E1–E6) 반영 상태(세션 1b)
+
+| 결정 | 내용 | 반영 |
+|---|---|---|
+| 116 E1 | 업체 원본 xlsx 커밋 문제없음, `.gitignore` 문구 정정 | `ade2654` |
+| 117 E2 | `--max-model-len` 17,408, base 셀 재측정, J2 참고만, J1 그대로 | `ade2654`(serve6b.sh·jobs6b.sh), B1–B4 실행 |
+| 118 E3 | W4 6(b) 통과 기준 문구 | `integration_check.json`(`4c9aa95`) |
+| 119 E4 | aug300 상태: train 207, 제외 18, holdout 53, 축소 22 | `aug300/status_e4.json`(`4c9aa95`) |
+| 120 E5 | batch008 재분류: 되살림 0(J7b 대상 없음), 분류 밖 2 | `batch008/e5_reclassification.json`, README 5절(`4c9aa95`) |
+| 121 E6 | pg 수용 147, EDIT_REQUIRED 7 보류 | `pg_imports/acceptance_e6.json`(`4c9aa95`) |
 
 ## 8. `protected_final_v1` 작성 계획(D1)
 
