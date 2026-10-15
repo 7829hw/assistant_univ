@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """J1 사후 manifest(세션 1b). J1(collect6.py --mode self)은 3,609 생성을 모두 마친 뒤 manifest 단계에서 실패했다:
 2026-10-16 00:25–00:29 사이 바깥에서 worktree 디렉터리(/data/hwkim/sftdpo_work/pilot_006_prep/wt_*)가 지워져 상대 경로 입력 파일을 열지 못함.
-큐(jobs6.sh)가 원문을 ``raw/ABORTED_self_full_raw.jsonl``로 바꿨다. 이 스크립트는 원문만 읽어 원래 manifest와 같은 항목을 만든다(모델 호출 없음).
-원문 파일 이름은 바꾸지 않았다(되돌릴지는 사용자 결정).
+큐(jobs6.sh)가 원문을 ``raw/self_full_raw.jsonl``로 바꿨다. 이 스크립트는 원문만 읽어 원래 manifest와 같은 항목을 만든다(모델 호출 없음).
+원문 파일 이름은 결정 F2로 self_full_raw.jsonl로 되돌렸다.
 """
 import hashlib
 import json
@@ -10,7 +10,7 @@ from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-RAW = ROOT / "training/generated/pilot_006/self_full/raw/ABORTED_self_full_raw.jsonl"
+RAW = ROOT / "training/generated/pilot_006/self_full/raw/self_full_raw.jsonl"
 INP = ROOT / "sft_dpo_inventory/pilot_006_prep/gpu/inputs/self_questions.jsonl"
 items = [json.loads(l) for l in INP.read_text(encoding="utf-8").splitlines()]
 rows = [json.loads(l) for l in RAW.read_text(encoding="utf-8").splitlines()]

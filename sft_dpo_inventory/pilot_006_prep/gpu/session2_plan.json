@@ -1,0 +1,117 @@
+{
+ "session": "pilot_006 준비 세션 2",
+ "written": "2026-10-16",
+ "scheduler": "gpu/scheduler6.py(공유 큐, 결정 114·124)",
+ "server": "vLLM 셀은 serve6b.sh(17,408), X1만 serve6.sh(16,384)",
+ "jobs": [
+  {
+   "priority": 1,
+   "id": "J6",
+   "work": "Partial arm 8b 자체 표본 401문항 × 9(greedy 1 + 표본 8), 17,408",
+   "gpu": "아무 GPU",
+   "est_minutes": 170,
+   "condition": "F1 기록(결정 122)",
+   "est_basis": "J1 실측 159분"
+  },
+  {
+   "priority": 2,
+   "id": "G0",
+   "work": "27b 속도 확인 5회, PROCESSOR 100% GPU",
+   "gpu": "Ollama GPU",
+   "est_minutes": 5,
+   "condition": "-",
+   "est_basis": "짧은 생성 5회"
+  },
+  {
+   "priority": 3,
+   "id": "J5R2",
+   "work": "R2 selection_v2 P0.3 base k=4, 17,408",
+   "gpu": "아무 GPU",
+   "est_minutes": 30,
+   "condition": "F1",
+   "est_basis": "selection_v2 표본 5.5–8분(동시 8)"
+  },
+  {
+   "priority": 4,
+   "id": "X1",
+   "work": "selection_v2 Full base k=4, 16,384(serve6.sh), B1과 같은 seed",
+   "gpu": "아무 GPU",
+   "est_minutes": 30,
+   "condition": "-",
+   "est_basis": "같음"
+  },
+  {
+   "priority": 5,
+   "id": "X2",
+   "work": "selection_v2 Full base k=4, 17,408, B1과 같은 seed",
+   "gpu": "아무 GPU",
+   "est_minutes": 30,
+   "condition": "-",
+   "est_basis": "같음"
+  },
+  {
+   "priority": 6,
+   "id": "R3a",
+   "work": "pilot_005 v1_step467 selection_v2 k=4, 17,408 + LoRA",
+   "gpu": "아무 GPU",
+   "est_minutes": 30,
+   "condition": "-",
+   "est_basis": "같음"
+  },
+  {
+   "priority": 7,
+   "id": "T0",
+   "work": "teacher 표현 중립 지시 smoke, 27b, 20질문 × 8",
+   "gpu": "Ollama GPU",
+   "est_minutes": 40,
+   "condition": "G0 끝, F5 기준 기록, C5 도구·선택 규칙 커밋(session2_ready/T0.json)",
+   "est_basis": "pilot_003 teacher 질문당 약 88초 × 20 ≈ 30분"
+  },
+  {
+   "priority": 8,
+   "id": "M1",
+   "work": "메모리 확인 학습 최대 20 step, L_req",
+   "gpu": "아무 GPU 단독",
+   "est_minutes": 30,
+   "condition": "C6 L_req·가장 긴 레코드(session2_ready/M1.json)",
+   "est_basis": "SFT 5.91초/step + 적재"
+  },
+  {
+   "priority": 9,
+   "id": "R2v",
+   "work": "P0.3 base valid98 k=4",
+   "gpu": "아무 GPU",
+   "est_minutes": 30,
+   "condition": "J5R2 끝",
+   "est_basis": "valid98 표본 약 7분"
+  },
+  {
+   "priority": 10,
+   "id": "R2a",
+   "work": "P0.3 base aux_test_v1 k=4",
+   "gpu": "아무 GPU",
+   "est_minutes": 15,
+   "condition": "J5R2 끝",
+   "est_basis": "aux 표본 약 3.5분"
+  },
+  {
+   "priority": 11,
+   "id": "R3b",
+   "work": "v1_step467 holdout k=4(봉인)",
+   "gpu": "아무 GPU",
+   "est_minutes": 15,
+   "condition": "-",
+   "est_basis": "holdout 표본 약 3분"
+  },
+  {
+   "priority": 12,
+   "id": "R2h",
+   "work": "P0.3 base holdout k=4(봉인)",
+   "gpu": "아무 GPU",
+   "est_minutes": 15,
+   "condition": "J5R2 끝",
+   "est_basis": "같음"
+  }
+ ],
+ "est_total_gpu_minutes": 440
+}

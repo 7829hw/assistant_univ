@@ -606,3 +606,34 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - selection_v2, holdout, valid98, aux_test_v1 중 하나와 family 수준으로 겹치면 계속 뺀다.
     - 문항마다 결과를 README 표에 적는다. 되살린 문항은 J7과 같은 방식으로 base 첫 응답을 모은다(GPU 작업 J7b).
 121. (2026-10-15, 사용자) 결정 BH(E6). pg_imports는 pg 쪽 승인 상태 그대로 학습 데이터 후보로 받는다. EDIT_REQUIRED 7행은 사람 검토 전까지 뺀다.
+
+## 2026-10-16 — pilot_006 준비 세션 2(`pilot_006_prep`)
+
+122. (2026-10-16, 사용자) 결정 BI(F1). J5S' 판정.
+    - smoke의 목적은 harness가 Partial 출력을 받아 Full과 같은 경로로 채점하는지 확인하는 것이었다. 실패 4건은 base 모델의 Partial 의미 실패다
+      (MISSING_RELATION_QUALIFIER 3건, 올바른 거부 1건). 경로 불일치는 0이다.
+    - 기준을 "요청 > 0이고, 비교 가능한 문항에서 경로 불일치 0"으로 다시 정하고 J5S'를 통과로 본다.
+    - **이 기준은 결과를 본 뒤 바꾼 것이다.** 이유: 사전 기준("비교 가능 ≥ 8/10")은 첫 J5S의 무효(요청 0건인데 통과)를 막으려고 더한 것인데,
+      base 모델의 의미 실패까지 harness 실패로 세었다.
+    - J5R'와 J6을 시작한다.
+123. (2026-10-16, 사용자) 결정 BJ(F2). J1 원문 `ABORTED_self_full_raw.jsonl`을 `self_full_raw.jsonl`로 되돌린다(3,609/3,609 생성, 빠짐·중복 0 검증).
+    manifest와 timeline에 정정 기록을 남긴다.
+124. (2026-10-16, 사용자) 결정 BK(F3). worktree 운용.
+    - GPU 작업용 worktree는 저장소 밖 고정 위치 `/home/hwkim/sftdpo_work/worktrees/`에 `wt_<커밋7자리>_<작업ID>`로 만든다.
+    - `pilot_006_prep/gpu/worktrees.json`에 worktree마다 쓰는 작업과 상태를 기록하고, 작업이 모두 끝나면 Claude Code가 `git worktree remove`로 지운다.
+    - 작업 스크립트는 입력과 출력을 모두 절대 경로로 다룬다(세션 1 J1 manifest 실패의 원인이 상대 경로). 반영한 큐 스크립트는 새 파일로 만든다(규칙 15).
+125. (2026-10-16, 사용자) 결정 BL(F4). 학습 길이 사전 등록(M1 결과로 자동 결정, 결과는 보고만 하고 세션 3 데이터 빌드에 적용).
+    1. 두 arm의 모든 후보 레코드(입력 + 응답)를 담을 수 있는 가장 작은 256 배수 길이를 `L_req`로 정한다(pilot_004 판, J1, J6 완료 뒤 J6, teacher는 pilot_004 분포로 추정).
+    2. M1에서 `L_req`로 가장 긴 레코드들을 학습할 때 GPU 메모리 peak가 46.0 GB 이하이면 (A): 두 arm 모두 `max_seq_length = L_req`.
+    3. 넘으면 `L = 12,288`로 한 번 더 잰다. 46.0 GB 이하이면 그 값을 쓰고, 넘는 레코드는 4처럼 처리한다.
+    4. 그래도 넘으면 (B'): arm마다 한도를 넘는 레코드만 뺀다. 어느 arm이든 그 질문의 레코드가 하나도 남지 않으면 그 질문을 두 arm 모두에서 뺀다.
+       두 arm의 질문 목록은 sha256까지 같게 유지하고 레코드 수 차이를 보고한다.
+126. (2026-10-16, 사용자) 결정 BM(F5). 27b teacher 속도 guard. 결정 55의 목적은 Ollama가 GPU를 잃고 CPU로 도는 상황(대략 10배 이상 느려짐)을 잡는 것이다.
+    30 tok/s 기준은 이전 Ollama 기록에서 정한 값이라 0.40.3의 27.6 tok/s는 GPU에서 정상인 속도로 본다. 0.40.3의 27b 기준:
+    G0에서 `ollama ps` PROCESSOR 100% GPU 확인 → 짧은 생성 5회 tok/s 중앙값 → 그 0.5배. 기준값은 T0 시작 전에 `pilot_006/PLAN_DEVIATIONS.md`에 적는다.
+    결정 55의 나머지(컨테이너 GPU 확인, PROCESSOR 확인, 기준 미달 시 즉시 멈춤과 `ABORTED_*`)는 그대로다. 세션 3 teacher 수집에도 쓴다.
+127. (2026-10-16, 사용자) 결정 BN(F6). b008-12·34는 보호 원본 `evaluation/grounding_v10/heldout_questions.yaml`과 family가 겹치므로 계속 뺀다.
+128. (2026-10-16, 사용자) 결정 BO(F7). 판정에 쓰지 않는 참고 셀을 더 잰다: R2h·R2v·R2a(P0.3 base, holdout·valid98·aux), R3a·R3b(pilot_005 v1_step467,
+    selection_v2·holdout). holdout 셀(R2h, R3b)은 J2·B2와 같이 봉인한다.
+129. (2026-10-16, 사용자) 결정 BP(F8). "학습하지 않는다"의 예외로 짧은 메모리 확인 학습(M1)만 허용한다. 최대 20 step, 저장한 adapter와 checkpoint는 측정 뒤 지운다.
+    남기는 것은 메모리·시간 기록뿐이다.
