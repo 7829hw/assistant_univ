@@ -542,3 +542,44 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
       그 변형만 처음부터 다시 돌린다.
     - 평가는 학습이 끝나 비는 GPU부터 쓴다. vLLM은 여러 LoRA adapter를 한 서버에 함께 올려도 된다.
     - 한 비교 안의 셀은 같은 backend, sampler, 동시 요청 수로 잰다.
+
+## 2026-10-15 — pilot_006 준비(`pilot_006_prep`, 세션 1)
+
+106. (2026-10-15, 사용자) 결정 AT(D1). 업체 100의 지위.
+    - 업체 100은 pilot_006부터 개발 셋으로 내린다. 최종 판정은 새로 만들 보호 셋 `protected_final_v1`로 한다.
+      `protected_final_v1`은 보호 셋을 보지 않고 새로 쓰며, 작성은 다음 세션에서 한다.
+    - `CLAUDE.md` 규칙 8의 "Vendor 100 results are evaluation-only"는 pilot_005까지의 기록에 적용된다. pilot_006부터는 이 결정을 따른다.
+    - 300문항 v2의 `보류_vendor100` 58문항은 train으로 복귀한다. holdout 53문항은 바꾸지 않는다.
+107. (2026-10-15, 사용자) 결정 AU(D2). 손실 범위.
+    - 두 arm 모두 결정 86의 출처별 손실 범위를 쓴다(teacher `full_response`, 8b 자체 `json_only`).
+    - Partial arm의 thinking 길이 p90이 base 대비 30% 넘게 줄면 보고한다.
+108. (2026-10-15, 사용자) 결정 AV(D3). 평가 경로.
+    - 두 arm 모두 PROTOCOL_v5 경로로 평가한다: vLLM 0.30.0 BF16, flashinfer, LoRA 비병합, k=4, 동시 요청 8, PROTOCOL_v4 3절 sampling.
+109. (2026-10-15, 사용자) 결정 AW(D4). 비열등 마진과 주 셋.
+    - 마진: −5%p.
+    - 주 셋: selection_v2(98) ∪ augmentation_holdout_v1(53), 151문항, k=4.
+    - selection_v2만의 결과도 함께 보고한다.
+    - 근거: pilot_005 학습 후보끼리의 selection_v2 차이 95% CI 반폭은 4.1–4.3%p였다(v1_step467 대 v2_step934 등).
+110. (2026-10-15, 사용자) 결정 AX(D5). DPO.
+    - pilot_006의 주 비교에 DPO를 쓰지 않는다. SFT만 한다.
+111. (2026-10-15, 사용자) 결정 AY(D6). 작업 브랜치와 이름 공간.
+    - 작업은 `geoflow/sft-dpo-t2pc`에서 한다(규칙 1). 새 실험 브랜치는 만들지 않는다.
+    - Partial 경로 코드는 `grounding_target`(기본값 `full`) 설정 뒤에 둔다. Full 경로의 동작과 `SEMANTIC_CODE` 지문(`791c4a68`)은 바뀌지 않아야 한다.
+    - partial-grounding 자산은 가져올 때 이름을 바꾼다.
+      - batch: `pg_batch006`, `pg-b006-NN`
+      - 결정 참조: `PG-81`–`PG-87`
+      - 원본 경로·커밋(`ab9d215`)·sha256을 기록한다.
+112. (2026-10-15, 사용자) 결정 AZ(D7). checkpoint 고정.
+    - 두 arm 모두 epoch 1 checkpoint를 미리 고정한다.
+    - epoch 2도 저장하지만 보고만 하고 선택하지 않는다.
+    - 그러므로 각 arm 대 base의 중단 규칙은 보정 없는 95% CI(PROTOCOL_v4 규칙)로 판정한다.
+113. (2026-10-15, 사용자) 결정 BA(D8). 지연 조건.
+    - pilot_006의 채택 조건에 PROTOCOL_v4 6절의 지연 조건을 넣는다: 순차 고정 30문항, base 대비 중앙값 비 ≤ 1.5.
+    - 두 arm 모두 재고, 생성 token을 thinking과 최종 JSON으로 나눠 보고한다.
+114. (2026-10-15, 사용자) 결정 BB(D9). GPU 사용 원칙.
+    - 서버의 RTX 6000 Ada 3장은 "작업 하나 = GPU 하나"로 쓴다.
+      - 한 작업을 여러 GPU에 나누지 않는다(tensor·data parallel, 한 셀의 표본을 여러 GPU에 쪼개기 모두 금지).
+      - 한 GPU에 작업 둘을 동시에 올리지 않는다.
+    - 대신 준비된 작업이 있으면 GPU를 놀리지 않는다. 세부 규칙은 pilot_006 준비 지시 5절이며, 결정 105를 이어받는다.
+115. (2026-10-15, 사용자) `.gitignore`의 `*.xlsx` 일괄 무시를 뺀다. 입력 xlsx, batch 검토 시트, 업체 100 원본 xlsx를 포함해 저장소의 xlsx를 모두 커밋한다
+    (사용자 지시 "다 커밋해"). 이후 검토 시트 XLSX도 데이터로 커밋한다.

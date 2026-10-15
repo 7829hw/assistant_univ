@@ -27,6 +27,10 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
 
 1. The work branch is `geoflow/sft-dpo-t2pc`. Do not commit or push to `geoflow/dev-v2` or
    `geoflow/sft-dpo-thor`. Read thor only through `git show` or a temporary worktree.
+   - Decision 111 (AY, 2026-10-15): pilot_006 Partial-grounding work also stays on this branch (no new experiment
+     branch). Partial code sits behind `grounding_target` (default `full`); the Full path and its `SEMANTIC_CODE`
+     fingerprint `791c4a68` must not change. `geoflow/partial-grounding` is read-only; imported assets are renamed
+     (`pg_batch006`, `pg-b006-NN`, `PG-81`–`PG-87`) with source path, commit `ab9d215` and sha256 recorded.
 2. After each work unit, in this order: verify → review the diff and the staged diff → make a logical
    commit → `git push origin geoflow/sft-dpo-t2pc` → report the SHA.
    - The first push sets upstream with `-u`.
@@ -62,6 +66,9 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
      Decision 105 (AS, 2026-10-15) continues this for pilot_005: one GPU per training variant (three variants at once); before
      training on the Ollama GPU confirm no Ollama model is loaded; evaluation starts on GPUs freed by finished training; one vLLM
      server may hold several LoRA adapters.
+     Decision 114 (BB, 2026-10-15) continues this from pilot_006: one job = one GPU (never split a job across GPUs, never two
+     jobs on one GPU); when a job finishes, start the next ready job on that GPU within 5 minutes; GPU jobs run from a
+     `git worktree` pinned at a commit and are logged in the run's `gpu/timeline.jsonl`.
    - HF runs with `CUDA_VISIBLE_DEVICES=3` (or `=2` for the spare); inside the process it appears as `cuda:0`. Do not
      change `CUDA_DEVICE_ORDER`.
    - Never unload Ollama models yourself and never touch the container to free a GPU. If an Ollama measurement is
@@ -92,6 +99,8 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
 8. Keep the existing data policies: protected dev/validation/diagnostic data never becomes training input,
    and annotation recommendations or validator PASS are not human approval. Vendor 100 results are
    evaluation-only (never used for training, checkpoint selection or annotation candidates).
+   - Decision 106 (AT, 2026-10-15): "Vendor 100 results are evaluation-only" applies to records through pilot_005.
+     From pilot_006 vendor 100 is a development set; the final judgment set is the new protected set `protected_final_v1`.
 9. Thinking condition (decided 2026-10-06): the training target is qwen3:8b + T2PC code and prompt 87048d0c with
    thinking ON, for both training and evaluation.
    - Comparison baselines: Ollama path = cell E (think unspecified, which Ollama 0.34.4 renders as thinking on;
