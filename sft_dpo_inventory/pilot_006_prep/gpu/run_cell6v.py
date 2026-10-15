@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """(pilot_006 준비 J2·J4·J5) pilot_005/run_cell5v.py의 사본이다. 다른 것: 서버 기록·원문 위치를 인자로 받는다(``--work``, ``--raw-dir``),
-``--sealed``(J2 봉인)이면 화면과 로그 끝 요약 줄에 정답률을 쓰지 않는다(items·wall만). 평가 client는 ``pilot_005/vllm_eval_thinking5.py`` 그대로.
+``--grounding-target partial``이면 평가 client를 ``vllm_eval_partial6.py``로 바꾼다(J5). ``--sealed``(J2 봉인)이면 화면과 로그 끝 요약 줄에 정답률을 쓰지 않는다(items·wall만). 평가 client는 ``pilot_005/vllm_eval_thinking5.py`` 그대로.
 표본 하나를 동시 요청으로 잰다.
 
     hfvenv/bin/python sft_dpo_inventory/serving_vllm_fp8/run_cell.py --port 8200 --model base --label vllm-bf16-base --k 1 \
@@ -28,6 +28,7 @@ from zoneinfo import ZoneInfo
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 EVAL = ROOT / "sft_dpo_inventory/pilot_005/vllm_eval_thinking5.py"
+EVAL_PARTIAL = HERE / "vllm_eval_partial6.py"
 sys.path.insert(0, str(ROOT))
 GOLD = "sft_dpo_inventory/conversion_diag/selection_gold.yaml"
 IDS = ROOT / "sft_dpo_inventory/pilot_003/selection/selection_v2_ids.txt"
@@ -70,6 +71,8 @@ def main():
     p.add_argument("--raw-dir", required=True)
     p.add_argument("--work", default="/data/hwkim/sftdpo_work/pilot_006_prep/vllm")
     p.add_argument("--sealed", action="store_true", help="정답률을 화면·요약 줄에 쓰지 않는다(J2 봉인)")
+    p.add_argument("--grounding-target", choices=("full", "partial"), default="full",
+                   help="partial이면 vllm_eval_partial6.py(PartialPlanner + P0.3), full이면 pilot_005 client 그대로")
     args = p.parse_args()
     RAW, WORK = Path(args.raw_dir), Path(args.work)
     out_dir = Path(args.out_dir)
@@ -92,7 +95,8 @@ def main():
     procs = []
     for j, shard in enumerate(shards):
         sp = out_dir / f".{args.label}_s{args.k}_part{j}"
-        cmd = [PY, str(EVAL), "--base-url", f"http://127.0.0.1:{args.port}",
+        client = [str(EVAL)] if args.grounding_target == "full" else [str(EVAL_PARTIAL), "--grounding-target", "partial"]
+        cmd = [PY, *client, "--base-url", f"http://127.0.0.1:{args.port}",
                "--served-model", args.model, "--gold", args.gold, "--only", ",".join(shard), "--condition-check", *SAMPLING,
                "--seed", str(20261100 + args.k), "--server-meta", str(server_meta), "--out", f"{sp}.json", "--raw-out", str(RAW / f".{sp.name}_raw.jsonl")]
         procs.append((sp, subprocess.Popen(cmd, cwd=ROOT, stdout=open(f"{sp}.log", "w"), stderr=subprocess.STDOUT)))
