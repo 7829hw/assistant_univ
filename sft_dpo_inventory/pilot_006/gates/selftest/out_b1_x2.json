@@ -1,0 +1,186 @@
+{
+ "cells": {
+  "base": {
+   "ok": 75.0,
+   "U": 4.08,
+   "silent": 2.04,
+   "dt_missing": 2.81,
+   "mm_nm": 0.26,
+   "struct": 12.76,
+   "gfail": 7.4,
+   "repair": 21.17,
+   "tokens_median": {
+    "input_tokens": 7280.0,
+    "gen_tokens": 912.375,
+    "thinking_tokens": 696.5,
+    "json_tokens": 207.125
+   }
+  },
+  "F": {
+   "ok": 68.62,
+   "U": 4.59,
+   "silent": 3.57,
+   "dt_missing": 2.55,
+   "mm_nm": 0.51,
+   "struct": 13.01,
+   "gfail": 7.91,
+   "repair": 19.13,
+   "tokens_median": {
+    "input_tokens": 7280.0,
+    "gen_tokens": 896.875,
+    "thinking_tokens": 715.125,
+    "json_tokens": 208.5
+   }
+  },
+  "P": {
+   "ok": 71.68,
+   "U": 5.36,
+   "silent": 4.08,
+   "dt_missing": 2.55,
+   "mm_nm": 0.26,
+   "struct": 11.48,
+   "gfail": 7.91,
+   "repair": 20.92,
+   "tokens_median": {
+    "input_tokens": 7280.0,
+    "gen_tokens": 910.5,
+    "thinking_tokens": 687.75,
+    "json_tokens": 206.125
+   }
+  }
+ },
+ "prerequisite": {
+  "F": {
+   "ok_vs_base": {
+    "diff_pp": -6.38,
+    "ci95_pp": [
+     -10.2,
+     -2.55
+    ]
+   },
+   "U_vs_base": {
+    "diff_pp": 0.51,
+    "ci95_pp": [
+     -1.28,
+     2.3
+    ]
+   },
+   "pass": false
+  },
+  "P": {
+   "ok_vs_base": {
+    "diff_pp": -3.32,
+    "ci95_pp": [
+     -7.14,
+     0.26
+    ]
+   },
+   "U_vs_base": {
+    "diff_pp": 1.28,
+    "ci95_pp": [
+     -1.02,
+     3.83
+    ]
+   },
+   "pass": false
+  }
+ },
+ "gates": {
+  "A": {
+   "diff_pp": 3.06,
+   "ci95_pp": [
+    -1.28,
+    7.4
+   ],
+   "rule": "P−F ok CI 하한 ≥ −5%p",
+   "pass": true,
+   "undecidable_if_fail": false
+  },
+  "B": {
+   "diff_pp": 0.0,
+   "ci95_pp": [
+    -1.28,
+    1.28
+   ],
+   "rule": "dt_missing P−F CI 하한 ≤ 0",
+   "pass": true
+  },
+  "C": {
+   "diff_pp": 0.51,
+   "ci95_pp": [
+    -1.28,
+    2.04
+   ],
+   "rule": "조용한 오답 P−F CI 하한 ≤ 0",
+   "pass": true
+  },
+  "D": {
+   "mm_nm": {
+    "diff_pp": -0.26,
+    "ci95_pp": [
+     -0.77,
+     0.0
+    ]
+   },
+   "improve_any": {
+    "struct": {
+     "diff_pp": -1.53,
+     "ci95_pp": [
+      -5.1,
+      2.04
+     ]
+    },
+    "gfail": {
+     "diff_pp": 0.0,
+     "ci95_pp": [
+      -2.81,
+      2.81
+     ]
+    },
+    "repair": {
+     "diff_pp": 1.79,
+     "ci95_pp": [
+      -1.53,
+      5.1
+     ]
+    }
+   },
+   "rule": "(1) MM+NM P−F CI 하한 ≤ 0 그리고 (2) 구조·grounding failure·repair 중 하나 이상 P−F CI 상한 < 0",
+   "pass": false
+  },
+  "E": {
+   "rule": "(1) P·F 지연 비 ≤ 1.5 (2) JSON token 중앙값 P ≤ 0.7·F (3) 생성 token 중앙값 P ≤ F",
+   "json_tokens_median": {
+    "F": 208.5,
+    "P": 206.125,
+    "reduction_pct": 1.14
+   },
+   "gen_tokens_median": {
+    "F": 896.875,
+    "P": 910.5
+   },
+   "input_tokens_median": {
+    "F": 7280.0,
+    "P": 7280.0
+   },
+   "thinking_tokens_median": {
+    "F": 715.125,
+    "P": 687.75
+   },
+   "latency_ratio": null,
+   "conditions": {
+    "1_latency": null,
+    "2_json_reduction": false,
+    "3_gen_tokens": false
+   },
+   "pass": null
+  }
+ },
+ "adopt": null,
+ "label": "selftest 1: F=B1, P=X2(같은 조건 반복, 차이 0 근처 기대), base=pilot_prep_007",
+ "items": 98,
+ "per_set_items": {
+  "selection_v2": 98
+ },
+ "table_md": "| Gate | 지표 | P − F [95% CI] | 통과 조건 | 결과 |\n|---|---|---|---|---|\n| A | grounding_ok | +3.06 [-1.28, 7.4] | 하한 ≥ −5%p | 통과 |\n| B | dt_missing | +0.00 [-1.28, 1.28] | 하한 ≤ 0 | 통과 |\n| C | 조용한 오답 | +0.51 [-1.28, 2.04] | 하한 ≤ 0 | 통과 |\n| D | MM+NM / 구조·gfail·repair | -0.26 [-0.77, 0.0] / struct -1.53 [-5.1, 2.04], gfail +0.00 [-2.81, 2.81], repair +1.79 [-1.53, 5.1] | (1)·(2) | 불통과 |\n| E | 지연 비 None, JSON token {'F': 208.5, 'P': 206.125, 'reduction_pct': 1.14}, 생성 token {'F': 896.875, 'P': 910.5} | – | (1)(2)(3) | 미측정 |"
+}
