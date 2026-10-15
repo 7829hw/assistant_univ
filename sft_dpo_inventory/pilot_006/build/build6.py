@@ -289,47 +289,48 @@ def main():
         (d / "manifest.json").write_text(json.dumps(man, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
         manifests[arm] = man["sft"]
     # ---- M1 세트(arm별 가장 긴 레코드 10개, 상한 전 후보 중)
-    m1 = out / "m1"
-    m1.mkdir(exist_ok=True)
     m1_list = {}
-    for arm in ("full", "partial"):
-        # 메모리 확인은 승인과 무관하므로 길이 후보 전체(J1·J6 정답 표본 전부 포함)에서 가장 긴 10개
-        from grounding.completion import complete_grounding_payload
-        from training.data import thinking as TH
-        from training.data.validation import assess, target_ok
+    for m1_name, cap in (("m1", None), ("m1_12288", 12288)):
+      m1 = out / m1_name
+      m1.mkdir(exist_ok=True)
+      for arm in ("full", "partial"):
+          # 메모리 확인은 승인과 무관하므로 길이 후보 전체(J1·J6 정답 표본 전부 포함)에서 가장 긴 10개
+          from grounding.completion import complete_grounding_payload
+          from training.data import thinking as TH
+          from training.data.validation import assess, target_ok
 
-        def trainable(x):
-            r = x["_rec"]
-            meta = dict(r.get("metadata") or {})
-            base = t2pc_meta.get(questions[x["qid"]]["sid"], {}) if x["qid"] in questions and x["kind"] != "self_all_correct" else {}
-            meta.update({k: base[k] for k in ("target_kind", "expected_stop") if base.get(k) is not None})
-            t = TH.response_json(r["messages"][2]["content"])
-            t = complete_grounding_payload(t) if arm == "partial" else t
-            return target_ok(assess(t, r["messages"][1]["content"]), meta)
-        top = []
-        for x in sorted((x for x in all_len if x["arm"] == arm), key=lambda x: -x["tokens"]):
-            if len(top) == 10:
-                break
-            if trainable(x):
-                top.append(x)
-        m1_list[arm] = [{k: x[k] for k in ("qid", "kind", "trace_id", "tokens")} for x in top]
-        d = m1 / arm
-        d.mkdir(exist_ok=True)
-        with open(d / "sft_train.jsonl", "w", encoding="utf-8") as f:
-            for x in top:
-                r = x["_rec"]
-                base = t2pc_meta.get(questions[x["qid"]]["sid"], {}) if x["qid"] in questions else {}
-                if x["kind"] == "self_all_correct":
-                    base = {}
-                meta = {**r["metadata"], "format": FORMAT, "parent_intent": f"m1-{x['trace_id']}", "source_record_id": x["qid"],
-                        **{k: base[k] for k in ("target_kind", "expected_stop") if base.get(k) is not None}}
-                f.write(json.dumps({"messages": r["messages"], "metadata": meta}, ensure_ascii=False) + "\n")
-        (d / "sft_valid.jsonl").write_text("", encoding="utf-8")
-        system = expected_system_prompt(arm)
-        (d / "manifest.json").write_text(json.dumps({"sft": {"representation": "flat", "format": FORMAT, "prompt_hash": hashlib.sha256(system.encode()).hexdigest(),
-                                                             "issues": [], "note": "M1 메모리 확인 전용(결정 129)",
-                                                             "output_hashes": {"sft_train.jsonl": sha(d / "sft_train.jsonl"), "sft_valid.jsonl": sha(d / "sft_valid.jsonl")}},
-                                                     "dpo": {}}, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+          def trainable(x):
+              r = x["_rec"]
+              meta = dict(r.get("metadata") or {})
+              base = t2pc_meta.get(questions[x["qid"]]["sid"], {}) if x["qid"] in questions and x["kind"] != "self_all_correct" else {}
+              meta.update({k: base[k] for k in ("target_kind", "expected_stop") if base.get(k) is not None})
+              t = TH.response_json(r["messages"][2]["content"])
+              t = complete_grounding_payload(t) if arm == "partial" else t
+              return target_ok(assess(t, r["messages"][1]["content"]), meta)
+          top = []
+          for x in sorted((x for x in all_len if x["arm"] == arm and (cap is None or x["tokens"] <= cap)), key=lambda x: -x["tokens"]):
+              if len(top) == 10:
+                  break
+              if trainable(x):
+                  top.append(x)
+          m1_list[f"{m1_name}:{arm}"] = [{k: x[k] for k in ("qid", "kind", "trace_id", "tokens")} for x in top]
+          d = m1 / arm
+          d.mkdir(exist_ok=True)
+          with open(d / "sft_train.jsonl", "w", encoding="utf-8") as f:
+              for x in top:
+                  r = x["_rec"]
+                  base = t2pc_meta.get(questions[x["qid"]]["sid"], {}) if x["qid"] in questions else {}
+                  if x["kind"] == "self_all_correct":
+                      base = {}
+                  meta = {**r["metadata"], "format": FORMAT, "parent_intent": f"m1-{x['trace_id']}", "source_record_id": x["qid"],
+                          **{k: base[k] for k in ("target_kind", "expected_stop") if base.get(k) is not None}}
+                  f.write(json.dumps({"messages": r["messages"], "metadata": meta}, ensure_ascii=False) + "\n")
+          (d / "sft_valid.jsonl").write_text("", encoding="utf-8")
+          system = expected_system_prompt(arm)
+          (d / "manifest.json").write_text(json.dumps({"sft": {"representation": "flat", "format": FORMAT, "prompt_hash": hashlib.sha256(system.encode()).hexdigest(),
+                                                               "issues": [], "note": "M1 메모리 확인 전용(결정 129)",
+                                                               "output_hashes": {"sft_train.jsonl": sha(d / "sft_train.jsonl"), "sft_valid.jsonl": sha(d / "sft_valid.jsonl")}},
+                                                       "dpo": {}}, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     lengths = {"L_req": l_req, "max_tokens": max_tok, "argmax": {k: v for k, v in max(all_len, key=lambda x: x["tokens"]).items() if k != "_rec"},
                "by_arm_kind": {}, "m1_longest_10_per_arm": m1_list}
     for arm in ("full", "partial"):
