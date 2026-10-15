@@ -1,0 +1,70 @@
+{
+ "note": "analysis/reasoning_samples.jsonl(모델당 정답 10 + 오답 10, sha256 순 결정적)을 사람(Claude)이 읽은 판정. quality_gate_v1은 쓰지 않았다. 평가 점수를 바꾸지 않는다.",
+ "style": {
+  "base": "'Okay, let's tackle this query' 꼴의 Qwen3 기본 thinking. 길고 흔들림(Wait 반복)이 많다",
+  "full154": "thinking 문체는 여전히 Base와 같다('Okay, let's tackle this query'). 27B teacher 문체('Let me analyze this question carefully')로 바뀐 표본은 20 중 0. 1 epoch LoRA로 문체 모방은 거의 일어나지 않았다",
+  "json154": "thinking 문체는 Base와 같고 더 짧다(p50 2,035자 vs 2,590). 최종 JSON이 thinking 내용과 따로 노는 경우가 보인다"
+ },
+ "tags_wrong": {
+  "base": {
+   "endpoint_reasoning": 3,
+   "grouping_unit": 1,
+   "aggregation_wobble": 2,
+   "generation_truncation_or_empty": 2,
+   "reasoning_final_conflict": 0,
+   "unsupported_hallucination": 0,
+   "scope_reverse": 0,
+   "other": 2
+  },
+  "full154": {
+   "reasoning_final_conflict": 4,
+   "unsupported_hallucination": 3,
+   "grouping_unit": 2,
+   "endpoint_reasoning": 1,
+   "aggregation_wobble": 2,
+   "scope_reverse": 1,
+   "structural_serialization": 2
+  },
+  "json154": {
+   "reasoning_final_conflict": 3,
+   "grouping_unit": 2,
+   "endpoint_reasoning": 3,
+   "aggregation_wobble": 3,
+   "scope_reverse": 1,
+   "vicinity_miss": 1,
+   "structural_serialization": 2
+  }
+ },
+ "examples": {
+  "full154": {
+   "valid98:heldout_v9/h04": "최종 JSON이 잘림(factors 없이 괄호 불일치). reasoning은 date factor를 말했으나 final에 없음 → 구조 + 충돌",
+   "valid98:heldout_v9/h21": "reasoning 결론은 dimension h3인데 final은 dimension emd와 지어낸 scope 'scope:h3'(묶음 단위를 scope concept로) → 충돌 + 묶음 단위 + 날짜 '20231004' 지어냄",
+   "valid98:heldout_v8/t26": "reasoning은 대구 od_role dropoff·dimension_target both라고 결론, final은 od_role·dimension 없음 → 충돌",
+   "sel154:indepv2/n02": "reasoning은 measure 하나라고 했으나 final은 trip_count 둘 → 충돌(MULTIPLE_MEASURES)",
+   "valid98:heldout_v9/h01": "'어제는 유효한 date가 아니다'라는 없는 규칙으로 unsupported → 근거 없는 거부",
+   "sel154:indepv2/n40": "scope 역조회에서 답 place 없이 scope만 냄(v006에 학습 예 0)",
+   "valid98:stage_v7/s04e": "요일(dayofweek)을 bucket으로 씀 → 묶음 단위 혼동"
+  },
+  "json154": {
+   "aux_test_v1:final_v12/f39": "'읍면동'을 value 있는 place로 만들고 dimension_target pickup 누락 → 묶음 단위어를 place로 확정",
+   "valid98:heldout_v8/t30": "place text를 '내린 곳'·'타고'로 만들고 value 없음 → 묶음/endpoint 표현을 place로",
+   "sel154:indepv4/k34": "reasoning은 출발·도착 역할을 말했지만 final은 place·dimension_target 모두 없음 → 충돌",
+   "vendor100:030": "'적은'을 aggregation min으로 지어냄 → aggregation 흔들림",
+   "sel154:indepv3/m36": "scope 역조회에서 답 place 없음"
+  },
+  "base": {
+   "valid98:heldout_v9/h16": "'승차 동'·'하차 동'을 place로 만듦 → 묶음 단위어 place",
+   "valid98:heldout_v9/h24": "두류동 od_role·dimension_target 방향을 뒤집음 → endpoint 추론 오류"
+  }
+ },
+ "correct_samples": {
+  "base": "10/10 reasoning과 final 일치",
+  "full154": "10/10 reasoning과 final 일치. 일부는 '소속' 해석을 망설이지만 결론 일치",
+  "json154": "9/10 일치. sel154:indepv2/n13은 '시도'를 value 없는 place로 넣었지만 채점상 match"
+ },
+ "summary": [
+  "FULL154 오답의 특징은 reasoning은 맞는 방향인데 final JSON이 그 결론을 옮기지 못하는 충돌(4/10)과 구조(측정값 중복·value 없는 place)다",
+  "JSON154 오답의 특징은 묶음 단위·endpoint 표현을 place로 만드는 오류와 aggregation 지어내기다. thinking을 학습하지 않아 final이 thinking 결론과 더 자주 갈라진다",
+  "두 arm 모두 scope 역조회에서 답 place를 빠뜨린다(학습 데이터에 이 family 0)"
+ ]
+}
