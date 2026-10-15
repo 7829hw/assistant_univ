@@ -1,0 +1,65 @@
+# pilot_005 V1(결정 101, PROTOCOL_v5 2절). qwen3_8b_t2pc_thinking_pilot004_sft.yaml과 같은 설정이고, 바꾼 것은 seed(42 → 43)와 출력 위치뿐이다.
+# 2 epoch, 저장 epoch 1과 2(save_steps 0.5, 마지막 step에서도 저장). 데이터 thinking_pilot004_t2pc(같은 sha256). PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True.
+model:
+  name_or_path: Qwen/Qwen3-8B
+  revision: b968826d9c46dd6066d109eabc6255188de91218
+  trust_remote_code: false
+  load_in_4bit: false
+  attn_implementation: sdpa
+data:
+  train: training/generated/thinking_pilot004_t2pc/sft_train.jsonl
+  valid: training/generated/thinking_pilot004_t2pc/sft_valid.jsonl
+  manifest: training/generated/thinking_pilot004_t2pc/manifest.json
+chat_template_kwargs:
+  enable_thinking: true
+training:
+  output_dir: /home/hwkim/sftdpo_work/pilot_005/checkpoints/v1
+  num_train_epochs: 2
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 1
+  learning_rate: 5.0e-05
+  warmup_ratio: 0
+  max_seq_length: 11392
+  bf16: true
+  fp16: false
+  gradient_checkpointing: true
+  eval_strategy: steps
+  save_strategy: steps
+  save_total_limit: 6
+  logging_steps: 1
+  report_to: none
+  seed: 43
+  optim: adamw_torch
+  dataloader_num_workers: 0
+  dataloader_pin_memory: false
+  torch_compile: false
+  gradient_checkpointing_kwargs:
+    use_reentrant: false
+  eval_steps: 2
+  save_steps: 0.5
+  warmup_steps: 1
+  disable_tqdm: true
+lora:
+  enabled: true
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+safety:
+  unified_memory: false
+  reserve_fraction: 0.2
+  reserve_gib: 16
+  min_disk_gib: 20
+profiling:
+  enabled: true
+  output: /home/hwkim/sftdpo_work/pilot_005/metrics/v1_profile.json
+thinking:
+  loss_scope: by_source
