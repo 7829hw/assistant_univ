@@ -541,3 +541,9 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - Base·FULL154·JSON154 셋을 같은 HF harness로 403문항 평가하고, 154 training recall도 잰다.
     - candidate는 PLAN 9·10절의 gate·규칙으로만 정한다. 둘 다 미달이면 NONE·NOT_READY다.
     - 결과를 보고 데이터·recipe를 바꾸지 않는다.
+87. (2026-10-15, 결과 기록) p0_sft_004 결과(`sft_dpo_inventory/p0_sft_004/REPORT.md`). 기준은 결정 86과 사전 등록 그대로다.
+    - semantic correctness(403, 같은 harness): Base 72.95%, FULL154 71.96%(−1.0pp, p 0.75), JSON154 62.28%(−10.7pp, p 0.0001). FULL154 − JSON154는 +9.7pp(p 0.0004)다.
+    - gate: FULL154는 structural 52 > Base 41로 gate 2만 미통과, JSON154는 gate 1–4 미통과. SFT candidate는 NONE, compression readiness는 NOT_READY다.
+    - training recall은 Base 34 / FULL154 57 / JSON154 51(154 중)이고, canonical 6은 세 모델 모두 0/6이다.
+    - 새 구조 오류: value 없는 place(MULTIPLE_MEASURES), scope 역조회 8/9 → 1/9.
+    - 다음 실험(full_response 학습량, 구조 회귀 진단, reviewed_reasoning_v002)은 각각 새 결정·사전 등록이 필요하다. 이 phase에서 재학습·데이터 수정은 하지 않았다.
