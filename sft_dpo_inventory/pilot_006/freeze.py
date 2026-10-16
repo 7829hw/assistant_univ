@@ -6,6 +6,7 @@
 
 PLAN·gate 도구·지연 도구·빌드 도구·RC 데이터의 커밋과 sha256을 한 번에 기록한다. 기록 뒤 사용자가 커밋하면 그 커밋이 사전 등록 시점이다.
 - 작업 트리가 깨끗해야 한다(추적 파일 수정 없음, 대상 파일이 모두 커밋됨). 아니면 exit 2.
+- 대상: PLAN·도구·RC 데이터 + 세션 3 실행 파일(``run3/configs/*.yaml``, ``run3/jobs.json``, ``scheduler6e.py``).
 - 대상 파일마다: 저장소 경로, sha256, 그 파일을 마지막으로 바꾼 커밋(``git log -1``). HEAD 커밋과 원격 일치 여부.
 - RC 데이터: 두 arm ``sft_train.jsonl``·``manifest.json``·``build_summary.json``·``lengths.json``·``questions.json`` sha256, 두 arm 질문 목록 sha256(같아야 함).
 - 지문: ``SEMANTIC_CODE``(``execution_spec.code_fingerprint``) ``791c4a68``, Full prompt ``87048d0c``, Partial system prompt sha256.
@@ -66,7 +67,11 @@ def main():
     rc = f"sft_dpo_inventory/pilot_006/build/{a.rc}"
     data = {f"rc:{arm}:{f}": f"{rc}/{arm}/{f}" for arm in ("full", "partial") for f in ("sft_train.jsonl", "manifest.json")}
     data.update({f"rc:{f}": f"{rc}/{f}" for f in ("build_summary.json", "lengths.json", "questions.json", "checks_summary.json")})
-    files = {**tools, **data}
+    run3 = {f"run3:{x.name}": str(x.relative_to(ROOT)) for x in sorted((HERE / "run3").glob("configs/*.yaml"))}
+    if (HERE / "run3/jobs.json").exists():
+        run3["run3:jobs.json"] = "sft_dpo_inventory/pilot_006/run3/jobs.json"
+    run3["scheduler"] = "sft_dpo_inventory/pilot_006_prep/gpu/scheduler6e.py"
+    files = {**tools, **data, **run3}
     dirty = git("status", "--porcelain", "--untracked-files=no")
     untracked = [v for v in files.values() if git("ls-files", "--error-unmatch", v) == ""]
     if (dirty or untracked) and not a.dry_run:
