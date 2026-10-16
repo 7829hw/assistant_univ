@@ -3,7 +3,8 @@
 
     hfvenv/bin/python coverage_h4.py   # -> coverage_h4.json, coverage_h4.md
 
-- 대상: 승인 corpus 전체(R0: trunk 131, pg 154, aug300 train 승인, batch007 27, batch008 10; 같은 정규화 질문은 하나로, trunk 우선). batch009는 후보로 따로 센다.
+- 대상: 승인 corpus(기본 v2: trunk 131, pg 154, aug300 207, batch007 27, batch008 10, batch009 51; 같은 정규화 질문은 하나로, trunk 우선).
+  batch009 열은 batch009 남은 후보(세션 2b) 기준으로 남겨 둔다(v2에서는 승인 corpus에 이미 들어 있음).
 - 부분집합(승인 semantics에서, 질문 표현이 필요한 것만 질문 문장 규칙):
   dt(dimension_target 있음), od≠dt(장소 od_role이 있고 그 집합이 {dimension_target}과 다름), implicit endpoint(od_role 또는 dt가 있고 질문에
   "승차·하차·출발·도착"이 없고 "태운·태워·탄·내린·내려·오른" 같은 동사가 있음), value 없는 장소(측정값이 장소 이름), 실차(trip_count 또는 운행 상태 occupied),
@@ -68,7 +69,7 @@ def main():
             if q["status"] == "approved" and q["correct"] > 0:
                 correct[d["arm"]].add(alias.get(q["id"], q["id"]))
     teacher = set()
-    teach = ROOT / "training/generated/pilot_006/teacher_v2/traces.jsonl"
+    teach = ROOT / "training/generated/pilot_006/teacher_v3/traces.jsonl"  # 세션 2c(P6): v3 선택 안(v2는 실행되지 않음)
     if teach.exists():
         for line in teach.read_text(encoding="utf-8").splitlines():
             t = json.loads(line)
@@ -85,6 +86,7 @@ def main():
             t["teacher_pass"] += cid in teacher
             both = (cid in teacher) or (cid in correct["full"] and cid in correct["partial"])
             t["both_arms_material"] += both
+            t["both_arms_self_only"] += cid in correct["full"] and cid in correct["partial"]
             if not both:
                 lacking[s].append(cid)
     b9 = json.loads((ROOT / "sft_dpo_inventory/batch009/candidates_checked.json").read_text(encoding="utf-8"))["candidates"]
@@ -95,18 +97,24 @@ def main():
             b9_sub[s] += 1
     short = {s: {"both_arms_material": t["both_arms_material"], "need": MIN_Q - t["both_arms_material"], "batch009_candidates": b9_sub.get(s, 0)}
              for s, t in table.items() if t["both_arms_material"] < MIN_Q}
+    short_self = {s: {"both_arms_self_only": t["both_arms_self_only"], "need": MIN_Q - t["both_arms_self_only"]}
+                  for s, t in table.items() if t["both_arms_self_only"] < MIN_Q}
     for s in ("valueless_place", "scope_reverse", "implicit_endpoint", "od_ne_dt"):
         if s not in table:
             short[s] = {"both_arms_material": 0, "need": MIN_Q, "batch009_candidates": b9_sub.get(s, 0)}
     out = {"questions_after_merge": len(qs), "judge_files": used, "teacher_traces": teach.exists(), "min_questions_proposed": MIN_Q,
-           "subsets": {s: dict(t) for s, t in sorted(table.items())}, "batch009_candidates_by_subset": dict(b9_sub), "shortfall": short,
+           "subsets": {s: dict(t) for s, t in sorted(table.items())}, "batch009_candidates_by_subset": dict(b9_sub),
+           "shortfall(with teacher)": short, "shortfall(without teacher)": short_self,
            "lacking_ids": {s: sorted(v) for s, v in lacking.items()}}
     (HERE / "coverage_h4.json").write_text(json.dumps(out, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     lines = [f"# H4 약점별 학습 재료(승인 corpus {len(qs)}질문, 판정 {len(used)}개 파일, TEACH {'있음' if teach.exists() else '없음'})", "",
-             "| 부분집합 | 질문 | Full 8b 정답 | Partial 8b 정답 | teacher 통과 | 두 arm 재료 | batch009 후보 |", "|---|---:|---:|---:|---:|---:|---:|"]
+             "| 부분집합 | 질문 | Full 8b 정답 | Partial 8b 정답 | teacher 통과 | 두 arm 재료(teacher 포함) | 두 arm 재료(8b만) | batch009 후보 |",
+             "|---|---:|---:|---:|---:|---:|---:|---:|"]
     for s, t in sorted(table.items()):
-        lines.append(f"| {s} | {t['questions']} | {t['full_self_correct']} | {t['partial_self_correct']} | {t['teacher_pass']} | {t['both_arms_material']} | {b9_sub.get(s, 0)} |")
-    lines += ["", f"최소 제안 {MIN_Q}질문(두 arm 재료 기준). 모자란 곳: " + ", ".join(f"{s} {v['both_arms_material']}(−{v['need']})" for s, v in short.items())]
+        lines.append(f"| {s} | {t['questions']} | {t['full_self_correct']} | {t['partial_self_correct']} | {t['teacher_pass']} | {t['both_arms_material']} | "
+                     f"{t['both_arms_self_only']} | {b9_sub.get(s, 0)} |")
+    lines += ["", f"최소 제안 {MIN_Q}질문. 모자란 곳(teacher 포함): " + (", ".join(f"{s} {v['both_arms_material']}(−{v['need']})" for s, v in short.items()) or "없음"),
+              "모자란 곳(8b만): " + (", ".join(f"{s} {v['both_arms_self_only']}(−{v['need']})" for s, v in short_self.items()) or "없음")]
     (HERE / "coverage_h4.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))
 
