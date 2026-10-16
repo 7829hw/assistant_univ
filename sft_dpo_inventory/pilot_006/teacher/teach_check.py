@@ -5,7 +5,7 @@
 
 - trace 검사((a)(b)(c)): 수집 때 붙인 결과를 센다(질문별 통과 trace 수, 통과 trace가 없는 질문).
 - 두 arm 레코드: 질문마다 통과 trace 하나에 Full JSON(``render_full``)·Partial JSON(``render_partial``)을 붙여(``teacher6v3.to_arm_records``) 학습 계약
-  (``target_ok``, Partial은 completion 뒤)과 W5 검증 사슬(``validate_semantics``, 승인 corpus 정답 호출)을 확인한다.
+  (``target_ok``, Partial은 completion 뒤; trunk는 정지 target metadata ``target_kind``·``expected_stop``을 build6rc와 같이 넘김)과 W5 검증 사슬(``validate_semantics``, 승인 corpus 정답 호출)을 확인한다.
 - 부분집합별 통과율: ``analysis/coverage_h4.subsets``와 같은 정의.
 - 결론 의식 표현(판정 밖 관찰, V3B_READ.md): 통과 trace의 thinking에 "결론" 또는 영어 "conclusion"이 있는 비율, 영어로 시작한 비율.
 """
@@ -32,6 +32,15 @@ def main():
     targets = {t["id"]: t for t in json.loads((HERE / "teach3_targets.json").read_text(encoding="utf-8"))}
     corpus = {json.loads(l)["id"]: json.loads(l) for l in (ROOT / "sft_dpo_inventory/pilot_006_prep/approved/approved_train_v2.jsonl").read_text(encoding="utf-8").splitlines()}
     rows = [json.loads(l) for l in (ROOT / "training/generated/pilot_006/teacher_v3/traces.jsonl").read_text(encoding="utf-8").splitlines()]
+    t2pc_meta = {r["metadata"]["source_record_id"]: r["metadata"] for r in
+                 map(json.loads, (ROOT / "training/generated/reviewed_gold_v006_t2pc/sft_train.jsonl").read_text(encoding="utf-8").splitlines())}
+
+    def meta_of(qid):
+        rec = corpus.get(qid)
+        if not rec or rec["corpus_group"] != "trunk":
+            return {}
+        base = t2pc_meta.get(rec["provenance"]["source_record_id"], {})
+        return {k: base[k] for k in ("target_kind", "expected_stop") if base.get(k) is not None}
     per = defaultdict(lambda: Counter())
     aware = Counter()
     for r in rows:
@@ -57,7 +66,7 @@ def main():
             for arm, r in recs.items():
                 tgt = TH.response_json(r["messages"][2]["content"])
                 tgt = complete_grounding_payload(tgt) if arm == "partial" else tgt
-                res[f"{arm}_contract_ok"] = bool(target_ok(assess(tgt, question), {}))
+                res[f"{arm}_contract_ok"] = bool(target_ok(assess(tgt, question), meta_of(qid)))
             v = validate_semantics(sem, question, rec.get("execution") if rec else None)
             res["validation_chain_ok"] = bool(v["ok"])
         arm_check[qid] = res
