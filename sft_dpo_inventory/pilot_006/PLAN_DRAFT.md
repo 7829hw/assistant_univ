@@ -3,7 +3,8 @@
 # pilot_006 계획 초안(Full vs Partial, SFT만)
 
 작성: 2026-10-15(pilot_006 준비 세션 1, W9), 갱신 2026-10-15(세션 1b: 결정 116–121 = E1–E6 반영, 2a·2b),
-갱신 2026-10-16(세션 2 C12: 결정 122–129 = F1–F8 반영, C1 base 권고, C9 R2 참고, C11 학습 길이, T0·C5 제안, 세션 3 일정표·시작 조건 = 6절·9절). **고정하지 않았다.** 학습·teacher 수집을 시작하기 전에 사용자가 고치고 확정한다.
+갱신 2026-10-16(세션 2 C12: 결정 122–129 = F1–F8 반영, C1 base 권고, C9 R2 참고, C11 학습 길이, T0·C5 제안, 세션 3 일정표·시작 조건 = 6절·9절),
+갱신 2026-10-16(세션 2b H9: 결정 130–137 = G0–G7, R0·R1, T0' 불통과, 8b 표본 보강, batch009, RC1 = **10절**, 세션 3 일정표 = 6.2절, 시작 조건 = 9절 다시 씀). **고정하지 않았다.** 학습·teacher 수집을 시작하기 전에 사용자가 고치고 확정한다.
 따르는 것: `CLAUDE.md`(SFT/DPO 규칙 1–15), `../DECISIONS.md`(결정 1–115, 특히 106–114 = D1–D9), `../vendor100_protocol/PROTOCOL_v5.md`(v4·v3를 이어받음),
 계획서 v2(`../pilot_006_prep/inputs/two_branch_integration_and_300_dataset_plan_v2.md`, 지시 3절 보정이 우선).
 
@@ -279,43 +280,83 @@ S12 | 지연 base·F e1·P e1(고정 30문항 순차, 한 GPU, 다른 둘 비움
 - 고정 뒤 어떤 모델 출력도 만들지 않는다. 채택 후보가 정해진 뒤 base와 그 후보만 k=8로 한 번 잰다(PROTOCOL_v4 6절 판정 규칙, 보정 없음).
 - 작성 시점: 다음 세션 초반(CPU). 학습과 겹쳐도 된다.
 
-## 9. 세션 3 시작 조건(체크리스트)
+## 9. 세션 3 시작 조건(체크리스트, 세션 2b에서 다시 씀)
 
-### 9.1 승인 완료(사람)
+### 9.1 승인(사람)
 
-- [ ] aug300 train 207(결정 119) 검토·승인: `aug300_review_v2.xlsx` 높음 90 → 보통 57 → 낮음 113 순. 상태 제안 15 결정.
-- [ ] batch007 27 검토·승인(`batch007_review_v2.xlsx`), batch008 10(`batch008_review_v1.xlsx`).
-- [ ] pg EDIT_REQUIRED 7 결정(`pg_edit_required_v1.xlsx`, 수정안은 초안).
-- [ ] pg 수용 147의 승인 지위 확인(pg 승인 상태 그대로, 결정 121).
-- [ ] teacher 지시 수정안 승인(3.1, T0_REPORT 제안 1–3) — 승인 뒤 새 지시 파일을 새 이름으로 만든다(기존 파일은 고치지 않음).
+- [x] aug300·batch007·batch008·pg EDIT_REQUIRED 검토 결정(결정 130 G0, R0 `dec42ac`): 승인 289, 수정 9 반영(aug300-348 보류), 제외 5.
+- [ ] **aug300-348**(질문 수정 뒤 aux_test_v1·valid98과 Jaccard ≥ 0.5): 보류 유지 / 제외 / 다른 문구 — 사용자 결정(대체 수정안은 만들지 않았다).
+- [ ] **batch009 43 후보** 검토(Claude 2차 검토 권고 → 사용자 결정, `../batch009/review/batch009_review_v1.xlsx`). w1(값 없는 장소) 0건 대안 결정(`../batch009/README.md` 4절).
+- [ ] **teacher 지시 v3**(`teacher/T0V2_REPORT.md` 제안) 승인 여부와 T0''(새 20문항) 통과 규칙.
 
-### 9.2 데이터 빌드 통과(세션 3 CPU, S5)
+### 9.2 데이터
 
-- [ ] `build6.py` final 모드(승인 결과 입력, `--max-seq-length 12288`): 두 arm 질문 목록 sha256 같음, 길이 초과 레코드·빠진 질문 수 보고.
-- [ ] tokenizer·손실 token(`check_loss_tokens6.py`)·마스크 audit(`loss_mask_audit6.py`)·두 arm dry-run 통과(시험 빌드에서 통과한 것과 같은 검사).
-- [ ] 평가 셋(보호 5 + holdout 53 + protected_final_v1 manifest) 강한 겹침 0, 유형 상한(τ 0.09, 결정 92 예외) 기록.
-- [ ] trunk 131질문 Partial 8b 자체 표본(S2) 판정 포함, teacher 필수 135질문(S4) 자동 검사 (a)(b) 기록.
+- [x] 8b 자체 표본: trunk 131 두 arm(J8·J9), 보강 32표본(S32P/F-a·b), batch008·질문 변경(J10) — 모두 승인 gold 판정(`../pilot_006_prep/self_samples/r1/`).
+- [x] RC1(`build/RC1`): 234질문, 두 arm 검사 통과. **teacher 0**.
+- [ ] teacher 수집(T0'' 통과 뒤 TEACH, G2 범위 189질문, `self_samples/r1/teacher_targets_h6.json`) → RC2 빌드·검사(`build/RC1/README.md` 명령).
+- [ ] batch009 승인분 J12 판정 → RC2에 포함.
+- [ ] H4 부족분(implicit endpoint 11/30, 값 없는 장소·scope 역조회 1/30) 처리 방침.
 
-### 9.3 사전 등록(PLAN 고정, 학습 시작 전 커밋)
+### 9.3 사전 등록(PLAN 고정, `freeze.py --rc RC2`; 이 세션에서는 실행하지 않음)
 
 - [ ] Gate A–E·마진 −5%p·주 셋 151·selection_v2 n33 포함·제외 보고(5절, 바꾸지 않음).
-- [ ] base 구성: B1 + X2 (+ 세션 3 base k=4) — C1 권고.
-- [ ] seed 20261016(두 arm 같음), epoch 1 고정(D7), max_seq_length 12,288.
-- [ ] teacher 자동 검사 (a) 목록(좁힐지)과 (b) 기준, 레코드 제외 규칙.
-- [ ] `protected_final_v1` 크기·작성자·고정 절차(SPEC 6절 결정).
-- [ ] 지연 측정: `latency/latency6.py`, 한 GPU·다른 둘 비움, 고정 30문항.
+- [ ] base: B1 + X2 + 세션 3 base k=4(결정 134 G4) = k=12.
+- [ ] seed 20261016(두 arm 같음), epoch 1 고정(D7), max_seq_length 12,288(결정 125).
+- [ ] teacher 자동 검사 (a)(b) 규칙(v3 기준), 레코드 제외 규칙.
+- [ ] `protected_final_v1`: 사람 작성(결정 135), `protected_final/` 도구로 검사·해시 고정. 작성자 이름 기록(지시의 작성자 칸이 비어 있었다).
+- [ ] 지연 측정: `latency/latency6.py`(vLLM, 한 GPU·다른 둘 비움, 고정 30문항). Ollama production 측정은 넣지 않는다(결정 137 G7).
 
 ### 9.4 GPU 준비
 
-- [ ] 세 GPU UUID·다른 사용자 프로세스·Ollama `/api/ps` 확인 기록, Ollama 컨테이너 GPU `48f798cc` 확인(규칙 13).
-- [ ] Ollama 0.40.3·`qwen3.8:27b` digest `aaee06c3…` 확인, guard 33.55 tok/s.
-- [ ] vLLM 0.30.0 서버 `serve6b.sh`(17,408), 학습은 GPU 1장씩(결정 105), Ollama GPU 학습 전 모델 미적재 확인.
-- [ ] worktree는 `/home/hwkim/sftdpo_work/worktrees/`(결정 124), 작업 끝나면 지움.
+- [ ] 세 GPU UUID·다른 사용자 프로세스·`/api/ps` 확인, Ollama 컨테이너 GPU `48f798cc`(규칙 13). Ollama는 teacher 수집에만(G7), guard 33.55 tok/s.
+- [ ] vLLM 0.30.0 `serve6b.sh`(17,408), 학습 GPU 1장씩, Ollama GPU 학습 전 모델 미적재 확인, worktree는 `/home/hwkim/sftdpo_work/worktrees/`.
 
 ### 9.5 남은 사용자 결정
 
-1. trunk 131질문 teacher: 기존 pilot_004 teacher 유지(표현 중립 아님) / 새 지시로 재수집(131 × 8 ≈ 3.4h 추가).
-2. 수정 지시 T0' 재측정 뒤 본 수집 여부(권고: 한다).
-3. teacher 필수 대상 범위: 135(한 arm이라도 정답 없음, 권고) / 83(두 arm 모두 없음, 대기 1.3h 감소).
-4. 세 번째 base 셀(S3)로 base k=12 여부(권고: 한다).
-5. `protected_final_v1`: 크기 120·k=8, 작성자, 거부 문항, 기준일(SPEC 6절).
+1. teacher 지시 v3 채택과 T0'' 규칙(새 20문항, 같은 (a)(b) 기준 또는 조정) — T0' 불통과(결정 131).
+2. aug300-348 처리.
+3. batch009 검토(43)와 w1 대안(결정 120 예외 / 그대로 0건).
+4. H4 부족분 최소 질문 수(제안 30)와 보강 방법.
+5. RC2 없이 RC1(teacher 0)로 학습할지 — 권하지 않음(결정 86 출처 구성과 다르고, 정답 표본 없는 98질문이 빠짐).
+6. protected_final_v1 작성자 이름.
+
+## 10. 세션 2b 결과(결정 130–137)
+
+| 결정 | 내용 | 반영 |
+|---|---|---|
+| 130 G0 | 검토 결정 채택(승인 289·수정 10·제외 5) | R0 `1d897d4`(목록)·`dec42ac`(기록·corpus): 수정 9 통과, 348 보류. holdout 고정값 그대로 |
+| 131 G1 | teacher v2, T0' 규칙 | `c607731`(지시·규칙), T0' **불통과**((a) 158/160, (b) 53/160) `de81b5f` |
+| 132 G2 | TEACH 범위 | 대상 216 고정(`c607731`), **실행 안 함**(T0' 불통과). 재계산 189(H6) |
+| 133 G3 | 8b 표본(vLLM 새로, S32 보강, 질문 변경 재수집) | J8·J9·S32*·J10 판정 `4198a91`–`a118c6b` |
+| 134 G4 | 세 번째 base 셀 | 6.2절 일정에 넣음 |
+| 135 G5 | protected_final_v1 120·k=8, 사람 작성 | 도구 `727433c` |
+| 136 G6 | CPU 순서, 예상 유휴 | `gpu/session2b_plan.json`, 실제 사용률은 보고 |
+| 137 G7 | Ollama는 teacher만 | PLAN에 production Ollama 측정 항목 없음(확인), 6.2절에도 넣지 않음 |
+
+- 승인 corpus(`../pilot_006_prep/approved/`): train 523레코드(trunk 131, pg 154, aug300 201, batch007 27, batch008 10; 정규화 질문으로 합치면 416), holdout 53.
+- 8b 정답 표본이 있는 질문(416 중): Full 339, Partial 348. 한 arm이라도 없는 질문 98(두 arm 모두 없음 47).
+- RC1: 234질문, Full 776·Partial 779(모두 8b 자체). 상세 `build/RC1/README.md`.
+
+### 6.2 세션 3 GPU 일정표(세션 2b 실측 기준)
+
+근거(`../pilot_006_prep/gpu/timeline.jsonl`): T0' 27b 320 trace 29.6분(5.6초/trace), J8 131 × 9 43분, J9 57분, S32P-a 112 × 32 126분, S32F-a 105 × 32 165분,
+selection_v2 k=4 셀 22–27분, holdout 8–12분, valid98 21–29분, aux 15–16분, SFT step 5.9–8.3초(pilot_004 평균·M1b 상한). T3 = 승인·사전 등록 끝.
+
+```text
+ID  | 작업                                                   | 의존                    | 예상(근거)                                  | GPU
+U1  | T0'' teacher v3 확인(새 20문항 × 8 + 참고)              | v3 승인, 규칙 커밋       | 30분(T0')                                   | 2(Ollama)
+U2  | TEACH v3(G2 범위 189질문 × 8)                           | U1 통과                  | 1,512 × 5.6초 ≈ 2.4h(T0')                   | 2(Ollama)
+U3  | batch009 승인분 추가 teacher·8b 판정(J12 원문 재사용)    | batch009 승인            | teacher ≤ 43 × 8 × 5.6초 ≈ 0.5h             | 2(Ollama)
+U4  | RC2 빌드·검사(CPU)                                      | U2·U3                    | CPU 10분                                    | –
+U5  | base selection_v2 k=4(G4, 세 번째)                      | 없음(F·P 평가와 같은 날)  | 25분                                        | 0 또는 1
+U6  | F 학습 2 epoch(RC2 약 1,300–1,500 레코드/epoch 추정)     | U4, PLAN 고정            | 2,800 × 5.9–7.5초 ≈ 4.6–5.8h               | 0
+U7  | P 학습 2 epoch                                          | U4, PLAN 고정            | 2,800 × 6.5–8.3초 ≈ 5.1–6.5h               | 1
+U8  | F e1·P e1 셀(주 셋 151, valid98, aux k=4, 업체 100 k=8) | U6·U7 epoch 1            | arm당 25 + 12 + 25 + 15 + 60분 ≈ 2.3h       | 끝난 GPU부터(2 포함)
+U9  | F e2·P e2 selection_v2 k=4(보고)                        | U6·U7                    | arm당 25분                                  | 남는 GPU
+U10 | 지연 창: base·F e1·P e1(vLLM, 고정 30문항 순차)         | U8                       | 3 × 13분 ≈ 40분, 다른 두 GPU 비움            | 하나
+```
+
+- 예상 유휴: GPU 0·1은 U4(RC2)까지 약 3h 의존 대기(teacher 수집이 학습 데이터의 선행 조건). 그 사이 U5(base 셋째 셀)만 넣을 수 있다.
+  줄이는 방법(사용자 결정): teacher 필수 98질문을 먼저 모으고(약 1.2h) 나머지 G2 범위(trunk 재수집)는 학습과 겹쳐 모으되 RC2에는 먼저 끝난 것만 넣기 — 단 이 경우 두 arm
+  trunk 질문의 teacher 출처가 일부만 v3가 되므로 G2 취지(두 arm 같은 지시)와 맞는지 확인이 필요하다.
+- Ollama production 측정(E·27b 참고 셀, Ollama 지연, 업체 100 Ollama)은 없음(결정 137 G7).
