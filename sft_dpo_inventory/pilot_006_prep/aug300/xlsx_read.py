@@ -18,6 +18,8 @@ def _col(ref):
 
 
 def _text(node):
+    if node is None:  # 값 없는 inlineStr 셀(<is> 없음, 세션 2c 2차 검토 파일)
+        return ""
     return "".join(t.text or "" for t in node.iter(f"{{{NS['m']}}}t"))
 
 
