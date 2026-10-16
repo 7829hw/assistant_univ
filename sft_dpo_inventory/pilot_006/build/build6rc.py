@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 """pilot_006 학습 직전 빌드(RC, 세션 2b H8). ``build6.py``(세션 2 시험 빌드)를 바꾸지 않고 새로 쓴 파일. 모델 호출 없음. **학습 전 후보, PLAN 고정 전.**
 
-    hfvenv/bin/python sft_dpo_inventory/pilot_006/build/build6rc.py --out sft_dpo_inventory/pilot_006/build/RC1
+    hfvenv/bin/python sft_dpo_inventory/pilot_006/build/build6rc.py --out sft_dpo_inventory/pilot_006/build/RC1 --label RC1 --approved-version v1   # RC1 재현
+    hfvenv/bin/python sft_dpo_inventory/pilot_006/build/build6rc.py --out sft_dpo_inventory/pilot_006/build/RC2 --label RC2                          # 세션 2c
 
 재료(세션 2b 지시 H8):
-- 질문: 승인 corpus(R0, ``pilot_006_prep/approved/approved_train_v1.jsonl``): trunk 131, pg 154, aug300 train 승인, batch007 27, batch008 10.
+- 질문: 승인 corpus(``--approved-version``; RC1 = v1(R0), RC2부터 v2(P1: + aug300 6, batch009 51)). 결정 140 family(scope 이름 조회) 문항은
+  레코드 metadata·``questions.json``에 ``k3_scope_name_family``로 표시한다.
   같은 정규화 질문(pg v005 ``pg:ann-…`` = trunk ``t2pc:ann-…``)은 하나로 합치고 trunk id를 쓴다. batch009는 승인 전이라 넣지 않는다.
-- teacher(``full_response``): TEACH(결정 132 G2, 지시 v2) trace 가운데 자동 검사 (a)(b) 모두 통과한 것만. thinking + canonical 답 JSON(Full = ``render_full``,
+- teacher(``full_response``): ``--teach``(RC1: v2 경로 — 없었음, RC2: ``teacher_v3/traces.jsonl``, 결정 144 선택 안) trace 가운데 ``pass``(v3a: a·b, v3b: a·b·c)인 것만. thinking + canonical 답 JSON(Full = ``render_full``,
   Partial = ``render_partial``)으로 두 arm 레코드(``teacher6v2.to_arm_records``). 질문당 최대 4개(결정 48). pilot_004·pg reasoning의 이전 teacher는 쓰지 않는다(G2).
 - 8b 자체(``json_only``): arm 자신의 prompt로 모은 vLLM 표본 가운데 승인 gold 판정(``judge6.py``, 조건 계층 전 원응답)으로 정답이고 학습 계약(``target_ok``)도
   통과한 것. Full = J1·J9·S32F-a·S32F-b·J10(full), Partial = J6·J8·S32P-a·S32P-b·J10(partial). 원문 그대로, 같은 원문은 하나로, 질문당 최대 4개.
@@ -51,6 +53,13 @@ SELF = {"full": [("J1", GEN / "self_full/raw/self_full_raw.jsonl", R1 / "j1_appr
                     ("S32P-b", GEN / "self_2b/raw/S32P-b_raw.jsonl", R1 / "s32p_b_approved.json"),
                     ("J10", GEN / "self_2b/raw/J10_partial_raw.jsonl", R1 / "j10_partial_approved.json")]}
 TEACH = GEN / "teacher_v2/traces.jsonl"
+TEACH_V3 = GEN / "teacher_v3/traces.jsonl"
+SELF_2C = {"full": [("J12", GEN / "self_2b/raw/J12_full_raw.jsonl", R1 / "j12_full_approved.json"),
+                    ("S64F", GEN / "self_2c/raw/S64F_raw.jsonl", R1 / "s64f_approved.json"),
+                    ("J13", GEN / "self_2c/raw/J13_full_raw.jsonl", R1 / "j13_full_approved.json")],
+           "partial": [("J12", GEN / "self_2b/raw/J12_partial_raw.jsonl", R1 / "j12_partial_approved.json"),
+                       ("S64P", GEN / "self_2c/raw/S64P_raw.jsonl", R1 / "s64p_approved.json"),
+                       ("J13", GEN / "self_2c/raw/J13_partial_raw.jsonl", R1 / "j13_partial_approved.json")]}
 
 
 def sha(path):
@@ -81,10 +90,21 @@ def main():
     p.add_argument("--out", required=True)
     p.add_argument("--max-seq-length", type=int, default=12288)
     p.add_argument("--label", default="RC1")
+    p.add_argument("--approved-version", default="v2")
+    p.add_argument("--teach", default=None, help="teacher 원문(기본: v2면 teacher_v2, 아니면 teacher_v3)")
+    p.add_argument("--teach-variant", default=None, help="v3a|v3b(기본: pilot_006/teacher/t0v3_verdict.json의 selected)")
     a = p.parse_args()
+    teach_path = Path(a.teach) if a.teach else (TEACH_V3 if a.approved_version != "v1" else TEACH)
+    variant = a.teach_variant
+    if variant is None and teach_path == TEACH_V3:
+        v = INV / "pilot_006/teacher/t0v3_verdict.json"
+        variant = json.loads(v.read_text(encoding="utf-8")).get("selected") if v.exists() else None
+    if a.approved_version != "v1":
+        for arm in SELF:
+            SELF[arm] = SELF[arm] + SELF_2C[arm]
     out = Path(a.out)
     rng = random.Random(SEED)
-    corpus = AP.load()
+    corpus = AP.load(version=a.approved_version)
     # ---- 질문(정규화 질문으로 합침, trunk 우선)
     order = {"trunk": 0, "pg": 1, "aug300": 2, "batch007": 3, "batch008": 4, "batch009": 5}
     questions, alias, by_key = {}, {}, {}
@@ -110,8 +130,9 @@ def main():
     # ---- teacher
     teacher = {"full": defaultdict(list), "partial": defaultdict(list)}
     teach_stats = Counter()
-    if TEACH.exists():
-        for t in read_jsonl(TEACH):
+    if teach_path.exists():
+        import teacher6v3 as T3
+        for t in read_jsonl(teach_path):
             teach_stats["traces"] += 1
             cid = canon(t["id"])
             if cid not in questions:
@@ -121,12 +142,14 @@ def main():
                 teach_stats["check_failed"] += 1
                 continue
             teach_stats["pass"] += 1
-            for arm, r in T2.to_arm_records({"trace_id": t["trace_id"], "thinking": t["thinking"], "model": t["model"], "model_digest": t["model_digest"]},
-                                            questions[cid]["semantics"], questions[cid]["question"], cid).items():
-                r["metadata"]["origin"] = "TEACH teacher v2 (qwen3.8:27b, checks a+b passed)"
+            tr = {"trace_id": t["trace_id"], "thinking": t["thinking"], "model": t["model"], "model_digest": t["model_digest"]}
+            recs = (T3.to_arm_records(tr, questions[cid]["semantics"], questions[cid]["question"], cid, variant) if variant in ("v3a", "v3b")
+                    else T2.to_arm_records(tr, questions[cid]["semantics"], questions[cid]["question"], cid))
+            for arm, r in recs.items():
+                r["metadata"]["origin"] = f"TEACH teacher {variant or 'v2'} (qwen3.8:27b, checks passed)"
                 teacher[arm][cid].append(r)
     else:
-        missing.append(str(TEACH.relative_to(ROOT)))
+        missing.append(str(teach_path.relative_to(ROOT)))
     # ---- 8b 자체
     selfrec = {"full": defaultdict(list), "partial": defaultdict(list)}
     self_stats = Counter()
@@ -246,7 +269,8 @@ def main():
         for cid in final_q:
             for r in arm_recs[arm][cid]:
                 meta = {**r["metadata"], **meta_of(cid), "format": FORMAT, "source_record_id": cid, "grounding_target": arm, "representation": "flat",
-                        "corpus_group": questions[cid]["corpus_group"], "_rc": f"{a.label}: 학습 전 후보, PLAN 고정 전"}
+                        "corpus_group": questions[cid]["corpus_group"], "_rc": f"{a.label}: 학습 전 후보, PLAN 고정 전",
+                        "k3_scope_name_family": bool(questions[cid].get("k3_scope_name_family"))}
                 meta.setdefault("parent_intent", cid)
                 rows.append({"messages": r["messages"], "metadata": meta})
         with open(d / "sft_train.jsonl", "w", encoding="utf-8") as f:
@@ -271,12 +295,21 @@ def main():
     qrows = []
     for cid in sorted(questions):
         qrows.append({"id": cid, "group": questions[cid]["corpus_group"], "aliases": sorted(k for k, v in alias.items() if v == cid),
+                      "k3_scope_name_family": bool(questions[cid].get("k3_scope_name_family")),
                       "in_build": cid in final_q, "reason": None if cid in final_q else reason.get(cid),
                       "teacher_pass": {arm: len(teacher[arm].get(cid, [])) for arm in ("full", "partial")},
                       "self_correct": {arm: len(selfrec[arm].get(cid, [])) for arm in ("full", "partial")},
                       "records": {arm: len(arm_recs[arm][cid]) if cid in final_q else 0 for arm in ("full", "partial")}})
     (out / "questions.json").write_text(json.dumps(qrows, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    rec_counts = {arm: Counter() for arm in ("full", "partial")}
+    for arm in ("full", "partial"):
+        for cid in final_q:
+            for r in arm_recs[arm][cid]:
+                rec_counts[arm][r["metadata"]["loss_scope"]] += 1
     summary = {"label": a.label, "status": "학습 전 후보, PLAN 고정 전", "missing_sources": missing, "partial_build": bool(missing),
+               "approved_version": a.approved_version, "teacher_source": str(teach_path.relative_to(ROOT)), "teacher_variant": variant,
+               "teacher_record_share": {arm: round(c["full_response"] / max(1, sum(c.values())), 3) for arm, c in rec_counts.items()},
+               "k3_scope_name_family_in_final": sum(1 for c in final_q if questions[c].get("k3_scope_name_family")),
                "corpus_records": len(corpus), "questions_after_merge": len(questions), "merged_aliases": len(alias),
                "questions_with_records_both_arms": len(both), "dropped": dict(Counter(reason.values())),
                "strong_overlap": strong, "vendor100_overlap(report only, decision 106)": vendor_only, "type_cap": {"tau": 0.09, "caps(non-exempt)": caps, "exempt_in_pool": len(exempt & set(kept_q)), "kept": len(final_q)},
@@ -285,8 +318,8 @@ def main():
                "records_by_loss_scope": {arm: manifests[arm]["by_source"] for arm in manifests},
                "teacher": dict(teach_stats), "self": dict(self_stats), "over_limit_dropped": len(over),
                "caps": {"teacher_per_question": TEACHER_CAP, "self_per_question": SELF_CAP, "seed": SEED},
-               "inputs": {"approved_train_v1": sha(AP.APPROVED / "approved_train_v1.jsonl"),
-                          **({"teacher_v2_traces": sha(TEACH)} if TEACH.exists() else {}),
+               "inputs": {f"approved_train_{a.approved_version}": sha(AP.APPROVED / f"approved_train_{a.approved_version}.jsonl"),
+                          **({"teacher_traces": sha(teach_path)} if teach_path.exists() else {}),
                           **{f"{arm}:{n}": sha(j) for arm, src in SELF.items() for n, _, j in src if j.exists()}}}
     (out / "build_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     print(json.dumps({k: v for k, v in summary.items() if k not in ("strong_overlap", "inputs")}, ensure_ascii=False, indent=1))
