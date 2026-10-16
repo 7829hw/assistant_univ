@@ -75,3 +75,43 @@ class ScorerRegistrationTest(unittest.TestCase):
         hold = A.C.R.C._gold("aug300", None)
         self.assertEqual(len(hold), 53)
         self.assertIn("heldout_v9", A.C.R.C.GOLD_FILES)
+
+
+class SeedBundleTest(unittest.TestCase):
+    """결정 154: seed 묶음. 합성(파일 없이 gates를 바꿔 끼움)과 pilot_005 셀을 가짜 seed 쌍으로."""
+
+    def test_merge_and_sensitivity_synthetic(self):
+        calls = []
+
+        def fake_gates(spec):
+            calls.append(spec)
+            f_files = spec["cells"]["F"]["sel"]
+            passed = "a1" in f_files and "b1" in f_files or f_files == ["a1"]
+            return {"prerequisite": {"F": {"pass": True}, "P": {"pass": True}},
+                    "gates": {g: {"pass": (passed if g == "A" else True)} for g in "ABCDE"}}
+        orig = CG.gates
+        CG.gates = fake_gates
+        try:
+            out = CG.seeded({"sets": {"sel": "x"}, "cells": {"base": {"sel": ["base1"]}}, "latency": {"base": "l", "F": "lf", "P": "lp"},
+                             "seed_cells": {"s43": {"F": {"sel": ["a1"]}, "P": {"sel": ["p1"]}}, "s1016": {"F": {"sel": ["b1"]}, "P": {"sel": ["q1"]}}}})
+        finally:
+            CG.gates = orig
+        self.assertEqual(calls[0]["cells"]["F"]["sel"], ["a1", "b1"])          # 주 판정: 두 seed 이어 붙임
+        self.assertIn("latency", calls[1])                                       # s43에만 지연
+        self.assertNotIn("latency", calls[2])
+        self.assertEqual(out["seed_sensitive"], {"gate:A": {"s43": True, "s1016": False}})
+
+    def test_pilot005_fake_seed_pair_reproduces(self):
+        import json
+        base = json.loads((CG.HERE / "selftest/spec_p005.json").read_text(encoding="utf-8"))
+        runs = "sft_dpo_inventory/pilot_005/runs/"
+        cell = lambda name: {"selection_v2": [f"{runs}{name}_s{k}.json" for k in (1, 2, 3, 4)]}  # noqa: E731
+        spec = {"sets": base["sets"], "cells": {"base": base["cells"]["base"]},
+                "seed_cells": {"s43": {"F": cell("v1_step467"), "P": cell("v2_step934")}, "s1016": {"F": cell("v1_step934"), "P": cell("v2_step1401")}}}
+        out = CG.seeded(spec)
+        plain = CG.gates({"sets": base["sets"], "cells": {"base": base["cells"]["base"], "F": cell("v1_step467"), "P": cell("v2_step934")}})
+        self.assertEqual(out["per_seed"]["s43"]["gates"]["A"]["ci95_pp"], plain["gates"]["A"]["ci95_pp"])   # seed별 = 기존 계산
+        self.assertEqual(out["per_seed"]["s43"]["prerequisite"]["F"]["ok_vs_base"]["diff_pp"], 11.22)        # pilot_005 v1 대 base 재현
+        f43, f16 = out["per_seed"]["s43"]["cells"]["F"]["ok"], out["per_seed"]["s1016"]["cells"]["F"]["ok"]
+        self.assertAlmostEqual(out["cells"]["F"]["ok"], (f43 + f16) / 2, delta=0.02)                        # 8표본 평균
+        self.assertEqual(out["seed_mode"]["samples_per_item"]["F"]["selection_v2"], 8)

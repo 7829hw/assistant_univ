@@ -7,6 +7,11 @@ SPEC: {"sets": {"<셋>": "<gold yaml(저장소 상대)>", ...},
        "cells": {"base": {"<셋>": ["<셀 json 경로>", ...]}, "F": {...}, "P": {...}},
        "latency": {"base": "<지연 셀 json>", "F": ..., "P": ...}  (선택),
        "label": "..."}
+seed 묶음(결정 154 L6): ``"cells"``에는 base만 두고 ``"seed_cells": {"s43": {"F": {...}, "P": {...}}, "s1016": {...}}``를 준다.
+  - 주 판정: 각 셋의 F·P 셀 목록을 seed마다 이어 붙여(두 seed × k=4 = 문항당 8표본 평균) 같은 판정을 한다. 지연은 ``latency``(s43 모델)만 쓴다.
+  - seed별 판정: seed마다 그 seed의 F·P로 같은 판정(지연은 s43에만). 선행 조건·Gate A–D 통과가 seed마다 갈리면 ``seed_sensitive``에 적는다
+    (이 표시만으로 채택을 막지 않는다).
+  - ``"diagnostic_subsets": {"<이름>": ["<셋>/<id>", ...]}``(선택): 부분집합별 arm 평균 ok·dt_missing(진단, 판정 아님; 결정 140 family, 결정 155 부분집합).
 - 표본 채점·분류: ``calibration_001/analyze_cal.load_sample``(grounding_check, U1–U4·조용한 오답 분류, dt_missing 등 오류 유형). judge_v3·pilot_005와 같다.
 - 문항 값 = 그 셀 k표본 평균. 셋 여러 개면 문항을 이어 붙인다(주 셋 = selection_v2 ∪ augmentation_holdout_v1).
 - 차이의 95% CI: 문항 단위 쌍 bootstrap 10,000회, 비교마다 새 ``numpy.random.default_rng(20261109)``(PROTOCOL_v4·v5).
@@ -164,6 +169,51 @@ def gates(spec):
         lat = {arm: round(latency(spec["latency"][arm]) / lb, 3) for arm in ("F", "P")}
     out = decide(m, lat)
     out.update(label=spec.get("label"), items=len(items["F"]), per_set_items=loaded["F"][2])
+    if spec.get("diagnostic_subsets"):
+        out["diagnostic_subsets"] = diagnostic(m, items["F"], spec["diagnostic_subsets"])
+    return out
+
+
+def seeded(spec):
+    """결정 154: seed 묶음 주 판정 + seed별 판정 + seed 민감 표시."""
+    sets, base = spec["sets"], spec["cells"]["base"]
+    seeds = spec["seed_cells"]
+    merged = {arm: {st: [p for sd in seeds.values() for p in sd[arm][st]] for st in seeds[next(iter(seeds))][arm]} for arm in ("F", "P")}
+    main_spec = {**spec, "cells": {"base": base, **merged}}
+    main_spec.pop("seed_cells")
+    out = gates(main_spec)
+    out["seed_mode"] = {"seeds": list(seeds), "samples_per_item": {arm: {st: len(v) for st, v in merged[arm].items()} for arm in merged}}
+    per = {}
+    for name, sd in seeds.items():
+        sp = {**spec, "cells": {"base": base, "F": sd["F"], "P": sd["P"]}}
+        sp.pop("seed_cells")
+        if name != spec.get("latency_seed", "s43"):
+            sp.pop("latency", None)
+        per[name] = gates(sp)
+    out["per_seed"] = per
+    keys = ["prerequisite:F", "prerequisite:P"] + [f"gate:{g}" for g in "ABCD"]
+
+    def val(o, k):
+        kind, x = k.split(":")
+        return o["prerequisite"][x]["pass"] if kind == "prerequisite" else o["gates"][x]["pass"]
+    out["seed_sensitive"] = {k: {n: val(o, k) for n, o in per.items()} for k in keys if len({val(o, k) for o in per.values()}) > 1}
+    return out
+
+
+def diagnostic(m, items, subsets):
+    """진단 부분집합(판정 아님): arm별 ok·dt_missing 평균과 P − F 차이."""
+    out = {}
+    for name, ids in subsets.items():
+        idx = [items.index(i) for i in ids if i in items]
+        if not idx:
+            out[name] = {"n": 0}
+            continue
+        row = {"n": len(idx)}
+        for arm, mm in m.items():
+            row[arm] = {f: round(100 * float(np.nanmean(mm[f][idx])), 2) for f in ("ok", "dt_missing")}
+        if "F" in m and "P" in m and len(idx) > 1:
+            row["P_minus_F_ok"] = cmp({"ok": m["F"]["ok"][idx]}, {"ok": m["P"]["ok"][idx]}, "ok")
+        out[name] = row
     return out
 
 
@@ -235,7 +285,7 @@ def main():
     p.add_argument("--out", required=True)
     a = p.parse_args()
     spec = json.loads(Path(a.spec).read_text(encoding="utf-8"))
-    out = gates(spec)
+    out = seeded(spec) if spec.get("seed_cells") else gates(spec)
     out["table_md"] = table(out)
     Path(a.out).write_text(json.dumps(out, ensure_ascii=False, indent=1, default=lambda o: o.item() if hasattr(o, "item") else str(o)) + "\n", encoding="utf-8")
     print(out["table_md"])
