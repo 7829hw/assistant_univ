@@ -40,7 +40,7 @@ def main():
     p.add_argument("--summary", required=True)
     p.add_argument("--samples", type=int, default=8)
     p.add_argument("--seed-base", type=int, default=SEED_BASE)
-    p.add_argument("--variant", choices=("v3a", "v3b"), required=True)
+    p.add_argument("--variant", choices=("v3a", "v3b", "v3c"), required=True)
     a = p.parse_args()
     out_dir = Path(a.out)
     if out_dir.exists():
@@ -68,7 +68,7 @@ def main():
                 content, thinking = m.get("content") or "", m.get("thinking") or ""
                 ca = T.check_field_names(thinking, content)
                 cb = T.check_conclusion(content, t["semantics"])
-                cc = T.check_exposure(thinking, content) if a.variant == "v3b" else {"exposed": False, "found": [], "not_applicable": True}
+                cc = T.check_exposure(thinking, content, a.variant) if a.variant in ("v3b", "v3c") else {"exposed": False, "found": [], "not_applicable": True}
                 row = {"trace_id": f"{t['id']}:teacher6{a.variant}:{k}", "source": "teacher", "model": MODEL, "model_digest": info["digest"],
                        "ollama_version": version, "id": t["id"], "question_index": qi, "sample_index": k, "seed": seed,
                        "options": {"temperature": TEMPERATURE, "seed": seed}, "think": True, "teacher_instruction_sha256": T.instruction_sha256(a.variant), "teacher_instruction": f"teacher_neutral_{a.variant}",

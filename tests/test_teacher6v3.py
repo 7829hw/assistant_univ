@@ -32,3 +32,16 @@ class TeacherV3Test(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TeacherV3cTest(unittest.TestCase):
+    def test_v3c_exposure_wider(self):
+        self.assertTrue(T.check_exposure("모든 판단이 결론과 일치한다", "", "v3c")["exposed"])
+        self.assertFalse(T.check_exposure("모든 판단이 결론과 일치한다", "", "v3b")["exposed"])
+        self.assertTrue(T.check_exposure("Let me verify against the conclusion", "", "v3c")["exposed"])
+        self.assertFalse(T.check_exposure("\"도착한\"은 하차 쪽이다", "측정: 통행량", "v3c")["exposed"])
+
+    def test_v3c_prompt(self):
+        self.assertIn("부근", T.instruction_text("v3c"))
+        self.assertTrue(T.check_field_names(T.instruction_text("v3c"))["pass"])
+        self.assertIn("[결론]", T.messages("v3c", "질문", {"nodes": [{"subtype": "rpm", "text": "RPM"}], "event": "drive", "factors": {}, "unsupported": None})[1]["content"])
