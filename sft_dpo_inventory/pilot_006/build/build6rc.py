@@ -56,10 +56,12 @@ TEACH = GEN / "teacher_v2/traces.jsonl"
 TEACH_V3 = GEN / "teacher_v3/traces.jsonl"
 SELF_2C = {"full": [("J12", GEN / "self_2b/raw/J12_full_raw.jsonl", R1 / "j12_full_approved.json"),
                     ("S64F", GEN / "self_2c/raw/S64F_raw.jsonl", R1 / "s64f_approved.json"),
-                    ("J13", GEN / "self_2c/raw/J13_full_raw.jsonl", R1 / "j13_full_approved.json")],
+                    ("J13", GEN / "self_2c/raw/J13_full_raw.jsonl", R1 / "j13_full_approved.json"),
+                    ("S128F", GEN / "self_2d/raw/S128F_raw.jsonl", R1 / "s128f_approved.json")],
            "partial": [("J12", GEN / "self_2b/raw/J12_partial_raw.jsonl", R1 / "j12_partial_approved.json"),
                        ("S64P", GEN / "self_2c/raw/S64P_raw.jsonl", R1 / "s64p_approved.json"),
-                       ("J13", GEN / "self_2c/raw/J13_partial_raw.jsonl", R1 / "j13_partial_approved.json")]}
+                       ("J13", GEN / "self_2c/raw/J13_partial_raw.jsonl", R1 / "j13_partial_approved.json"),
+                       ("S128P", GEN / "self_2d/raw/S128P_raw.jsonl", R1 / "s128p_approved.json")]}
 
 
 def sha(path):

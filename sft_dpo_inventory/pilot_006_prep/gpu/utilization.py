@@ -68,16 +68,26 @@ REASONS_S2C = {
 }
 
 
+START_S2D = datetime.fromisoformat("2026-10-16T20:59:06+09:00")
+REASONS_S2D = {
+    "2445b100(index 0)": [("2026-10-16T20:59", "큐 시작")],
+    "a5ce83d0(index 1)": [("2026-10-16T20:59", "큐 시작"), ("2026-10-17T00:16", "준비된 작업 없음: 남은 S128F는 GPU 0, TEACH는 Ollama GPU에서 실행 중(작업 하나 = GPU 하나)")],
+    "48f798cc(index 2, Ollama GPU)": [("2026-10-16T20:59", "큐 시작"), ("2026-10-17T01:13", "준비된 작업 없음: TEACH 뒤 남은 작업은 S128F(GPU 0)뿐")],
+}
+
+
 def main():
     global START, REASONS
     p = argparse.ArgumentParser()
     p.add_argument("--end", required=True)
-    p.add_argument("--session", choices=("1", "2", "2b", "2c"), default="1")
+    p.add_argument("--session", choices=("1", "2", "2b", "2c", "2d"), default="1")
     a = p.parse_args()
     end = datetime.fromisoformat(a.end)
     out_name = "utilization.json"
     if a.session == "2":
         START, REASONS, out_name = START_S2, REASONS_S2, "utilization_s2.json"
+    if a.session == "2d":
+        START, REASONS, out_name = START_S2D, REASONS_S2D, "utilization_s2d.json"
     if a.session == "2c":
         START, REASONS, out_name = START_S2C, REASONS_S2C, "utilization_s2c.json"
     if a.session == "2b":
