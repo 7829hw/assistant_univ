@@ -47,16 +47,29 @@ REASONS_S2 = {
 }
 
 
+START_S2B = datetime.fromisoformat("2026-10-16T11:08:10+09:00")
+REASONS_S2B = {
+    "2445b100(index 0)": [("2026-10-16T11:08", "큐 시작"), ("2026-10-16T14:29", "세션 2b GPU 큐 끝(남은 작업 없음)")],
+    "a5ce83d0(index 1)": [("2026-10-16T11:08", "큐 시작"),
+                          ("2026-10-16T13:54", "준비된 작업 없음: 남은 S32P-b·J10·J11·J12·S32F-b가 다른 GPU에 먼저 붙었다. TEACH(T0' 불통과)가 없어져 vLLM 작업이 계획보다 일찍 소진")],
+    "48f798cc(index 2, Ollama GPU)": [("2026-10-16T11:08", "큐 시작"),
+                                      ("2026-10-16T11:37", "T0' 뒤 Ollama 모델이 /api/ps에서 내려갈 때까지 vLLM을 올리지 않음(keep_alive, 결정 137·규칙 7)"),
+                                      ("2026-10-16T14:10", "세션 2b GPU 큐 끝(남은 작업 없음)")],
+}
+
+
 def main():
     global START, REASONS
     p = argparse.ArgumentParser()
     p.add_argument("--end", required=True)
-    p.add_argument("--session", choices=("1", "2"), default="1")
+    p.add_argument("--session", choices=("1", "2", "2b"), default="1")
     a = p.parse_args()
     end = datetime.fromisoformat(a.end)
     out_name = "utilization.json"
     if a.session == "2":
         START, REASONS, out_name = START_S2, REASONS_S2, "utilization_s2.json"
+    if a.session == "2b":
+        START, REASONS, out_name = START_S2B, REASONS_S2B, "utilization_s2b.json"
     rows = [json.loads(line) for line in (HERE / "timeline.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
     rows = [r for r in rows if r["kind"] != "status_correction" and datetime.fromisoformat(r["start"]) >= START]
     session = (end - START).total_seconds()
