@@ -135,7 +135,7 @@ def main():
     out = {"arm": a.arm, "raw": {str(Path(k).resolve().relative_to(ROOT)) if str(Path(k).resolve()).startswith(str(ROOT)) else k: v for k, v in raw_hashes.items()},
            "gold": "approved corpus R0 (pilot_006_prep/approved, render_full)", "criterion": "raw output before condition layer, grounding_check vs approved gold"
            + (" (Partial: completion first)" if a.arm == "partial" else ""),
-           "approved_manifest_sha256": hashlib.sha256((AP.APPROVED / "manifest.json").read_bytes()).hexdigest(),
+           "approved_version": AP.VERSION, "approved_manifest_sha256": hashlib.sha256((AP.APPROVED / AP.MANIFEST[AP.VERSION]).read_bytes()).hexdigest(),
            "questions": len(questions), "samples": sum(q["samples"] for q in questions), "by_status_group": {k: dict(v) for k, v in sorted(by.items())},
            "no_correct_approved": [q["id"] for q in questions if q["status"] == "approved" and q["judged"] > 0 and q["correct"] == 0],
            "correct_over_12288": [{"id": q["id"], **x} for q in questions for x in q["correct_over_12288"]],
