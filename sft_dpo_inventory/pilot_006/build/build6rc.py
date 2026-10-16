@@ -86,7 +86,7 @@ def main():
     rng = random.Random(SEED)
     corpus = AP.load()
     # ---- 질문(정규화 질문으로 합침, trunk 우선)
-    order = {"trunk": 0, "pg": 1, "aug300": 2, "batch007": 3, "batch008": 4}
+    order = {"trunk": 0, "pg": 1, "aug300": 2, "batch007": 3, "batch008": 4, "batch009": 5}
     questions, alias, by_key = {}, {}, {}
     for cid, rec in sorted(corpus.items(), key=lambda kv: (order[kv[1]["corpus_group"]], kv[0])):
         k = question_key(rec["question"])

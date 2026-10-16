@@ -50,7 +50,7 @@ def main():
     import approved6 as AP
     from training.data.split import question_key
     corpus = AP.load()
-    order = {"trunk": 0, "pg": 1, "aug300": 2, "batch007": 3, "batch008": 4}
+    order = {"trunk": 0, "pg": 1, "aug300": 2, "batch007": 3, "batch008": 4, "batch009": 5}
     by_key, alias, qs = {}, {}, {}
     for cid, rec in sorted(corpus.items(), key=lambda kv: (order[kv[1]["corpus_group"]], kv[0])):
         k = question_key(rec["question"])

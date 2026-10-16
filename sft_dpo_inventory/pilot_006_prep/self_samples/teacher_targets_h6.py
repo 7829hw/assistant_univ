@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """H6: 모든 8b 표본 판정(승인 gold) 뒤 teacher 필수 대상과 12,288 초과 정답 표본을 다시 센다. 모델 호출 없음.
 
-    hfvenv/bin/python teacher_targets_h6.py   # -> r1/teacher_targets_h6.json
+    hfvenv/bin/python teacher_targets_h6.py   # -> r1/teacher_targets_h6.json (세션 2c P2: --out r1/teacher_targets_p2.json, 승인 corpus v2)
 
 - teacher 필수 = 승인 corpus 질문(정규화 질문으로 합침, trunk 우선) 가운데 한 arm이라도 8b 자체 정답 표본이 없는 질문.
 - TEACH는 T0' 불통과로 시작하지 않았으므로(결정 131) 전부 "추가 teacher 대상"(다음 세션 수집)이다. G2 범위(teacher 필수 ∪ trunk 131 ∪ 질문 변경)도 함께 적는다.
@@ -20,7 +20,7 @@ def main():
     import approved6 as AP
     from training.data.split import question_key
     corpus = AP.load()
-    order = {"trunk": 0, "pg": 1, "aug300": 2, "batch007": 3, "batch008": 4}
+    order = {"trunk": 0, "pg": 1, "aug300": 2, "batch007": 3, "batch008": 4, "batch009": 5}
     by_key, alias, qs = {}, {}, {}
     for cid, rec in sorted(corpus.items(), key=lambda kv: (order[kv[1]["corpus_group"]], kv[0])):
         k = question_key(rec["question"])
@@ -51,7 +51,8 @@ def main():
            "additional_teacher_targets(next session, G2 scope)": {"count": len(g2), "ids": g2,
                                                                   "note": "TEACH 미실행(T0' 불통과). G2 범위 전체가 다음 세션 수집 대상"},
            "r1_teacher_required": 133, "correct_over_12288": over}
-    (HERE / "r1/teacher_targets_h6.json").write_text(json.dumps(out, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    out_name = sys.argv[sys.argv.index("--out") + 1] if "--out" in sys.argv else "r1/teacher_targets_h6.json"
+    (HERE / out_name).write_text(json.dumps(out, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     print(json.dumps({k: (v if k not in ("teacher_required", "additional_teacher_targets(next session, G2 scope)") else {kk: vv for kk, vv in v.items() if kk != "ids"})
                       for k, v in out.items() if k != "judge_files"}, ensure_ascii=False, indent=1))
 
