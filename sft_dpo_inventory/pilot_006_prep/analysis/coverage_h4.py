@@ -61,7 +61,7 @@ def main():
         qs[cid] = rec
     correct = {"full": set(), "partial": set()}
     used = []
-    for f in sorted((PREP / "self_samples/r1").glob("*_approved.json")):
+    for f in sorted(x for x in (PREP / "self_samples/r1").glob("*_approved.json") if "first" not in x.name):
         d = json.loads(f.read_text(encoding="utf-8"))
         used.append(f.name)
         for q in d["per_question"]:
