@@ -76,16 +76,28 @@ REASONS_S2D = {
 }
 
 
+START_S3 = datetime.fromisoformat("2026-10-17T14:01:34+09:00")
+REASONS_S3 = {
+    "2445b100(index 0)": [("2026-10-17T14:01", "큐 시작")],
+    "a5ce83d0(index 1)": [("2026-10-17T14:01", "큐 시작"), ("2026-10-17T23:00", "의존 대기: P1016 epoch 1 checkpoint(23:28 저장) — P1016은 결정 154 배치로 19:58에 시작"),
+                          ("2026-10-17T23:35", "준비된 작업 없음: 남은 E2_P1016·지연 창은 P1016 학습 끝(02:55)과 학습 없음(결정 113)을 기다림")],
+    "48f798cc(index 2, Ollama GPU)": [("2026-10-17T14:01", "큐 시작"), ("2026-10-17T22:42", "의존 대기: P1016 epoch 1 checkpoint(23:28)"),
+                                      ("2026-10-17T23:44", "준비된 작업 없음: 같은 이유(P1016 학습 끝·지연 창 대기)")],
+}
+
+
 def main():
     global START, REASONS
     p = argparse.ArgumentParser()
     p.add_argument("--end", required=True)
-    p.add_argument("--session", choices=("1", "2", "2b", "2c", "2d"), default="1")
+    p.add_argument("--session", choices=("1", "2", "2b", "2c", "2d", "3"), default="1")
     a = p.parse_args()
     end = datetime.fromisoformat(a.end)
     out_name = "utilization.json"
     if a.session == "2":
         START, REASONS, out_name = START_S2, REASONS_S2, "utilization_s2.json"
+    if a.session == "3":
+        START, REASONS, out_name = START_S3, REASONS_S3, "utilization_s3.json"
     if a.session == "2d":
         START, REASONS, out_name = START_S2D, REASONS_S2D, "utilization_s2d.json"
     if a.session == "2c":
