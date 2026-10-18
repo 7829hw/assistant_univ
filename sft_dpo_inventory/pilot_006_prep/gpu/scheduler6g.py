@@ -6,7 +6,7 @@
 
 - 6e와 같다(작업 하나 = GPU 하나, worktree, timeline·worktrees·gpu_check·runs.log ``[s4]``, PID ``scheduler6g.pid``). 다른 것:
   - ``train_diag``: ``post/diag/train_diag.py --config <worktree>/<config>``(epoch 1에서 멈춤, 25·50·75·100% 저장).
-  - ``cells``: 한 서버(``base`` 또는 ``lora:…``)에서 셀 여러 개(``run_cell6w.py``: ``seed_base``, ``greedy``)를 차례로.
+  - ``cells``: 한 서버(``base`` 또는 ``lora:…``)에서 셀 여러 개(``run_cell6x.py``: ``seed_base``, ``greedy``)를 차례로.
   - ``ollama``: Ollama GPU에서만, ``cmd``(자리표 {WT},{MAIN})를 그대로.
   - 작업 표 JSON을 20초마다 다시 읽어 새 ID를 더한다(T-v3d·D-avg처럼 조건이 나중에 맞는 작업). 이미 있는 ID는 바꾸지 않는다.
 - Ollama GPU 규칙: Ollama 작업 뒤 ``/api/ps``가 빌 때까지 그 GPU에 학습·vLLM을 올리지 않는다(직접 내리지 않음).
@@ -134,7 +134,7 @@ def cells(specs):
         cmds = []
         for c in specs:
             for k in range(1, c.get("k", 4) + 1):
-                cmd = [PY, f"{wt}/sft_dpo_inventory/pilot_006_prep/gpu/run_cell6w.py", "--port", str(port), "--model", c["model"], "--label", c["label"],
+                cmd = [PY, f"{wt}/sft_dpo_inventory/pilot_006_prep/gpu/run_cell6x.py", "--port", str(port), "--model", c["model"], "--label", c["label"],
                        "--k", str(k), "--concurrency", "8", "--grounding-target", c["target"], "--out-dir", str(CELLS), "--raw-dir", str(RAWP),
                        "--seed-base", str(c.get("seed_base", 20261100))]
                 if c.get("greedy"):
