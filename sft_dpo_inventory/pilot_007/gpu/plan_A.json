@@ -1,0 +1,21 @@
+{
+ "basis": {
+  "train_step_seconds": "세션 4 D-F7 실측 10,656초 / 1,861 step = 5.73초(RC3, batch 1). RC3c는 teacher(긴 레코드) 비율이 낮아 같거나 빠를 것. R2는 같은 레코드를 accum 16으로 묶을 뿐이라 계산량이 같다고 봄",
+  "train_hours_each": 2.2,
+  "eval_E_A_minutes_each": "주 셋 k=4 약 37분 + valid98 k=4 21–29분 + aux k=4 15–16분 + 서버 기동 3–5분 ≈ 85분",
+  "eval_E_Aq_minutes_each": 35,
+  "gpus": ["GPU-2445b100 (0)", "GPU-a5ce83d0 (1)", "GPU-48f798cc (2, Ollama GPU; Ollama 안 씀, /api/ps 빔 확인)"]
+ },
+ "schedule_T_relative_hours": {
+  "A-R1-o43 / A-R1-o1016 / A-R1-o7": "GPU 0·1·2, T → T+2.2",
+  "A-R2-o43 / A-R2-o1016 / A-R2-o7": "같은 GPU, T+2.2 → T+4.4(우선 2가 E-A(우선 3)보다 먼저)",
+  "E-A × 6": "T+4.4 → T+7.3(85분 × 2바퀴)",
+  "S-focus, J-b010": "목록 커밋 뒤 우선 4·5로 들어감 — E-A 뒤 T+7.3부터(각 30–60분 예상)",
+  "E-Aq × 6(선택)": "남은 시간에 우선 6(35분 × 2바퀴)",
+  "end": "약 T+9–10h"
+ },
+ "expected_idle_over_10min": [
+  {"when": "없음(예상)", "why": "학습 6개가 GPU 세 장을 두 바퀴 채우고, 그 뒤 E-A 6개·S-focus·J-b010·E-Aq가 이어진다. S-focus·J-b010 목록이 E-A 끝(T+7.3)까지 커밋되지 않으면 E-Aq가 먼저 들어간다."},
+  {"when": "학습 끝 시각이 GPU마다 다르면 E-A 1바퀴가 엇갈림", "why": "작업 하나 = GPU 하나라 짧은 유휴는 생길 수 있음(10분 넘으면 사유 기록)"}
+ ]
+}
