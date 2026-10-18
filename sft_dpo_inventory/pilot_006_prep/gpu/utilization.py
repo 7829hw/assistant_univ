@@ -86,11 +86,23 @@ REASONS_S3 = {
 }
 
 
+START_S4 = datetime.fromisoformat("2026-10-18T12:14:43+09:00")
+REASONS_S4 = {
+    "2445b100(index 0)": [("2026-10-18T12:14", "세션 시작 확인·S0/S1(진단 config dry-run·tokenizer 검사, jobs4 커밋) 뒤 큐 시작(12:24)")],
+    "a5ce83d0(index 1)": [("2026-10-18T12:14", "세션 시작 확인·S0/S1 뒤 큐 시작(12:24)"),
+                          ("2026-10-18T17:53", "의존 대기: 6f에 남은 작업(E-D·E-Dq D-F1016o43)이 모두 D-F1016o43 학습(18:24 끝)을 기다림"),
+                          ("2026-10-18T18:25", "준비된 작업 없음: 6f에 남은 것은 GPU 0의 E-D_D-F1016o43 하나; greedy 재실행은 6f의 셀 실행기(run_cell6w 고정)로 돌릴 수 없어 6f 종료 뒤 6g(18:53)에서만 가능"),
+                          ("2026-10-18T20:26", "준비된 작업 없음: 6g 마지막 두 작업(E-DqR_D-P7 GPU 0, D-avg GPU 2) 실행 중")],
+    "48f798cc(index 2, Ollama GPU)": [("2026-10-18T12:14", "세션 시작 확인·S0/S1 뒤 큐 시작(12:24)"),
+                                      ("2026-10-18T17:50", "의존 대기(D-F1016o43 학습) → 18:25부터 6f 남은 작업 없음, greedy 재실행은 6g(18:53)에서만 가능")],
+}
+
+
 def main():
     global START, REASONS
     p = argparse.ArgumentParser()
     p.add_argument("--end", required=True)
-    p.add_argument("--session", choices=("1", "2", "2b", "2c", "2d", "3"), default="1")
+    p.add_argument("--session", choices=("1", "2", "2b", "2c", "2d", "3", "4"), default="1")
     a = p.parse_args()
     end = datetime.fromisoformat(a.end)
     out_name = "utilization.json"
@@ -98,6 +110,8 @@ def main():
         START, REASONS, out_name = START_S2, REASONS_S2, "utilization_s2.json"
     if a.session == "3":
         START, REASONS, out_name = START_S3, REASONS_S3, "utilization_s3.json"
+    if a.session == "4":
+        START, REASONS, out_name = START_S4, REASONS_S4, "utilization_s4.json"
     if a.session == "2d":
         START, REASONS, out_name = START_S2D, REASONS_S2D, "utilization_s2d.json"
     if a.session == "2c":
