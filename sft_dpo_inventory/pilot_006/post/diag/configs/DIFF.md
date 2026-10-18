@@ -1,0 +1,6 @@
+# 진단 config와 고정 config의 차이(seed·data_seed·output_dir·profiling.output·save_strategy만)
+
+- D-F7 ← pilot006_F43.yaml: {'seed': 43, 'data_seed': None, 'output_dir': '/home/hwkim/sftdpo_work/pilot_006/train/F43', 'save_strategy': 'steps', 'save_steps': 0.5} → {'seed': 7, 'data_seed': 7, 'output_dir': '/home/hwkim/sftdpo_work/pilot_006/diag/D-F7', 'save_strategy': 'no', 'save_steps': None}
+- D-P7 ← pilot006_P43.yaml: {'seed': 43, 'data_seed': None, 'output_dir': '/home/hwkim/sftdpo_work/pilot_006/train/P43', 'save_strategy': 'steps', 'save_steps': 0.5} → {'seed': 7, 'data_seed': 7, 'output_dir': '/home/hwkim/sftdpo_work/pilot_006/diag/D-P7', 'save_strategy': 'no', 'save_steps': None}
+- D-F43o1016 ← pilot006_F43.yaml: {'seed': 43, 'data_seed': None, 'output_dir': '/home/hwkim/sftdpo_work/pilot_006/train/F43', 'save_strategy': 'steps', 'save_steps': 0.5} → {'seed': 43, 'data_seed': 20261016, 'output_dir': '/home/hwkim/sftdpo_work/pilot_006/diag/D-F43o1016', 'save_strategy': 'no', 'save_steps': None}
+- D-F1016o43 ← pilot006_F43.yaml: {'seed': 43, 'data_seed': None, 'output_dir': '/home/hwkim/sftdpo_work/pilot_006/train/F43', 'save_strategy': 'steps', 'save_steps': 0.5} → {'seed': 20261016, 'data_seed': 43, 'output_dir': '/home/hwkim/sftdpo_work/pilot_006/diag/D-F1016o43', 'save_strategy': 'no', 'save_steps': None}

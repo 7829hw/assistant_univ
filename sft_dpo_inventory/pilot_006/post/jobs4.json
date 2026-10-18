@@ -1,0 +1,718 @@
+{
+ "rep_seed_base": 20261200,
+ "jobs": [
+  {
+   "id": "O1",
+   "type": "ollama",
+   "kind": "ollama_speed_0.40.6",
+   "server": "ollama",
+   "est": 10,
+   "prio": 0,
+   "cmd": [
+    "/home/hwkim/sftdpo_work/hfvenv/bin/python",
+    "{WT}/sft_dpo_inventory/pilot_006/post/o1_speed.py",
+    "--main",
+    "{MAIN}"
+   ],
+   "outputs": [
+    "{MAIN}/sft_dpo_inventory/pilot_006/post/o1_speed.json"
+   ]
+  },
+  {
+   "id": "D-F7",
+   "type": "train_diag",
+   "kind": "train_diag_D-F7",
+   "server": "train",
+   "est": 202,
+   "prio": 1,
+   "config": "sft_dpo_inventory/pilot_006/post/diag/configs/diag_D-F7.yaml"
+  },
+  {
+   "id": "D-P7",
+   "type": "train_diag",
+   "kind": "train_diag_D-P7",
+   "server": "train",
+   "est": 198,
+   "prio": 2,
+   "config": "sft_dpo_inventory/pilot_006/post/diag/configs/diag_D-P7.yaml"
+  },
+  {
+   "id": "D-F43o1016",
+   "type": "train_diag",
+   "kind": "train_diag_D-F43o1016",
+   "server": "train",
+   "est": 202,
+   "prio": 3,
+   "config": "sft_dpo_inventory/pilot_006/post/diag/configs/diag_D-F43o1016.yaml"
+  },
+  {
+   "id": "D-F1016o43",
+   "type": "train_diag",
+   "kind": "train_diag_D-F1016o43",
+   "server": "train",
+   "est": 202,
+   "prio": 4,
+   "config": "sft_dpo_inventory/pilot_006/post/diag/configs/diag_D-F1016o43.yaml"
+  },
+  {
+   "id": "E-rep_F43",
+   "type": "cells",
+   "kind": "cells_rep_F43_main_k4_seed20261200",
+   "server": "lora:F43=/home/hwkim/sftdpo_work/pilot_006/train/F43/checkpoint-1861",
+   "est": 40,
+   "prio": 5,
+   "cells": [
+    {
+     "label": "rep_f43_e1_sel",
+     "model": "F43",
+     "target": "full",
+     "gold": "sel",
+     "k": 4,
+     "seed_base": 20261200,
+     "greedy": false
+    },
+    {
+     "label": "rep_f43_e1_holdout",
+     "model": "F43",
+     "target": "full",
+     "gold": "holdout",
+     "k": 4,
+     "seed_base": 20261200,
+     "greedy": false
+    }
+   ]
+  },
+  {
+   "id": "E-rep_F1016",
+   "type": "cells",
+   "kind": "cells_rep_F1016_main_k4_seed20261200",
+   "server": "lora:F1016=/home/hwkim/sftdpo_work/pilot_006/train/F1016/checkpoint-1861",
+   "est": 40,
+   "prio": 5,
+   "cells": [
+    {
+     "label": "rep_f1016_e1_sel",
+     "model": "F1016",
+     "target": "full",
+     "gold": "sel",
+     "k": 4,
+     "seed_base": 20261200,
+     "greedy": false
+    },
+    {
+     "label": "rep_f1016_e1_holdout",
+     "model": "F1016",
+     "target": "full",
+     "gold": "holdout",
+     "k": 4,
+     "seed_base": 20261200,
+     "greedy": false
+    }
+   ]
+  },
+  {
+   "id": "E-greedy_base",
+   "type": "cells",
+   "kind": "cells_greedy_base_main",
+   "server": "b17408",
+   "est": 12,
+   "prio": 6,
+   "cells": [
+    {
+     "label": "greedy_base_sel",
+     "model": "base",
+     "target": "full",
+     "gold": "sel",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    },
+    {
+     "label": "greedy_base_holdout",
+     "model": "base",
+     "target": "full",
+     "gold": "holdout",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    }
+   ]
+  },
+  {
+   "id": "E-greedy_F43",
+   "type": "cells",
+   "kind": "cells_greedy_F43_main",
+   "server": "lora:F43=/home/hwkim/sftdpo_work/pilot_006/train/F43/checkpoint-1861",
+   "est": 12,
+   "prio": 6,
+   "cells": [
+    {
+     "label": "greedy_f43_e1_sel",
+     "model": "F43",
+     "target": "full",
+     "gold": "sel",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    },
+    {
+     "label": "greedy_f43_e1_holdout",
+     "model": "F43",
+     "target": "full",
+     "gold": "holdout",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    }
+   ]
+  },
+  {
+   "id": "E-greedy_F1016",
+   "type": "cells",
+   "kind": "cells_greedy_F1016_main",
+   "server": "lora:F1016=/home/hwkim/sftdpo_work/pilot_006/train/F1016/checkpoint-1861",
+   "est": 12,
+   "prio": 6,
+   "cells": [
+    {
+     "label": "greedy_f1016_e1_sel",
+     "model": "F1016",
+     "target": "full",
+     "gold": "sel",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    },
+    {
+     "label": "greedy_f1016_e1_holdout",
+     "model": "F1016",
+     "target": "full",
+     "gold": "holdout",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    }
+   ]
+  },
+  {
+   "id": "E-greedy_P43",
+   "type": "cells",
+   "kind": "cells_greedy_P43_main",
+   "server": "lora:P43=/home/hwkim/sftdpo_work/pilot_006/train/P43/checkpoint-1826",
+   "est": 12,
+   "prio": 6,
+   "cells": [
+    {
+     "label": "greedy_p43_e1_sel",
+     "model": "P43",
+     "target": "partial",
+     "gold": "sel",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    },
+    {
+     "label": "greedy_p43_e1_holdout",
+     "model": "P43",
+     "target": "partial",
+     "gold": "holdout",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    }
+   ]
+  },
+  {
+   "id": "E-greedy_P1016",
+   "type": "cells",
+   "kind": "cells_greedy_P1016_main",
+   "server": "lora:P1016=/home/hwkim/sftdpo_work/pilot_006/train/P1016/checkpoint-1826",
+   "est": 12,
+   "prio": 6,
+   "cells": [
+    {
+     "label": "greedy_p1016_e1_sel",
+     "model": "P1016",
+     "target": "partial",
+     "gold": "sel",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    },
+    {
+     "label": "greedy_p1016_e1_holdout",
+     "model": "P1016",
+     "target": "partial",
+     "gold": "holdout",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    }
+   ]
+  },
+  {
+   "id": "E-D_D-F7",
+   "type": "cells",
+   "kind": "cells_D-F7_100_main_k4",
+   "server": "lora:D_F7=/home/hwkim/sftdpo_work/pilot_006/diag/D-F7/checkpoint-1861",
+   "est": 40,
+   "prio": 7,
+   "deps": [
+    "file:/home/hwkim/sftdpo_work/pilot_006/diag/D-F7/checkpoint-1861/adapter_model.safetensors|D-F7"
+   ],
+   "cells": [
+    {
+     "label": "d_f7_q100_sel",
+     "model": "D_F7",
+     "target": "full",
+     "gold": "sel",
+     "k": 4,
+     "seed_base": 20261100,
+     "greedy": false
+    },
+    {
+     "label": "d_f7_q100_holdout",
+     "model": "D_F7",
+     "target": "full",
+     "gold": "holdout",
+     "k": 4,
+     "seed_base": 20261100,
+     "greedy": false
+    }
+   ]
+  },
+  {
+   "id": "E-Dq_D-F7",
+   "type": "cells",
+   "kind": "cells_D-F7_q25_50_75_greedy",
+   "server": "lora:D_F7q25=/home/hwkim/sftdpo_work/pilot_006/diag/D-F7/checkpoint-465 D_F7q50=/home/hwkim/sftdpo_work/pilot_006/diag/D-F7/checkpoint-930 D_F7q75=/home/hwkim/sftdpo_work/pilot_006/diag/D-F7/checkpoint-1396",
+   "est": 35,
+   "prio": 8,
+   "deps": [
+    "file:/home/hwkim/sftdpo_work/pilot_006/diag/D-F7/checkpoint-1396/adapter_model.safetensors|D-F7",
+    "file:/home/hwkim/sftdpo_work/pilot_006/diag/D-F7/checkpoint-1861/adapter_model.safetensors|D-F7"
+   ],
+   "cells": [
+    {
+     "label": "d_f7_q25_greedy_sel",
+     "model": "D_F7q25",
+     "target": "full",
+     "gold": "sel",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    },
+    {
+     "label": "d_f7_q25_greedy_holdout",
+     "model": "D_F7q25",
+     "target": "full",
+     "gold": "holdout",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    },
+    {
+     "label": "d_f7_q50_greedy_sel",
+     "model": "D_F7q50",
+     "target": "full",
+     "gold": "sel",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    },
+    {
+     "label": "d_f7_q50_greedy_holdout",
+     "model": "D_F7q50",
+     "target": "full",
+     "gold": "holdout",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    },
+    {
+     "label": "d_f7_q75_greedy_sel",
+     "model": "D_F7q75",
+     "target": "full",
+     "gold": "sel",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    },
+    {
+     "label": "d_f7_q75_greedy_holdout",
+     "model": "D_F7q75",
+     "target": "full",
+     "gold": "holdout",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    }
+   ]
+  },
+  {
+   "id": "E-D7dev_D-F7",
+   "type": "cells",
+   "kind": "cells_D-F7_100_dev",
+   "server": "lora:D_F7=/home/hwkim/sftdpo_work/pilot_006/diag/D-F7/checkpoint-1861",
+   "est": 90,
+   "prio": 9,
+   "deps": [
+    "file:/home/hwkim/sftdpo_work/pilot_006/diag/D-F7/checkpoint-1861/adapter_model.safetensors|D-F7"
+   ],
+   "cells": [
+    {
+     "label": "d_f7_q100_valid98",
+     "model": "D_F7",
+     "target": "full",
+     "gold": "valid98",
+     "k": 4
+    },
+    {
+     "label": "d_f7_q100_aux",
+     "model": "D_F7",
+     "target": "full",
+     "gold": "aux",
+     "k": 4
+    },
+    {
+     "label": "d_f7_q100_vendor100",
+     "model": "D_F7",
+     "target": "full",
+     "gold": "vendor100",
+     "k": 8
+    }
+   ]
+  },
+  {
+   "id": "E-D_D-P7",
+   "type": "cells",
+   "kind": "cells_D-P7_100_main_k4",
+   "server": "lora:D_P7=/home/hwkim/sftdpo_work/pilot_006/diag/D-P7/checkpoint-1826",
+   "est": 40,
+   "prio": 7,
+   "deps": [
+    "file:/home/hwkim/sftdpo_work/pilot_006/diag/D-P7/checkpoint-1826/adapter_model.safetensors|D-P7"
+   ],
+   "cells": [
+    {
+     "label": "d_p7_q100_sel",
+     "model": "D_P7",
+     "target": "partial",
+     "gold": "sel",
+     "k": 4,
+     "seed_base": 20261100,
+     "greedy": false
+    },
+    {
+     "label": "d_p7_q100_holdout",
+     "model": "D_P7",
+     "target": "partial",
+     "gold": "holdout",
+     "k": 4,
+     "seed_base": 20261100,
+     "greedy": false
+    }
+   ]
+  },
+  {
+   "id": "E-Dq_D-P7",
+   "type": "cells",
+   "kind": "cells_D-P7_q25_50_75_greedy",
+   "server": "lora:D_P7q25=/home/hwkim/sftdpo_work/pilot_006/diag/D-P7/checkpoint-456 D_P7q50=/home/hwkim/sftdpo_work/pilot_006/diag/D-P7/checkpoint-913 D_P7q75=/home/hwkim/sftdpo_work/pilot_006/diag/D-P7/checkpoint-1370",
+   "est": 35,
+   "prio": 8,
+   "deps": [
+    "file:/home/hwkim/sftdpo_work/pilot_006/diag/D-P7/checkpoint-1370/adapter_model.safetensors|D-P7",
+    "file:/home/hwkim/sftdpo_work/pilot_006/diag/D-P7/checkpoint-1826/adapter_model.safetensors|D-P7"
+   ],
+   "cells": [
+    {
+     "label": "d_p7_q25_greedy_sel",
+     "model": "D_P7q25",
+     "target": "partial",
+     "gold": "sel",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    },
+    {
+     "label": "d_p7_q25_greedy_holdout",
+     "model": "D_P7q25",
+     "target": "partial",
+     "gold": "holdout",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    },
+    {
+     "label": "d_p7_q50_greedy_sel",
+     "model": "D_P7q50",
+     "target": "partial",
+     "gold": "sel",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    },
+    {
+     "label": "d_p7_q50_greedy_holdout",
+     "model": "D_P7q50",
+     "target": "partial",
+     "gold": "holdout",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    },
+    {
+     "label": "d_p7_q75_greedy_sel",
+     "model": "D_P7q75",
+     "target": "partial",
+     "gold": "sel",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    },
+    {
+     "label": "d_p7_q75_greedy_holdout",
+     "model": "D_P7q75",
+     "target": "partial",
+     "gold": "holdout",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    }
+   ]
+  },
+  {
+   "id": "E-D7dev_D-P7",
+   "type": "cells",
+   "kind": "cells_D-P7_100_dev",
+   "server": "lora:D_P7=/home/hwkim/sftdpo_work/pilot_006/diag/D-P7/checkpoint-1826",
+   "est": 90,
+   "prio": 9,
+   "deps": [
+    "file:/home/hwkim/sftdpo_work/pilot_006/diag/D-P7/checkpoint-1826/adapter_model.safetensors|D-P7"
+   ],
+   "cells": [
+    {
+     "label": "d_p7_q100_valid98",
+     "model": "D_P7",
+     "target": "partial",
+     "gold": "valid98",
+     "k": 4
+    },
+    {
+     "label": "d_p7_q100_aux",
+     "model": "D_P7",
+     "target": "partial",
+     "gold": "aux",
+     "k": 4
+    },
+    {
+     "label": "d_p7_q100_vendor100",
+     "model": "D_P7",
+     "target": "partial",
+     "gold": "vendor100",
+     "k": 8
+    }
+   ]
+  },
+  {
+   "id": "E-D_D-F43o1016",
+   "type": "cells",
+   "kind": "cells_D-F43o1016_100_main_k4",
+   "server": "lora:D_F43o1016=/home/hwkim/sftdpo_work/pilot_006/diag/D-F43o1016/checkpoint-1861",
+   "est": 40,
+   "prio": 7,
+   "deps": [
+    "file:/home/hwkim/sftdpo_work/pilot_006/diag/D-F43o1016/checkpoint-1861/adapter_model.safetensors|D-F43o1016"
+   ],
+   "cells": [
+    {
+     "label": "d_f43o1016_q100_sel",
+     "model": "D_F43o1016",
+     "target": "full",
+     "gold": "sel",
+     "k": 4,
+     "seed_base": 20261100,
+     "greedy": false
+    },
+    {
+     "label": "d_f43o1016_q100_holdout",
+     "model": "D_F43o1016",
+     "target": "full",
+     "gold": "holdout",
+     "k": 4,
+     "seed_base": 20261100,
+     "greedy": false
+    }
+   ]
+  },
+  {
+   "id": "E-Dq_D-F43o1016",
+   "type": "cells",
+   "kind": "cells_D-F43o1016_q25_50_75_greedy",
+   "server": "lora:D_F43o1016q25=/home/hwkim/sftdpo_work/pilot_006/diag/D-F43o1016/checkpoint-465 D_F43o1016q50=/home/hwkim/sftdpo_work/pilot_006/diag/D-F43o1016/checkpoint-930 D_F43o1016q75=/home/hwkim/sftdpo_work/pilot_006/diag/D-F43o1016/checkpoint-1396",
+   "est": 35,
+   "prio": 8,
+   "deps": [
+    "file:/home/hwkim/sftdpo_work/pilot_006/diag/D-F43o1016/checkpoint-1396/adapter_model.safetensors|D-F43o1016",
+    "file:/home/hwkim/sftdpo_work/pilot_006/diag/D-F43o1016/checkpoint-1861/adapter_model.safetensors|D-F43o1016"
+   ],
+   "cells": [
+    {
+     "label": "d_f43o1016_q25_greedy_sel",
+     "model": "D_F43o1016q25",
+     "target": "full",
+     "gold": "sel",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    },
+    {
+     "label": "d_f43o1016_q25_greedy_holdout",
+     "model": "D_F43o1016q25",
+     "target": "full",
+     "gold": "holdout",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    },
+    {
+     "label": "d_f43o1016_q50_greedy_sel",
+     "model": "D_F43o1016q50",
+     "target": "full",
+     "gold": "sel",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    },
+    {
+     "label": "d_f43o1016_q50_greedy_holdout",
+     "model": "D_F43o1016q50",
+     "target": "full",
+     "gold": "holdout",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    },
+    {
+     "label": "d_f43o1016_q75_greedy_sel",
+     "model": "D_F43o1016q75",
+     "target": "full",
+     "gold": "sel",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    },
+    {
+     "label": "d_f43o1016_q75_greedy_holdout",
+     "model": "D_F43o1016q75",
+     "target": "full",
+     "gold": "holdout",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    }
+   ]
+  },
+  {
+   "id": "E-D_D-F1016o43",
+   "type": "cells",
+   "kind": "cells_D-F1016o43_100_main_k4",
+   "server": "lora:D_F1016o43=/home/hwkim/sftdpo_work/pilot_006/diag/D-F1016o43/checkpoint-1861",
+   "est": 40,
+   "prio": 7,
+   "deps": [
+    "file:/home/hwkim/sftdpo_work/pilot_006/diag/D-F1016o43/checkpoint-1861/adapter_model.safetensors|D-F1016o43"
+   ],
+   "cells": [
+    {
+     "label": "d_f1016o43_q100_sel",
+     "model": "D_F1016o43",
+     "target": "full",
+     "gold": "sel",
+     "k": 4,
+     "seed_base": 20261100,
+     "greedy": false
+    },
+    {
+     "label": "d_f1016o43_q100_holdout",
+     "model": "D_F1016o43",
+     "target": "full",
+     "gold": "holdout",
+     "k": 4,
+     "seed_base": 20261100,
+     "greedy": false
+    }
+   ]
+  },
+  {
+   "id": "E-Dq_D-F1016o43",
+   "type": "cells",
+   "kind": "cells_D-F1016o43_q25_50_75_greedy",
+   "server": "lora:D_F1016o43q25=/home/hwkim/sftdpo_work/pilot_006/diag/D-F1016o43/checkpoint-465 D_F1016o43q50=/home/hwkim/sftdpo_work/pilot_006/diag/D-F1016o43/checkpoint-930 D_F1016o43q75=/home/hwkim/sftdpo_work/pilot_006/diag/D-F1016o43/checkpoint-1396",
+   "est": 35,
+   "prio": 8,
+   "deps": [
+    "file:/home/hwkim/sftdpo_work/pilot_006/diag/D-F1016o43/checkpoint-1396/adapter_model.safetensors|D-F1016o43",
+    "file:/home/hwkim/sftdpo_work/pilot_006/diag/D-F1016o43/checkpoint-1861/adapter_model.safetensors|D-F1016o43"
+   ],
+   "cells": [
+    {
+     "label": "d_f1016o43_q25_greedy_sel",
+     "model": "D_F1016o43q25",
+     "target": "full",
+     "gold": "sel",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    },
+    {
+     "label": "d_f1016o43_q25_greedy_holdout",
+     "model": "D_F1016o43q25",
+     "target": "full",
+     "gold": "holdout",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    },
+    {
+     "label": "d_f1016o43_q50_greedy_sel",
+     "model": "D_F1016o43q50",
+     "target": "full",
+     "gold": "sel",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    },
+    {
+     "label": "d_f1016o43_q50_greedy_holdout",
+     "model": "D_F1016o43q50",
+     "target": "full",
+     "gold": "holdout",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    },
+    {
+     "label": "d_f1016o43_q75_greedy_sel",
+     "model": "D_F1016o43q75",
+     "target": "full",
+     "gold": "sel",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    },
+    {
+     "label": "d_f1016o43_q75_greedy_holdout",
+     "model": "D_F1016o43q75",
+     "target": "full",
+     "gold": "holdout",
+     "k": 1,
+     "seed_base": 20261100,
+     "greedy": true
+    }
+   ]
+  }
+ ]
+}
