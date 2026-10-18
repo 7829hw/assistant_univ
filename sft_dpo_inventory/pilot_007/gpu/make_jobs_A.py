@@ -35,5 +35,20 @@ for r in ("R1", "R2"):
               for q in ("25", "50", "75") for g in ("sel", "holdout")]
         jobs.append({"id": f"E-Aq_{jid}", "type": "cells", "kind": f"cells_{jid}_q25_50_75_greedy_main", "server": f"lora:{loras}", "est": 35, "prio": 6,
                      "deps": [f"file:{ck(q100)}/adapter_model.safetensors{own}"], "cells": qc})
+# 우선 4: S-focus(결정 169) — arm마다 8b 정답 표본 < 4인 소속·bucket 질문에 64표본(``pilot_007/self/sfocus_manifest.json``).
+# 입력 목록은 스케줄러 worktree(고정 커밋 0eef870) 뒤에 커밋되므로 main 경로에서 읽고 sha256을 먼저 확인한다(코드는 worktree의 collect6b.py).
+SF = json.loads((HERE.parent / "self/sfocus_manifest.json").read_text(encoding="utf-8"))
+PY = "/home/hwkim/sftdpo_work/hfvenv/bin/python"
+GEN = "/home/hwkim/assistant_univ/training/generated/pilot_007/self"
+for arm, tag in (("full", "F"), ("partial", "P")):
+    a = SF["arms"][arm]
+    if not a["items"]:
+        continue
+    inp = f"{{MAIN}}/sft_dpo_inventory/pilot_007/self/sfocus_{arm}.jsonl"
+    cmd = (f"echo '{a['sha256']}  {inp}' | sha256sum -c - && mkdir -p {GEN}/raw && {PY} {{WT}}/sft_dpo_inventory/pilot_006_prep/gpu/collect6b.py --mode self "
+           f"--grounding-target {arm} --port {{PORT}} --label SF_{arm} --inputs {inp} --raw-out {GEN}/raw/SF_{arm}_raw.jsonl --out {GEN}/SF_{arm}_manifest.json "
+           f"--server-meta /data/hwkim/sftdpo_work/pilot_006_prep/vllm --samples {SF['samples']} --no-greedy --round-seed {SF['round_seed']}")
+    jobs.append({"id": f"S-focus-{tag}", "type": "raw", "kind": f"self_sfocus_{arm}_{a['items']}x{SF['samples']}", "server": "b17408",
+                 "est": max(10, 3 * a["items"]), "prio": 4, "cmd": ["bash", "-c", cmd], "outputs": [f"{GEN}/SF_{arm}_manifest.json"]})
 (HERE / "jobs_A.json").write_text(json.dumps({"jobs": jobs}, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
 print(len(jobs), [j["id"] for j in jobs])
