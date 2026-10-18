@@ -50,5 +50,19 @@ for arm, tag in (("full", "F"), ("partial", "P")):
            f"--server-meta /data/hwkim/sftdpo_work/pilot_006_prep/vllm --samples {SF['samples']} --no-greedy --round-seed {SF['round_seed']}")
     jobs.append({"id": f"S-focus-{tag}", "type": "raw", "kind": f"self_sfocus_{arm}_{a['items']}x{SF['samples']}", "server": "b17408",
                  "est": max(10, 3 * a["items"]), "prio": 4, "cmd": ["bash", "-c", cmd], "outputs": [f"{GEN}/SF_{arm}_manifest.json"]})
+# 우선 5: J-b010(결정 169) — batch010 남은 후보(검사 통과 50)의 base 첫 응답(greedy) + 두 arm 자체 표본(collect6b 기본: greedy 1 + 표본 8, batch009 J11·J12와 같음).
+import hashlib  # noqa: E402
+B10 = HERE.parents[1] / "batch010"
+if (B10 / "inputs_self.jsonl").exists():
+    sh = {n: hashlib.sha256((B10 / n).read_bytes()).hexdigest() for n in ("inputs_first_response.jsonl", "inputs_self.jsonl")}
+    M = "{MAIN}/sft_dpo_inventory/batch010"
+    chk = " && ".join(f"echo '{h}  {M}/{n}' | sha256sum -c -" for n, h in sh.items())
+    col = f"{PY} {{WT}}/sft_dpo_inventory/pilot_006_prep/gpu/collect6b.py --port {{PORT}} --server-meta /data/hwkim/sftdpo_work/pilot_006_prep/vllm"
+    steps = [f"{col} --mode first --label Jb010_first --inputs {M}/inputs_first_response.jsonl --raw-out {GEN}/raw/Jb010_first_raw.jsonl --out {M}/base_first_response.jsonl"]
+    steps += [f"{col} --mode self --grounding-target {arm} --label Jb010_{arm} --inputs {M}/inputs_self.jsonl --raw-out {GEN}/raw/Jb010_{arm}_raw.jsonl "
+              f"--out {GEN}/Jb010_{arm}_manifest.json" for arm in ("partial", "full")]
+    jobs.append({"id": "J-b010", "type": "raw", "kind": "first_response_and_self_both_batch010", "server": "b17408", "est": 60, "prio": 5,
+                 "cmd": ["bash", "-c", chk + f" && mkdir -p {GEN}/raw && " + " && ".join(steps)],
+                 "outputs": [f"/home/hwkim/assistant_univ/sft_dpo_inventory/batch010/base_first_response.jsonl", f"{GEN}/Jb010_partial_manifest.json", f"{GEN}/Jb010_full_manifest.json"]})
 (HERE / "jobs_A.json").write_text(json.dumps({"jobs": jobs}, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
 print(len(jobs), [j["id"] for j in jobs])

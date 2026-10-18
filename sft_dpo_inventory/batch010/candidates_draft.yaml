@@ -1,0 +1,470 @@
+batch: batch010
+status: 초안(승인 아님)
+author: Claude
+date: '2026-10-18'
+candidates:
+- id: b010-01
+  gap: g1_affiliation_place
+  question: 올해 대구 소속 택시의 활성 택시 대수 최댓값은?
+  gold_text: 'get_place_scope(name=대구)
+
+    get_billing_metrics(metric=active_taxi_count, scope=$resolve.scope, date=this_year,
+    aggregation=max)'
+  rationale: '''<지역> 소속 택시'' = 그 지역 scope(od 없음). 장소를 빠뜨리면 전국 값이 된다. 집계 최대, bucket
+    없음.'
+- id: b010-02
+  gap: g1_affiliation_place
+  question: 지난달 부산 소속 개인택시의 활성 택시 대수 중간값을 알려줘
+  gold_text: 'get_place_scope(name=부산)
+
+    get_billing_metrics(metric=active_taxi_count, scope=$resolve.scope, date=last_month,
+    taxi_type=private, aggregation=med)'
+  rationale: '''<지역> 소속 택시'' = 그 지역 scope(od 없음). 장소를 빠뜨리면 전국 값이 된다. 집계 중간값.'
+- id: b010-03
+  gap: g1_affiliation_place
+  question: 이번 달 인천 소속 택시 가동률의 최솟값은 얼마야?
+  gold_text: 'get_place_scope(name=인천)
+
+    get_billing_metrics(metric=active_taxi_ratio, scope=$resolve.scope, date=this_month,
+    aggregation=min)'
+  rationale: '''<지역> 소속 택시'' = 그 지역 scope(od 없음). 장소를 빠뜨리면 전국 값이 된다. 집계 최소.'
+- id: b010-04
+  gap: g1_affiliation_place
+  question: 올해 서울 소속 법인택시의 가동률 중간값을 보여줘
+  gold_text: 'get_place_scope(name=서울)
+
+    get_billing_metrics(metric=active_taxi_ratio, scope=$resolve.scope, date=this_year,
+    taxi_type=corporate, aggregation=med)'
+  rationale: '''<지역> 소속 택시'' = 그 지역 scope(od 없음). 장소를 빠뜨리면 전국 값이 된다. 집계 중간값.'
+- id: b010-05
+  gap: g1_affiliation_place
+  question: 올해 대구 소속 택시의 월별 평균 활성 택시 대수 중 가장 적은 값은?
+  gold_text: 'get_place_scope(name=대구)
+
+    get_billing_metrics(metric=active_taxi_count, scope=$resolve.scope, date=this_year,
+    aggregation=avg, bucket=month, rollup=min)'
+  rationale: '''<지역> 소속 택시'' = 그 지역 scope(od 없음). 장소를 빠뜨리면 전국 값이 된다. bucket: 기간을 월
+    단위로 먼저 평균(aggregation)으로 낸 뒤 그 값들의 최소(rollup). '
+- id: b010-06
+  gap: g1_affiliation_place
+  question: 올해 부산 소속 택시의 월별 최대 활성 택시 대수 가운데 가장 큰 값을 알려줘
+  gold_text: 'get_place_scope(name=부산)
+
+    get_billing_metrics(metric=active_taxi_count, scope=$resolve.scope, date=this_year,
+    aggregation=max, bucket=month, rollup=max)'
+  rationale: '''<지역> 소속 택시'' = 그 지역 scope(od 없음). 장소를 빠뜨리면 전국 값이 된다. bucket: 기간을 월
+    단위로 먼저 최대(aggregation)으로 낸 뒤 그 값들의 최대(rollup). '
+- id: b010-07
+  gap: g1_affiliation_place
+  question: 지난달 대구 수성구 소속 택시의 주별 활성 택시 대수 중간값 중 가장 낮은 값은?
+  gold_text: 'get_place_scope(name=수성구, region=대구)
+
+    get_billing_metrics(metric=active_taxi_count, scope=$resolve.scope, date=last_month,
+    aggregation=med, bucket=week, rollup=min)'
+  rationale: '''<지역> 소속 택시'' = 그 지역 scope(od 없음). 장소를 빠뜨리면 전국 값이 된다. bucket: 기간을 주
+    단위로 먼저 중간값(aggregation)으로 낸 뒤 그 값들의 최소(rollup). '
+- id: b010-08
+  gap: g1_affiliation_place
+  question: 이번 달 부산진구 소속 개인택시의 주별 최소 활성 택시 대수를 평균 내면 얼마야?
+  gold_text: 'get_place_scope(name=부산진구, region=부산)
+
+    get_billing_metrics(metric=active_taxi_count, scope=$resolve.scope, date=this_month,
+    taxi_type=private, aggregation=min, bucket=week, rollup=avg)'
+  rationale: '''<지역> 소속 택시'' = 그 지역 scope(od 없음). 장소를 빠뜨리면 전국 값이 된다. bucket: 기간을 주
+    단위로 먼저 최소(aggregation)으로 낸 뒤 그 값들의 평균(rollup). '
+- id: b010-09
+  gap: g1_affiliation_place
+  question: 올해 인천 소속 택시의 월별 평균 가동률을 다시 평균 낸 값은?
+  gold_text: 'get_place_scope(name=인천)
+
+    get_billing_metrics(metric=active_taxi_ratio, scope=$resolve.scope, date=this_year,
+    aggregation=avg, bucket=month, rollup=avg)'
+  rationale: '''<지역> 소속 택시'' = 그 지역 scope(od 없음). 장소를 빠뜨리면 전국 값이 된다. bucket: 기간을 월
+    단위로 먼저 평균(aggregation)으로 낸 뒤 그 값들의 평균(rollup). '
+- id: b010-10
+  gap: g1_affiliation_place
+  question: 올해 서울 소속 개인택시의 월별 최고 가동률 중 가장 낮은 값을 알려줘
+  gold_text: 'get_place_scope(name=서울)
+
+    get_billing_metrics(metric=active_taxi_ratio, scope=$resolve.scope, date=this_year,
+    taxi_type=private, aggregation=max, bucket=month, rollup=min)'
+  rationale: '''<지역> 소속 택시'' = 그 지역 scope(od 없음). 장소를 빠뜨리면 전국 값이 된다. bucket: 기간을 월
+    단위로 먼저 최대(aggregation)으로 낸 뒤 그 값들의 최소(rollup). '
+- id: b010-11
+  gap: g1_affiliation_place
+  question: 지난달 대구 소속 택시의 주별 평균 가동률 중 가장 높은 값은?
+  gold_text: 'get_place_scope(name=대구)
+
+    get_billing_metrics(metric=active_taxi_ratio, scope=$resolve.scope, date=last_month,
+    aggregation=avg, bucket=week, rollup=max)'
+  rationale: '''<지역> 소속 택시'' = 그 지역 scope(od 없음). 장소를 빠뜨리면 전국 값이 된다. bucket: 기간을 주
+    단위로 먼저 평균(aggregation)으로 낸 뒤 그 값들의 최대(rollup). '
+- id: b010-12
+  gap: g1_affiliation_place
+  question: 이번 달 부산 수영구 소속 법인택시의 주별 최저 가동률 중 가장 낮은 값을 보여줘
+  gold_text: 'get_place_scope(name=수영구, region=부산)
+
+    get_billing_metrics(metric=active_taxi_ratio, scope=$resolve.scope, date=this_month,
+    taxi_type=corporate, aggregation=min, bucket=week, rollup=min)'
+  rationale: '''<지역> 소속 택시'' = 그 지역 scope(od 없음). 장소를 빠뜨리면 전국 값이 된다. bucket: 기간을 주
+    단위로 먼저 최소(aggregation)으로 낸 뒤 그 값들의 최소(rollup). '
+- id: b010-13
+  gap: g1_affiliation_place
+  question: 올해 부산 소속 택시의 월별 운행 일수 합계 중 가장 많은 값은?
+  gold_text: 'get_place_scope(name=부산)
+
+    get_billing_metrics(metric=operating_days, scope=$resolve.scope, date=this_year,
+    aggregation=sum, bucket=month, rollup=max)'
+  rationale: '''<지역> 소속 택시'' = 그 지역 scope(od 없음). 장소를 빠뜨리면 전국 값이 된다. bucket: 기간을 월
+    단위로 먼저 합계(aggregation)으로 낸 뒤 그 값들의 최대(rollup). '
+- id: b010-14
+  gap: g1_affiliation_place
+  question: 올해 대구 소속 개인택시의 월별 평균 운행 일수의 중간값을 알려줘
+  gold_text: 'get_place_scope(name=대구)
+
+    get_billing_metrics(metric=operating_days, scope=$resolve.scope, date=this_year,
+    taxi_type=private, aggregation=avg, bucket=month, rollup=med)'
+  rationale: '''<지역> 소속 택시'' = 그 지역 scope(od 없음). 장소를 빠뜨리면 전국 값이 된다. bucket: 기간을 월
+    단위로 먼저 평균(aggregation)으로 낸 뒤 그 값들의 중간값(rollup). '
+- id: b010-15
+  gap: g1_affiliation_place
+  question: 지난달 서울 소속 택시의 주별 운행 일수 합계를 평균 내면?
+  gold_text: 'get_place_scope(name=서울)
+
+    get_billing_metrics(metric=operating_days, scope=$resolve.scope, date=last_month,
+    aggregation=sum, bucket=week, rollup=avg)'
+  rationale: '''<지역> 소속 택시'' = 그 지역 scope(od 없음). 장소를 빠뜨리면 전국 값이 된다. bucket: 기간을 주
+    단위로 먼저 합계(aggregation)으로 낸 뒤 그 값들의 평균(rollup). '
+- id: b010-16
+  gap: g1_affiliation_place
+  question: 이번 달 인천 소속 법인택시의 주별 최대 운행 일수 중 가장 작은 값은?
+  gold_text: 'get_place_scope(name=인천)
+
+    get_billing_metrics(metric=operating_days, scope=$resolve.scope, date=this_month,
+    taxi_type=corporate, aggregation=max, bucket=week, rollup=min)'
+  rationale: '''<지역> 소속 택시'' = 그 지역 scope(od 없음). 장소를 빠뜨리면 전국 값이 된다. bucket: 기간을 주
+    단위로 먼저 최대(aggregation)으로 낸 뒤 그 값들의 최소(rollup). '
+- id: b010-17
+  gap: g1_affiliation_place
+  question: 올해 대구 소속 택시의 월별 최대 수입을 평균 낸 값은 얼마야?
+  gold_text: 'get_place_scope(name=대구)
+
+    get_billing_metrics(metric=revenue, scope=$resolve.scope, date=this_year, aggregation=max,
+    bucket=month, rollup=avg)'
+  rationale: '''<지역> 소속 택시'' = 그 지역 scope(od 없음). 장소를 빠뜨리면 전국 값이 된다. bucket: 기간을 월
+    단위로 먼저 최대(aggregation)으로 낸 뒤 그 값들의 평균(rollup). '
+- id: b010-18
+  gap: g1_affiliation_place
+  question: 올해 부산 소속 개인택시의 월별 수입 중간값 가운데 가장 큰 값을 알려줘
+  gold_text: 'get_place_scope(name=부산)
+
+    get_billing_metrics(metric=revenue, scope=$resolve.scope, date=this_year, taxi_type=private,
+    aggregation=med, bucket=month, rollup=max)'
+  rationale: '''<지역> 소속 택시'' = 그 지역 scope(od 없음). 장소를 빠뜨리면 전국 값이 된다. bucket: 기간을 월
+    단위로 먼저 중간값(aggregation)으로 낸 뒤 그 값들의 최대(rollup). '
+- id: b010-19
+  gap: g1_affiliation_place
+  question: 지난달 대구 달서구 소속 택시의 주별 수입 합계 중 가장 적은 값은?
+  gold_text: 'get_place_scope(name=달서구, region=대구)
+
+    get_billing_metrics(metric=revenue, scope=$resolve.scope, date=last_month, aggregation=sum,
+    bucket=week, rollup=min)'
+  rationale: '''<지역> 소속 택시'' = 그 지역 scope(od 없음). 장소를 빠뜨리면 전국 값이 된다. bucket: 기간을 주
+    단위로 먼저 합계(aggregation)으로 낸 뒤 그 값들의 최소(rollup). '
+- id: b010-20
+  gap: g1_affiliation_place
+  question: 이번 달 서울 소속 법인택시의 주별 평균 수입의 중간값은?
+  gold_text: 'get_place_scope(name=서울)
+
+    get_billing_metrics(metric=revenue, scope=$resolve.scope, date=this_month, taxi_type=corporate,
+    aggregation=avg, bucket=week, rollup=med)'
+  rationale: '''<지역> 소속 택시'' = 그 지역 scope(od 없음). 장소를 빠뜨리면 전국 값이 된다. bucket: 기간을 주
+    단위로 먼저 평균(aggregation)으로 낸 뒤 그 값들의 중간값(rollup). '
+- id: b010-21
+  gap: g2_inflow_outflow_place
+  question: 지난주 부산 초량동에서 나간 실차를 도착 시도별로 셌을 때 가장 적은 두 곳은?
+  gold_text: 'get_place_scope(name=초량동, region=부산)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=last_week, dimension=sido, dimension_target=dropoff,
+    order=bottom, limit=2)'
+  rationale: '''…으로 들어온·…에 들어온'' = 그 장소가 하차(도착) 끝, ''…에서 나간·빠져나간'' = 승차(출발) 끝(od_role).
+    묶는 끝은 dimension_target. 나간 = 승차 끝, 도착 시도별 = dt 하차, 순위 하위 2.'
+- id: b010-22
+  gap: g2_inflow_outflow_place
+  question: 이번 달 대구 동인동에서 나간 실차 건수를 출발 읍면동과 도착 읍면동 짝별로 보여줘
+  gold_text: 'get_place_scope(name=동인동, region=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=this_month, dimension=emd, dimension_target=both)'
+  rationale: '''…으로 들어온·…에 들어온'' = 그 장소가 하차(도착) 끝, ''…에서 나간·빠져나간'' = 승차(출발) 끝(od_role).
+    묶는 끝은 dimension_target. 나간 = 승차 끝, 짝별 = dt both.'
+- id: b010-23
+  gap: g2_inflow_outflow_place
+  question: 지난주 대구 중앙로동에서 나간 실차를 도착 H3 셀별로 세어줘
+  gold_text: 'get_place_scope(name=중앙로동, region=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=last_week, dimension=h3, dimension_target=dropoff)'
+  rationale: '''…으로 들어온·…에 들어온'' = 그 장소가 하차(도착) 끝, ''…에서 나간·빠져나간'' = 승차(출발) 끝(od_role).
+    묶는 끝은 dimension_target. 나간 = 승차 끝, 도착 H3 셀별 = dt 하차.'
+- id: b010-24
+  gap: g2_inflow_outflow_place
+  question: 이번 달 대구 태평로동에서 나간 실차가 가장 많이 도착한 H3 셀 세 곳은?
+  gold_text: 'get_place_scope(name=태평로동, region=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=this_month, dimension=h3, dimension_target=dropoff,
+    order=top, limit=3)'
+  rationale: '''…으로 들어온·…에 들어온'' = 그 장소가 하차(도착) 끝, ''…에서 나간·빠져나간'' = 승차(출발) 끝(od_role).
+    묶는 끝은 dimension_target. 순위 상위 3.'
+- id: b010-25
+  gap: g2_inflow_outflow_place
+  question: 지난달 대구 동성로동에서 빠져나간 실차가 가장 적게 도착한 H3 셀 두 곳은?
+  gold_text: 'get_place_scope(name=동성로동, region=대구)
+
+    get_trip_count(scope_pickup=$pickup.scope, date=last_month, dimension=h3, dimension_target=dropoff,
+    order=bottom, limit=2)'
+  rationale: '''…으로 들어온·…에 들어온'' = 그 장소가 하차(도착) 끝, ''…에서 나간·빠져나간'' = 승차(출발) 끝(od_role).
+    묶는 끝은 dimension_target. 빠져나간 = 승차 끝, 순위 하위 2.'
+- id: b010-26
+  gap: g2_inflow_outflow_place
+  question: 지난주 부산 초량동으로 들어온 실차를 출발 시도별로 세어줘
+  gold_text: 'get_place_scope(name=초량동, region=부산)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, date=last_week, dimension=sido, dimension_target=pickup)'
+  rationale: '''…으로 들어온·…에 들어온'' = 그 장소가 하차(도착) 끝, ''…에서 나간·빠져나간'' = 승차(출발) 끝(od_role).
+    묶는 끝은 dimension_target. 들어온 = 하차 끝, 출발 시도별 = dt 승차.'
+- id: b010-27
+  gap: g2_inflow_outflow_place
+  question: 이번 달 대구 동인동으로 들어온 실차가 가장 많이 출발한 시도 두 곳은?
+  gold_text: 'get_place_scope(name=동인동, region=대구)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, date=this_month, dimension=sido,
+    dimension_target=pickup, order=top, limit=2)'
+  rationale: '''…으로 들어온·…에 들어온'' = 그 장소가 하차(도착) 끝, ''…에서 나간·빠져나간'' = 승차(출발) 끝(od_role).
+    묶는 끝은 dimension_target. 순위 상위 2.'
+- id: b010-28
+  gap: g2_inflow_outflow_place
+  question: 지난달 부산 초읍동으로 들어온 실차가 가장 적게 출발한 시도는?
+  gold_text: 'get_place_scope(name=초읍동, region=부산)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, date=last_month, dimension=sido,
+    dimension_target=pickup, order=bottom, limit=1)'
+  rationale: '''…으로 들어온·…에 들어온'' = 그 장소가 하차(도착) 끝, ''…에서 나간·빠져나간'' = 승차(출발) 끝(od_role).
+    묶는 끝은 dimension_target. 순위 하위 1.'
+- id: b010-29
+  gap: g2_inflow_outflow_place
+  question: 지난주 대구 신천동에 들어온 실차 건수를 출발 시군구별로 보여줘
+  gold_text: 'get_place_scope(name=신천동, region=대구)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, date=last_week, dimension=sigungu,
+    dimension_target=pickup)'
+  rationale: '''…으로 들어온·…에 들어온'' = 그 장소가 하차(도착) 끝, ''…에서 나간·빠져나간'' = 승차(출발) 끝(od_role).
+    묶는 끝은 dimension_target. 들어온 = 하차 끝, 출발 시군구별.'
+- id: b010-30
+  gap: g2_inflow_outflow_place
+  question: 이번 달 대구 두류동으로 들어온 실차를 출발 읍면동별로 세어줘
+  gold_text: 'get_place_scope(name=두류동, region=대구)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, date=this_month, dimension=emd, dimension_target=pickup)'
+  rationale: '''…으로 들어온·…에 들어온'' = 그 장소가 하차(도착) 끝, ''…에서 나간·빠져나간'' = 승차(출발) 끝(od_role).
+    묶는 끝은 dimension_target. 들어온 = 하차 끝, 출발 읍면동별.'
+- id: b010-31
+  gap: g3_bucket
+  question: 올해 대구 택시의 주별 평균 수입 가운데 가장 낮은 값은?
+  gold_text: 'get_place_scope(name=대구)
+
+    get_billing_metrics(metric=revenue, scope=$resolve.scope, date=this_year, aggregation=avg,
+    bucket=week, rollup=min)'
+  rationale: 'bucket: 기간을 주 단위로 먼저 평균(aggregation)으로 낸 뒤 그 값들의 최소(rollup). 장소는 결제
+    기록의 소속 지역 scope.'
+- id: b010-32
+  gap: g3_bucket
+  question: 올해 부산 택시의 월별 최대 수입 중 가장 작은 값을 알려줘
+  gold_text: 'get_place_scope(name=부산)
+
+    get_billing_metrics(metric=revenue, scope=$resolve.scope, date=this_year, aggregation=max,
+    bucket=month, rollup=min)'
+  rationale: 'bucket: 기간을 월 단위로 먼저 최대(aggregation)으로 낸 뒤 그 값들의 최소(rollup). 장소는 결제
+    기록의 소속 지역 scope.'
+- id: b010-33
+  gap: g3_bucket
+  question: 지난달 인천 택시의 주별 최대 활성 택시 대수를 평균 내줘
+  gold_text: 'get_place_scope(name=인천)
+
+    get_billing_metrics(metric=active_taxi_count, scope=$resolve.scope, date=last_month,
+    aggregation=max, bucket=week, rollup=avg)'
+  rationale: 'bucket: 기간을 주 단위로 먼저 최대(aggregation)으로 낸 뒤 그 값들의 평균(rollup). 장소는 결제
+    기록의 소속 지역 scope.'
+- id: b010-34
+  gap: g3_bucket
+  question: 올해 서울 개인택시의 월별 최소 활성 택시 대수 중 가장 큰 값은?
+  gold_text: 'get_place_scope(name=서울)
+
+    get_billing_metrics(metric=active_taxi_count, scope=$resolve.scope, date=this_year,
+    taxi_type=private, aggregation=min, bucket=month, rollup=max)'
+  rationale: 'bucket: 기간을 월 단위로 먼저 최소(aggregation)으로 낸 뒤 그 값들의 최대(rollup). 장소는 결제
+    기록의 소속 지역 scope.'
+- id: b010-35
+  gap: g3_bucket
+  question: 이번 달 대구 법인택시의 주별 가동률 중간값 가운데 가장 높은 값은?
+  gold_text: 'get_place_scope(name=대구)
+
+    get_billing_metrics(metric=active_taxi_ratio, scope=$resolve.scope, date=this_month,
+    taxi_type=corporate, aggregation=med, bucket=week, rollup=max)'
+  rationale: 'bucket: 기간을 주 단위로 먼저 중간값(aggregation)으로 낸 뒤 그 값들의 최대(rollup). 장소는 결제
+    기록의 소속 지역 scope.'
+- id: b010-36
+  gap: g3_bucket
+  question: 올해 부산진구 택시의 월별 최저 가동률을 평균 낸 값은?
+  gold_text: 'get_place_scope(name=부산진구, region=부산)
+
+    get_billing_metrics(metric=active_taxi_ratio, scope=$resolve.scope, date=this_year,
+    aggregation=min, bucket=month, rollup=avg)'
+  rationale: 'bucket: 기간을 월 단위로 먼저 최소(aggregation)으로 낸 뒤 그 값들의 평균(rollup). 장소는 결제
+    기록의 소속 지역 scope.'
+- id: b010-37
+  gap: g3_bucket
+  question: 지난달 대구 수성구 택시의 주별 평균 운행 일수를 다시 평균 내면 얼마야?
+  gold_text: 'get_place_scope(name=수성구, region=대구)
+
+    get_billing_metrics(metric=operating_days, scope=$resolve.scope, date=last_month,
+    aggregation=avg, bucket=week, rollup=avg)'
+  rationale: 'bucket: 기간을 주 단위로 먼저 평균(aggregation)으로 낸 뒤 그 값들의 평균(rollup). 장소는 결제
+    기록의 소속 지역 scope.'
+- id: b010-38
+  gap: g3_bucket
+  question: 올해 인천 법인택시의 월별 최대 운행 일수 중 가장 큰 값은?
+  gold_text: 'get_place_scope(name=인천)
+
+    get_billing_metrics(metric=operating_days, scope=$resolve.scope, date=this_year,
+    taxi_type=corporate, aggregation=max, bucket=month, rollup=max)'
+  rationale: 'bucket: 기간을 월 단위로 먼저 최대(aggregation)으로 낸 뒤 그 값들의 최대(rollup). 장소는 결제
+    기록의 소속 지역 scope.'
+- id: b010-39
+  gap: g3_bucket
+  question: 이번 달 대구 개인택시의 주별 운행 일수 중간값 가운데 가장 작은 값을 보여줘
+  gold_text: 'get_place_scope(name=대구)
+
+    get_billing_metrics(metric=operating_days, scope=$resolve.scope, date=this_month,
+    taxi_type=private, aggregation=med, bucket=week, rollup=min)'
+  rationale: 'bucket: 기간을 주 단위로 먼저 중간값(aggregation)으로 낸 뒤 그 값들의 최소(rollup). 장소는 결제
+    기록의 소속 지역 scope.'
+- id: b010-40
+  gap: g3_bucket
+  question: 지난달 부산 택시의 주별 수입 합계의 중간값은?
+  gold_text: 'get_place_scope(name=부산)
+
+    get_billing_metrics(metric=revenue, scope=$resolve.scope, date=last_month, aggregation=sum,
+    bucket=week, rollup=med)'
+  rationale: 'bucket: 기간을 주 단위로 먼저 합계(aggregation)으로 낸 뒤 그 값들의 중간값(rollup). 장소는 결제
+    기록의 소속 지역 scope.'
+- id: b010-41
+  gap: g3_bucket_vs_dimension
+  question: 올해 요일별 평균 수입을 알려줘
+  gold_text: get_billing_metrics(metric=revenue, date=this_year, aggregation=avg,
+    dimension=dayofweek)
+  rationale: '대조: ''…별''이 기간을 먼저 집계하는 bucket이 아니라 결과를 요일로 나누는 dimension이다(먼저 집계 없음).
+    장소 없음(현재 코드가 billing dimension + scope를 받지 않음). 집계 평균.'
+- id: b010-42
+  gap: g3_bucket_vs_dimension
+  question: 올해 최대 수입이 가장 높은 요일은?
+  gold_text: get_billing_metrics(metric=revenue, date=this_year, aggregation=max,
+    dimension=dayofweek, order=top, limit=1)
+  rationale: '대조: ''…별''이 기간을 먼저 집계하는 bucket이 아니라 결과를 요일로 나누는 dimension이다(먼저 집계 없음).
+    장소 없음(현재 코드가 billing dimension + scope를 받지 않음). 집계 최대, 순위 상위 1.'
+- id: b010-43
+  gap: g3_bucket_vs_dimension
+  question: 올해 요일별 활성 택시 대수를 보여줘
+  gold_text: get_billing_metrics(metric=active_taxi_count, date=this_year, dimension=dayofweek)
+  rationale: '대조: ''…별''이 기간을 먼저 집계하는 bucket이 아니라 결과를 요일로 나누는 dimension이다(먼저 집계 없음).
+    장소 없음(현재 코드가 billing dimension + scope를 받지 않음). 집계 없음.'
+- id: b010-44
+  gap: g3_bucket_vs_dimension
+  question: 지난달 시도별 평균 활성 택시 대수는?
+  gold_text: get_billing_metrics(metric=active_taxi_count, date=last_month, aggregation=avg,
+    dimension=sido)
+  rationale: '대조: ''…별''이 기간을 먼저 집계하는 bucket이 아니라 결과를 시도로 나누는 dimension이다(먼저 집계 없음).
+    장소 없음(현재 코드가 billing dimension + scope를 받지 않음). 집계 평균.'
+- id: b010-45
+  gap: g3_bucket_vs_dimension
+  question: 올해 최저 가동률이 가장 낮은 두 요일은?
+  gold_text: get_billing_metrics(metric=active_taxi_ratio, date=this_year, aggregation=min,
+    dimension=dayofweek, order=bottom, limit=2)
+  rationale: '대조: ''…별''이 기간을 먼저 집계하는 bucket이 아니라 결과를 요일로 나누는 dimension이다(먼저 집계 없음).
+    장소 없음(현재 코드가 billing dimension + scope를 받지 않음). 집계 최소, 순위 하위 2.'
+- id: b010-46
+  gap: g3_bucket_vs_dimension
+  question: 이번 달 요일별 평균 가동률을 보여줘
+  gold_text: get_billing_metrics(metric=active_taxi_ratio, date=this_month, aggregation=avg,
+    dimension=dayofweek)
+  rationale: '대조: ''…별''이 기간을 먼저 집계하는 bucket이 아니라 결과를 요일로 나누는 dimension이다(먼저 집계 없음).
+    장소 없음(현재 코드가 billing dimension + scope를 받지 않음). 집계 평균.'
+- id: b010-47
+  gap: g3_bucket_vs_dimension
+  question: 올해 운행 일수 합계가 가장 많은 요일 두 개는?
+  gold_text: get_billing_metrics(metric=operating_days, date=this_year, aggregation=sum,
+    dimension=dayofweek, order=top, limit=2)
+  rationale: '대조: ''…별''이 기간을 먼저 집계하는 bucket이 아니라 결과를 요일로 나누는 dimension이다(먼저 집계 없음).
+    장소 없음(현재 코드가 billing dimension + scope를 받지 않음). 집계 합계, 순위 상위 2.'
+- id: b010-48
+  gap: g3_bucket_vs_dimension
+  question: 지난달 시도별 운행 일수 중간값을 알려줘
+  gold_text: get_billing_metrics(metric=operating_days, date=last_month, aggregation=med,
+    dimension=sido)
+  rationale: '대조: ''…별''이 기간을 먼저 집계하는 bucket이 아니라 결과를 시도로 나누는 dimension이다(먼저 집계 없음).
+    장소 없음(현재 코드가 billing dimension + scope를 받지 않음). 집계 중간값.'
+- id: b010-49
+  gap: g3_bucket_vs_dimension
+  question: 올해 수입 중간값이 가장 높은 시도 두 곳은?
+  gold_text: get_billing_metrics(metric=revenue, date=this_year, aggregation=med,
+    dimension=sido, order=top, limit=2)
+  rationale: '대조: ''…별''이 기간을 먼저 집계하는 bucket이 아니라 결과를 시도로 나누는 dimension이다(먼저 집계 없음).
+    장소 없음(현재 코드가 billing dimension + scope를 받지 않음). 집계 중간값, 순위 상위 2.'
+- id: b010-50
+  gap: g3_bucket_vs_dimension
+  question: 이번 달 최대 활성 택시 대수가 가장 적은 시도는?
+  gold_text: get_billing_metrics(metric=active_taxi_count, date=this_month, aggregation=max,
+    dimension=sido, order=bottom, limit=1)
+  rationale: '대조: ''…별''이 기간을 먼저 집계하는 bucket이 아니라 결과를 시도로 나누는 dimension이다(먼저 집계 없음).
+    장소 없음(현재 코드가 billing dimension + scope를 받지 않음). 집계 최대, 순위 하위 1.'
+- id: b010-51
+  gap: g1_affiliation_place
+  question: 지난달 대구 소속 법인택시의 주별 평균 활성 택시 대수 가운데 가장 적은 값은?
+  gold_text: 'get_place_scope(name=대구)
+
+    get_billing_metrics(metric=active_taxi_count, scope=$resolve.scope, date=last_month,
+    taxi_type=corporate, aggregation=avg, bucket=week, rollup=min)'
+  rationale: '''<지역> 소속 택시'' = 그 지역 scope(od 없음). 장소를 빠뜨리면 전국 값이 된다. bucket: 기간을 주
+    단위로 먼저 평균(aggregation)으로 낸 뒤 그 값들의 최소(rollup). '
+- id: b010-52
+  gap: g1_affiliation_place
+  question: 이번 달 부산 소속 개인택시의 주별 가동률 중간값 중 가장 낮은 값을 알려줘
+  gold_text: 'get_place_scope(name=부산)
+
+    get_billing_metrics(metric=active_taxi_ratio, scope=$resolve.scope, date=this_month,
+    taxi_type=private, aggregation=med, bucket=week, rollup=min)'
+  rationale: '''<지역> 소속 택시'' = 그 지역 scope(od 없음). 장소를 빠뜨리면 전국 값이 된다. bucket: 기간을 주
+    단위로 먼저 중간값(aggregation)으로 낸 뒤 그 값들의 최소(rollup). '
+- id: b010-53
+  gap: g1_affiliation_place
+  question: 올해 서울 소속 택시의 월별 최소 운행 일수 가운데 가장 큰 값은?
+  gold_text: 'get_place_scope(name=서울)
+
+    get_billing_metrics(metric=operating_days, scope=$resolve.scope, date=this_year,
+    aggregation=min, bucket=month, rollup=max)'
+  rationale: '''<지역> 소속 택시'' = 그 지역 scope(od 없음). 장소를 빠뜨리면 전국 값이 된다. bucket: 기간을 월
+    단위로 먼저 최소(aggregation)으로 낸 뒤 그 값들의 최대(rollup). '
+- id: b010-54
+  gap: g2_inflow_outflow_place
+  question: 이번 달 대구 중앙로동으로 들어온 실차 건수를 출발·도착 읍면동 짝으로 나눴을 때 가장 많은 두 짝은?
+  gold_text: 'get_place_scope(name=중앙로동, region=대구)
+
+    get_trip_count(scope_dropoff=$dropoff.scope, date=this_month, dimension=emd, dimension_target=both,
+    order=top, limit=2)'
+  rationale: '''…으로 들어온·…에 들어온'' = 그 장소가 하차(도착) 끝, ''…에서 나간·빠져나간'' = 승차(출발) 끝(od_role).
+    묶는 끝은 dimension_target. 들어온 = 하차 끝, 짝별 = dt both, 순위 상위 2.'
+- id: b010-55
+  gap: g3_bucket_vs_dimension
+  question: 올해 최고 가동률이 가장 높은 시도 두 곳은?
+  gold_text: get_billing_metrics(metric=active_taxi_ratio, date=this_year, aggregation=max,
+    dimension=sido, order=top, limit=2)
+  rationale: '대조: ''…별''이 기간을 먼저 집계하는 bucket이 아니라 결과를 시도로 나누는 dimension이다(먼저 집계 없음).
+    장소 없음(현재 코드가 billing dimension + scope를 받지 않음). 집계 최대, 순위 상위 2.'
