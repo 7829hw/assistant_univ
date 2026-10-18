@@ -45,7 +45,8 @@
 | 안 | 내용 | 근거 |
 |---|---|---|
 | T1 v3b 그대로 + 정리 규칙 | RC3 trace에 C1–C4 중 하나 | C4(ii 줄만 지움): 빠짐 18–19, 문항 손실 0. C1(ii trace 뺌): 빠짐 346, 문항 손실 10–15. C2는 약점 coverage가 깨짐(dt 38/82 등) |
-| T2 v3d로 다시 모음 | `grounding/prompts/teacher_neutral_v3d.md` | **[T-v3d 결과 반영 예정: (a)(b)(c) 통과율, A2 유형 비율, 읽기 검사]** |
+| T2 v3d로 다시 모음 | `grounding/prompts/teacher_neutral_v3d.md` | T-v3d(`../pilot_006/post/V3D_READ.md`): (a)∧(b)∧¬(c) 82.5%, "결론" (ii) 0% — 하지만 통과 trace의 68%가 영어 생각(영어 비율 중앙값 0.70), 30개는 영어로 받은 줄을 가리킴. 엄격 깨끗 26%(문항 12/20), 읽기 10개 중 씀 2. **이대로는 못 씀** |
+| T2' v3e(가칭) | v3c(자유 형식) + v3d의 "[다섯 줄]" 이름표만; 검사 (d) 한국어(영어 5단어 구간 없음, 영어 비율 < 0.05)·(e) 영어 노출·메타 문장 추가 | 새 smoke 필요(20 × 8 ≈ 30분). v3b TEACH 통과 trace도 21.7%가 영어 구간 — 기존 RC3에 (d)를 적용하면 teacher 레코드 약 18%가 빠짐 |
 | T3 teacher 없음 | 8b 자체 thinking + 승인 JSON(json_only)만 | teacher 문장 습관이 없다; pilot_004·005의 teacher 손실 비율 81.8%와 크게 다른 recipe |
 
 다시 모으는 시간(0.40.6): O1 중앙값 67.42 tok/s(0.40.3 G0 67.09와 같음). TEACH(245질문 × 8, 0.40.3)가 3.87h였으므로 같은 규모는 ≈ 3.9h.
