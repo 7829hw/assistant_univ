@@ -67,7 +67,7 @@ def main():
     rep = {m: diff(f"{m}rep", f"{m}e1") for m in ("F43", "F1016")}
     for v in rep.values():
         if v:
-            v["over_6pp(stop rule: report)"] = abs(v["a_minus_b"]) > 6
+            v["over_6pp(stop rule: report)"] = bool(abs(v["a_minus_b"]) > 6)
     out["sampling_noise_E_rep"] = rep
     cells = {("43", "43"): "F43e1", ("1016", "1016"): "F1016e1", ("43", "1016"): "D_F43o1016q100", ("1016", "43"): "D_F1016o43q100"}
     m = {k: vec(v) for k, v in cells.items()}
