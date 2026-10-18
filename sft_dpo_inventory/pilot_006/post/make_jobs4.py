@@ -62,5 +62,12 @@ for did, arm, n, _ in D:
         jobs.append({"id": f"E-D7dev_{did}", "type": "cells", "kind": f"cells_{did}_100_dev", "server": f"lora:{nm}={ck(s100)}", "est": 90, "prio": 9,
                      "deps": [f"file:{ck(s100)}/adapter_model.safetensors{owner}"],
                      "cells": [{"label": f"{nm.lower()}_q100_{g}", "model": nm, "target": arm, "gold": g, "k": k} for g, k in (("valid98", 4), ("aux", 4), ("vendor100", 8))]})
+V3D_COMMIT = "09c4eb4"
+V3D_WT = f"/home/hwkim/sftdpo_work/worktrees/wt_{V3D_COMMIT}_T-v3d-run"
+# T-v3d(우선 11, 결정 164): O1 통과·v3d 지시와 (c) 목록·문항 커밋 뒤에 더함(A2). Ollama GPU에서만, 스케줄러가 job = GPU로 학습·vLLM과 겹치지 않게 함.
+jobs.append({"id": "T-v3d", "type": "ollama", "kind": "ollama_teacher_v3d_smoke_20x8", "server": "ollama", "est": 30, "prio": 11,
+             # 스케줄러 worktree(52cc5f7)에는 v3d 파일이 없어, 작업 자체가 v3d 커밋에 고정한 worktree를 따로 만들어 거기서 돈다(결정 114).
+             "cmd": ["bash", "-c", f"git -C {{MAIN}} worktree add --detach {V3D_WT} {V3D_COMMIT} && {PY} {V3D_WT}/sft_dpo_inventory/pilot_006/post/tv3d/run_tv3d.py --main {{MAIN}}"],
+             "outputs": ["{MAIN}/sft_dpo_inventory/pilot_006/post/tv3d/tv3d_summary.json"]})
 (HERE / "jobs4.json").write_text(json.dumps({"rep_seed_base": REP_SEED, "jobs": jobs}, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
 print(len(jobs), [j["id"] for j in jobs])
