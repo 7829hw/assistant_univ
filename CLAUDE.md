@@ -47,6 +47,8 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
    - Update (decision 181, 2026-10-19): a person moved the Ollama container to host GPU UUID
      `GPU-2445b100-70d8-e384-3a24-0249eeefc64d` (index 0). The Ollama GPU is now `2445b100…`; the text above about
      `48f798cc…` is kept as history. Map by UUID.
+   - Update (decision 191, 2026-10-20): the Ollama container is back on `GPU-48f798cc-9437-50ac-d604-448bbad7b311`
+     (index 2). The Ollama GPU is now `48f798cc…` again; the decision 181 line above is kept as history.
    - Do not move, restart or reconfigure the container or change its GPU assignment. A person does that.
    - Do not start another Ollama server and do not pull models. If something is needed, stop and report.
    - Ollama calls are allowed (decision 19, 2026-10-06). Rule 7 (measurement method, HF and Ollama measurements in
@@ -133,6 +135,8 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
     - Update (decision 181, 2026-10-19): the container's GPU is now `GPU-2445b100…` (index 0), so this check expects
       `2445b100…`. Before any training or vLLM job on GPU 0, `/api/ps` must be empty; if a model is loaded, do not unload it,
       fill GPU 1 first and wait (decision 181).
+    - Update (decision 191, 2026-10-20): the container's GPU is `GPU-48f798cc…` (index 2) again, so this check expects
+      `48f798cc…`, and the decision 181 rules (empty `/api/ps` before a job, never unload, 30-minute wait) apply to GPU 2, not GPU 0.
     - During the cell, check the recorded generation rate of every item (eval_count / eval_duration; evaluation records
       without eval_duration use eval_count / (duration_ms − load_duration_ms)). If it falls far below the same model's
       GPU records (threshold fixed beforehand from existing records and written in the run's plan-deviation record;
