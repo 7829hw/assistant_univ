@@ -1,0 +1,20 @@
+{
+ "gpus": ["GPU 0 2445b100", "GPU 1 a5ce83d0", "GPU 2 48f798cc (Ollama GPU, 결정 191·198: 작업마다 /api/ps 빔 확인)"],
+ "basis": {"train_hours_each": "약 3.0(A3 R1'' 실측 2.99–3.01h, F 1,811 step; P 1,775 step은 약 2%짧음)",
+           "eval_main_minutes_each": "약 30(A3 E 50분 중 주 셋 몫)", "eval_dev_minutes_each": "약 25", "base3_minutes": 30, "latency_minutes": "약 40 + 다른 GPU 빔 대기 ≤ 25"},
+ "schedule_T_relative_hours": {
+  "바퀴 1": "B-F-o43 / B-P-o43 / B-F-o1016, T → T+3",
+  "바퀴 2": "B-P-o1016 / B-F-o7 / B-P-o7, T+3 → T+6",
+  "바퀴 3": "B-F-o11 / B-P-o11 / B-F-o2027, T+6 → T+9",
+  "바퀴 4": "B-P-o2027 한 장 T+9 → T+12, 다른 두 장은 평가(주 셋·base3·개발 셋)",
+  "평가 나머지": "T+12 → 약 T+13.3(세 장)",
+  "지연 창": "약 T+13.3 → T+14.3",
+  "end": "약 T+14.3h"
+ },
+ "priority_note": "지시의 우선(학습 → 주 셋 평가 → base3 → 개발 셋 → 지연)을 작업 표에서 1–4(학습 바퀴별)·5·6·7·8로 적었다. 같은 순서 seed의 F·P가 가까운 바퀴에 들어가도록 바퀴를 나눴다.",
+ "expected_idle_over_10min": [
+  {"when": "GPU 2에 Ollama 모델이 올라오면", "why": "결정 191: 직접 내리지 않고 다른 GPU부터 채움"},
+  {"when": "지연 창(약 1h)", "why": "결정 196: 다른 두 GPU를 비워야 함"},
+  {"when": "지연 창 직전 최대 25분", "why": "쉬는 vLLM 서버가 10분 뒤 내려감 + 대기"}
+ ]
+}
