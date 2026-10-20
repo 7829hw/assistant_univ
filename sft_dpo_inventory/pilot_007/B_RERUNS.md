@@ -13,3 +13,7 @@
 ## 기록
 - 2026-10-21 00:25 사용자 확인: "잘림을 다시 돌려." — 위 방법 그대로(잘림 > 1% 셀도 다시 돌림).
 - 도구: `gpu/make_jobs_B_rerun.py`(대상 출력 → `--apply`로 원본 이동·`gpu/jobs_B_rerun.json`·`B_RERUNS.json`). 다시 돌리는 셀은 `run_cell6x.py --sealed`(화면·로그 요약 줄에 정답률을 쓰지 않음, 저장 내용은 같음).
+- 2026-10-21 03:41–04:07 다시 돌림: 셀 13개(F 8 = o1016 sel s4·holdout s3·valid98 s1, o11 holdout s2·s3, o43 sel s3, o7 holdout s3; P 5 = o1016 sel s4·valid98 s2, o43 valid98 s3,
+  o7 sel s2·valid98 s1·s4), 작업 7개(`jobs_B_rerun.json`, 스케줄러 worktree @ a5a6fec) 모두 ok. 서버 오류 0.
+- 결과: 13개 모두 원본과 sha256이 다름(같은 seed라도 출력이 같지 않음). 잘림 > 1%가 그대로인 셀 5개(b_f_o1016_sel_s4, b_p_o1016_sel_s4, b_p_o7_sel_s2,
+  b_p_o1016_valid98_s2, b_p_o7_valid98_s4) — 규칙대로 더 돌리지 않고 다시 돌린 셀을 쓴다. 잘림 호출 합계 28 → 19(셀 168개).
