@@ -15,3 +15,11 @@
 | 2026-10-21T10:26:47+09:00 | Claude Code(pilot_007 T 재검사, PF2) | 기계 검사(validate.py 실행만) | 같은 경로, sha256 `5a43e8d0…` | ok true(rows 120, file_problems 0, row_problems 0, distribution_problems 0). 출력 `validate_report_T2.json`·`validate_stdout_T2.txt`(700 디렉터리, 600, 커밋 안 함). 수치만 옮김 |
 | 2026-10-21T10:26:53+09:00 | Claude Code(pilot_007 T 재검사, PF3) | 기계 검사(RC5 학습 레코드 겹침 수·행 번호만, `pf3_overlap_t.py`) | 같은 경로, sha256 `5a43e8d0…` | 겹침 0(질문·Jaccard·같은 grounding, Full·Partial 모두). 출력 `pf3_overlap_T.json`(직전 출력은 `pf3_overlap_T_r1.json`으로 이름 바꿈; 700 디렉터리, 600, 커밋 안 함). PF4 통과 |
 | 2026-10-21T10:27:08+09:00 | Claude Code(pilot_007 T, 고정) | 고정(`pin_hash.py`, validate.py를 다시 부름, 내용 출력 없음) | 같은 경로, sha256 `5a43e8d0…` | `manifest_v1.json`(rows 120, author "사용자(이름 기록 안 함)", test false). 이 manifest 커밋이 고정 시점. 결정 202·204 |
+
+## 고정 기록(2026-10-21, manifest 커밋 `2fb30faeed618866be3ed16f02ff507730757b68`, 파일 sha256 `5a43e8d07c487ad54568331138237bbd5270df55b9d014346078e90f349af3dc`)
+
+- 작성: 새 Claude 대화, 초안
+- 수정: 같은 대화, 검사 결과의 행 번호·코드만 전달(두 차례: 첫째는 A3 PF2의 18행, 둘째는 76번만 — PF3 같은 grounding)
+- 검토: 사용자(120행 전체, 76번은 수정 뒤 다시; 이름 기록 안 함, 결정 138)
+- 검사: Claude Code, 실행만(validate.py, pf3_overlap_t.py; 내용 열람·출력 없음)
+- 고정: Claude Code(pin_hash.py)
