@@ -17,3 +17,6 @@
   o7 sel s2·valid98 s1·s4), 작업 7개(`jobs_B_rerun.json`, 스케줄러 worktree @ a5a6fec) 모두 ok. 서버 오류 0.
 - 결과: 13개 모두 원본과 sha256이 다름(같은 seed라도 출력이 같지 않음). 잘림 > 1%가 그대로인 셀 5개(b_f_o1016_sel_s4, b_p_o1016_sel_s4, b_p_o7_sel_s2,
   b_p_o1016_valid98_s2, b_p_o7_valid98_s4) — 규칙대로 더 돌리지 않고 다시 돌린 셀을 쓴다. 잘림 호출 합계 28 → 19(셀 168개).
+
+## B2단계(결정 210, 같은 방법)
+- 2026-10-22 01:15 주 큐 끝 뒤 완료성: 셀 160개 중 잘림 > 1% 23개(서버 오류 0) → 같은 seed로 한 번씩 다시 돌림(`gpu/jobs_B2_rerun.json`, 원본 `cells/replaced_B2/`, 기록 `B2_RERUNS.json`).
