@@ -23,3 +23,4 @@
 - 검토: 사용자(120행 전체, 76번은 수정 뒤 다시; 이름 기록 안 함, 결정 138)
 - 검사: Claude Code, 실행만(validate.py, pf3_overlap_t.py; 내용 열람·출력 없음)
 - 고정: Claude Code(pin_hash.py)
+| 2026-10-21T10:27:39+09:00 | Claude Code(pilot_007 B, R7 확인) | 기계 검사(`pilot_007/results/check_r7.py`: 원격 manifest·sha256 비교, validate.py `--report`의 ok만 읽음) | 같은 경로, sha256 `5a43e8d0…` | 고정 확인(manifest 커밋 2fb30fa, sha256 같음, ok true). 출력 `r7_validate_report.json`(700 디렉터리, 600, 커밋 안 함). 결정 200·203 |
