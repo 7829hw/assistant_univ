@@ -16,6 +16,8 @@ GPUS = {"GPU-2445b100-70d8-e384-3a24-0249eeefc64d": "2445b100(index 0)", "GPU-a5
         "GPU-48f798cc-9437-50ac-d604-448bbad7b311": "48f798cc(index 2, Ollama GPU)"}
 REASONS = {g: [("2026-10-21T10:46", "세션 시작 확인 → 결정 205–210 기록, O4' 순서 도구·순서 파일 5개·연속 길이 표, config·dry-run/tokenizer-check 20개, 작업 표·spec, PLAN_B2·FREEZE_B2 뒤 큐 시작(11:03, 지시 순서)")]
            for g in ("2445b100(index 0)", "a5ce83d0(index 1)", "48f798cc(index 2, Ollama GPU)")}
+REASONS["a5ce83d0(index 1)"].append(("2026-10-22T00:30", "준비된 작업 없음(남은 개발 셋 평가가 다른 GPU에서 실행 중) → 지연 창 L-B2(GPU 0, 00:51–01:14) 대기·측정 중 — 결정 208: 다른 두 GPU 비움; 01:16 다시 돌리기 큐 시작"))
+REASONS["48f798cc(index 2, Ollama GPU)"].append(("2026-10-22T00:28", "준비된 작업 없음(남은 개발 셋 평가가 다른 GPU에서 실행 중) → 지연 창 L-B2(GPU 0, 00:51–01:14) 대기·측정 중 — 결정 208: 다른 두 GPU 비움; 01:16 다시 돌리기 큐 시작"))
 GPUS["GPU-48f798cc-9437-50ac-d604-448bbad7b311"] = "48f798cc(index 2, Ollama GPU)"  # B: Ollama GPU = GPU 2(결정 191·198)
 
 
