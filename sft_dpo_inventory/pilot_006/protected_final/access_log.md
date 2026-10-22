@@ -24,3 +24,5 @@
 - 검사: Claude Code, 실행만(validate.py, pf3_overlap_t.py; 내용 열람·출력 없음)
 - 고정: Claude Code(pin_hash.py)
 | 2026-10-21T10:27:39+09:00 | Claude Code(pilot_007 B, R7 확인) | 기계 검사(`pilot_007/results/check_r7.py`: 원격 manifest·sha256 비교, validate.py `--report`의 ok만 읽음) | 같은 경로, sha256 `5a43e8d0…` | 고정 확인(manifest 커밋 2fb30fa, sha256 같음, ok true). 출력 `r7_validate_report.json`(700 디렉터리, 600, 커밋 안 함). 결정 200·203 |
+| 2026-10-22T11:02:25+09:00 | Claude Code(pilot_007 최종 판정, 시작 확인) | 고정 확인(validate.py 실행만) | 같은 경로, sha256 `5a43e8d0…` | 원격 manifest 2fb30fa·sha256 같음·ok true. 출력 `validate_report_final.json`(700, 600, 커밋 안 함) |
+| 2026-10-22T11:06:10+09:00 | Claude Code(pilot_007 최종 판정, S1 변환) | 평가 gold 변환(`pilot_007/final/convert_pf_gold.py`, 출력은 sha256·개수·번호만) | 같은 경로, sha256 `5a43e8d0…` | `pf1_gold.yaml`(sha256 `8ee5e10e…`)·`pf1_items_meta.json`(`5ef54e88…`) 700 디렉터리 600. 120문항(거부 10), 거부 아닌 110문항 mock match·grounding_check 참. 내용 출력 없음. 결정 215 |
