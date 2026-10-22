@@ -1,0 +1,17 @@
+{
+ "gpus": ["GPU 0 2445b100", "GPU 1 a5ce83d0", "GPU 2 48f798cc (Ollama GPU, 결정 191: 작업마다 /api/ps 빔 확인)"],
+ "basis": {"train_hours_each": "약 3.2(RC6 2,005 step; B2 F 1,811 step 2.9–3.0h × 1.11)", "eval_per_P8_model_minutes": "약 70(주 셋 30 + 개발 셋 25 + refusal_dev 4회 × 3–4)",
+           "E8-rdev-base_minutes": "약 30(k=12 × 60문항)", "E8-rdev-B2F_minutes_each": "약 12(서버 1 + k=4 × 60문항)"},
+ "schedule_T_relative_hours": {
+  "바퀴 1": "P8-F-o43 / P8-F-o1016 / P8-F-o7 학습, T → T+3.2",
+  "바퀴 2": "P8-F-o11 / P8-F-o2027 학습 T+3.2 → T+6.4; 빈 한 장: E8-rdev-base(0.5h) → E8-rdev-B2F × 5(1h) → E8-eval 바퀴 1 모델 둘(2.3h)",
+  "끝": "T+6.4 → 약 T+7.6: 남은 E8-eval 셋을 세 장에",
+  "다시 돌리기(있으면)": "약 +0.5h",
+  "end": "약 T+8h"
+ },
+ "expected_idle_over_10min": [
+  {"when": "큐 시작 전(결정 기록, 검토 반영, RC6 빌드·검사, config, PLAN·FREEZE)", "why": "지시 순서: PLAN_008 고정 전 학습 금지"},
+  {"when": "GPU 2에 Ollama 모델이 올라오면", "why": "결정 191: 직접 내리지 않고 다른 GPU부터 채움"},
+  {"when": "끝 무렵", "why": "작업 하나 = GPU 하나, 마지막 E8-eval 동안 다른 장이 빔"}
+ ]
+}
