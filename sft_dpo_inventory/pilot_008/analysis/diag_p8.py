@@ -111,11 +111,14 @@ def main():
     items = ok["P8"][0]
     dlt = ok["P8"][1] - ok["B2F"][1]
     typ = {}
-    for it in items:
-        st, i = it.split(":", 1) if ":" in it else ("selection_v2", it)
-        g = gold.get(st, gold["selection_v2"]).get(i) or gold["holdout"].get(i) or gold["selection_v2"].get(i)
+    for it in items:  # load_arm id = "<셋>/<문항 id>"
+        st, i = it.split("/", 1)
+        g = gold[st].get(i)
         typ[it] = (g["gold"][-1]["tool"] if g and g.get("gold") else (g or {}).get("expected_outcome", "?"))
-    out["accuracy_change_by_type"] = {"gained_ge_0.5": dict(Counter(typ[items[x]] for x in range(len(items)) if dlt[x] >= 0.5)),
+    out["accuracy_change_by_type"] = {"items_changed_ge_0.25": {"gained": int((dlt >= 0.25).sum()), "lost": int((dlt <= -0.25).sum())},
+                                      "gained_ge_0.25_by_type": dict(Counter(typ[items[x]] for x in range(len(items)) if dlt[x] >= 0.25)),
+                                      "lost_ge_0.25_by_type": dict(Counter(typ[items[x]] for x in range(len(items)) if dlt[x] <= -0.25)),
+                                      "gained_ge_0.5": dict(Counter(typ[items[x]] for x in range(len(items)) if dlt[x] >= 0.5)),
                                       "lost_ge_0.5": dict(Counter(typ[items[x]] for x in range(len(items)) if dlt[x] <= -0.5)),
                                       "mean_by_type_pp": {t: round(100 * float(np.mean([dlt[x] for x in range(len(items)) if typ[items[x]] == t])), 2) for t in sorted(set(typ.values()))}}
     (HERE / "diag_p8.json").write_text(json.dumps(out, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
