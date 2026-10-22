@@ -903,3 +903,31 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     protected_final_v1로 하는 최종 판정은 이 세션에서 하지 않음(후보가 나오면 절차만 제안).
 210. (2026-10-21, 사용자) 결정 ES(U6). GPU 세 장, GPU 2(Ollama GPU) 작업은 시작 전마다 `/api/ps` 확인(결정 191). adapter는 지우지 않고 위치·sha256만 기록, 커밋하지 않음.
     평가 셀 잘림·서버 오류 > 1%면 그 셀만 같은 seed로 한 번 다시 돌리고 원본 보관(B단계와 같은 규칙).
+
+## 2026-10-22 — pilot_007 최종 판정: F 후보를 protected_final_v1로 base와 한 번 비교
+
+사용자 선택: F를 후보로 지정, F 다섯 중 개발 셋 평균이 가장 높은 seed, Partial 검토는 이번 판으로 끝냄.
+
+211. (2026-10-22, 사용자) 결정 ET(V1). F를 채택 후보로 지정 — **PLAN_B2 사전 규칙과 다른 사용자 결정**(PLAN_B2 채택 규칙으로는 후보 없음, `results/B2_RESULTS.md`).
+    근거: F 선행 조건 정답률 CI 하한 −0.14(+6.74 [−0.14, 13.29]), 다시 돌리기 전 원래 셀로는 +0.04(사전 등록한 다시 돌리기 규칙이 결과를 갈랐다);
+    개발 셋에서 F(B2 다섯 평균)는 base보다 높다 — valid98 72.09 대 57.65, aux 69.02 대 58.82(base 값은 `A_RESULTS.md`).
+    확인 판정 = 결과를 보기 전에 고른 이 후보를, 아무 모델도 본 적 없는 protected_final_v1로 한 번 재는 것(결정 215). PLAN_B2·B2_RESULTS 판정은 고치지 않는다.
+212. (2026-10-22, 사용자) 결정 EU(V2). 후보 모델: B2 F 다섯(R1'', O4', 순서 seed 43·1016·7·11·2027) 중 개발 셋 평균(valid98 98·aux 51 정답률 문항 가중 평균, 커밋된 B2 셀) 최대,
+    같으면 순서 seed 작은 쪽. 주 셋·protected_final_v1은 쓰지 않는다. 결과(`analysis/select_final.json`, 측정 전 커밋): **B2-F-o11**(개발 셋 73.15 = valid98 74.74·aux 70.10;
+    o43 70.97, o1016 71.98, o7 68.79, o2027 70.30), adapter `/home/hwkim/sftdpo_work/pilot_007/train_b2/B2-F-o11/checkpoint-1811`,
+    adapter_model sha256 `2d94933b5756c769c1b1068a6003540fd92d64ab7717b1fc4ea6793ef78574f2`.
+213. (2026-10-22, 사용자) 결정 EV(V3). Partial 검토 종료: Full 대 Partial 질문을 pilot_007로 끝낸다. 근거(B2, 같은 순서 공유): 주 셋 P − F +2.28 [−1.52, 6.32](차이 확인 안 됨),
+    구조 오류·grounding failure는 P가 유의하게 많음(Gate D 불통과: +2.55 [0.66, 4.83], +3.11 [1.29, 5.23]), 지연 비슷(0.728 대 0.761), Partial의 핵심 가정(구조 오류 감소)은 확인되지 않음.
+    Partial 경로 코드(`grounding/`)는 삭제하지 않고 기본값 `full` 그대로. CLAUDE.md에 범위 문장을 덧붙인다.
+214. (2026-10-22, 사용자) 결정 EW(V4). 최종 판정 방식(SPEC 1절, PLAN_FINAL로 측정 전 고정): 셀 base(vLLM-base, Full prompt)와 후보(V2의 F), 각각 protected_final_v1 120문항 k=8.
+    PROTOCOL_v5 경로(vLLM 0.30.0 BF16, flashinfer, LoRA 비병합, 동시 요청 8, `--max-model-len` 17,408(결정 117), PROTOCOL_v4 3절 sampling), sampling seed 측정 전 커밋.
+    지연: PROTOCOL_v4 6절 고정 30문항 순차(지금까지의 지연 창 30문항, protected_final_v1 아님), base → 후보 한 GPU, 다른 두 GPU 비움.
+    판정: PROTOCOL_v4 6절(v3 6절 포함) — 문항 단위 쌍 bootstrap 10,000회, `default_rng(20261109)`, A = base, B = 후보; 개선·악화·차이 없음(구분 안 됨) 범주, 지연 1.5배 이하.
+    보정·재측정·부분 재사용 없음(실행 조건 위반으로 무효인 셀만 결과를 보기 전 이유 기록 뒤 처음부터 다시). B2의 잘림 1% 다시 돌리기 규칙은 쓰지 않고 잘림은 오답으로 채점·건수만 보고.
+    거부 문항 10개: 기존 파이프라인의 거부 결과 분류(outcome `unsupported`·`needs_clarification` = refused_*)로 — 거부 문항은 분석 tool을 실행하지 않고 거부로 끝나면 정답,
+    거부가 아닌 문항은 거부로 끝나면 오답(코드로 PLAN_FINAL에, 측정 전 커밋). 측정이 끝나면 protected_final_v1은 끝난다(SPEC 1절).
+215. (2026-10-22, 사용자) 결정 EX(V5). 보호 셋 내용 비공개: xlsx → gold yaml은 스크립트로만, 결과는 `/home/hwkim/sftdpo_work/protected_final_v1/`(700) 안 600, sha256만 기록.
+    측정 셀 원문(질문·응답·thinking)도 같은 700 디렉터리, 저장소에 넣지 않음. 저장소에는 문항 번호별 판정 값(문장 없음)·집계·sha256만. 보고·대화에 질문 문장·정답 호출·응답을 옮기지 않음.
+    오류 분석은 유형·factor·범주별 수치로만. access_log.md에 변환·측정·판정을 한 줄씩.
+216. (2026-10-22, 사용자) 결정 EY(V6). base 셀과 후보 셀은 다른 GPU에서 동시에(PROTOCOL_v5 5절), GPU 0·GPU 1. 지연 창은 두 셀이 끝난 뒤. GPU 2를 쓰면 시작 전 `/api/ps` 확인(결정 191).
+    adapter는 지우지 않는다.

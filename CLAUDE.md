@@ -31,6 +31,9 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
      branch). Partial code sits behind `grounding_target` (default `full`); the Full path and its `SEMANTIC_CODE`
      fingerprint `791c4a68` must not change. `geoflow/partial-grounding` is read-only; imported assets are renamed
      (`pg_batch006`, `pg-b006-NN`, `PG-81`–`PG-87`) with source path, commit `ab9d215` and sha256 recorded.
+   - Decision 213 (V3, 2026-10-22): the Full vs Partial question ends with pilot_007 (B2 shared-order comparison:
+     P − F +2.28 [−1.52, 6.32], Partial had more structure errors and grounding failures, Gate D failed). Keep the Partial code
+     (`grounding/`) and the `grounding_target` default `full`; do not start new Partial experiments unless a new decision reopens it.
 2. After each work unit, in this order: verify → review the diff and the staged diff → make a logical
    commit → `git push origin geoflow/sft-dpo-t2pc` → report the SHA.
    - The first push sets upstream with `-u`.
