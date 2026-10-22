@@ -1,0 +1,355 @@
+[
+ {
+  "id": "rdev-051",
+  "gap": "rdc_mode",
+  "kind": "r2_contrast",
+  "question": "지난주 두산동에 도착한 택시 실차를 출발 시도별로 볼 때 가장 많은 두 곳은?",
+  "gold_text": "get_place_scope(name=두산동, region=대구)\nget_trip_count(scope_dropoff=$dropoff.scope, date=last_week, dimension=sido, dimension_target=pickup, order=top, limit=2)",
+  "rationale": "근접 대조(지원되는 질문, batch010 빈 구조)",
+  "decision_120": "뺌(강한 겹침·검사 실패)",
+  "gold": [
+   {
+    "tool": "get_place_scope",
+    "args": {
+     "name": "두산동",
+     "region": "대구"
+    }
+   },
+   {
+    "tool": "get_trip_count",
+    "args": {
+     "scope_dropoff": "$dropoff.scope",
+     "date": "last_week",
+     "dimension": "sido",
+     "dimension_target": "pickup",
+     "order": "top",
+     "limit": 2
+    }
+   }
+  ],
+  "draft_grounding": {
+   "concepts": [
+    {
+     "id": "place_scope_dropoff",
+     "concept": "LOCATION",
+     "subtype": "place",
+     "role": "SUBCOND",
+     "source": "user",
+     "value": {
+      "name": "두산동",
+      "region": "대구"
+     },
+     "attributes": {
+      "od_role": "dropoff"
+     },
+     "text": "두산동"
+    },
+    {
+     "id": "event",
+     "concept": "EVENT",
+     "subtype": "trip",
+     "role": "SUPPORT",
+     "source": "implicit"
+    },
+    {
+     "id": "measure",
+     "concept": "AMOUNT",
+     "subtype": "trip_count",
+     "role": "MEASURE",
+     "source": "implicit"
+    }
+   ],
+   "factors": {
+    "date": "last_week",
+    "dimension": "sido",
+    "dimension_target": "pickup",
+    "order": "top",
+    "limit": 2
+   }
+  },
+  "span_flags": [
+   "span_missing:measure:trip_count"
+  ],
+  "semantics": {
+   "nodes": [
+    {
+     "subtype": "place",
+     "value": {
+      "name": "두산동",
+      "region": "대구"
+     },
+     "text": "두산동",
+     "attributes": {
+      "od_role": "dropoff"
+     }
+    },
+    {
+     "subtype": "trip_count"
+    }
+   ],
+   "event": "trip",
+   "factors": {
+    "date": "last_week",
+    "dimension": "sido",
+    "dimension_target": "pickup",
+    "order": "top",
+    "limit": 2
+   },
+   "unsupported": null
+  },
+  "view": {
+   "measure": {
+    "subtype": "trip_count",
+    "text": null
+   },
+   "conditions": [
+    {
+     "subtype": "place",
+     "span": "두산동",
+     "value": {
+      "name": "두산동",
+      "region": "대구"
+     },
+     "od_role": "dropoff"
+    },
+    {
+     "subtype": "date",
+     "span": null,
+     "value": "last_week",
+     "od_role": null
+    }
+   ],
+   "dimension": "sido",
+   "dimension_target": "pickup",
+   "order": "top",
+   "limit": 2,
+   "refusal": null
+  },
+  "validation_chain": {
+   "ok": true,
+   "assess_same": true,
+   "mock_same": true,
+   "execution_match": true,
+   "full_answered": true
+  },
+  "t2pc": {
+   "parse_ok": true,
+   "compose_ok": true,
+   "validation_ok": true,
+   "validation_codes": [],
+   "error_code": null,
+   "outcome": "answered",
+   "compile_ok": true,
+   "compile_error_code": null,
+   "condition_actions": {},
+   "operators": [
+    "RESOLVE_PLACE_SCOPE",
+    "TRIP_COUNT"
+   ],
+   "condition_changed_meaning": false,
+   "condition_changed_outcome": false
+  },
+  "leakage": {
+   "thor_policy_reasons": [],
+   "per_set": {
+    "selection_v1": {
+     "question": [],
+     "jaccard_max": 0.073,
+     "jaccard_nearest": "indepv4/k17",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "selection_v2": {
+     "question": [],
+     "jaccard_max": 0.073,
+     "jaccard_nearest": "indepv4/k17",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "aux_test_v1": {
+     "question": [],
+     "jaccard_max": 0.052,
+     "jaccard_nearest": "final_v12/f24",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "valid98": {
+     "question": [],
+     "jaccard_max": 0.1,
+     "jaccard_nearest": "heldout_v9/h19",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "vendor100": {
+     "question": [],
+     "jaccard_max": 0.077,
+     "jaccard_nearest": "069",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "batch007": {
+     "question": [],
+     "jaccard_max": 0.019,
+     "jaccard_nearest": "b007-07",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_v006_t2pc": {
+     "question": [],
+     "jaccard_max": 0.136,
+     "jaccard_nearest": "b005-33",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "train_thinking_pilot004_t2pc": {
+     "question": [],
+     "jaccard_max": 0.136,
+     "jaccard_nearest": "b005-33",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "batch008": {
+     "question": [],
+     "jaccard_max": 0.082,
+     "jaccard_nearest": "b008-02",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    },
+    "batch009": {
+     "question": [],
+     "jaccard_max": 0.058,
+     "jaccard_nearest": "b009-44",
+     "same_grounding": [],
+     "template": 2,
+     "family": 2
+    },
+    "batch010": {
+     "question": [],
+     "jaccard_max": 0.186,
+     "jaccard_nearest": "b010-26",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    },
+    "train_rc:RC5/full": {
+     "question": [],
+     "jaccard_max": 0.186,
+     "jaccard_nearest": "b010:b010-26",
+     "same_grounding": [],
+     "template": 4,
+     "family": 4
+    },
+    "train_rc:RC5/partial": {
+     "question": [],
+     "jaccard_max": 0.186,
+     "jaccard_nearest": "b010:b010-26",
+     "same_grounding": [],
+     "template": 4,
+     "family": 4
+    },
+    "batch011_draft": {
+     "question": [],
+     "jaccard_max": 0.75,
+     "jaccard_nearest": "b011-092",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    },
+    "approved_pilot006": {
+     "question": [],
+     "jaccard_max": 0.186,
+     "jaccard_nearest": "b010:b010-26",
+     "same_grounding": [],
+     "template": 4,
+     "family": 4
+    },
+    "pg_batch006": {
+     "question": [],
+     "jaccard_max": 0.138,
+     "jaccard_nearest": "pg-b006-41",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    },
+    "pg_reviewed_reasoning_v001": {
+     "question": [],
+     "jaccard_max": 0.138,
+     "jaccard_nearest": "b006-41",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "question": [],
+     "jaccard_max": 0.138,
+     "jaccard_nearest": "b006-41",
+     "same_grounding": [],
+     "template": 1,
+     "family": 1
+    },
+    "aug300": {
+     "question": [],
+     "jaccard_max": 0.045,
+     "jaccard_nearest": "aug300-347",
+     "same_grounding": [],
+     "template": 0,
+     "family": 0
+    }
+   }
+  },
+  "overlap_info": {
+   "training_and_other_template_family": {
+    "batch009": {
+     "template": 2,
+     "family": 2
+    },
+    "batch010": {
+     "template": 1,
+     "family": 1
+    },
+    "train_rc:RC5/full": {
+     "template": 4,
+     "family": 4
+    },
+    "train_rc:RC5/partial": {
+     "template": 4,
+     "family": 4
+    },
+    "batch011_draft": {
+     "template": 1,
+     "family": 1
+    },
+    "approved_pilot006": {
+     "template": 4,
+     "family": 4
+    },
+    "pg_batch006": {
+     "template": 1,
+     "family": 1
+    },
+    "pg_reviewed_reasoning_v001": {
+     "template": 1,
+     "family": 1
+    },
+    "pg_reviewed_gold_v006_p0": {
+     "template": 1,
+     "family": 1
+    }
+   }
+  },
+  "template_key": "f2dd813b4b7421fde448641e95c801b82dd930618b910672f86abd4a04a15aef",
+  "family_key": "b2ded75b4b7d0bb070ed36c21e7934b1589ecec84ccbb96e597ab28d61267d67",
+  "excluded_reasons": [
+   "batch011_draft:jaccard>=0.5(b011-092,0.75)"
+  ]
+ }
+]
