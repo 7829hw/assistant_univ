@@ -27,3 +27,9 @@
 | 2026-10-22T11:02:25+09:00 | Claude Code(pilot_007 최종 판정, 시작 확인) | 고정 확인(validate.py 실행만) | 같은 경로, sha256 `5a43e8d0…` | 원격 manifest 2fb30fa·sha256 같음·ok true. 출력 `validate_report_final.json`(700, 600, 커밋 안 함) |
 | 2026-10-22T11:06:10+09:00 | Claude Code(pilot_007 최종 판정, S1 변환) | 평가 gold 변환(`pilot_007/final/convert_pf_gold.py`, 출력은 sha256·개수·번호만) | 같은 경로, sha256 `5a43e8d0…` | `pf1_gold.yaml`(sha256 `8ee5e10e…`)·`pf1_items_meta.json`(`5ef54e88…`) 700 디렉터리 600. 120문항(거부 10), 거부 아닌 110문항 mock match·grounding_check 참. 내용 출력 없음. 결정 215 |
 | 2026-10-22T11:12:37+09:00 | Claude Code(pilot_007 최종 판정, 측정 시도 1) | 측정 시작 실패(모델 요청 전, client의 저장소 상대 경로 검사) | `pf1_gold.yaml` 경로만 전달 | 셀·원문 없음, shard 로그만 → `aborted_launch1/`(700, 내용 열지 않음). PLAN_FINAL_AMEND1 |
+| 2026-10-22T11:18:11+09:00 | Claude Code(pilot_007 최종 판정, 측정) | 최종 측정 k=8(base GPU 0·후보 B2-F-o11 GPU 1, `final/run_cell_final.py --sealed`, 11:18–12:13) | `pf1_gold.yaml`(`8ee5e10e…`) | 셀 json·원문·실행 출력은 700 디렉터리(`cells/`·`raw/`·`logs/`) 600, 커밋 안 함. 잘림 2, 서버 오류 0. 내용 출력 없음. 결정 214–216 |
+| 2026-10-22T12:35:00+09:00 | Claude Code(pilot_007 최종 판정, 판정) | 채점·판정(`final/final_score.py`, 출력은 번호별 판정 값·집계만) | 같은 셀 16개, `pf1_gold.yaml`·`pf1_items_meta.json` | 결론 개선(정답률 +10.73 [3.96, 17.40]). 저장소에 문항 번호별 값·집계만(`results/final_items.json`·`final_judgment.json`·`FINAL_RESULTS.md`) |
+
+## 사용 종료(2026-10-22)
+
+protected_final_v1은 pilot_007 최종 판정(후보 B2-F-o11 대 base, k=8 한 번)으로 **사용이 끝났다**(SPEC 1절). 다시 측정·분석에 쓰지 않는다. 다음 보호 셋은 v2를 새로 쓴다.
