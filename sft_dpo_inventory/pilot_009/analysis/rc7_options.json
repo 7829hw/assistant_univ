@@ -1,0 +1,88 @@
+{
+ "assumptions": "- batch012 100이 모두 승인된다고 둔다(승인 결과에 따라 줄어듦). 유형 상한(C-1)으로 밀리는 레코드는 빼지 않은 값(빌드 때 다시 계산).\n- 답하는 레코드 A = RC6 답하는 1,845 + batch012 r2 base 정답 표본(J-b012, 질문당 ≤ 4) + r2 teacher trace(TEACH-R v3b 통과, 질문당 ≤ 4).\n- 거부 레코드 R: 8%면 round(0.08·A/0.92), 10%면 round(0.10·A/0.90). 거부 질문 = batch011 r1 60 + batch012 r1 60.\n- 출처: S-1(base 순수 모델 거부 표본: batch011 10, batch012는 J-b012 표본 중 exact `{\"unsupported\": true}` 수), teacher 거부 trace(TEACH-R 통과, 질문당 ≤ 4, full_response),\n  S-2(짧은 근거 target, json_only; batch012 S-2는 새로 만들어야 함).\n  - **T(대체)**: R = S-1 + teacher(질문마다 고르게, ≤ 4). S-2 없음.\n  - **S(유지)**: R = S-1 + S-2(질문당 1) + teacher(나머지, 고르게).\n- 손실 token: 기존 RC6 값(`pilot_008/build/RC6/mask_audit.json`), teacher 거부 레코드 = 통과 trace의 eval_count 평균(생각 + 출력; 출력은 JSON으로 바뀌어 거의 같음),\n  r2 teacher = v3b 통과 eval_count 평균 + JSON 근사(RC6 teacher 레코드 평균 − 생각 근사 대신 그대로 eval_count 사용), r2 base 표본 = RC6 r2_Jb011 평균, S-2·S-1 = 6.",
+ "answered_records_A": 1974,
+ "parts": {
+  "rc6_answered": 1845,
+  "batch012_r2_base_samples(≤4/q)": 107,
+  "r2_teacher_traces(≤4/q)": 22,
+  "refusal_questions": 120,
+  "teacher_refusal_available(≤4/q)": 480,
+  "questions_with_teacher_refusal≥4": 120,
+  "s1_records(est.)": 17
+ },
+ "tokens": {
+  "teacher_refusal_trace_mean": 305.5,
+  "r2_teacher_trace_mean": 516.9,
+  "rc6_teacher_record_mean": 616.2
+ },
+ "options": {
+  "8%_T": {
+   "R_target": 172,
+   "refusal_records": 172,
+   "s1": 17,
+   "s2": 0,
+   "teacher_refusal": 155,
+   "per_question_teacher": 1.29,
+   "records_total": 2146,
+   "refusal_share": 0.0801,
+   "teacher_records": 924,
+   "teacher_record_share": 0.4306,
+   "teacher_loss_share": 0.6808,
+   "refusal_loss_share": 0.0622,
+   "steps_1epoch": 2146
+  },
+  "8%_S": {
+   "R_target": 172,
+   "refusal_records": 172,
+   "s1": 17,
+   "s2": 120,
+   "teacher_refusal": 35,
+   "per_question_teacher": 0.29,
+   "records_total": 2146,
+   "refusal_share": 0.0801,
+   "teacher_records": 804,
+   "teacher_record_share": 0.3747,
+   "teacher_loss_share": 0.6641,
+   "refusal_loss_share": 0.0159,
+   "steps_1epoch": 2146
+  },
+  "10%_T": {
+   "R_target": 219,
+   "refusal_records": 219,
+   "s1": 17,
+   "s2": 0,
+   "teacher_refusal": 202,
+   "per_question_teacher": 1.68,
+   "records_total": 2193,
+   "refusal_share": 0.0999,
+   "teacher_records": 971,
+   "teacher_record_share": 0.4428,
+   "teacher_loss_share": 0.6867,
+   "refusal_loss_share": 0.0796,
+   "steps_1epoch": 2193
+  },
+  "10%_S": {
+   "R_target": 219,
+   "refusal_records": 219,
+   "s1": 17,
+   "s2": 120,
+   "teacher_refusal": 82,
+   "per_question_teacher": 0.68,
+   "records_total": 2193,
+   "refusal_share": 0.0999,
+   "teacher_records": 851,
+   "teacher_record_share": 0.3881,
+   "teacher_loss_share": 0.6706,
+   "refusal_loss_share": 0.0349,
+   "steps_1epoch": 2193
+  }
+ },
+ "rc6_reference": {
+  "records": 2005,
+  "teacher_records": 747,
+  "teacher_record_share": 0.3726,
+  "teacher_loss_share": 0.672,
+  "refusal_records": 160,
+  "refusal_loss_share": 0.0014
+ }
+}
