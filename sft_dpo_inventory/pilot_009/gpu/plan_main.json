@@ -1,0 +1,20 @@
+{
+ "gpus": ["GPU 0 2445b100", "GPU 1 a5ce83d0", "GPU 2 48f798cc (Ollama GPU, 결정 191: 작업마다 /api/ps 빔 확인; 이번 세션 Ollama 호출 없음)"],
+ "scheduler": "pilot_009/gpu/scheduler11.py(준비 세션과 같은 파일, 고정 worktree), 작업 표 gpu/jobs_main.json",
+ "basis": {"train_hours_each": "약 3.2(RC7 1,993 step; P8 2,005 step 3.2–3.3h)",
+           "E9-rdev-base_minutes": "약 95(k=12 × 120문항; pilot_008 k=12 × 60문항 48분)",
+           "E9-rdev-B2F·P8_minutes_each": "약 20–25(서버 1 + k=4 × 120문항; pilot_008 60문항 10–21분)",
+           "E9-eval_minutes_each": "약 80–100(주 셋 + 개발 셋 + refusal_dev v2 k=4; pilot_008 62–93분 + rdev 60문항 더)"},
+ "schedule_T_relative_hours": {
+  "바퀴 1": "P9-F-o43 / P9-F-o1016 / P9-F-o7 학습(GPU 0·1·2), T → T+3.2",
+  "바퀴 2": "P9-F-o11 / P9-F-o2027 학습 T+3.2 → T+6.4(먼저 빈 두 장); 남는 한 장: E9-rdev-base(1.6h) → E9-rdev-B2F × 5(약 2h) → (우선 2 남은 것)",
+  "바퀴 2 뒤": "T+6.4 → 약 T+9.7: 남은 E9-rdev-P8 × 5(우선 2) → E9-eval × 5(우선 3)를 세 장에",
+  "다시 돌리기(있으면)": "약 +0.5h",
+  "end": "약 T+10h"
+ },
+ "expected_idle_over_10min": [
+  {"when": "큐 시작 전(결정 기록, 검토 반영, RC7 빌드·검사, config, PLAN·FREEZE)", "why": "지시 순서: PLAN_009 고정 전 학습 금지"},
+  {"when": "GPU 2에 Ollama 모델이 올라오면", "why": "결정 191: 직접 내리지 않고 다른 GPU부터 채움(이번 세션은 Ollama를 부르지 않음)"},
+  {"when": "끝 무렵", "why": "작업 하나 = GPU 하나, 마지막 E9-eval 동안 다른 장이 빔"}
+ ]
+}
