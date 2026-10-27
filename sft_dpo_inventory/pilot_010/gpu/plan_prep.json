@@ -1,0 +1,16 @@
+{
+ "decision": "242·243 (AA2·AA3), 지시 2.2 — 실행 전 추정",
+ "gpus": {"GPU 0 (GPU-2445b100)": "vLLM 작업(J-b013 등)", "GPU 1 (GPU-a5ce83d0)": "vLLM 작업(J-p9-b013·J-b2f-b013 등)", "GPU 2 (GPU-48f798cc, Ollama)": "T-C → TEACH-C(Ollama만, 그동안 vLLM 없음)"},
+ "jobs_est_min": {"T-C": 20, "TEACH-C": 150, "J-b013": 60, "J-p9-b013": 10, "J-b2f-b013": 10},
+ "timeline_est": [
+  {"gpu": 2, "job": "T-C", "start": "P1 커밋 직후", "minutes": 20, "note": "warm-up 1회 + 20 × 8. 끝난 뒤 /api/ps가 빌 때까지(keep_alive, 약 5분) 대기"},
+  {"gpu": 2, "job": "TEACH-C", "start": "T-C 통과(읽기 검사 뒤) + batch013 겹침 검사 끝", "minutes": 150, "note": "약 200질문 × 8(질문 수는 targets 확정 뒤)"},
+  {"gpu": 0, "job": "J-b013", "start": "P2 커밋 뒤", "minutes": 60},
+  {"gpu": 1, "job": "J-p9-b013 → J-b2f-b013", "start": "P2 커밋 뒤", "minutes": 20}
+ ],
+ "idle_expected_over_10min": [
+  {"gpu": "0·1", "from": "큐 시작", "to": "P2(batch013 초안·검사) 커밋", "reason": "J 작업은 batch013 초안이 있어야 시작(입력 없음). 이번 세션은 학습·평가 셀이 없어 GPU 0·1에 줄 다른 작업 없음"},
+  {"gpu": "0·1", "from": "J 작업 끝", "to": "세션 끝", "reason": "준비된 작업 없음(지시 2.2 작업 표가 전부; 학습은 하지 않음)"},
+  {"gpu": 2, "from": "T-C 끝", "to": "TEACH-C 시작", "reason": "T-C 읽기 검사(사람 판정 = Claude 읽기)와 batch013 겹침 검사를 기다림; Ollama 작업이 남아 있어 45분 넘는 vLLM 작업을 주지 않음"}
+ ]
+}
