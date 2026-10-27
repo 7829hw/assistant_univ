@@ -31,7 +31,7 @@ FILES = {"plan": f"{P10}/PLAN_S.md", "decisions": "sft_dpo_inventory/DECISIONS.m
          "contrast_tests": "tests/test_teacher_contrast10b.py", "tc2_rule": f"{P10}/teacher/tc2_rule.json", "tc2_verdict": f"{P10}/teacher/tc2_verdict.json",
          "teachc_targets": f"{P10}/teacher/teachc_targets.json", "teachc_analysis": f"{P10}/teacher/teachc_analysis.json",
          "teachc_traces": "training/generated/pilot_010/teacher_teachc/traces.jsonl",
-         "build_tool": f"{P10}/build/build10v.py", "mask_audit_tool": f"{P10}/build/mask_audit10.py",
+         "build_tool": f"{P10}/build/build10w.py", "build_tool_first": f"{P10}/build/build10v.py", "teachc_read": f"{P10}/teacher/TEACH_C2_READ.md", "mask_audit_tool": f"{P10}/build/mask_audit10.py",
          "config_maker": f"{P10}/train/make_s10_configs.py", "config_diff": f"{P10}/train/configs_s10/DIFF.md", "dryrun_log": f"{P10}/train/configs_s10/dryrun.log",
          "lr_check_tool": f"{P10}/train/lr_check_s10.py", "lr_check": f"{P10}/train/configs_s10/lr_check.json", "wrapper": f"{P7}/train/train_b7b.py", "order_tool": f"{P7}/train/order7b.py",
          "select_tool": f"{P10}/gates/select_s10.py", "select_spec": f"{P10}/gates/spec_s10.json", "select_smoke": f"{P10}/gates/smoke_s10.json",
@@ -46,6 +46,7 @@ for v in ("V4", "V8"):
         FILES[f"{v}:{k}"] = f"{P10}/build/{v}/full/{k}"
     FILES[f"{v}:summary"] = f"{P10}/build/{v}/build_summary.json"
     FILES[f"{v}:mask_audit"] = f"{P10}/build/{v}/mask_audit.json"
+    FILES[f"{v}:summary_first"] = f"{P10}/build/{v}/build_summary_build10v_first.json"
     for sd in (43, 20261016, 7):
         FILES[f"{v}:order:{sd}"] = f"{P10}/build/{v}/order_b2_o{sd}.json"
     for o in ("o43", "o1016", "o7"):
