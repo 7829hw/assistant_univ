@@ -1,0 +1,23 @@
+{
+ "decision": "248–252 (AB2–AB6), 지시 2.2 — 실행 전 추정",
+ "gpus": {"GPU 0 (GPU-2445b100)": "학습·평가", "GPU 1 (GPU-a5ce83d0)": "학습·평가", "GPU 2 (GPU-48f798cc, Ollama)": "T-C2 → TEACH-C(Ollama만, 그동안 vLLM·학습 없음) → 끝나고 /api/ps 빈 뒤 학습·평가"},
+ "jobs_est_min": {"T-C2": 40, "TEACH-Cv2": 470, "S-V4-o43": 200, "S-V8-o43": 205, "S-V4-o1016": 200, "S-V8-o1016": 205, "S-V4-o7": 200, "S-V8-o7": 205,
+                  "ES-*(모델마다 refusal_dev v2 k=4 + valid98·aux k=4)": 45},
+ "estimate_basis": {"T-C": "준비 세션 T-C 160 trace 37분(약 14초/trace)", "TEACH-C": "2,000 trace × 약 14초 = 약 7.8시간(지시 추정 6.6시간)",
+                    "train": "P9 1,993 step 약 195분; V4 약 2,690·V8 약 2,810 레코드(1 epoch, step = 레코드)로 늘어 같은 속도면 약 260–280분일 수 있음",
+                    "eval": "pilot_009 E9-rdev 25분(k=4 120문항) + valid98·aux k=4 약 20분"},
+ "timeline_est": [
+  {"gpu": 2, "job": "T-C2", "start": "P1 커밋 직후", "minutes": 40, "note": "warm-up 1회 + 20 × 8, 끝난 뒤 /api/ps 빔 대기(약 5분)"},
+  {"gpu": 2, "job": "TEACH-Cv2", "start": "T-C2 통과(읽기 검사 뒤)", "minutes": 470},
+  {"gpu": "0·1·2", "job": "첫 바퀴 S-V4-o43·S-V8-o43·S-V4-o1016", "start": "TEACH-C 끝 → 검사·변형 빌드·config·PLAN_S 고정(약 1시간)", "minutes": 280},
+  {"gpu": "0·1·2", "job": "둘째 바퀴 S-V8-o1016·S-V4-o7·S-V8-o7 + 첫 바퀴 평가 3", "start": "첫 바퀴 끝", "minutes": 330},
+  {"gpu": "0·1·2", "job": "둘째 바퀴 평가 3", "start": "둘째 바퀴 끝", "minutes": 45}
+ ],
+ "idle_expected_over_10min": [
+  {"gpu": "0·1", "from": "세션 시작", "to": "TEACH-C 끝 + 변형 빌드·PLAN_S 고정", "reason": "TEACH-C 의존 대기: 변형 데이터가 TEACH-C 결과에 달려 있어 학습을 붙일 수 없고, 이번 세션 작업 표에 다른 GPU 작업이 없음(지시 2.2)"},
+  {"gpu": 2, "from": "T-C2 끝", "to": "TEACH-C 시작", "reason": "T-C2 읽기 검사(Claude 읽기)와 판정; Ollama 작업이 남아 있어 다른 작업 주지 않음"},
+  {"gpu": "0·1·2", "from": "TEACH-C 끝", "to": "PLAN_S 고정", "reason": "TEACH-C 검사·거르기, 변형 빌드·검사, config, PLAN_S 고정(학습은 고정 뒤에만)"},
+  {"gpu": "한 장", "from": "둘째 바퀴 학습 끝", "to": "세션 끝", "reason": "평가 3개만 남아 한 장은 놀 수 있음"}
+ ],
+ "total_est_h": "약 16–17"
+}

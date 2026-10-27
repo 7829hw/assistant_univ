@@ -1,0 +1,37 @@
+{
+ "jobs": [
+  {
+   "id": "T-C2",
+   "type": "raw",
+   "kind": "teacher_contrast_check_TC2",
+   "server": "ollama",
+   "est": 40,
+   "prio": 1,
+   "deps": [],
+   "cmd": [
+    "bash",
+    "-c",
+    "/home/hwkim/sftdpo_work/hfvenv/bin/python {WT}/sft_dpo_inventory/pilot_010/teacher/run_c10b.py --main {MAIN} --job T-C2"
+   ],
+   "outputs": []
+  },
+  {
+   "id": "TEACH-Cv2",
+   "type": "raw",
+   "kind": "teacher_contrast_collect_v2",
+   "server": "ollama",
+   "est": 470,
+   "prio": 2,
+   "deps": [
+    "T-C2",
+    "ready:TEACH-Cv2"
+   ],
+   "cmd": [
+    "bash",
+    "-c",
+    "bash {MAIN}/sft_dpo_inventory/pilot_010/gpu/check_ready.sh TEACH-Cv2 && /home/hwkim/sftdpo_work/hfvenv/bin/python {WT}/sft_dpo_inventory/pilot_010/teacher/run_c10b.py --main {MAIN} --job TEACH-C"
+   ],
+   "outputs": []
+  }
+ ]
+}
