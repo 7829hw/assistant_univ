@@ -5,7 +5,8 @@
 
 가정(PLAN_DRAFT 1절의 공통 바탕):
 - 답하는 바탕 = RC7 답하는 레코드 1,834(RC6 1,709 + batch012 r2 base 정답 표본 103 + batch011 r2 teacher 22) 그대로. 유형 상한 C-1은 다시 계산하지 않는다(밀림은 추정 밖).
-- 근접 대조 teacher 레코드(``full_response``) = TEACH-C 대상 250질문(batch011 r2 40·batch012 r2 40·batch013 초안 77·승인 요금 지표 93)마다 min(4, 통과 trace 수).
+- 근접 대조 teacher 레코드(``full_response``) = TEACH-C 대상 250질문(batch011 r2 40·batch012 r2 40·batch013 초안 77·승인 요금 지표 93)마다 min(상한, 통과 trace 수).
+  상한은 지시의 4(질문당 최대 4)와, 비중을 비교하려고 1·2를 함께 낸다(선택지, 결정 아님).
   통과 trace 수 분포는 실제 TEACH-C가 없으면 **T-C 질문별 통과 수의 경험 분포**(20질문 × 8)로 대신한다(``source``에 적음). TEACH-C 원문이 있으면 그것을 쓴다.
   batch013은 모두 승인된다고 두는 상한(승인 수가 줄면 비례해 준다).
 - batch013 base 정답 표본(json_only) = J-b013 표본에서 초안과 같은 grounding 표본 수 min(4, ·)(RC7의 batch012 r2와 같은 방식). J-b013이 없으면 0.
@@ -33,6 +34,7 @@ TC = ROOT / "training/generated/pilot_010/teacher_tc/traces.jsonl"
 TEACHC = ROOT / "training/generated/pilot_010/teacher_teachc/traces.jsonl"
 TARGETS = P10 / "teacher/teachc_targets.json"
 JB013 = ROOT / "sft_dpo_inventory/batch013/jb013_draft_judgement.json"
+CAPS = (4, 2, 1)
 
 
 def lines(p):
@@ -67,23 +69,20 @@ def main():
         per_q = Counter()
         for r in rows:
             per_q[r["id"]] += r["pass"]
-        rec_per_q = {i: min(4, per_q.get(i, 0)) for i in targets}
+        rec_cap = {cap: {i: min(cap, per_q.get(i, 0)) for i in targets} for cap in CAPS}
         tok_rows, tok_targets = [r for r in rows if r["pass"]], targets
     else:
         rows, src = lines(TC), "T-C 질문별 통과 수 경험 분포(TEACH-C 없음)"
         per_q = Counter()
         for r in rows:
             per_q[r["id"]] += r["pass"]
-        dist = [min(4, per_q.get(i, 0)) for i in tct]
-        mean_r = sum(dist) / len(dist)
-        rec_per_q = {i: mean_r for i in targets}
+        rec_cap = {}
+        for cap in CAPS:
+            dist = [min(cap, per_q.get(i, 0)) for i in tct]
+            rec_cap[cap] = {i: sum(dist) / len(dist) for i in targets}
         tok_rows, tok_targets = [r for r in rows if r["pass"]], tct
     toks = contrast_tokens(tok_rows, tok_targets) if tok_rows else []
     c_tok = statistics.mean(toks) if toks else None
-    by_set = defaultdict(float)
-    for i, v in rec_per_q.items():
-        by_set[targets[i]["set"]] += v
-    contrast_records = sum(rec_per_q.values())
     b013_hf = 0
     if JB013.exists():
         bs = json.loads(JB013.read_text(encoding="utf-8"))["base_samples"]
@@ -95,7 +94,12 @@ def main():
     teacher_ans_loss = a7["by_kind"]["teacher_full_response"]["loss_tokens_sum"] + a7["by_kind"]["r2_b011_teacher"]["loss_tokens_sum"]
     ref_t, s1_t = mean7["refusal_teacher"], mean7["refusal_S-1"]
     variants = {}
-    for name, rho in (("V4", 0.04), ("V8", 0.08)):
+    for (vname, rho), cap in ((v, c) for v in (("V4", 0.04), ("V8", 0.08)) for c in CAPS):
+        name = f"{vname}·대조 상한 {cap}"
+        by_set = defaultdict(float)
+        for i, v in rec_cap[cap].items():
+            by_set[targets[i]["set"]] += v
+        contrast_records = sum(rec_cap[cap].values())
         N = answered_base + contrast_records + b013_hf
         R = round(rho / (1 - rho) * N)
         r_s1, r_t = 10, R - 10
@@ -118,7 +122,7 @@ def main():
                "pilot_009 RC7": {"records": a7["records"], "refusal": 159, "refusal_share": 0.0798, "contrast_teacher": 0,
                                  "loss_share_3way": {"refusal": a7["refusal_loss_share"], "contrast_teacher": 0.0, "rest": round(1 - a7["refusal_loss_share"], 4)},
                                  "note": "batch011 r2 teacher 22(v3b, 근접 대조 문장의 일반 teacher)는 rest에 넣음"}}
-    out = {"source_pass_distribution": src, "contrast_records_per_question_mean": round(contrast_records / len(targets), 3),
+    out = {"source_pass_distribution": src, "contrast_records_per_question_mean": {cap: round(sum(rec_cap[cap].values()) / len(targets), 3) for cap in CAPS},
            "contrast_teacher_loss_tokens": {"n": len(toks), "mean": round(c_tok, 1) if c_tok else None, "median": statistics.median(toks) if toks else None},
            "loss_tokens_per_record_rc7": {k: round(v, 1) for k, v in mean7.items()}, "teachc_targets": len(targets), "variants": variants, "compare": compare,
            "rc6_kinds": {k: v["records"] for k, v in ref6.items()}}
