@@ -43,6 +43,9 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
    and teacher traces, evaluation raw outputs under `training/generated/`, summaries). Never commit model/adapter
    weights, checkpoints, merged models, GGUF files, caches or temporary files. Never use `git add -f`; if data is
    ignored, change `.gitignore` instead.
+   - Real data (decision 256, 2026-10-28): the user confirmed that this project's real data contains no personal or
+     sensitive data. Commit original real questions, TIMS responses, and execution/review/judgment records, including
+     `evaluation/real_data/records/`. Anonymization is not required for collecting or committing these records.
 4. Ollama: use the existing Docker server (`localhost:11434`) as is. Since decision 69 (2026-10-12) the default GPU for
    Ollama measurements is host GPU 3 (UUID `GPU-48f798cc-9437-50ac-d604-448bbad7b311`). The container's `device_ids`
    decide which GPU Ollama actually uses (2026-10-12: "3"; earlier records under decisions 32 and 38 ran on GPU 2;
