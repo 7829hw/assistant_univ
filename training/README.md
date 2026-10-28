@@ -4,6 +4,8 @@
 > 맞췄다. 가져온 경로·제외한 경로·수정 내용은 [PORTING.md](PORTING.md)에 있다. 아래 본문은 thor 시점의 설명이다(prompt 522aa3b1,
 > token 한도 7040 등). 현재 학습 입력은 `reviewed_gold_v003_t2pc`와 `configs/qwen3_8b_t2pc_v003_*.yaml`이다.
 
+> **현재 자료 보존 정책(2026-10-28, 결정 257):** 학습·검토 원문, thinking·teacher·자체 표본, 검토 시트와 출처 기록은 Git에 보존한다.
+> [DATA_RETENTION.md](../sft_dpo_inventory/DATA_RETENTION.md)가 아래 Thor 시점 설명과 과거 문서의 원문 비커밋 지시보다 우선한다.
 
 이 패키지는 LLM의 **semantic grounding 정확도**를 개선하는 offline 학습 파이프라인이다.
 production planner, prompt 기본값, deterministic composition, validation, compiler와 executor의
@@ -364,7 +366,8 @@ output schema version, prompt hash, planner/factor/ontology/operator definition 
 output hashes, split별/전체 counts와 분포를 기록한다. Concept/subtype/role/measure/factor/
 aggregation, OD/unsupported/parent counts, negative_type 및 semantic/constraint 분포, 희소 class와
 OD 부재/reviewer warning을 포함한다. Trainer와 DPO builder는 data checksum 및 prompt drift를
-검사한다. 모든 생성물/weights/log는 .gitignore의 training/generated, checkpoints, runs에 있다.
+검사한다. 학습 생성물·검토 원문·실행 기록은 Git에 보존하며, 가중치·체크포인트·캐시는 별도로 보관한다.
+기존에 명시된 평가 전용 원문의 제외 범위는 [현재 보존 정책](../sft_dpo_inventory/DATA_RETENTION.md)에서 구분한다.
 
 Non-JSON structure, unknown vocabulary, invalid factor, duplicate id/question, runtime normalization을
 필요로 하는 gold, 불가능한 합성/검증, 동일 pair, split leakage, source 혼용은 명시적 오류다.
@@ -409,7 +412,8 @@ lock, 모델 revision과 GPU 정보를 experiment 기록에 추가한다.
 [records/README.md](records/README.md)에 bounded pilot 001/002 보고서, reviewed v001/v002/v003
 승인·coverage·manifest와 batch003의 원래 pending queue, 별도 최종 decision을 보존했다.
 V003의 compact index는 같은 production prompt hash에서 정확한 export 재구성을 지원한다.
-원본 ignored 산출물과 weights/checkpoints/XLSX는 추적하지 않는다.
+위 `records/`는 Thor 시점의 읽기 전용 보존 기록이다. 현재 학습·검토 원문과 XLSX는 Git에 추적하며,
+가중치·체크포인트·캐시는 제외한다. 원문을 ignore 경로에만 둔다는 과거 지시는 결정 257로 대체됐다.
 
 ## V003 token/memory gate
 

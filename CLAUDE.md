@@ -46,6 +46,13 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
    - Real data (decision 256, 2026-10-28): the user confirmed that this project's real data contains no personal or
      sensitive data. Commit original real questions, TIMS responses, and execution/review/judgment records, including
      `evaluation/real_data/records/`. Anonymization is not required for collecting or committing these records.
+   - Training and review originals (decision 257, 2026-10-28): commit raw and combined training traces (thinking,
+     teacher, self samples), annotation-candidate first responses, review documents/queues/sheets, and their provenance.
+     This supersedes earlier instructions to keep these originals ignored or commit only summaries. The current policy
+     is `sft_dpo_inventory/DATA_RETENTION.md`; historical reports and frozen scripts retain their original bytes.
+     Preserve explicit evaluation-only and final-set restrictions separately. Git preservation does not approve a
+     draft or authorize using evaluation data for training. For mixed training/review/evaluation directories, exclude
+     only the identified evaluation files, so future training/review originals remain visible to Git.
 4. Ollama: use the existing Docker server (`localhost:11434`) as is. Since decision 69 (2026-10-12) the default GPU for
    Ollama measurements is host GPU 3 (UUID `GPU-48f798cc-9437-50ac-d604-448bbad7b311`). The container's `device_ids`
    decide which GPU Ollama actually uses (2026-10-12: "3"; earlier records under decisions 32 and 38 ran on GPU 2;

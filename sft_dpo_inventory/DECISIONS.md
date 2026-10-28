@@ -1125,3 +1125,11 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - 실제 질문·TIMS 응답·실행·검토·판정 기록은 원본을 보존하고 커밋한다. `evaluation/real_data/records/`의 Git 제외 규칙을 해제한다.
     - 기존 `evaluation/real_data/README.md`와 스키마의 개인정보 제거·익명화 전제를 대체한다. 익명화를 수집·보관·커밋의 조건으로 요구하지 않는다.
     - `question.anonymized`는 기존 기록과의 호환을 위한 선택 항목으로 유지하며, 생략하거나 `false`인 기록도 보관·커밋할 수 있다.
+
+## 2026-10-28 — 학습·검토 원문 Git 보존
+
+257. (2026-10-28, 사용자) 학습·검토 원문을 올리지 않는 규칙을 폐지하고 원문을 Git에 보존한다.
+    - thinking·teacher·자체 표본·필터 전후 trace·원본 모음, 학습 후보 검토용 첫 응답, 검토 문서·queue·XLSX와 출처 기록을 포함한다. 원문 대신 요약만 커밋하던 과거 지시를 대체하며 기존 원문에도 적용한다.
+    - 학습·검토 경로와 `training/runs/`, `training/experiments/`, `training/annotations/generated/`, `training/checkpoints/`, `sft_dpo_inventory/generated/`의 포괄 ignore를 해제한다. JSON 출처·학습 상태 기록은 추적하고 가중치·바이너리 체크포인트·캐시·임시 파일은 계속 제외한다. `build/` 제외는 저장소 루트의 dump 출력으로 한정한다.
+    - 학습·검토·평가가 섞인 폴더는 전체를 무시하지 않고 확인된 평가 파일만 제외한다. `pilot_006_prep/raw/`의 검토 원문 두 파일은 추적하고 기존 평가 파일 59개만 정확한 경로로 제외한다.
+    - 현재 정책은 `DATA_RETENTION.md`와 `CLAUDE.md` 규칙 3이다. 과거 보고서·동결 자산은 당시 기록으로 유지한다. 원문 보존을 학습 승인이나 평가 자료의 학습 사용 허가로 해석하지 않는다.
