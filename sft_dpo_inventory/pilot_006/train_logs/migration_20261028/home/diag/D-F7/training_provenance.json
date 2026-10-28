@@ -1,0 +1,102 @@
+{
+  "stage": "sft",
+  "config": {
+    "model": {
+      "name_or_path": "Qwen/Qwen3-8B",
+      "revision": "b968826d9c46dd6066d109eabc6255188de91218",
+      "trust_remote_code": false,
+      "load_in_4bit": false,
+      "attn_implementation": "sdpa"
+    },
+    "data": {
+      "train": "sft_dpo_inventory/pilot_006/build/RC3/full/sft_train.jsonl",
+      "valid": "sft_dpo_inventory/pilot_006/build/RC3/full/sft_valid.jsonl",
+      "manifest": "sft_dpo_inventory/pilot_006/build/RC3/full/manifest.json",
+      "grounding_target": "full"
+    },
+    "chat_template_kwargs": {
+      "enable_thinking": true
+    },
+    "training": {
+      "output_dir": "/home/hwkim/sftdpo_work/pilot_006/diag/D-F7",
+      "num_train_epochs": 2,
+      "per_device_train_batch_size": 1,
+      "per_device_eval_batch_size": 1,
+      "gradient_accumulation_steps": 1,
+      "learning_rate": 5e-05,
+      "warmup_ratio": 0,
+      "max_seq_length": 12288,
+      "bf16": true,
+      "fp16": false,
+      "gradient_checkpointing": true,
+      "eval_strategy": "no",
+      "save_strategy": "no",
+      "save_total_limit": 6,
+      "logging_steps": 1,
+      "report_to": "none",
+      "seed": 7,
+      "optim": "adamw_torch",
+      "dataloader_num_workers": 0,
+      "dataloader_pin_memory": false,
+      "torch_compile": false,
+      "gradient_checkpointing_kwargs": {
+        "use_reentrant": false
+      },
+      "warmup_steps": 1,
+      "disable_tqdm": true,
+      "data_seed": 7
+    },
+    "lora": {
+      "enabled": true,
+      "r": 16,
+      "alpha": 32,
+      "dropout": 0.05,
+      "target_modules": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj"
+      ]
+    },
+    "safety": {
+      "unified_memory": false,
+      "reserve_fraction": 0.2,
+      "reserve_gib": 16,
+      "min_disk_gib": 20
+    },
+    "profiling": {
+      "enabled": true,
+      "output": "/home/hwkim/sftdpo_work/pilot_006/diag/D-F7_profile.json"
+    },
+    "thinking": {
+      "loss_scope": "by_source"
+    }
+  },
+  "dataset_manifest": {
+    "generated_at": "2026-10-16T18:04:13.395816+00:00",
+    "representation": "flat",
+    "format": "thinking",
+    "prompt_hash": "87048d0c554c365e0e7994d09a4515c1cc646785708ce6dc9d1f120b4b5e8c2c",
+    "grounding_target": "full",
+    "release_candidate": "RC3",
+    "note": "학습 전 후보, PLAN 고정 전(pilot_006 세션 2b)",
+    "train_count": 1861,
+    "validation_count": 0,
+    "questions": 386,
+    "question_list_sha256": "6b06bb2cbc1ff91dccf90432327c02d814a6c77fbe6e55c1b006991c48e4b773",
+    "issues": [],
+    "by_source": {
+      "json_only": 1025,
+      "full_response": 836
+    },
+    "max_seq_length": 12288,
+    "output_hashes": {
+      "sft_train.jsonl": "756160fe2d43c4b3d57a1c8ac9caa7a21f9ee13903cec0d540564bd7924cff71",
+      "sft_valid.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "prompt_hash": "87048d0c554c365e0e7994d09a4515c1cc646785708ce6dc9d1f120b4b5e8c2c"
+}

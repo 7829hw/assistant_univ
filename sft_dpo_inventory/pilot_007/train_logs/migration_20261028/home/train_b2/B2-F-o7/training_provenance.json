@@ -1,0 +1,102 @@
+{
+  "stage": "sft",
+  "config": {
+    "model": {
+      "name_or_path": "Qwen/Qwen3-8B",
+      "revision": "b968826d9c46dd6066d109eabc6255188de91218",
+      "trust_remote_code": false,
+      "load_in_4bit": false,
+      "attn_implementation": "sdpa"
+    },
+    "data": {
+      "train": "sft_dpo_inventory/pilot_007/build/RC5/full/sft_train.jsonl",
+      "valid": "sft_dpo_inventory/pilot_007/build/RC5/full/sft_valid.jsonl",
+      "manifest": "sft_dpo_inventory/pilot_007/build/RC5/full/manifest.json",
+      "grounding_target": "full"
+    },
+    "chat_template_kwargs": {
+      "enable_thinking": true
+    },
+    "training": {
+      "output_dir": "/home/hwkim/sftdpo_work/pilot_007/train_b2/B2-F-o7",
+      "num_train_epochs": 1,
+      "per_device_train_batch_size": 1,
+      "per_device_eval_batch_size": 1,
+      "gradient_accumulation_steps": 1,
+      "learning_rate": 0.0002,
+      "warmup_ratio": 0,
+      "max_seq_length": 12288,
+      "bf16": true,
+      "fp16": false,
+      "gradient_checkpointing": true,
+      "eval_strategy": "no",
+      "save_strategy": "no",
+      "save_total_limit": 6,
+      "logging_steps": 1,
+      "report_to": "none",
+      "seed": 43,
+      "optim": "adamw_torch",
+      "dataloader_num_workers": 0,
+      "dataloader_pin_memory": false,
+      "torch_compile": false,
+      "gradient_checkpointing_kwargs": {
+        "use_reentrant": false
+      },
+      "warmup_steps": 1,
+      "disable_tqdm": true,
+      "data_seed": 7
+    },
+    "lora": {
+      "enabled": true,
+      "r": 16,
+      "alpha": 32,
+      "dropout": 0.05,
+      "target_modules": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj"
+      ]
+    },
+    "safety": {
+      "unified_memory": false,
+      "reserve_fraction": 0.2,
+      "reserve_gib": 16,
+      "min_disk_gib": 20
+    },
+    "profiling": {
+      "enabled": true,
+      "output": "/home/hwkim/sftdpo_work/pilot_007/train_b2/B2-F-o7_profile.json"
+    },
+    "thinking": {
+      "loss_scope": "by_source"
+    }
+  },
+  "dataset_manifest": {
+    "generated_at": "2026-10-19T16:41:34.434897+00:00",
+    "representation": "flat",
+    "format": "thinking",
+    "prompt_hash": "87048d0c554c365e0e7994d09a4515c1cc646785708ce6dc9d1f120b4b5e8c2c",
+    "grounding_target": "full",
+    "release_candidate": "RC5",
+    "note": "pilot_007 RC5 = RC3(full, teacher c2 편집) + batch010 승인분(8b J-b010, 상한 칸에서 우선) + S-focus 정답 표본; build7rc5.py",
+    "train_count": 1811,
+    "validation_count": 0,
+    "questions": 391,
+    "question_list_sha256": "22406d92024a184ea2379c776c5e01495a73d665ab27758f182323e9774686f3",
+    "issues": [],
+    "by_source": {
+      "json_only": 1048,
+      "full_response": 763
+    },
+    "max_seq_length": 12288,
+    "output_hashes": {
+      "sft_train.jsonl": "fd2ea453927fa1fd401ea0e5f8762af11c032a6caaca8c7b19a8971e4fbddbfe",
+      "sft_valid.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "prompt_hash": "87048d0c554c365e0e7994d09a4515c1cc646785708ce6dc9d1f120b4b5e8c2c"
+}

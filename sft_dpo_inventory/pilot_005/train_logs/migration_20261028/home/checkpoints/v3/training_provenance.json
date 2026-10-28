@@ -1,0 +1,142 @@
+{
+  "stage": "dpo",
+  "config": {
+    "model": {
+      "name_or_path": "Qwen/Qwen3-8B",
+      "revision": "b968826d9c46dd6066d109eabc6255188de91218",
+      "initial_mode": "sft",
+      "trust_remote_code": false,
+      "load_in_4bit": false,
+      "attn_implementation": "sdpa",
+      "adapter_path": "/home/hwkim/sftdpo_work/pilot_004/checkpoints/sft/checkpoint-934"
+    },
+    "reference": {
+      "mode": "initial_policy",
+      "strategy": "precompute",
+      "initial_adapter_hash": "5506c8cb7fcfb9580bb51515ed0df69eeea1f12007eeded0696d6b5ee741bf8e"
+    },
+    "data": {
+      "train": "training/generated/thinking_pilot004_t2pc/dpo_train.jsonl",
+      "valid": "training/generated/thinking_pilot004_t2pc/dpo_valid.jsonl",
+      "manifest": "training/generated/thinking_pilot004_t2pc/manifest.json"
+    },
+    "chat_template_kwargs": {
+      "enable_thinking": true
+    },
+    "training": {
+      "output_dir": "/home/hwkim/sftdpo_work/pilot_005/checkpoints/v3",
+      "num_train_epochs": 0.5,
+      "per_device_train_batch_size": 1,
+      "per_device_eval_batch_size": 1,
+      "gradient_accumulation_steps": 1,
+      "learning_rate": 5e-06,
+      "warmup_ratio": 0,
+      "beta": 0.1,
+      "max_prompt_length": 7424,
+      "max_completion_length": 4096,
+      "max_length": 11392,
+      "bf16": true,
+      "fp16": false,
+      "gradient_checkpointing": true,
+      "eval_strategy": "steps",
+      "save_strategy": "steps",
+      "save_total_limit": 6,
+      "logging_steps": 1,
+      "report_to": "none",
+      "seed": 42,
+      "use_logits_to_keep": true,
+      "precompute_ref_log_probs": true,
+      "optim": "adamw_torch",
+      "dataloader_num_workers": 0,
+      "dataloader_pin_memory": false,
+      "torch_compile": false,
+      "gradient_checkpointing_kwargs": {
+        "use_reentrant": false
+      },
+      "eval_steps": 2,
+      "save_steps": 0.5,
+      "warmup_steps": 1,
+      "disable_tqdm": true
+    },
+    "lora": {
+      "enabled": true,
+      "r": 16,
+      "alpha": 32,
+      "dropout": 0.05,
+      "target_modules": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj"
+      ]
+    },
+    "safety": {
+      "unified_memory": false,
+      "reserve_fraction": 0.2,
+      "reserve_gib": 16,
+      "min_disk_gib": 20
+    },
+    "profiling": {
+      "enabled": true,
+      "output": "/home/hwkim/sftdpo_work/pilot_005/metrics/v3_profile.json"
+    },
+    "thinking": {
+      "loss_scope": "full_response"
+    }
+  },
+  "dataset_manifest": {
+    "generated_at": "2026-10-14T11:49:48.107783+00:00",
+    "git_commit": "2765bb3cb5ce21528dc18f5de41449a94c7851db",
+    "branch": "geoflow/sft-dpo-t2pc",
+    "seed": 42,
+    "output_schema_version": "geoflow-planner-flat-training-v1",
+    "ontology_version": "1.0",
+    "planner_schema_hash": "9599c3d0a2873208dd4749035e94b9a7612d20a0452682613d17c91967f8d933",
+    "factor_schema_hash": "e1a9e78295ec1790540f0cdba06c9c806b3e6c1315f832f69cf35215cc8653db",
+    "representation": "flat",
+    "prompt_hash": "87048d0c554c365e0e7994d09a4515c1cc646785708ce6dc9d1f120b4b5e8c2c",
+    "definition_hashes": {
+      "prompts/geoflow_planner.yaml": "defdd7111fc2de608b106ab540370175f132dd8f19740cad5a59af84b5cbbdf0",
+      "geoflow/planner.py": "c1f4471ecc923fc0f505dbede1468be72347b264f2a6209771503b6563281647",
+      "geoflow/grounding.py": "9599c3d0a2873208dd4749035e94b9a7612d20a0452682613d17c91967f8d933",
+      "geoflow/factors.py": "e1a9e78295ec1790540f0cdba06c9c806b3e6c1315f832f69cf35215cc8653db",
+      "geoflow/types.py": "689760613b09d1737dbe435361dc42c13da779fe43bc5ea58178c858796b074b",
+      "geoflow/operator_registry.py": "35f6cb2a797908a9c19d29b5a5d7ce81ab43dfd3895ad6749d4e7427e0525d6a",
+      "geoflow/aggregation.py": "0062c60d4a3a592df5e9896f5517e9b888c56c444bd08fbecac4a8562865bdc4",
+      "geoflow/composer.py": "09a0f440b7115709eb7584ee5649b83edc6532a64b988e8637c0a7ad63472ebe",
+      "geoflow/validator.py": "9629045fb0bee2528379b0bbd2f2e72455ff810d09a39760117ed0032a632824",
+      "geoflow/operator_mapping.py": "b40419493a99765407d6d1480746175abb441a1176f27f7659120c50b9238ee3",
+      "geoflow_macros/event_to_grouped_measure.yaml": "07e119dbbeb29accd163bf3cf97231f464a417521b597f8d58a2282681deb77c",
+      "geoflow_macros/event_to_measure.yaml": "2693fc651822a1e9721ab9c8195137ef599592dc4b60285cef21ecc2ad317f10",
+      "geoflow_macros/od_event_to_measure.yaml": "f400708152c1787886a71d81c616140e06f15f0977a82c9658bdf31ff3c5a6b0",
+      "geoflow_macros/place_to_scope.yaml": "badbdd3af4bccdd8c93e3899a10a07750d85b969b43ef2eab0ceb62d4d672329",
+      "geoflow_macros/scope_to_place.yaml": "e3ae47efd63a68eabaf65874dc1a522225dee6ad855e658ab91c46bd86d17bc8"
+    },
+    "source_files": {
+      "training/generated/pilot_004/combined_traces.jsonl": "b81433de95c1e17acf2a9d7f638a475f4b3c2d9404d4edfc0bd72ef9a21afee8",
+      "sft_dpo_inventory/pilot_004/data/candidates_pilot004.json": "1ba746e3aa94820dfdd5cf5c094609614dafa04c4ad003f784a03c2a6a903a10",
+      "training/generated/reviewed_gold_v006_t2pc/sft_train.jsonl": "cef54fe56569597e52ff7af0e9c123755fa63b0b8c6d5dd27088edbed07bd089"
+    },
+    "format": "thinking",
+    "corpus": "training/generated/reviewed_gold_v006_t2pc",
+    "split_source": "train",
+    "reasoning_human_reviewed": false,
+    "train_count": 385,
+    "validation_count": 0,
+    "questions": 58,
+    "excluded": {},
+    "negative_category": {
+      "constraint": 213,
+      "semantic": 172
+    },
+    "issues": [],
+    "output_hashes": {
+      "dpo_train.jsonl": "6c52d0477d0a0aa4199bf57cfc27f544602e3abf1a5c6b6b87a896ca0099a96b",
+      "dpo_valid.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "prompt_hash": "87048d0c554c365e0e7994d09a4515c1cc646785708ce6dc9d1f120b4b5e8c2c"
+}

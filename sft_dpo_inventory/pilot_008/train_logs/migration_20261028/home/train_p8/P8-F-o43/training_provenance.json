@@ -1,0 +1,102 @@
+{
+  "stage": "sft",
+  "config": {
+    "model": {
+      "name_or_path": "Qwen/Qwen3-8B",
+      "revision": "b968826d9c46dd6066d109eabc6255188de91218",
+      "trust_remote_code": false,
+      "load_in_4bit": false,
+      "attn_implementation": "sdpa"
+    },
+    "data": {
+      "train": "sft_dpo_inventory/pilot_008/build/RC6/full/sft_train.jsonl",
+      "valid": "sft_dpo_inventory/pilot_008/build/RC6/full/sft_valid.jsonl",
+      "manifest": "sft_dpo_inventory/pilot_008/build/RC6/full/manifest.json",
+      "grounding_target": "full"
+    },
+    "chat_template_kwargs": {
+      "enable_thinking": true
+    },
+    "training": {
+      "output_dir": "/home/hwkim/sftdpo_work/pilot_008/train_p8/P8-F-o43",
+      "num_train_epochs": 1,
+      "per_device_train_batch_size": 1,
+      "per_device_eval_batch_size": 1,
+      "gradient_accumulation_steps": 1,
+      "learning_rate": 0.0002,
+      "warmup_ratio": 0,
+      "max_seq_length": 12288,
+      "bf16": true,
+      "fp16": false,
+      "gradient_checkpointing": true,
+      "eval_strategy": "no",
+      "save_strategy": "no",
+      "save_total_limit": 6,
+      "logging_steps": 1,
+      "report_to": "none",
+      "seed": 43,
+      "optim": "adamw_torch",
+      "dataloader_num_workers": 0,
+      "dataloader_pin_memory": false,
+      "torch_compile": false,
+      "gradient_checkpointing_kwargs": {
+        "use_reentrant": false
+      },
+      "warmup_steps": 1,
+      "disable_tqdm": true,
+      "data_seed": 43
+    },
+    "lora": {
+      "enabled": true,
+      "r": 16,
+      "alpha": 32,
+      "dropout": 0.05,
+      "target_modules": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj"
+      ]
+    },
+    "safety": {
+      "unified_memory": false,
+      "reserve_fraction": 0.2,
+      "reserve_gib": 16,
+      "min_disk_gib": 20
+    },
+    "profiling": {
+      "enabled": true,
+      "output": "/home/hwkim/sftdpo_work/pilot_008/train_p8/P8-F-o43_profile.json"
+    },
+    "thinking": {
+      "loss_scope": "by_source"
+    }
+  },
+  "dataset_manifest": {
+    "generated_at": "2026-10-22T12:07:59.096514+00:00",
+    "representation": "flat",
+    "format": "thinking",
+    "prompt_hash": "87048d0c554c365e0e7994d09a4515c1cc646785708ce6dc9d1f120b4b5e8c2c",
+    "grounding_target": "full",
+    "release_candidate": "RC6",
+    "note": "pilot_008 RC6 = RC5 Full + batch011 승인분(r2 8b J-b011 상한 칸에서 우선, r1 거부 S-1 base 표본 + S-2 거부 target 8%); build8rc6.py",
+    "train_count": 2005,
+    "validation_count": 0,
+    "questions": 466,
+    "question_list_sha256": "c8fb87aac3f3ada9ca5b2fb7c76d2188fed70597e7fffb1ed0fc4cde86fad5ab",
+    "issues": [],
+    "by_source": {
+      "json_only": 1258,
+      "full_response": 747
+    },
+    "max_seq_length": 12288,
+    "output_hashes": {
+      "sft_train.jsonl": "2abbd93eb9cf5787eb0bd66cc15c527ac2527f23c40beaba4edf9f7631c1b8c5",
+      "sft_valid.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "prompt_hash": "87048d0c554c365e0e7994d09a4515c1cc646785708ce6dc9d1f120b4b5e8c2c"
+}
