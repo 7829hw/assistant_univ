@@ -25,3 +25,9 @@
 
 - 셀: `cells/ct10k_v4_<seed>_c<1-5>_s1.json`·`.log`. 원문: `training/generated/client_test_10000/raw/`.
 - 결과 요약은 측정이 끝난 뒤 `RESULTS.md`에 적는다.
+
+## base 측정(결정 260, 2026-10-29 사용자 지시)
+
+- 파인튜닝하지 않은 base Qwen3-8B@b968826d(BF16, LoRA 없이 요청). 모델이 하나이므로 GPU마다 sampling 회차 하나: k=1·2·3(회차 seed 20261101·02·03; k=1은 V4 셀과 같은 회차 seed).
+- 실행 `gpu/run_ct10k_base.sh K GPU PORT`(작업 CT10K-base-k1·k2·k3), 서버 `gpu/serve_ct10k.sh`(serve7.sh 사본; 기록 위치 P3를 이 디렉터리로 — 원본은 pilot_007/gpu에 썼다).
+- 출력 `cells/ct10k_base_c<1-5>_s<K>.json`. 그 밖의 조건(client·sampler·묶음·동시 요청 32)은 V4 측정과 같다.

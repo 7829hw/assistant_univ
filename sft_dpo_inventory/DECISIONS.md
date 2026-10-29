@@ -1147,3 +1147,5 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
 
 259. (2026-10-29, 사용자) 업로드한 `qa_test_10000.yaml`(평가 전용, 최종 판정 셋 아님)로 pilot_010 선택 변형 V4를 HF 경로(BF16 base + LoRA, vLLM 서빙, thinking ON)에서 테스트한다.
     GPU 3장을 모두 쓰고, 순서 seed adapter 3개(o43·o1016·o7)를 GPU마다 하나씩 10,000문항 k=1로 잰다(작업 하나 = GPU 하나). 기록은 `client_test_10000/README.md`.
+260. (2026-10-29, 사용자) 같은 `qa_test_10000.yaml`로 파인튜닝하지 않은 base Qwen3-8B@b968826d(HF-base, BF16, vLLM 서빙, thinking ON)도 테스트한다.
+    모델이 하나이므로 GPU 3장에 sampling 회차 k=1·2·3(회차 seed 20261101–03)을 하나씩 맡긴다. 그 밖의 조건은 결정 259와 같다. 기록은 `client_test_10000/README.md`.
