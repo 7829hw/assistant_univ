@@ -1142,3 +1142,8 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - Git 복구 `1a82099`: 후보 881개 중 외부 기록 485개 복사, 동일 blob 57개 매핑, 기존 원문 245개 유지, 큰 원문 1개 완전 분할. 기존 평가 전용 76개 및 평가·혼합 서버 로그 17개는 data에 보존한다. 787개 직접/기존 blob 항목의 SHA를 커밋과 대조했다. 별도 generated 기록 7개도 편입했다. 결정 256·257을 현재 보존 정책으로 적용하고 가중치·환경·캐시는 계속 Git 밖에 둔다.
     - 실행은 data의 `runtime/envs/{hf,vllm,llamacpp,uvtool}`과 새 native quantizer를 쓴다. 과거 스크립트·config·FREEZE·manifest는 원래 바이트를 유지하고 `gpu_data`·`train_data`·`teacher_data` sibling 실행 스냅샷을 Git에 남긴다. 코드·설정은 해당 파일이 포함된 커밋으로 고정한 worktree, 기존 입력·로그·상태·결과는 기존 저장소 경로를 쓴다. 새 작업표·설정은 커밋·pin 전에 생성한다.
     - 실행 증거와 한계는 `migration_execution_20261028/README.md`. 네 환경 import·pip check 및 학습 CPU dry-run, 이관 관련 CPU 테스트 27개가 통과했다. GPU·Ollama·학습·모델 추론은 시작하지 않았다. 원래 자료의 외부 통합은 저장소 자체(`/home/hwkim/assistant_univ`)의 위치 변경을 포함하지 않는다.
+
+## 2026-10-29 — 고객 질문 10,000문항 테스트(client_test_10000)
+
+259. (2026-10-29, 사용자) 업로드한 `qa_test_10000.yaml`(평가 전용, 최종 판정 셋 아님)로 pilot_010 선택 변형 V4를 HF 경로(BF16 base + LoRA, vLLM 서빙, thinking ON)에서 테스트한다.
+    GPU 3장을 모두 쓰고, 순서 seed adapter 3개(o43·o1016·o7)를 GPU마다 하나씩 10,000문항 k=1로 잰다(작업 하나 = GPU 하나). 기록은 `client_test_10000/README.md`.
