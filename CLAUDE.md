@@ -168,3 +168,21 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
 15. Running scripts (decision 88, 2026-10-14). Never edit a script file while a process is executing it: bash reads scripts
     incrementally, so an edit can make the running shell execute different or partial lines. If a change is needed, write a new
     file and use it from the next run.
+
+16. Consolidated storage (decision 258, 2026-10-29): external SFT/DPO assets live only under
+    `/data/hwkim/sftdpo_work`. Do not recreate `/home/hwkim/sftdpo_work` or add a compatibility symlink.
+    - Keep model/adapter/checkpoint/GGUF files and caches outside Git. Keep original training/review data and
+      execution records inside the repository under rule 3; external copies do not replace their Git preservation.
+    - Use the rebuilt environments at `/data/hwkim/sftdpo_work/runtime/envs/{hf,vllm,llamacpp,uvtool}`.
+      Their observed versions, wheel provenance and CPU validation are recorded in
+      `sft_dpo_inventory/migration_execution_20261028/runtime/`. The old copied environment/build directories
+      are historical preservation copies; use the new runtime for execution. The CPU native quantizer is
+      `runtime/native/llama.cpp-b11434/build/bin/llama-quantize` under the same external root.
+    - Historical scripts/configs/FREEZE/manifests keep their original bytes, including obsolete paths. New
+      execution snapshots use sibling `gpu_data`, `train_data`, `teacher_data` directories listed in
+      `runtime/render_manifest.json`. Preserve input/log/ready/result locations in the existing repository
+      directories; select executable code/configs from the job's commit-pinned worktree. Generate new job
+      manifests before committing and pinning them. Do not modify a running/pinned checkout.
+    - Pin a commit that actually contains the new execution snapshots before starting any future GPU job.
+      Copied historical job manifests do not authorize rerunning completed experiments. Migration validation
+      covers offline CPU checks, not GPU operation or model equivalence. See the execution report for limits.

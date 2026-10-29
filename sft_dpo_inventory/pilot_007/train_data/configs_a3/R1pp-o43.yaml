@@ -1,0 +1,64 @@
+# pilot_007 A3 R1pp-o43(결정 186): A-R1-o43.yaml에서 데이터 RC3c → RC5/full, learning_rate 5e-5 → 0.0002, 출력만 바꿈. train_a7.py.
+model:
+  name_or_path: Qwen/Qwen3-8B
+  revision: b968826d9c46dd6066d109eabc6255188de91218
+  trust_remote_code: false
+  load_in_4bit: false
+  attn_implementation: sdpa
+data:
+  train: sft_dpo_inventory/pilot_007/build/RC5/full/sft_train.jsonl
+  valid: sft_dpo_inventory/pilot_007/build/RC5/full/sft_valid.jsonl
+  manifest: sft_dpo_inventory/pilot_007/build/RC5/full/manifest.json
+  grounding_target: full
+chat_template_kwargs:
+  enable_thinking: true
+training:
+  output_dir: /data/hwkim/sftdpo_work/pilot_007/train_a3/R1pp-o43
+  num_train_epochs: 1
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 1
+  learning_rate: 0.0002
+  warmup_ratio: 0
+  max_seq_length: 12288
+  bf16: true
+  fp16: false
+  gradient_checkpointing: true
+  eval_strategy: 'no'
+  save_strategy: 'no'
+  save_total_limit: 6
+  logging_steps: 1
+  report_to: none
+  seed: 43
+  optim: adamw_torch
+  dataloader_num_workers: 0
+  dataloader_pin_memory: false
+  torch_compile: false
+  gradient_checkpointing_kwargs:
+    use_reentrant: false
+  warmup_steps: 1
+  disable_tqdm: true
+  data_seed: 43
+lora:
+  enabled: true
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+safety:
+  unified_memory: false
+  reserve_fraction: 0.2
+  reserve_gib: 16
+  min_disk_gib: 20
+profiling:
+  enabled: true
+  output: /data/hwkim/sftdpo_work/pilot_007/train_a3/R1pp-o43_profile.json
+thinking:
+  loss_scope: by_source

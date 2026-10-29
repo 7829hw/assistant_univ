@@ -1,0 +1,19 @@
+{
+ "gpus": ["GPU 0 2445b100 (Ollama GPU, 결정 181: 작업마다 /api/ps 빔 확인)", "GPU 1 a5ce83d0"],
+ "excluded": "GPU 2 48f798cc (다른 사용자 배정, 결정 180) — worker 없음, gpu_lib7가 거부",
+ "basis": {"train_hours_each": "2.2(A단계 R1 실측 2.20–2.26h, 같은 RC3c 1,356 레코드; (a)는 epoch 1에서 멈춰 같은 step 수)",
+           "eval_E_A2_minutes_each": "약 50(A단계 E-A 실측 43–55분)", "eval_E_ref_minutes": 35, "eval_E_A2q_minutes_each": 35},
+ "schedule_T_relative_hours": {
+  "바퀴 1": "C-s43 / R1p-o43, T → T+2.2",
+  "바퀴 2": "R1p-o1016 / C-s1016, T+2.2 → T+4.4",
+  "바퀴 3": "C-s7 / R1p-o7, T+4.4 → T+6.6",
+  "평가": "E-A2 × 6 + E-ref_F1016dev, T+6.6 → 약 T+9.4(50분 × 6 + 35분, 두 장)",
+  "궤적(선택)": "E-A2q × 3, 약 T+9.4 → T+10.3",
+  "end": "약 T+10.3h"
+ },
+ "placement_note": "지시 2.2대로 학습을 먼저 모두 돌리고 평가를 붙인다. 두 장이 늘 바쁘므로 평가를 학습 사이에 끼워도 전체 시간은 같다(같은 일의 합). 학습 먼저가 세 번째 바퀴 학습을 늦추지 않는다.",
+ "expected_idle_over_10min": [
+  {"when": "GPU 0에 Ollama 모델이 올라오면", "why": "결정 181: 직접 내리지 않고 GPU 1부터 채움 — 그동안 GPU 0 유휴(기록)"},
+  {"when": "끝 무렵 작업 수가 홀수일 때(평가 7개, 궤적 3개)", "why": "작업 하나 = GPU 하나라 마지막 작업 동안 한 장이 빈다(약 35–50분)"}
+ ]
+}

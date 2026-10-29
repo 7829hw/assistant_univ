@@ -1133,3 +1133,12 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     - 학습·검토 경로와 `training/runs/`, `training/experiments/`, `training/annotations/generated/`, `training/checkpoints/`, `sft_dpo_inventory/generated/`의 포괄 ignore를 해제한다. JSON 출처·학습 상태 기록은 추적하고 가중치·바이너리 체크포인트·캐시·임시 파일은 계속 제외한다. `build/` 제외는 저장소 루트의 dump 출력으로 한정한다.
     - 학습·검토·평가가 섞인 폴더는 전체를 무시하지 않고 확인된 평가 파일만 제외한다. `pilot_006_prep/raw/`의 검토 원문 두 파일은 추적하고 기존 평가 파일 59개만 정확한 경로로 제외한다.
     - 현재 정책은 `DATA_RETENTION.md`와 `CLAUDE.md` 규칙 3이다. 과거 보고서·동결 자산은 당시 기록으로 유지한다. 원문 보존을 학습 승인이나 평가 자료의 학습 사용 허가로 해석하지 않는다.
+
+
+## 2026-10-29 — 외부 저장소 통합과 학습·검토 원문 복구 실행
+
+258. (2026-10-29, 사용자) 검사된 이관 목록에 따라 `/home/hwkim/sftdpo_work`와 기존 data 자료를 `/data/hwkim/sftdpo_work`로 통합하고 누락된 학습·검토 원문을 Git에 올린다.
+    - 실제 이관 완료: 일반 SHA 163,684개·보호 자료 87개 machine-only 바이트 비교·링크 1,102개·디렉터리 18,027개 전체 검증 통과. 원본 격리 상태에서 새 환경 CPU 검사를 통과한 뒤 전체 바이트 재검증과 파일별 삭제 직전 비교를 거쳐 home의 182,724개 항목을 정리했다. 구 home 및 임시 격리 폴더는 없고 호환 링크도 두지 않는다.
+    - Git 복구 `1a82099`: 후보 881개 중 외부 기록 485개 복사, 동일 blob 57개 매핑, 기존 원문 245개 유지, 큰 원문 1개 완전 분할. 기존 평가 전용 76개 및 평가·혼합 서버 로그 17개는 data에 보존한다. 787개 직접/기존 blob 항목의 SHA를 커밋과 대조했다. 별도 generated 기록 7개도 편입했다. 결정 256·257을 현재 보존 정책으로 적용하고 가중치·환경·캐시는 계속 Git 밖에 둔다.
+    - 실행은 data의 `runtime/envs/{hf,vllm,llamacpp,uvtool}`과 새 native quantizer를 쓴다. 과거 스크립트·config·FREEZE·manifest는 원래 바이트를 유지하고 `gpu_data`·`train_data`·`teacher_data` sibling 실행 스냅샷을 Git에 남긴다. 코드·설정은 해당 파일이 포함된 커밋으로 고정한 worktree, 기존 입력·로그·상태·결과는 기존 저장소 경로를 쓴다. 새 작업표·설정은 커밋·pin 전에 생성한다.
+    - 실행 증거와 한계는 `migration_execution_20261028/README.md`. 네 환경 import·pip check 및 학습 CPU dry-run, 이관 관련 CPU 테스트 27개가 통과했다. GPU·Ollama·학습·모델 추론은 시작하지 않았다. 원래 자료의 외부 통합은 저장소 자체(`/home/hwkim/assistant_univ`)의 위치 변경을 포함하지 않는다.
