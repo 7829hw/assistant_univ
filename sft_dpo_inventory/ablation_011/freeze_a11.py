@@ -48,7 +48,13 @@ def main():
         out = HERE / "FREEZE_A11.json"
     else:
         body = {"label": "ablation_011 FREEZE tools(결정 261) — 평가 전", "note": "진단, 판정 아님",
-                "files": files([f"{A}/analysis/*.py", f"{A}/analysis/smoke_*.json", f"{A}/soup/soup11.py"])}
+                "smoke": {"analyze_a11 --smoke": "pilot_010 V4 3 seed 올바른 거부 86.48·과잉 거부 2.17·개발 셋 71.81 = selection_s10.json; V8(A1 자리) − V4 짝 비교 동작",
+                          "xtab_a11 --existing": "pilot_010 V4·V8·B2 F·P9 과잉 거부 2.17·4.24·0.98·10.68%, client10k V4 거부 112·169·148 = 기존 기록",
+                          "completeness11": "pilot_010 셀 16개에서 completeness10.json 다시 돌리기 판단과 같음"},
+                "amendments_to_plan": ["6절 3 유형 칸: type_target.profile 칸은 semantics가 필요한데 E1 gold에는 정답 호출만 있어 '분석 tool | 시간 단위 | 지역 유형'(xtab_a11.classify) 서명으로 묶고 문항 4개 이상 칸만 본다(smoke에서 59칸 중 13칸).",
+                                       "6절 5 지역 유형: 광안리·동성로·동대구역·어린이대공원은 POI로 명시('리'는 읍면동 접미사로 쓰지 않음; E1·client10k 장소명 22종 확인).",
+                                       "5절 다시 돌리기 판단의 서버 오류는 completeness_B.cell 정의(UNHANDLED_EXCEPTION + 연결 예외)를 쓴다; analyze_a11 속도표에는 서버 오류를 넣지 않는다."],
+                "files": files([f"{A}/analysis/*.py", f"{A}/analysis/smoke_*.json", f"{A}/soup/soup11.py", f"{A}/soup/soup_check.json"])}
         out = HERE / "FREEZE_A11_tools.json"
     body["frozen_at"] = datetime.now(ZoneInfo("Asia/Seoul")).isoformat(timespec="seconds")
     out.write_text(json.dumps(body, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
