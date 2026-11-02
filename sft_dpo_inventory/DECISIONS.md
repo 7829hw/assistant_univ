@@ -1149,3 +1149,27 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
     GPU 3장을 모두 쓰고, 순서 seed adapter 3개(o43·o1016·o7)를 GPU마다 하나씩 10,000문항 k=1로 잰다(작업 하나 = GPU 하나). 기록은 `client_test_10000/README.md`.
 260. (2026-10-29, 사용자) 같은 `qa_test_10000.yaml`로 파인튜닝하지 않은 base Qwen3-8B@b968826d(HF-base, BF16, vLLM 서빙, thinking ON)도 테스트한다.
     모델이 하나이므로 GPU 3장에 sampling 회차 k=1·2·3(회차 seed 20261101–03)을 하나씩 맡긴다. 그 밖의 조건은 결정 259와 같다. 기록은 `client_test_10000/README.md`.
+
+## 2026-11-02 — ablation_011
+
+이번 작업은 ablation 진단이며 판정이 아니다. 결과로 V4를 채택·탈락시키지 않는다. PLAN_J 판정 단계 학습·PLAN_J seed(101·523·2029·31·20271027)·protected_final_v2 열람·고정·주 셋 151 측정·Ollama·DPO·Partial·nonthinking은 쓰지 않는다.
+기존 adapter는 지우지 않고, build10w.py 등 기존 스크립트는 고치지 않는다(필요하면 새 파일). 기록 `sft_dpo_inventory/ablation_011/`.
+
+261. (2026-11-02, 사용자) ablation_011 — V4 한계 세 가지(순서 seed 편차, 선택에 쓴 개발 셋, 과잉 거부 몰림)를 겨냥한 ablation(약 24시간, GPU 3장).
+    - arm(V4에서 한 가지만 바꿈; 공통 R1''·모델 seed 43·epoch 끝 checkpoint·thinking ON·87048d0c·expandable_segments):
+      A0 = `pilot_010/build/V4/full/sft_train.jsonl` 그대로(재빌드 없음, 질문 목록 sha256 `d559b3e1…` 확인).
+      A1 = 근접 대조 teacher 레코드(TEACH-C 통과분, `full_response`)의 손실 범위만 `json_only`(입력 바이트 같고 마스크만 다름; 저장소 정의가 "같은 입력에서 최종 JSON에만 손실"과 다르면 멈춤).
+      A2 = 거부 비중 ρ = 0.02, R = round(ρ·N/(1−ρ)), V4 거부 레코드의 부분집합(build10w `refusal_tie` 순서 앞쪽 R개).
+      A3 = V4에서 요금 지표 근접 대조(batch013 c1 50과 근접 대조 teacher trace 중 `get_billing_metrics` 문항)를 뺀 부분집합(빼는 레코드 id 목록은 학습 전에 커밋).
+      A0-soup(학습 없음) = S-V4-o43·o1016·o7 checkpoint-1984의 정확한 평균(A' = concat(A1,A2,A3) rank 48, B' = concat(B1,B2,B3)/3, alpha/rank 비율 맞춤; CPU 일치 검사 실패 시 soup만 뺌; vLLM max_lora_rank ≥ 48).
+      빌드 `ablation_011/build/build11.py`(V4 빌드 결과 입력, 모델 호출 없음), arm마다 결정 250 빌드 검사와 레코드 수·step 수·손실 비중 표.
+    - 공유 순서: 새 순서 seed 3개(기존 사용 seed와 겹치지 않음을 grep으로 확인 뒤 확정·기록). seed마다 A0의 O4' 순서, A1은 같은 순서, A2·A3은 A0 순서에서 빠진 레코드만 지움(상대 순서 유지). 같은 질문 연속 길이 ≤ 4, 넘으면 멈춤.
+    - 평가: E1 = refusal_dev v2 + valid98 + aux, k=4(pilot_010 셀과 같은 client·채점·sampler·동시 8·기준일 2026-09-25; 선택에 이미 쓴 셋임을 표기).
+      E2 = 독립 holdout H(원천 `llm-finetuning-30000.jsonl` sha256 `63d445b8…`; H-ans 2,000 층화 seed 20261102·gold_check, H-ref는 원천 라벨로 거부가 확정되는 문항만 최대 500), k=1·sampling seed 20261101·동시 32. 원천이 없거나 sha256이 다르면 E2만 뺀다.
+    - 측정: 학습 12개({A0,A1,A2,A3} × 순서 seed 3) E1·E2, soup E1·E2, 기준 셀(base E2 k=1·2, V4 o43·o1016·o7 E2 k=1, B2 F E2는 시간이 남고 adapter가 있을 때만). E1 기준은 있는 셀.
+    - GPU: 결정 114 규칙, 커밋 고정 worktree, `gpu/timeline.jsonl`; 스케줄러는 scheduler12.py 사본(새 파일), 우선순위 (1) 끝난 모델 평가 (2) 학습(순서 seed 블록 단위) (3) 기준 셀. 시작 22시간 뒤 새 학습 없음. OOM·NaN은 한 번 다시.
+    - 측정 전 `PLAN_A11.md`·`FREEZE_A11.json` 커밋·푸시. 분석: 각 arm − A0(같은 순서 seed 짝, seed 짝·문항 공유 재추출 bootstrap 10,000, 95% CI), 순서 편차(V4 6 seed), soup, 과잉 거부 tool × 시간 단위 × 지역 유형 교차표. 모든 결과에 "진단, 판정 아님".
+    - 산출: `RESULTS.md`, `CRITERIA_DRAFT.md`(기준 후보만), `QUESTIONS.md`. adapter 위치·sha256은 기록만(결정 255).
+- 실행 기록(2026-11-02, Claude, 새 결정 아님): (1) 30k 원천 `llm-finetuning-30000.jsonl`은 업로드 폴더·저장소·`/data/hwkim`·`/home/hwkim`·`/tmp` 어디에도 없다(업로드 폴더에는 `qa_test_10000.yaml`만 있음). 지시 10절대로 **E2(H-ans·H-ref)와 E2 전용 기준 셀(base k=1·2, V4 3 seed, B2 F)을 뺀다**. 나머지는 진행한다.
+  (2) 순서 seed 제안값 3·1102·20261102 중 3은 기존 sampling seed(`pilot_006_prep/gpu/g0_speed.json`·`pilot_006/post/o1_speed.json`), 20261102는 회차 seed S_2(= 20261100 + 2, 셀 460곳; 이번 E1 k=2 회차 seed와도 같음)로 이미 쓰였다.
+  seed 문맥 grep(저장소·`training/generated` jsonl 포함) 0건인 값으로 바꿔 **1102 · 211102 · 2026113**(라벨 o1102·o211102·o2026113)으로 확정한다.
