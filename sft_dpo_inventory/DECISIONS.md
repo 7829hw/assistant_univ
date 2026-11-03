@@ -1202,3 +1202,6 @@ adapter는 지우지 않고, 기존 스크립트·FREEZE 파일은 고치지 않
     - 산출: `ablation_012/RESULTS.md`·`CRITERIA_v2_DRAFT.md`(2안까지, 확정 안 함)·`CONTRAST_PLAN_DRAFT.md`(문항 없음)·`QUESTIONS.md`, `pilot_010/PLAN_J2_DRAFT.md`(PLAN_J_DRAFT 그대로 두고 새로).
       adapter 위치·sha256은 `/data/hwkim/sftdpo_work/ablation_012/adapters_sha256.txt`에만(결정 255).
 - 실행 기록(2026-11-03, Claude, 새 결정 아님): 30k 원천은 있고 sha256 `63d445b86bfb…5102def`가 맞다(E2 진행). 그 밖의 실행 기록은 `ablation_012/PLAN_A12.md` 0절.
+- 실행 기록(2026-11-04, Claude, 새 결정 아님): ablation_012 끝(scheduler14, 작업 52 ok, 셀 116/116, 다시 돌리기 셀 39 자동, GPU 빈 시간 최대 20초).
+  (1) 지시의 "client_test_10000과 같은 겹침 도구"는 저장소에 없어(CT10K 파일에 pool 값만 있음) 규칙을 다시 만들고 CT10K 10,000 라벨을 모두 재현한 뒤 썼다(`ablation_012/e2/pool_rule_check.json`); 짝 근거가 없는 360문항은 보수적으로 뺐다.
+  (2) H-ref 없음: 비-tool_call 원천 라벨로 '거부'가 확정되지 않음. (3) 결과·기준 초안은 `ablation_012/RESULTS.md`·`CRITERIA_v2_DRAFT.md`, 판정 초안 `pilot_010/PLAN_J2_DRAFT.md`, 보강 초안 `CONTRAST_PLAN_DRAFT.md`, 질문 `QUESTIONS.md`(모두 진단, 판정 아님).
