@@ -1173,3 +1173,32 @@ GPU 사용 규칙(결정 1)은 `CLAUDE.md`의 SFT/DPO 규칙 5·6에 있다.
 - 실행 기록(2026-11-02, Claude, 새 결정 아님): (1) 30k 원천 `llm-finetuning-30000.jsonl`은 업로드 폴더·저장소·`/data/hwkim`·`/home/hwkim`·`/tmp` 어디에도 없다(업로드 폴더에는 `qa_test_10000.yaml`만 있음). 지시 10절대로 **E2(H-ans·H-ref)와 E2 전용 기준 셀(base k=1·2, V4 3 seed, B2 F)을 뺀다**. 나머지는 진행한다.
   (2) 순서 seed 제안값 3·1102·20261102 중 3은 기존 sampling seed(`pilot_006_prep/gpu/g0_speed.json`·`pilot_006/post/o1_speed.json`), 20261102는 회차 seed S_2(= 20261100 + 2, 셀 460곳; 이번 E1 k=2 회차 seed와도 같음)로 이미 쓰였다.
   seed 문맥 grep(저장소·`training/generated` jsonl 포함) 0건인 값으로 바꿔 **1102 · 211102 · 2026113**(라벨 o1102·o211102·o2026113)으로 확정한다.
+
+## 2026-11-03 — ablation_012
+
+이번 작업도 진단이며 판정이 아니다. V4를 채택·기각하지 않는다. PLAN_J 학습·판정·PLAN_J seed(101·523·2029·31·20271027)·protected_final_v2 열람·고정·주 셋 151 측정·Ollama 호출·컨테이너 조작·DPO·Partial·nonthinking은 쓰지 않는다.
+adapter는 지우지 않고, 기존 스크립트·FREEZE 파일은 고치지 않는다(필요하면 새 파일). 측정 전에 H-final의 결과·문항 내용을 보지 않는다. 기록 `sft_dpo_inventory/ablation_012/`.
+
+262. (2026-11-03, 사용자) ablation_011 QUESTIONS 1–6에 대한 답(D1–D6)과 ablation_012 — A3 효과 분리, V4 seed 일관성(넓은 셋), 판정 설계 초안(GPU 3장, E2 있으면 약 18h).
+    - D1 30k 원천: `/data/hwkim/sftdpo_work/sources/llm-finetuning-30000.jsonl`(sha256 `63d445b8…`이 맞아야 함; 없거나 다르면 E2만 뺌).
+      `qa_test_10000`(CT10K)은 V4 자신의 seed 일관성과 soup 진단에만 쓴다. 변형 비교(A3R 등)에는 쓰지 않는다.
+    - D2 판정 기준: 변형 비교(개발)는 안 2(V4 짝 비열등), V4 최종 판정은 안 3(넓은 셋 seed 일관성 + 거부 하한). 수치는 이번 6 seed 분포로 다시 계산한 초안으로만 내고 확정하지 않는다.
+    - D3 판정 셋·seed 수: 판정에 넓은 셋을 넣는다(E2가 있으면 H-final, 없으면 보류). seed 수는 이번 검정력 계산(3·5·8)을 보고 정한다. PLAN_J seed는 계속 예약, 이번에 쓰지 않는다.
+    - D4 A3 효과 분리: 무작위 제거 대조 arm A3R — 뽑기 2회(A3R-d1 seed 20261104·d2 seed 20261105) × ablation_011 순서 seed 3개(1102·211102·2026113).
+      A3과 같은 질문 수(99)를 질문 단위로 뽑고, 뺀 레코드 수가 A3 제거 레코드 수(462)의 ±2% 안일 때까지 다시 뽑는다(1,000번 안에 못 하면 멈춤). 대상 풀 = V4 답하는 질문 − A3 제거 질문 − 거부 질문. 거부 레코드는 그대로.
+      순서 = ablation_011 A0 순서 파일에서 빠진 레코드만 지움(연속 길이 ≤ 4, 넘으면 멈춤). 학습·빌드 검사·recipe는 ablation_011과 같다(R1''·모델 seed 43·epoch 끝·결정 250 검사). OOM·NaN은 한 번 다시, 또 실패하면 빼고 보고.
+    - D5 soup은 후보로 정하지 않는다. CT10K에서 진단만 한다.
+    - D6 근접 대조 보강(QUESTIONS 6d)은 문항 작성·teacher 수집을 하지 않는다(Ollama 컨테이너 없음). 대상 유형 분석과 설계 초안만.
+    - E2(원천이 있을 때): 모집단 = CT10K 모집단 16,206 − CT10K 10,000 − train_skeleton·verbatim_vendor100 겹침. template_group 층화(seed 20261103)로 H-dev(최대 2,000, 이번 비교용)와
+      H-final(나머지에서 최대 3,000, **봉인**: 파일·sha256·구성 통계만 커밋, 측정은 사용자 지시 뒤, PLAN_J 판정 전용). gold_check CPU 전부 match. H-ref는 비-tool_call 12,000에서 원천 라벨만으로 '거부'가 확정될 때만(dev·final 각 최대 500), 아니면 기술 통계만.
+      두 파일 모두 "평가 전용, 학습·checkpoint 선택·annotation 후보 금지" note, 측정 전 커밋·sha256 고정. 측정 k=1·sampling seed 20261101·동시 32.
+      H-dev 대상: ablation_011 12 모델, A3R 6, soup, V4 o43·o1016·o7, base k=1·2(회차 seed 20261101·02).
+    - 다른 측정: E1(refusal_dev v2 + valid98 + aux, k=4, 동시 8) A3R 6개. CT10K 10,000 k=1(seed 20261101·동시 32·chunks c1–c5, client_test_10000과 같은 조건) A0 3 seed·soup.
+    - GPU: 결정 114 규칙. 스케줄러는 ablation_011 것을 복사한 새 파일로 (a) 셀이 끝날 때마다 잘림 다시 돌리기 규칙(PLAN_S 5절)을 바로 검사해 같은 seed로 큐에 넣고,
+      (b) 큐가 비고 모든 작업이 끝나면 `gpu/DONE`과 요약 한 줄을 쓰고, (c) 대기는 job 완료 알림 기본, 15분 넘게 알림이 없으면 상태를 직접 본다.
+      우선순위 (1) A3R 학습(d1 seed 3개 먼저) (2) 학습이 끝난 모델의 E1 (3) CT10K (4) H-dev. 시작 22시간 뒤 새 작업 없음.
+    - 측정 전 `PLAN_A12.md`·`FREEZE_A12.json` 커밋·푸시 후 학습 시작. 분석 도구는 ablation_011 고정 도구를 새 파일로 복사. 모든 결과에 "진단, 판정 아님".
+      A3 분리 해석 규칙(미리 고정): (A3 − A3R) CI가 0을 넘으면 "요금 대조 고유 효과", 아니면 "데이터 양 효과와 구별 안 됨".
+    - 산출: `ablation_012/RESULTS.md`·`CRITERIA_v2_DRAFT.md`(2안까지, 확정 안 함)·`CONTRAST_PLAN_DRAFT.md`(문항 없음)·`QUESTIONS.md`, `pilot_010/PLAN_J2_DRAFT.md`(PLAN_J_DRAFT 그대로 두고 새로).
+      adapter 위치·sha256은 `/data/hwkim/sftdpo_work/ablation_012/adapters_sha256.txt`에만(결정 255).
+- 실행 기록(2026-11-03, Claude, 새 결정 아님): 30k 원천은 있고 sha256 `63d445b86bfb…5102def`가 맞다(E2 진행). 그 밖의 실행 기록은 `ablation_012/PLAN_A12.md` 0절.
