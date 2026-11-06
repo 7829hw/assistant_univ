@@ -1,0 +1,67 @@
+# ablation_013 A0-o2026131(결정 263 A0 짝 seed): ablation_011 A0-o1102.yaml에서 순서 seed·O4' 순서 파일·레코드 순서 파일·출력만 바꿈(data = V4 그대로). wrapper ablation_011/train/train_a11.py.
+model:
+  name_or_path: Qwen/Qwen3-8B
+  revision: b968826d9c46dd6066d109eabc6255188de91218
+  trust_remote_code: false
+  load_in_4bit: false
+  attn_implementation: sdpa
+data:
+  train: sft_dpo_inventory/pilot_010/build/V4/full/sft_train.jsonl
+  valid: sft_dpo_inventory/pilot_010/build/V4/full/sft_valid.jsonl
+  manifest: sft_dpo_inventory/pilot_010/build/V4/full/manifest.json
+  grounding_target: full
+chat_template_kwargs:
+  enable_thinking: true
+training:
+  output_dir: /data/hwkim/sftdpo_work/ablation_013/train/A0-o2026131
+  num_train_epochs: 1
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 1
+  learning_rate: 0.0002
+  warmup_ratio: 0
+  max_seq_length: 12288
+  bf16: true
+  fp16: false
+  gradient_checkpointing: true
+  eval_strategy: 'no'
+  save_strategy: 'no'
+  save_total_limit: 6
+  logging_steps: 1
+  report_to: none
+  seed: 43
+  optim: adamw_torch
+  dataloader_num_workers: 0
+  dataloader_pin_memory: false
+  torch_compile: false
+  gradient_checkpointing_kwargs:
+    use_reentrant: false
+  warmup_steps: 1
+  disable_tqdm: true
+  data_seed: 43
+  shared_slot_order_seed: 2026131
+  shared_slot_order_file: sft_dpo_inventory/ablation_013/build/orders/order_b2_o2026131.json
+  a11_record_order_file: sft_dpo_inventory/ablation_013/build/orders/record_order_A0_o2026131.json
+lora:
+  enabled: true
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+safety:
+  unified_memory: false
+  reserve_fraction: 0.2
+  reserve_gib: 16
+  min_disk_gib: 20
+profiling:
+  enabled: true
+  output: /data/hwkim/sftdpo_work/ablation_013/train/A0-o2026131_profile.json
+thinking:
+  loss_scope: by_source
