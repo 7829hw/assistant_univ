@@ -1230,3 +1230,7 @@ protected_final_v2 열람·고정, 주 셋 151 측정, Ollama 컨테이너 조�
     - 산출: `ablation_013/RESULTS.md`·`CRITERIA_DEV_v1.json`·`e2/h_final_group_sizes.json`·`PLAN_A14_DRAFT.md`·`QUESTIONS.md`, `batch014/` 초안과 검토 시트. adapter 위치·sha256은 `/data/hwkim/sftdpo_work/ablation_013/adapters_sha256.txt`에만(결정 255).
 - 실행 기록(2026-11-06, Claude, 새 결정 아님): (1) D5b 실제 상태 — `docker ps -a` 컨테이너 0개, `localhost:11434` 응답 없음. Ollama가 없으므로 **teacher 수집(T-C3·TEACH-C14)을 하지 않고 자체 표본 진단만** 한다. 컨테이너에는 손대지 않았다.
   (2) A0 새 순서 seed: 후보 7102·311102·41102·511102(기존 사용 있음)를 버리고, 저장소 전체 단어 grep 0건인 **2026117 · 2026131**(라벨 o2026117·o2026131)으로 확정한다.
+- 실행 기록(2026-11-06, Claude, 새 결정 아님): ablation_013 끝(scheduler15, 09:26–17:37, 작업 27 ok, 셀 65/65, 다시 돌리기 13셀 자동, GPU 빈 시간 최대 19초).
+  (1) A3T는 요금 외 근접 대조 55질문을 모두 빼도 근접 대조 teacher 비중 29.6%(목표 16.2 ± 2 미달) — 지시대로 다 뺀 상태로 진행. (2) batch014는 T1·T2(운행 요금 × 시도·없음·시군구)가 모두 보호 넷 family에 걸려 0문항,
+  대체 묶음 T1v(POI 주변, 지시 범위 밖) 12 포함 46문항 초안(승인 아님). (3) 승인 corpus의 운행 요금 44문항이 V4에 0(빌드 유형 상한으로 빠짐) — QUESTIONS 3. (4) A0 새 seed o2026131 H-dev 78.6(< base), CRITERIA_DEV_v1 Δ=0 동시 통과 모의 0.235 — 기준은 바꾸지 않음.
+  결과 `ablation_013/RESULTS.md`, 질문 `ablation_013/QUESTIONS.md`(모두 진단, 판정 아님).

@@ -12,6 +12,7 @@
 - J-b014 첫 응답(base greedy)·표본(greedy 1 + 8), J-b014-v4(V4 o1016·o7·o43, A0 o1102·o211102·o2026113 greedy).
 - T5 출발 역할: 응답 grounding의 ``dimension_target`` 값이 초안과 다른 수(예: pickup ↔ both), 장소 끝(od_role: pickup·dropoff)이 초안과 다른 수.
 - 우선순위(판정 아님): 높음 = base 표본 일치 ≤ 3/9, 또는 V4 6 seed 중 3개 이상이 거부로 끝남.
+- 2차 검토 권고: base 표본 일치 ≤ 1/9이고 V4 6 seed 일치 ≤ 1이면 "수정 권고(질문 표현·정답 대조)"(J-b014 결과를 본 뒤 더한 규칙, 권고일 뿐).
 """
 import importlib.util
 import json
@@ -131,7 +132,11 @@ def why_text(c):
     return base
 
 
-def rec(c):
+def rec(c, base_match=None, v4_match=None):
+    """2차 검토 권고(승인 아님). base 표본·V4 6 seed 모두 일치 ≤ 1이면 질문 표현과 정답을 다시 맞춰 보라는 수정 권고."""
+    if base_match is not None and v4_match is not None and base_match <= 1 and v4_match <= 1:
+        note = " — '일대'를 모델이 POI 주변(vicinity)으로 읽지 않음: '근처'·'주변'으로 바꾸기 권고" if "일대" in c["question"] else ""
+        return "수정 권고(질문 표현·정답 대조)" + note
     return "범위 결정 뒤 승인(대체 묶음)" if c["group"] == "T1v" else "승인"
 
 
@@ -152,10 +157,11 @@ def main():
         sig_s = f"일치 {s.get('match', 0)}/{n}, 거부 {s.get('refusal_any', 0)}/{n}" if n else ""
         sig_v = f"거부 {v4ref}/{v4n}, 일치 {sum(1 for m in V4N if vf[m][i].get('match'))}/{v4n}" if v4n else ""
         pr = "높음" if (n and s.get("match", 0) <= 3) or v4ref >= 3 else ("보통" if n or v4n else "")
+        mt = (s.get("match", 0), sum(1 for m in V4N if vf[m][i].get("match"))) if n and v4n else (None, None)
         counts[pr or "신호 없음"] += 1
         rows.append([i, pr, c["group"], GROUP[c["group"]], c["subtype"], c["gap"], c.get("pair_refusal_memo") or "", c["question"], c["gold_text"],
-                     mark(bf[i]), sig_s, sig_v, *[mark(vf[m][i]) for m in V4N], c["decision_120"], rec(c), why_text(c), *[""] * len(TAIL)])
-        md.append(f"| {i} | {pr} | {c['group']} | {c['question']} | `{c['gold_text'].replace(chr(10), ' ; ')}` | {c.get('pair_refusal_memo') or ''} | {mark(bf[i])} | {sig_s} | {sig_v} | {rec(c)} |")
+                     mark(bf[i]), sig_s, sig_v, *[mark(vf[m][i]) for m in V4N], c["decision_120"], rec(c, *mt), why_text(c), *[""] * len(TAIL)])
+        md.append(f"| {i} | {pr} | {c['group']} | {c['question']} | `{c['gold_text'].replace(chr(10), ' ; ')}` | {c.get('pair_refusal_memo') or ''} | {mark(bf[i])} | {sig_s} | {sig_v} | {rec(c, *mt)} |")
     rows.sort(key=lambda r: (r[1] != "높음", r[0]))
     (HERE / "review").mkdir(exist_ok=True)
     guide = [["무엇인가", "batch014 후보 검토 시트 v1(Claude 초안, 승인 아님, 학습에 쓰지 않음). 결정 263 D5: 근접 대조 보강(T1v 대체·T3·T4) + OD 상위 N(T5). 설계·검사는 README.md"],
