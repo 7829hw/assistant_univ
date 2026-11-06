@@ -1205,3 +1205,28 @@ adapter는 지우지 않고, 기존 스크립트·FREEZE 파일은 고치지 않
 - 실행 기록(2026-11-04, Claude, 새 결정 아님): ablation_012 끝(scheduler14, 작업 52 ok, 셀 116/116, 다시 돌리기 셀 39 자동, GPU 빈 시간 최대 20초).
   (1) 지시의 "client_test_10000과 같은 겹침 도구"는 저장소에 없어(CT10K 파일에 pool 값만 있음) 규칙을 다시 만들고 CT10K 10,000 라벨을 모두 재현한 뒤 썼다(`ablation_012/e2/pool_rule_check.json`); 짝 근거가 없는 360문항은 보수적으로 뺐다.
   (2) H-ref 없음: 비-tool_call 원천 라벨로 '거부'가 확정되지 않음. (3) 결과·기준 초안은 `ablation_012/RESULTS.md`·`CRITERIA_v2_DRAFT.md`, 판정 초안 `pilot_010/PLAN_J2_DRAFT.md`, 보강 초안 `CONTRAST_PLAN_DRAFT.md`, 질문 `QUESTIONS.md`(모두 진단, 판정 아님).
+
+## 2026-11-06 — ablation_013
+
+이번 작업도 진단이며 판정이 아니다. V4를 채택·기각하지 않는다. 보강 데이터(batch014)로 학습하지 않는다(batch014는 초안, 승인은 사용자가 세션 뒤에). PLAN_J 학습·판정, H-final 측정·문항 열람(그룹 크기 분포 제외),
+protected_final_v2 열람·고정, 주 셋 151 측정, Ollama 컨테이너 조작, DPO·Partial·nonthinking은 쓰지 않는다. adapter는 지우지 않고, 기존 스크립트·FREEZE는 고치지 않는다(새 파일). CT10K·H-dev 문항 원문을 batch014 작성에 쓰지 않는다. 기록 `sft_dpo_inventory/ablation_013/`, 문항 초안 `sft_dpo_inventory/batch014/`.
+
+263. (2026-11-06, 사용자) ablation_012 QUESTIONS 1–7에 대한 답(D1–D7)과 ablation_013 — 근접 대조 비중 대조(A3T), V4 짝 seed 5개 맞추기, 보강 데이터(batch014) 초안과 진단.
+    - D1 개발 비교 기준(안 2) = **2-가로 고정**: seed 5, 같은 순서 seed 짝, seed 짝·문항 재추출 bootstrap 95% CI. 정답률은 H-dev만(하한 > −4pp; E1 개발 셋 정답률은 보고만), 올바른 거부 E1 rdev 90(하한 > −7pp),
+      과잉 거부 E1 169와 H-dev 각각(상한 < +1.5pp). CRITERIA_v2_DRAFT 1.2의 2-가를 그대로 `ablation_013/CRITERIA_DEV_v1.json`(bootstrap 횟수·rng 포함)으로 고정·커밋. 이후 V4 대비 변형 비교에 쓰고, 이번 A3T 진단에는 적용하지 않는다(수치만 보고).
+    - D2 V4 최종 판정(안 3)은 3-나 방향, 수치는 PLAN_J 때 정한다. H-final의 template_group별 문항 수 분포만 지금 연다(히스토그램, 20·30·50문항 이상 그룹 수; 문항 내용·정답은 열지 않음) → `ablation_013/e2/h_final_group_sizes.json`.
+    - D3 PLAN_J는 보강 결과가 나올 때까지 미룬다. H-final 봉인 유지(최종 후보에 한 번만). protected_final_v2 역할(PLAN_J2_DRAFT 5절 가·나·다)은 PLAN_J 때. PLAN_J seed 101·523·2029·31·20271027 계속 예약.
+    - D4 A3 해석: 근접 대조 teacher 손실 비중을 A3(16.2%)에 맞추되 요금 대조는 남기는 arm **A3T** = A0에서 요금 지표가 아닌 근접 대조 질문(batch011·012 r2, batch013 c2, TEACH-C 통과분 중 `get_billing_metrics`가 아닌 것)을 질문 단위로 통째로 뺌
+      (뽑기 seed 20261106, 무작위 순서로 하나씩 빼다 16.2 ± 2pp 안에 들면 멈춤; 풀을 다 빼도 못 미치면 가능한 만큼만 빼고 실제 비중 보고). 요금 지표 근접 대조와 거부 레코드는 남김. 순서 = ablation_011 A0 순서 1102·211102·2026113에서 빠진 레코드만 지움(연속 ≤ 4). 학습 3개.
+    - D5 근접 대조 보강: batch014 초안(CONTRAST_PLAN_DRAFT T1–T4 근접 대조 + T5 OD 상위 N 일반 답하는 문항). D5b(Ollama)는 사용자가 두 칸 중 하나를 고르지 않은 채로 보냈다 → 지시대로 실제 상태를 따른다(아래 실행 기록).
+    - D6 겹침 검사: H-final은 내용을 보여 주지 않는 도구(정규화 문자열·정답 뼈대 일치 여부·개수만 출력)로 넣는다. 다시 만든 PoolRule(`ablation_012/e2/build_e2.py`)을 정식 겹침 판정 도구로 쓴다.
+    - D7 soup 종료(추가 측정 없음).
+    - A0 짝 seed 추가: V4 데이터 그대로, 새 순서 seed 2개(기존 사용 seed·PLAN_J 예약 seed와 문맥 grep 0건, 확정 전 기록)로 O4' 순서 파일(연속 ≤ 4). 학습 2개 → A0 순서 seed 5개.
+    - 평가: A3T 3·A0 새 2 각각 E1(refusal_dev v2 + valid98 + aux, k=4, 동시 8, ablation_011과 같은 client·sampler·기준일)과 H-dev(k=1, seed 20261101, 동시 32). CT10K·H-final 측정 없음.
+      batch014 진단 열(학습 아님): J-b014-base(base greedy 1 + 표본 8, batch013 J-b013 seed 규칙), J-b014-v4(V4 o1016·o7·o43 + A0 o1102·o211102·o2026113 첫 응답 k=1). base 정답 표본 원문은 보존(승인 뒤 자체 출처 후보).
+    - GPU: 결정 114, scheduler14 방식 사본(셀마다 잘림 다시 돌리기 자동 검사, `gpu/DONE`, 15분 넘게 알림 없으면 직접 확인). 우선순위 학습 5(A3T 3 → A0 2) → 끝난 모델 E1·H-dev → J-b014. 시작 22시간 뒤 새 작업 없음.
+    - 측정 전 `PLAN_A13.md`·`FREEZE_A13.json` 커밋·푸시 후 학습. 분석 도구는 ablation_012 고정 도구 사본. A3 분리 2판 해석 규칙(미리 고정): (A3 − A3T) CI가 0을 넘으면 "근접 대조 비중을 맞춰도 남는 요금 대조 고유 효과",
+      아니면 "근접 대조 비중 효과와 구별 안 됨"; (A3T − A0) 과잉 거부 CI가 0을 넘으면 "요금 외 근접 대조도 과잉 거부를 막음". 모든 결과에 "진단, 판정 아님".
+    - 산출: `ablation_013/RESULTS.md`·`CRITERIA_DEV_v1.json`·`e2/h_final_group_sizes.json`·`PLAN_A14_DRAFT.md`·`QUESTIONS.md`, `batch014/` 초안과 검토 시트. adapter 위치·sha256은 `/data/hwkim/sftdpo_work/ablation_013/adapters_sha256.txt`에만(결정 255).
+- 실행 기록(2026-11-06, Claude, 새 결정 아님): (1) D5b 실제 상태 — `docker ps -a` 컨테이너 0개, `localhost:11434` 응답 없음. Ollama가 없으므로 **teacher 수집(T-C3·TEACH-C14)을 하지 않고 자체 표본 진단만** 한다. 컨테이너에는 손대지 않았다.
+  (2) A0 새 순서 seed: 후보 7102·311102·41102·511102(기존 사용 있음)를 버리고, 저장소 전체 단어 grep 0건인 **2026117 · 2026131**(라벨 o2026117·o2026131)으로 확정한다.
