@@ -1234,3 +1234,16 @@ protected_final_v2 열람·고정, 주 셋 151 측정, Ollama 컨테이너 조�
   (1) A3T는 요금 외 근접 대조 55질문을 모두 빼도 근접 대조 teacher 비중 29.6%(목표 16.2 ± 2 미달) — 지시대로 다 뺀 상태로 진행. (2) batch014는 T1·T2(운행 요금 × 시도·없음·시군구)가 모두 보호 넷 family에 걸려 0문항,
   대체 묶음 T1v(POI 주변, 지시 범위 밖) 12 포함 46문항 초안(승인 아님). (3) 승인 corpus의 운행 요금 44문항이 V4에 0(빌드 유형 상한으로 빠짐) — QUESTIONS 3. (4) A0 새 seed o2026131 H-dev 78.6(< base), CRITERIA_DEV_v1 Δ=0 동시 통과 모의 0.235 — 기준은 바꾸지 않음.
   결과 `ablation_013/RESULTS.md`, 질문 `ablation_013/QUESTIONS.md`(모두 진단, 판정 아님).
+
+## 2026-11-08 — topic2_semantic_order
+
+이번 작업은 진단이며 판정이 아니다. V4를 채택·기각하지 않는다. H-final 문항 열람·추론·분석, batch014 학습 사용, C/D(커버리지) 학습, Ollama 컨테이너 조작, DPO·Partial·nonthinking은 쓰지 않는다. adapter는 지우지 않고 기존 ablation_011~013 모델·로그·결과는 덮어쓰지 않는다(새 파일·새 디렉터리). 기록 `topic2_semantic_order/`.
+
+264. (2026-11-08, 사용자) Semantic-balanced Scheduler 검증 — 동일한 V4 1,984 레코드에서 순서만 O4'(A) 대 의미 균형(B)으로 바꿔 의미 그룹 붕괴를 줄이는지 실제 GPU 학습으로 확인.
+    - A = 기존 A0 5개(ablation_011 o1102·o211102·o2026113, ablation_013 o2026117·o2026131; 설정이 순서 키·출력 경로만 다름을 검증해 재사용). B = 같은 설정·seed 43, 순서만 `topic2_semantic_order/orders/semantic_order_o<seed>.json`, 사전학습 Qwen3-8B에서 새로 학습 5개. 반복 쌍 A0·B o2026131 -r2(GPU 비결정성 추정, H-dev만).
+    - 스케줄러 라벨은 학습용 승인 코퍼스(`approved_train_v6` `view`)만 사용, 평가 오답·H-final 신호 미사용, fine_weight 0.24 고정(조정 안 함). 이전 패키지 결함(실행 정보 없는 132문항의 별도 coarse 그룹)을 고침.
+    - 평가: CT10K(k=1, 5 seed B + A0 o2026117·o2026131 신규), H-dev(k=1), E1(k=4) — 기존 명령 그대로. 그룹·지표·계층 bootstrap(10,000, rng 20261108)·성공 기준 S1–S4(비열등 −2pp)는 `topic2_semantic_order/PLAN.md`에 학습 전에 고정. H-final은 열지 않는다.
+    - C/D는 차단(승인되지 않은 데이터·보호 family·44문항 재포함 미결정·손실 토큰 대응 불가), `DATA_AUDIT.md`에 사유.
+    - GPU: 결정 114, scheduler16(= scheduler15 사본), UUID 0·1·2, 작업 하나 = GPU 하나, 학습 → H-dev → E1 → CT10K → A0 CT10K 2개 → 반복 쌍, 시작 24시간 뒤 새 작업 없음. 평가 작업은 분석 도구 고정 커밋(`gpu/ready/T2_TOOLS.json`) 뒤에만 시작.
+- 실행 기록(2026-11-08, Claude, 새 결정 아님): Gate G1–G10 모두 PASS(`topic2_semantic_order/gates/GATES.json`). G10 첫 실행은 `pgrep -f`가 자기 셸 명령줄에 매치해 오탐 → `ps comm` 검사로 교체.
+
