@@ -4,7 +4,7 @@ This package implements a **new training data order**, not a trained model. It r
 
 ## Current status
 
-The earlier draft of this package was validated only on a synthetic fixture. It has since been run on the real V4 data, a labelling defect was fixed (see PLAN.md), and the real experiment (decision 264) is described in `PLAN.md`. Real orders are in `orders/`, pre-GPU gates in `gates/GATES.json`. Results are in `RESULTS.md` once finished; scheduling-fairness metrics are mechanical and are NOT accuracy results.
+The real A/B experiment (decision 264) has been run on GPU and evaluated. **Result: H1 (semantic-balanced order reduces group collapse) is not supported** — all pre-registered criteria S1–S4 failed (see `RESULTS.md`, `STATISTICAL_ANALYSIS.md`, `PAPER_FINDINGS.md`). Scheduling-fairness metrics (`orders/offline_validation_summary.json`, fig4) are mechanical and are NOT accuracy results. C/D coverage arms were not run (blocked, `DATA_AUDIT.md`). H-final was never opened.
 
 ## Offline: generate B schedules on the actual V4 data
 

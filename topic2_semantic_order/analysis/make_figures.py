@@ -68,7 +68,7 @@ def main(path=None, outdir=None):
     seeds = list(sm)
     A = [round(sm[s]["baseline"]["coarse"]["mean_window_total_variation"], 4) * 100 for s in seeds]
     B = [round(sm[s]["balanced"]["coarse"]["mean_window_total_variation"], 4) * 100 for s in seeds]
-    (out / "fig4_exposure_distribution.svg").write_text(grouped("Exposure imbalance of coarse (tool,metric) groups: mean 128-record window TV (%) — mechanical, not accuracy", [f"o{s}" for s in seeds], A, B, max(A) * 1.2, "window TV %"), encoding="utf-8")
+    (out / "fig4_exposure_distribution.svg").write_text(grouped("Order exposure imbalance (128-record window TV %, not accuracy)", [f"o{s}" for s in seeds], A, B, max(A) * 1.2, "window TV %"), encoding="utf-8")
     print("figures written to", out)
 
 
