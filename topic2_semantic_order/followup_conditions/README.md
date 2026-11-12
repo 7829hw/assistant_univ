@@ -1,6 +1,6 @@
 # Semantic interleaving: failure conditions
 
-현재 상태: 기존 결과 CPU 진단 및 반복 재분석 완료, 새 순서와 20개 config/gates 완료. 신규 GPU 학습·평가는 **BLOCKED**. Experiment 4는 승인 전 준비만 했다. 원래 결과와 H-final 봉인은 유지한다.
+현재 상태: 기존 결과 CPU 진단 및 반복 재분석 완료, 새 순서와 20개 config/gates 완료. 신규 GPU 작업의 현재 상태는 [실행 기록](gpu/STATUS.md)에 있다. Experiment 4는 승인 전 준비만 했다. 원래 결과와 H-final 봉인은 유지한다.
 
 - [사전등록](EXPERIMENT_PLAN.md) · [실험 매트릭스](EXPERIMENT_MATRIX.md) · [감사](DATA_AND_CONFIG_AUDIT.md)
 - [기존 결과 진단](EXISTING_RESULT_DIAGNOSTICS.md) · [결과](RESULTS.md) · [통계](STATISTICAL_ANALYSIS.md)
@@ -34,18 +34,18 @@ Baseline commit `5d6a257608c7b016b876cf5c25004879d02f6ade`, 사전등록 commit 
 
 ## GPU 실행 승인 후
 
-이번 실험에 대한 새 승인에 **단일 물리 GPU UUID, 승인 범위(phase), 새 작업 시작 마감 KST**, 장시간 작업을 위한 실행 허용 시간을 명시한다. 기본 장치 후보는 workstation4 `GPU-48f798cc-9437-50ac-d604-448bbad7b311`(관측 index 2). 현재 spare UUID는 조회되지 않았다. Phase 1은 12 train + 216 eval cells, 순수 직렬 약 85 GPU-hours. Phase 2는 8 train + 144 cells, 약 56.7 GPU-hours. 추정은 기존 처리시간 기반이며 재시도는 별도다. 옛 실험 승인으로 새 실행을 열지 않는다. 시작 전 host GPU 상태·타 사용자 프로세스·Ollama 컨테이너/device 및 API 상태·torch UUID를 재확인한다.
+2026-11-13 사용자 지시로 workstation4의 GPU 3장(현재 인덱스 0, 1, 2)을 사용한다. UUID, 두 phase의 manifest SHA, 실행 커밋, 새 작업 시작 마감(KST)은 실행 기록에 남긴다. 같은 order seed의 신규 조건 4개는 한 장치에 고정한다. 각 장치에서 같은 adapter와 seed로 H-dev 5문항을 생성해 호출별 UTF-8 응답을 비교한다. Phase 1의 3개 seed를 마친 뒤 Phase 2의 2개 seed로 넘어간다. 기존 처리시간 기준 1단계 약 28 GPU 벽시계 시간, 2단계 약 28시간이 예상된다. 재평가와 서버 초기화는 별도다.
 
-동결된 실행 커밋을 별도 worktree로 checkout하고, 새 승인 내용을 외부 JSON으로 보존한다. 키는 `commit` (full SHA), `manifest_sha256` (실행 대상 파일), `gpu_uuid`, `start_before` (ISO 8601, timezone 필수). 승인이 없으면 이 JSON을 임의로 생성하지 않는다. 승인된 시각을 넘겨 새 train/eval cell을 시작하지 않으며 이미 실행 중인 cell의 완료는 고려해야 한다. 아래는 승인 후 실행 템플릿이다.
+실행은 별도 detached worktree에서 한다. GPU 배정 기록의 키는 `commit`(full SHA), `manifest_sha256`(phase 번호별 SHA 매핑), `gpu_uuids`(장치 UUID 목록), `start_before`(timezone이 있는 ISO 8601)다. 이 시각 이후에는 새 train/eval cell의 시작을 막는다. 아래는 승인 후 실행 템플릿이다.
 
 ```bash
 p=/data/hwkim/sftdpo_work/runtime/envs/hf/bin/python
 f=topic2_semantic_order/followup_conditions
 git worktree add --detach "$FOLLOWUP_WORKTREE" "$FOLLOWUP_COMMIT"
 cd "$FOLLOWUP_WORKTREE"
-"$p" "$f/launch.py" --phase 1 --approval "$FOLLOWUP_APPROVAL" --run
+"$p" "$f/launch.py" --phase 1 2 --approval "$FOLLOWUP_APPROVAL" --run
 ```
 
-승인 범위에 phase 2가 포함되면 phase 1 기술 검증 후 같은 방식으로 `--phase 2`를 사용한다(해당 phase manifest SHA의 승인 레코드 필요). 러너는 GPU별 train/eval을 순차 실행하고 CT10K/H-dev/E1의 동결 harness를 그대로 사용한다. 산출물은 원래 checkout의 이 디렉터리 아래 `gpu/execution/`, `cells/`, `cells_raw/`에 생성된다. Adapter와 체크포인트 및 adapter SHA 기록은 외부 `/data/hwkim/sftdpo_work/topic2_semantic_order/followup_conditions/`에 유지한다. GPU 실행 이력이 없으므로 지금은 GPU 학습/평가 로그와 신규 원본 셀이 없다.
+각 GPU는 작업 하나씩 실행하고, CT10K/H-dev/E1에는 동결된 평가 코드를 사용한다. 산출물은 원래 checkout의 이 디렉터리 아래 `gpu/execution/`, `cells/`, `cells_raw/`에 생성된다. Adapter와 체크포인트 및 adapter SHA 기록은 외부 `/data/hwkim/sftdpo_work/topic2_semantic_order/followup_conditions/`에 유지한다. 장치 비교는 `gpu/execution/device_probe/`, phase별 GPU 배정과 학습·평가 기록은 `gpu/execution/`에 저장된다.
 
 [Coverage 계획](coverage/COVERAGE_PLAN.md)은 새 학습이나 신규 teacher trace 생성 없이 감사 요건과 validator만 제공한다.

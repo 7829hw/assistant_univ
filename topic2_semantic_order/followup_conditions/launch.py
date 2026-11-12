@@ -1,5 +1,6 @@
-"""Run one approved GPU at a time from a clean detached commit; default is preview."""
+"""Run the approved follow-up from a clean detached commit; default is preview."""
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import ast
 from datetime import datetime
 import fcntl
@@ -19,7 +20,12 @@ from prepare import OUT
 MAIN=Path("/home/hwkim/assistant_univ")
 DEFAULT_GPU="GPU-48f798cc-9437-50ac-d604-448bbad7b311"
 SPARE_GPU="GPU-a644de12-2a2c-ca3d-4822-b80f704b0b21"
-RUN_REL=REL/"gpu"
+WORKSTATION_GPUS=(
+    "GPU-2445b100-70d8-e384-3a24-0249eeefc64d",
+    "GPU-a5ce83d0-6ca2-5e3a-276c-4c965ea9c555",
+    DEFAULT_GPU,
+)
+PROBE_IDS=("CLIENT-00002","CLIENT-00011","CLIENT-00029","CLIENT-00048","CLIENT-00051")
 SERVE_ROOT=WORK/"pilot_006_prep/vllm"
 
 
@@ -118,8 +124,9 @@ def boundary(deadline):
         raise RuntimeError("Authorized deadline for starting new work has passed")
 
 
-def pick_port():
-    for port in range(18716,18732):
+def pick_port(index):
+    start=18716+8*int(index)
+    for port in range(start,start+8):
         if (SERVE_ROOT/f"server_{port}.pid").exists():
             continue
         try:
@@ -187,10 +194,10 @@ def train_job(job, env, logdir, model_log, deadline, uuid, commit, checkpoint):
     raise AssertionError("unreachable")
 
 
-def evaluate(job, manifest, env, logdir, model_log, deadline, uuid, commit, out, checkpoint, adapter_sha):
+def evaluate(job, manifest, env, logdir, model_log, deadline, uuid, commit, out, checkpoint, adapter_sha, *, probe=False):
     boundary(deadline)
     index=gpu_gate(uuid,env,logdir/"gpu_checks.jsonl")
-    port=pick_port()
+    port=pick_port(index)
     ep=manifest["evaluation"]
     server_env={**env,"P3":str(logdir),"LORAS":f"{job['model']}={checkpoint}","MAX_LORA_RANK":"16"}
     server_log=logdir/f"serve_{job['id']}.log"
@@ -223,7 +230,12 @@ def evaluate(job, manifest, env, logdir, model_log, deadline, uuid, commit, out,
                         args=[PY,ep["harness"],"--port",str(port),"--model",job["model"],"--label",label,"--k",str(k),
                               "--concurrency",str(cell["concurrency"]),"--grounding-target","full","--out-dir",cells,
                               "--raw-dir",raw,"--seed-base",str(ep["seed_base"]),"--gold",cell["gold"]]
-                        args += ["--only",(ROOT/cell["chunk"]).read_text().strip()] if cell["chunk"] else ["--all-items"]
+                        if probe:
+                            args += ["--only",",".join(PROBE_IDS)]
+                        elif cell["chunk"]:
+                            args += ["--only",(ROOT/cell["chunk"]).read_text().strip()]
+                        else:
+                            args += ["--all-items"]
                         start=stamp()
                         rc=logged(args,env,logdir/f"eval_{base}_a{attempt}.log")
                         append(logdir/"timeline.jsonl",dict(job=job["id"],stage="eval",cell=base,attempt=attempt,
@@ -235,11 +247,13 @@ def evaluate(job, manifest, env, logdir, model_log, deadline, uuid, commit, out,
                             raise RuntimeError(f"Invalid eval cell {base}; retain partial files for review")
                     r=CB.cell(label,k)
                     if not all(r.get(key) for key in ("exists","raw_sha256_match","raw_items_cover","rows_equal_item_order",
-                                                      "fingerprint_ok","prompt_ok")) or r["model"]!=job["model"]:
+                                                      "fingerprint_ok","prompt_ok")) or r["model"]!=f"vllm:{job['model']}":
                         raise RuntimeError(f"Evaluation completeness or provenance mismatch: {base}")
+                    if r["code_commit"]!=commit[:7] or load(result)["meta"]["vllm"]["server_meta"]["gpu_uuid"]!=uuid:
+                        raise RuntimeError(f"Evaluation commit or GPU mismatch: {base}")
                     need=(r["truncated_calls"]>=2 or r["server_error_rows"]>=2) if label.endswith("_rdevv2") else r["rerun"]
                     already=(cells/"replaced"/result.name).exists()
-                    if need and attempt==1 and not already:
+                    if need and attempt==1 and not already and not probe:
                         for p in (result,cells/f"{base}.log",raw/f"{base}_raw.jsonl"):
                             dst=p.parent/"replaced"/p.name
                             dst.parent.mkdir(exist_ok=True)
@@ -259,64 +273,130 @@ def evaluate(job, manifest, env, logdir, model_log, deadline, uuid, commit, out,
                 time.sleep(1)
 
 
+def sample_signatures(path):
+    signatures={}
+    for row in S.read_jsonl(path):
+        key=(row["id"],row["call"],row["sampling_seed"])
+        if key in signatures:
+            raise RuntimeError(f"Duplicate probe sample: {key}")
+        signatures[key]=row["raw_text"].encode("utf-8")
+    if {k[0] for k in signatures}!=set(PROBE_IDS):
+        raise RuntimeError("Five-item GPU probe incomplete")
+    return signatures
+
+
+def check_device_sampling(uuids, manifest, env, logdir, model_log, deadline, commit):
+    out=logdir/"device_probe"
+    out.mkdir(parents=True,exist_ok=True)
+    checkpoint=WORK/"topic2_semantic_order/train/B-o2026113/checkpoint-1984"
+    adapter_sha=S.sha_file(checkpoint/"adapter_model.safetensors")
+    gold=next(c["gold"] for c in manifest["jobs"][0]["cells"] if c["dataset"]=="H-dev")
+    samples={}
+    for uuid in uuids:
+        label=f"device_probe_{uuid[4:12]}"
+        job=dict(id=label,model="probe_adapter",cells=[dict(label=label,k=1,concurrency=1,gold=gold,chunk=None)])
+        evaluate(job,manifest,env,out,model_log,deadline,uuid,commit,out,checkpoint,adapter_sha,probe=True)
+        samples[uuid]=sample_signatures(out/"cells_raw"/f"{label}_s1_raw.jsonl")
+    ref=samples[DEFAULT_GPU]
+    dump(out/"comparison.json",dict(reference=DEFAULT_GPU,items=list(PROBE_IDS),seed_base=manifest["evaluation"]["seed_base"],
+                                  matches={u:s==ref for u,s in samples.items()},calls={u:len(s) for u,s in samples.items()}))
+
+
+def run_jobs(jobs, manifest, env, logdir, model_log, deadline, uuid, commit, out):
+    import completeness_B as CB
+    CB.CELLS=out/"cells"
+    for job in jobs:
+        boundary(deadline)
+        checkpoint=Path(job["checkpoint"])
+        append(logdir/"timeline.jsonl",dict(job=job["id"],stage="job_started",gpu_uuid=uuid,commit=commit))
+        trained=train_job(job,env,logdir,model_log,deadline,uuid,commit,checkpoint)
+        evaluate(job,manifest,env,logdir,model_log,deadline,uuid,commit,out,checkpoint,trained["adapter_sha256"])
+        append(logdir/"timeline.jsonl",dict(job=job["id"],stage="job_completed",gpu_uuid=uuid,commit=commit))
+
+
 def main():
-    p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--phase",type=int,choices=(1,2),required=True)
-    p.add_argument("--approval",type=Path)
-    p.add_argument("--run",action="store_true")
-    a=p.parse_args()
-    path=HERE/f"gpu/jobs_phase{a.phase}.json"
-    m=load(path)
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--phase",type=int,choices=(1,2),nargs="+",required=True)
+    parser.add_argument("--approval",type=Path)
+    parser.add_argument("--run",action="store_true")
+    args=parser.parse_args()
+    if args.phase!=sorted(set(args.phase)):
+        parser.error("Supply distinct phases in execution order")
+    paths={p:HERE/f"gpu/jobs_phase{p}.json" for p in args.phase}
+    manifests={p:load(path) for p,path in paths.items()}
+    digests={str(p):S.sha_file(path) for p,path in paths.items()}
     gate=load(HERE/"gates/GATES.json") if (HERE/"gates/GATES.json").exists() else {}
-    digest=S.sha_file(path)
-    if not a.run:
-        print(json.dumps(dict(phase=a.phase,jobs=len(m["jobs"]),cells=sum(len(j["cells"]) for j in m["jobs"]),
-                              manifest_sha256=digest,cpu_gates_pass=sum(v["status"]=="PASS" for v in gate.values()),
-                              estimated_gpu_hours=sum(j["train_estimate_min"]+j["eval_estimate_min"] for j in m["jobs"])/60)))
+    if not args.run:
+        for phase,manifest in manifests.items():
+            jobs=manifest["jobs"]
+            print(json.dumps(dict(phase=phase,jobs=len(jobs),cells=sum(len(j["cells"]) for j in jobs),
+                                  manifest_sha256=digests[str(phase)],cpu_gates_pass=sum(v["status"]=="PASS" for v in gate.values()),
+                                  estimated_gpu_hours=sum(j["train_estimate_min"]+j["eval_estimate_min"] for j in jobs)/60)))
         return
-    if a.approval is None:
-        p.error("--run needs a new task-specific authorization record")
+    if args.approval is None:
+        parser.error("--run requires the current task's GPU authorization")
     commit=command(["git","rev-parse","HEAD"])
     if ROOT==MAIN or shell(["git","symbolic-ref","-q","HEAD"]).returncode!=1 or command(["git","status","--porcelain"]):
         raise RuntimeError("Use a separate clean, detached worktree at the approved commit")
-    approved=load(a.approval)
-    uuid=approved["gpu_uuid"]
-    deadline=datetime.fromisoformat(approved["start_before"])
-    if deadline.tzinfo is None or approved.get("commit")!=commit or approved.get("manifest_sha256")!=digest:
-        raise RuntimeError("Authorization does not match this commit, phase manifest or deadline")
+    approval=load(args.approval)
+    uuids=tuple(approval["gpu_uuids"])
+    allowed={(DEFAULT_GPU,),(SPARE_GPU,),WORKSTATION_GPUS}
+    if uuids not in allowed or (uuids==WORKSTATION_GPUS and socket.gethostname().split(".")[0]!="workstation4"):
+        raise RuntimeError("GPU allocation is outside the workstation policy or this task's three-GPU authorization")
+    deadline=datetime.fromisoformat(approval["start_before"])
+    if (deadline.tzinfo is None or approval.get("commit")!=commit
+        or any(approval.get("manifest_sha256",{}).get(p)!=h for p,h in digests.items())):
+        raise RuntimeError("Authorization does not match this commit, phase manifests or deadline")
     boundary(deadline)
-    if uuid not in (DEFAULT_GPU,SPARE_GPU):
-        raise RuntimeError("Requested GPU is outside default/spare policy")
     if len(gate)!=40 or any(v["status"]!="PASS" or S.sha_file(ROOT/v["log"])!=v["log_sha256"] for v in gate.values()):
         raise RuntimeError("Pinned CPU gates have not passed")
-    if m["preregistration_sha256"]!=S.sha_file(HERE/"EXPERIMENT_PLAN.md"):
-        raise RuntimeError("Preregistration hash mismatch")
-    for f,h in m["eval_input_sha256"].items():
-        if S.sha_file(ROOT/f)!=h:
-            raise RuntimeError(f"Evaluation input hash drift: {f}")
+    for manifest in manifests.values():
+        if manifest["preregistration_sha256"]!=S.sha_file(HERE/"EXPERIMENT_PLAN.md"):
+            raise RuntimeError("Preregistration hash mismatch")
+        for file,digest in manifest["eval_input_sha256"].items():
+            if S.sha_file(ROOT/file)!=digest:
+                raise RuntimeError(f"Evaluation input hash drift: {file}")
     if min(shutil.disk_usage(WORK).free,shutil.disk_usage(MAIN).free)/2**30 < 100:
         raise RuntimeError("Follow-up disk gate requires >=100 GiB free on both volumes")
     out=MAIN/REL
     logdir=out/"gpu"/"execution"
     logdir.mkdir(parents=True,exist_ok=True)
-    # Keep actual adapter hashes outside Git, per decision 255.
     model_log=WORK/"topic2_semantic_order/followup_conditions/provenance"
     model_log.mkdir(parents=True,exist_ok=True)
     env={**os.environ,"HF_HOME":str(WORK/"hf-cache"),"HF_HUB_OFFLINE":"1","TRANSFORMERS_OFFLINE":"1",
          "PYTHONDONTWRITEBYTECODE":"1","TOKENIZERS_PARALLELISM":"false","PYTORCH_CUDA_ALLOC_CONF":"expandable_segments:True",
-         "OLLAMA_UUID":DEFAULT_GPU,"ALLOWED_UUIDS":uuid,"FOLLOWUP_RUN_COMMIT":commit}
+         "OLLAMA_UUID":DEFAULT_GPU,"ALLOWED_UUIDS":" ".join(uuids),"FOLLOWUP_RUN_COMMIT":commit}
     env.pop("LORAS",None)
     with (model_log/"run.lock").open("a") as lock:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         sys.path.insert(0,str(INV/"pilot_007/results"))
-        for job in m["jobs"]:
-            boundary(deadline)
-            checkpoint=Path(job["checkpoint"])
-            # Training logs stay in the repo; only the verification receipt is external.
-            trained=train_job(job,env,logdir,model_log,deadline,uuid,commit,checkpoint)
-            evaluate(job,m,env,logdir,model_log,deadline,uuid,commit,out,checkpoint,trained["adapter_sha256"])
-        dump(logdir/f"phase{a.phase}_done.json",dict(commit=commit,manifest_sha256=digest,gpu_uuid=uuid,
-                                                     completed=stamp(),jobs=len(m["jobs"])))
+        (out/"cells").mkdir(exist_ok=True)
+        if len(uuids)>1:
+            check_device_sampling(uuids,next(iter(manifests.values())),env,logdir,model_log,deadline,commit)
+        for phase,manifest in manifests.items():
+            if phase==2 and not (logdir/"phase1_done.json").is_file():
+                raise RuntimeError("Phase 1 technical completion required before phase 2")
+            jobs=manifest["jobs"]
+            seeds=sorted({j["order_seed"] for j in jobs},key=SEEDS.index)
+            # Reuse the original B training GPU where possible. Keep all four
+            # new conditions for each seed on one physical device.
+            queues={uuid:[j for j in jobs if uuids[SEEDS.index(j["order_seed"])%len(uuids)]==uuid] for uuid in uuids}
+            dump(logdir/f"phase{phase}_assignment.json",dict(commit=commit,seeds=seeds,
+                 jobs_by_gpu={uuid:[j["id"] for j in queue] for uuid,queue in queues.items()}))
+            with ThreadPoolExecutor(max_workers=len(uuids)) as pool:
+                futures={pool.submit(run_jobs,queue,manifest,env,logdir,model_log,deadline,uuid,commit,out):uuid
+                         for uuid,queue in queues.items() if queue}
+                errors=[]
+                for future in as_completed(futures):
+                    try:
+                        future.result()
+                    except Exception as error:
+                        errors.append((futures[future],str(error)))
+                        append(logdir/"timeline.jsonl",dict(stage="worker_error",gpu_uuid=futures[future],commit=commit,error=str(error)))
+                if errors:
+                    raise RuntimeError(f"Phase {phase} failed: {errors}")
+            dump(logdir/f"phase{phase}_done.json",dict(commit=commit,manifest_sha256=digests[str(phase)],
+                                                     gpu_uuids=list(uuids),completed=stamp(),jobs=len(jobs)))
 
 
 if __name__=="__main__":
