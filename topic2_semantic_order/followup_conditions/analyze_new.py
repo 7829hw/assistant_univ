@@ -110,7 +110,28 @@ def checked_cells(job,dataset,validated):
     return paths
 
 
-def for_dataset(dataset, jobs, reps, validated):
+def baseline_cells(job, dataset, validated, *, gold=None):
+    paths=[]
+    for cell in job["cells"]:
+        if cell["dataset"]!=dataset or (gold is not None and cell["gold"]!=gold):
+            continue
+        if cell["reuse"]:
+            path=ROOT/cell["prior"]
+            digest=cell["prior_sha256"]
+        else:
+            name=f"{cell['label']}_s{cell['k']}"
+            path=HERE/"cells"/f"{name}.json"
+            record=validated.get(name)
+            if not record or record["gpu_uuid"]!=job["gpu_uuid"]:
+                raise ValueError(f"Missing same-GPU baseline result: {name}")
+            digest=record["sha256"]
+        if S.sha_file(path)!=digest:
+            raise ValueError(f"Baseline file hash drift: {path}")
+        paths.append(local(path))
+    return paths
+
+
+def for_dataset(dataset, jobs, reps, validated, baselines, baseline_receipts):
     ids, clusters, groups = context(dataset)
     paths=A.ct_base_paths() if dataset=="CT10K" else [[f"{A.C12}/hdev_base_s{k}.json"] for k in (1,2)]
     base=np.mean([read_model(p,ids)[0]=="match" for p in paths],axis=0)
@@ -118,7 +139,9 @@ def for_dataset(dataset, jobs, reps, validated):
     for arm in ("A","B","C","D","F0","F48"):
         for seed in SEEDS:
             s=f"o{seed}"
-            if arm in "AB":
+            if (arm,seed) in baselines:
+                paths=baseline_cells(baselines[arm,seed],dataset,baseline_receipts)
+            elif arm in "AB":
                 paths=A.ct_paths(arm,s) if dataset=="CT10K" else [A.hd_path(arm,s)]
             else:
                 j=jobs[arm,seed]
@@ -157,7 +180,7 @@ def for_dataset(dataset, jobs, reps, validated):
     return rows,per_run,by_group,sorted(complete)
 
 
-def e1(jobs,validated):
+def e1(jobs,validated,baselines,baseline_receipts):
     import robust_scoring
     robust_scoring.patch()
     import evaluate_vendor100 as EV
@@ -170,6 +193,9 @@ def e1(jobs,validated):
         paths=A.e1_cells(arm,s) if not j else {
             st:[local(HERE/"cells"/f"{c['label']}_s{c['k']}.json") for c in j["cells"]
                 if c["dataset"]=="E1" and c["gold"]==g] for st,g in A.CORE.SETS.items()}
+        if (arm,seed) in baselines:
+            paths={st:baseline_cells(baselines[arm,seed],"E1",baseline_receipts,gold=g)
+                   for st,g in A.CORE.SETS.items()}
         if all(len(v)==4 and A.exists(v) for v in paths.values()):
             vectors=A.A12.e1_vectors(A.CORE.load_model(paths,dict(A.CORE.SETS),gold,False))
             vals.setdefault(arm,{})[s]=vectors
@@ -183,22 +209,31 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("--reps",type=int,default=A.REPS)
     p.add_argument("--out",type=Path)
+    p.add_argument("--device-matched",action="store_true",help="Use the same-GPU A/B evaluation plan")
     args=p.parse_args()
     if not args.out and args.reps!=A.REPS:
         p.error("Reduced replicate count requires a separate smoke output")
     jobs={(j["arm"],j["order_seed"]):j for phase in (1,2) for j in load(HERE/f"gpu/jobs_phase{phase}.json")["jobs"]}
     receipt=HERE/"gpu/execution/eval_provenance.jsonl"
     validated={r["cell"]:r for r in S.read_jsonl(receipt)} if receipt.is_file() else {}
+    baselines, baseline_receipts = {}, {}
+    if args.device_matched:
+        path=HERE/"gpu/device_matched_baselines.json"
+        folder=receipt.parent/"matched_baselines"
+        if load(folder/"done.json")["manifest_sha256"]!=S.sha_file(path):
+            raise ValueError("Same-GPU baseline execution manifest mismatch")
+        baselines={(j["arm"],j["seed"]):j for j in load(path)["jobs"]}
+        baseline_receipts={r["cell"]:r for r in S.read_jsonl(folder/"eval_provenance.jsonl")}
     status, tables, runs, groups = {}, [], [], []
     for dataset in ("CT10K","H-dev"):
-        res,rr,gr,complete=for_dataset(dataset,jobs,args.reps,validated)
+        res,rr,gr,complete=for_dataset(dataset,jobs,args.reps,validated,baselines,baseline_receipts)
         status[dataset]={"all_five_seeds":complete,"missing_complete_arms":sorted({"C","D","F0","F48"}-set(complete))}
         tables.extend(res); runs.extend(rr); groups.extend(gr)
-    er, erun=e1(jobs,validated)
+    er, erun=e1(jobs,validated,baselines,baseline_receipts)
     if args.out:
-        dump(args.out,dict(status=status,contrasts=tables,runs=runs,e1=er,reps=args.reps,smoke=args.reps!=A.REPS))
+        dump(args.out,dict(status=status,contrasts=tables,runs=runs,e1=er,reps=args.reps,smoke=args.reps!=A.REPS,device_matched=args.device_matched))
     else:
-        dump(HERE/"tables/followup_analysis.json",dict(status=status,e1_vs_A=er,reps=args.reps))
+        dump(HERE/"tables/followup_analysis.json",dict(status=status,e1_vs_A=er,reps=args.reps,device_matched=args.device_matched))
         for n,d in (("registered_contrasts",tables),("followup_evaluation_per_run",runs),
                     ("followup_group_results",groups),("followup_e1_per_run",erun)):
             write_csv(n,d)

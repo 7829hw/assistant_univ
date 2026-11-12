@@ -46,6 +46,6 @@ cd "$FOLLOWUP_WORKTREE"
 "$p" "$f/launch.py" --phase 1 2 --approval "$FOLLOWUP_APPROVAL" --run
 ```
 
-각 GPU는 작업 하나씩 실행하고, CT10K/H-dev/E1에는 동결된 평가 코드를 사용한다. 산출물은 원래 checkout의 이 디렉터리 아래 `gpu/execution/`, `cells/`, `cells_raw/`에 생성된다. Adapter와 체크포인트 및 adapter SHA 기록은 외부 `/data/hwkim/sftdpo_work/topic2_semantic_order/followup_conditions/`에 유지한다. 장치 비교는 `gpu/execution/device_probe/`, phase별 GPU 배정과 학습·평가 기록은 `gpu/execution/`에 저장된다.
+각 GPU는 작업 하나씩 실행하고, CT10K/H-dev/E1에는 동결된 평가 코드를 사용한다. 산출물은 원래 checkout의 이 디렉터리 아래 `gpu/execution/`, `cells/`, `cells_raw/`에 생성된다. Adapter와 체크포인트 및 adapter SHA 기록은 외부 `/data/hwkim/sftdpo_work/topic2_semantic_order/followup_conditions/`에 유지한다. 장치 비교는 `gpu/execution/device_probe/`, phase별 GPU 배정과 학습·평가 기록은 `gpu/execution/`에 저장된다. Probe에서 응답 차이가 나와, GPU가 다른 기존 A/B 셀만 [매칭 계획](gpu/device_matched_baselines.json)에 따라 재평가한다. 결과 분석은 `analyze_new.py --device-matched`로 실행한다.
 
 [Coverage 계획](coverage/COVERAGE_PLAN.md)은 새 학습이나 신규 teacher trace 생성 없이 감사 요건과 validator만 제공한다.

@@ -18,3 +18,7 @@
 [반복 집계](tables/repeat_summary.csv)에는 balanced ANOVA의 raw variance components가 있다(arm 고정, order seed와 arm×seed 임의, arm×seed 내 run 잔차). within-cell df=12, seed/arm×seed는 각각 df=2. T1의 음수 seed component는 검정력 부족 및 경계 불안정으로 해석한다. 세 seed 밖 모집단의 재학습 분산 또는 다른 모델에서의 noise floor는 추정하지 않는다. CT10K에 반복 학습 평가가 없어 CT10K 분산 성분은 분리할 수 없다.
 
 신규 대비는 동결 계획의 3개 primary contrast와 98.333% family CI를 사용한다. `analyze_new.py`는 조건·seed별 유효 셀 확인 후에만 5-seed 대비를 산출한다. 점추정은 run 지표의 paired 평균, CI는 seed 및 공유 template clusters의 10,000회 bootstrap이다. Bootstrap에서 해당 그룹의 문항이 빠진 경우 per-group CI에 그 replicate를 포함하지 않고 유효 횟수를 기록한다. Overall 및 worst와 group-specific base-correct→wrong rate는 secondary다. 기존 A/B-only 재계산은 도구 검증용이며 기존 동결 CI를 대체하지 않는다.
+
+### 평가 장치가 다른 경우
+
+5문항 probe에서 GPU 간 응답 바이트가 달랐다. 같은 seed의 신규 조건을 한 GPU에 고정했고, 기존 A/B는 그 GPU에서 평가한 셀을 재사용한다. 일치하지 않는 셀은 원래 A/B adapter를 사용해 다시 평가한다. 같은 GPU를 사용한 A/B와 신규 결과에 동결된 통계 절차를 적용하고, 원래 A/B를 사용한 분석을 민감도 결과로 보존한다. Base collapse threshold, seed, endpoint 및 bootstrap 방식은 사전등록과 같다. Probe는 별도 serving session을 사용했으므로 하드웨어 차이와 serving 비결정성을 분리하지 못한다.
