@@ -81,7 +81,16 @@ def run_summary(cats, groups, base):
 
 
 def repeat_analysis(ids, groups):
-    cells = {(a,s,r): read_model([R.path(a,s,r)],ids)[0] for a in "AB" for s in R.SEEDS for r in R.RUNS}
+    cells, actions = {}, {}
+    for a in "AB":
+        for s in R.SEEDS:
+            for r in R.RUNS:
+                raw = R.load_cell(R.path(a,s,r))
+                if set(raw)!=set(ids):
+                    raise ValueError("Repeat cell ID coverage mismatch")
+                cells[a,s,r]=np.array([raw[i]["category"] for i in ids])
+                actions[a,s,r]=np.array([S.canonical([raw[i].get("outcome"),raw[i].get("error_code"),
+                    [[x.get("tool"),x.get("args")] for x in raw[i].get("calls") or []]]) for i in ids], dtype=object)
     repeat_summary, pairs, group_variation = [], [], []
     masks = {"overall":np.ones(len(ids),dtype=bool), **groups["type"], **groups["fine"]}
     for g, m in masks.items():
@@ -99,7 +108,8 @@ def repeat_analysis(ids, groups):
                     pairs.append(dict(arm=a,seed=s,group=g,r1=x,r2=y,n=int(m.sum()),
                                       delta_accuracy=(v=="match").mean()-(u=="match").mean(),
                                       correctness_discordance=np.mean((u=="match")!=(v=="match")),
-                                      category_discordance=np.mean(u!=v)))
+                                      category_discordance=np.mean(u!=v),
+                                      action_signature_discordance=np.mean(actions[a,s,x][m]!=actions[a,s,y][m])))
         group_variation.extend(distinct)
         y = {a:{s:[d[f"accuracy_r{r}"] for r in R.RUNS] for d in distinct if d["arm"]==a for s in [d["seed"]]} for a in "AB"}
         repeat_summary.append(dict(group=g,n=int(m.sum()),within_cell_sd=np.sqrt(rss/df),within_df=df,
