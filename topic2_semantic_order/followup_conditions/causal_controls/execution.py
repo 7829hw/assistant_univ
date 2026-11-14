@@ -1,6 +1,7 @@
 """Freeze the run matrix, validate training on CPU and prepare checkpoint evaluation."""
 import argparse
 import copy
+from contextlib import ExitStack, contextmanager
 from datetime import datetime
 import os
 import shutil
@@ -122,7 +123,48 @@ def ensure_original_complete():
         raise RuntimeError("The authorized E1/E2 queue, device-matched A/B and final analysis take priority")
 
 
-def execute_train(job, mode, approval_path):
+@contextmanager
+def gpu_locks(budget, uuid):
+    """Exclude legacy launchers and any other budget job on this physical GPU."""
+    import fcntl
+    lock_path=WORK/"topic2_semantic_order/followup_conditions/provenance/run.lock"
+    with ExitStack() as stack:
+        shared = stack.enter_context(lock_path.open("a"))
+        fcntl.flock(shared,(fcntl.LOCK_SH if budget else fcntl.LOCK_EX)|fcntl.LOCK_NB)
+        if budget:
+            device = stack.enter_context(lock_path.with_name(f"budget-{uuid}.lock").open("a"))
+            fcntl.flock(device,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        yield
+
+
+def authorized_scope(job, approval, commit, budget_option, action):
+    if not budget_option:
+        if (approval["commit"]!=commit or approval["manifest_sha256"]!=S.sha_file(PLAN) or
+            job["id"] not in approval["jobs"]):
+            raise ValueError("Approval does not cover this commit, manifest and run")
+        return None
+
+    from budget_plan import manifest
+    from launch import WORKSTATION_GPUS
+    plan, path = manifest(budget_option)
+    selected = next((entry for entry in plan["jobs"] if entry["job"]==job["id"]), None)
+    devices = approval["gpu_uuids"]
+    if (selected is None or tuple(devices)!=WORKSTATION_GPUS or
+        approval["commit"]!=commit or approval["manifest_sha256"]!=S.sha_file(path) or
+        approval.get("option")!=budget_option or action not in approval.get("actions",[]) or
+        approval["gpu_uuid"]!=devices[selected["gpu_slot"]] or
+        job["id"] not in approval["jobs"] or
+        not set(approval["jobs"])<={j["job"] for j in plan["jobs"]}):
+        raise ValueError("Approval does not cover this budget option, commit and assigned run")
+    return plan
+
+
+def budget_paths(option):
+    root = MAIN_RESULTS/"budget"
+    return (root/"training", root/f"results_{option}")
+
+
+def execute_train(job, mode, approval_path, budget_option=None):
     if not mode and approval_path is None:
         raise ValueError("New task-specific GPU authorization is required")
     from launch import SPARE_GPU, WORKSTATION_GPUS, boundary, command, gpu_gate, shell
@@ -145,9 +187,7 @@ def execute_train(job, mode, approval_path):
         if ROOT==Path("/home/hwkim/assistant_univ") or shell(["git","symbolic-ref","-q","HEAD"]).returncode!=1 or command(["git","status","--porcelain"]):
             raise RuntimeError("Train from a clean detached worktree at the approved commit")
         approval=load(approval_path)
-        if (approval["commit"]!=commit or approval["manifest_sha256"]!=S.sha_file(PLAN) or
-            job["id"] not in approval["jobs"]):
-            raise ValueError("Approval does not cover this commit, manifest and run")
+        authorized_scope(job, approval, commit, budget_option, "train")
         deadline=datetime.fromisoformat(approval["start_before"])
         if deadline.tzinfo is None:
             raise ValueError("GPU deadline requires timezone")
@@ -156,20 +196,8 @@ def execute_train(job, mode, approval_path):
             raise ValueError("GPU UUID is outside the workstation policy")
         if min(shutil.disk_usage(WORK).free,shutil.disk_usage(MAIN_RESULTS).free)/2**30 < 100:
             raise RuntimeError("Insufficient disk headroom for checkpoint or evaluation artifacts")
-        import fcntl
-        lock_path=WORK/"topic2_semantic_order/followup_conditions/provenance/run.lock"
-        lock_path.parent.mkdir(parents=True,exist_ok=True)
-        # Retain the descriptor for the full run. This also excludes the
-        # existing follow-up launcher while any of its jobs are active.
-        lock=lock_path.open("a")
-        fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-        exec_dir=MAIN_RESULTS/"execution"
-        exec_dir.mkdir(exist_ok=True)
-        index=gpu_gate(approval["gpu_uuid"],os.environ,exec_dir/"gpu_checks.jsonl")
-        if os.environ.get("CUDA_VISIBLE_DEVICES")!=index or Path(c["training"]["output_dir"]).exists():
-            raise RuntimeError("Expected only the approved physical GPU and a fresh run directory")
-        if os.environ.get("PYTORCH_CUDA_ALLOC_CONF")!="expandable_segments:True":
-            raise RuntimeError("Set the frozen training allocator configuration before starting")
+        exec_dir=budget_paths(budget_option)[0] if budget_option else MAIN_RESULTS/"execution"
+    steps = (STEPS,) if budget_option else CHECKPOINT_STEPS
     train_a11.install_override()
     args,c,splits,manifest=cli("sft",["--config",str(ROOT/job["config"]),*([mode] if mode else [])])
     train_semantic.apply_semantic_order(c,splits)
@@ -178,53 +206,72 @@ def execute_train(job, mode, approval_path):
         raise ValueError("Actual trainer sampler is not sequential")
     if manifest["prompt_hash"]!=PROMPT or not np.allclose(hf_rates(c),analytical_rates("linear"),rtol=0,atol=1e-18):
         raise ValueError("Prompt or optimizer step LR changed")
-    print(f"{job['id']} records={len(splits['train'])}, sampler=SequentialSampler, steps={STEPS}, checkpoints={CHECKPOINT_STEPS}",flush=True)
+    print(f"{job['id']} records={len(splits['train'])}, sampler=SequentialSampler, steps={STEPS}, checkpoints={steps}",flush=True)
     if mode:
         return
     from training.profiling import RunProfile
     from training.train_sft import train
-    profile=RunProfile(c,"sft")
-    error=None
-    try:
-        train(args,c,splits,manifest,profile,callbacks=[SaveAt()])
-        checkpoint_hashes={}
-        for step in CHECKPOINT_STEPS:
-            weights=OUTPUT/job["id"]/f"checkpoint-{step}"/"adapter_model.safetensors"
-            if not weights.is_file():
-                raise ValueError(f"Missing checkpoint adapter for step {step}")
-            checkpoint_hashes[str(step)]=S.sha_file(weights)
-        dump(OUTPUT/job["id"]/"checkpoint_hashes.json",checkpoint_hashes)
-    except BaseException as exc:
-        error=exc
-        raise
-    finally:
+
+    class SaveFinal(SaveAt):
+        def on_train_begin(self, args, state, control, **kwargs):
+            if state.max_steps != STEPS:
+                raise ValueError("Full budget training step count has changed")
+            self.save_at = {STEPS}
+
+    with gpu_locks(budget_option, approval["gpu_uuid"]):
+        boundary(deadline)
+        exec_dir.mkdir(parents=True,exist_ok=True)
+        index=gpu_gate(approval["gpu_uuid"],os.environ,exec_dir/"gpu_checks.jsonl")
+        if os.environ.get("CUDA_VISIBLE_DEVICES")!=index or Path(c["training"]["output_dir"]).exists():
+            raise RuntimeError("Expected only the approved physical GPU and a fresh run directory")
+        if os.environ.get("PYTORCH_CUDA_ALLOC_CONF")!="expandable_segments:True":
+            raise RuntimeError("Set the frozen training allocator configuration before starting")
+        profile=RunProfile(c,"sft")
+        error=None
         try:
+            train(args,c,splits,manifest,profile,callbacks=[SaveFinal() if budget_option else SaveAt()])
+            checkpoint_hashes={}
+            for step in steps:
+                weights=OUTPUT/job["id"]/f"checkpoint-{step}"/"adapter_model.safetensors"
+                checkpoint_hashes[str(step)]=S.sha_file(weights)
+            dump(OUTPUT/job["id"]/"checkpoint_hashes.json",checkpoint_hashes)
+        except BaseException as exc:
+            error=exc
+            raise
+        finally:
             profile.finish(error)
             if error is None:
-                write_training_receipt(job,c,commit,approval["gpu_uuid"],ledger_path,exec_dir)
-        finally:
-            lock.close()
+                write_training_receipt(job,c,commit,approval["gpu_uuid"],ledger_path,exec_dir,steps,
+                                       approval["manifest_sha256"],budget_option)
 
 
-def write_training_receipt(job, config, commit, uuid, ledger_path, exec_dir):
+def write_training_receipt(job, config, commit, uuid, ledger_path, exec_dir, steps, manifest_hash, option):
     import torch
     profile=load(config["profiling"]["output"])
     ledger=load(ledger_path)
     if (profile["status"]!="completed" or profile["optimizer_steps"]!=STEPS
         or profile["policy_tokens"]!=ledger["input_tokens"]):
         raise ValueError("Run profile does not validate optimizer steps and the token budget")
+    final_dir=OUTPUT/job["id"]/f"checkpoint-{STEPS}"
+    state=load(final_dir/"trainer_state.json")
+    history=[entry for entry in state["log_history"] if "loss" in entry and "learning_rate" in entry]
+    if option and (state["global_step"]!=STEPS or [entry["step"] for entry in history]!=list(range(1,STEPS+1))):
+        raise ValueError("Final checkpoint does not contain one loss/LR entry per optimizer step")
     dump(exec_dir/f"{job['id']}_training.json",
          dict(commit=commit,job=job["id"],complete=True,gpu_uuid=uuid,
               training_sha256=TRAIN_SHA,config_sha256=job["config_sha256"],order_sha256=job["order"]["sha256"],
-              ledger_sha256=S.sha_file(ledger_path),checkpoint_steps=list(CHECKPOINT_STEPS),
+              ledger_sha256=S.sha_file(ledger_path),checkpoint_steps=list(steps),
+              manifest_sha256=manifest_hash,budget_option=option,
+              training_provenance=load(OUTPUT/job["id"]/"training_provenance.json"),
+              checkpoint_hashes=load(OUTPUT/job["id"]/"checkpoint_hashes.json"),
+              trainer_state_sha256=S.sha_file(final_dir/"trainer_state.json"),optimizer_log_history=history,
               packages=profile["environment"],cuda=torch.version.cuda,
               optimizer_steps=profile["optimizer_steps"],policy_tokens=profile["policy_tokens"],
               loss_tokens=ledger["loss_tokens"],profile=profile))
 
 
-def evaluate_checkpoints(job, approval_path):
-    """Only evaluate after a completed training receipt and four verified adapters."""
-    import fcntl
+def evaluate_checkpoints(job, approval_path, budget_option=None):
+    """Evaluate the authorized checkpoint subset from a verified training receipt."""
     from launch import DEFAULT_GPU, boundary, command, evaluate, shell
     if approval_path is None:
         raise ValueError("New task-specific GPU authorization is required")
@@ -233,37 +280,64 @@ def evaluate_checkpoints(job, approval_path):
     commit=command(["git","rev-parse","HEAD"])
     approval=load(approval_path)
     if (ROOT==Path("/home/hwkim/assistant_univ") or shell(["git","symbolic-ref","-q","HEAD"]).returncode!=1 or
-        command(["git","status","--porcelain"]) or approval["commit"]!=commit or
-        approval["manifest_sha256"]!=S.sha_file(PLAN) or job["id"] not in approval["jobs"]):
+        command(["git","status","--porcelain"])):
         raise ValueError("Evaluation requires the approved run in a clean detached worktree")
+    scope = authorized_scope(job, approval, commit, budget_option, "evaluate")
+    checkpoints = job["checkpoints"] if scope is None else [
+        next(entry["checkpoint"] for entry in scope["jobs"] if entry["job"]==job["id"])
+    ]
+    steps = tuple(cp["step"] for cp in checkpoints)
+    if scope:
+        plan = scope
     deadline=datetime.fromisoformat(approval["start_before"])
     if deadline.tzinfo is None:
         raise ValueError("GPU deadline requires timezone")
     boundary(deadline)
-    logdir=MAIN_RESULTS/"execution"
-    receipt=load(logdir/f"{job['id']}_training.json")
+    training_dir, out = budget_paths(budget_option) if scope else (MAIN_RESULTS/"execution", MAIN_RESULTS)
+    logdir = out/"execution"
+    receipt=load(training_dir/f"{job['id']}_training.json")
     if (not receipt["complete"] or receipt["commit"]!=commit or receipt["gpu_uuid"]!=approval["gpu_uuid"] or
-        receipt["config_sha256"]!=job["config_sha256"] or receipt["order_sha256"]!=job["order"]["sha256"]):
+        receipt["config_sha256"]!=job["config_sha256"] or receipt["order_sha256"]!=job["order"]["sha256"] or
+        receipt["checkpoint_steps"]!=list(steps)):
         raise ValueError("No corresponding completed training run on the approved device")
+    if scope:
+        from budget_plan import manifest
+        _, trained_under = manifest(receipt["budget_option"])
+        if S.sha_file(trained_under)!=receipt["manifest_sha256"]:
+            raise ValueError("Training receipt is outside the frozen budget manifests")
     for path,digest in plan["eval_input_sha256"].items():
         if S.sha_file(ROOT/path)!=digest:
             raise ValueError(f"Evaluation input changed: {path}")
-    lock_path=WORK/"topic2_semantic_order/followup_conditions/provenance/run.lock"
     model_log=OUTPUT/job["id"]
     hashes=load(model_log/"checkpoint_hashes.json")
-    for step in CHECKPOINT_STEPS:
-        if hashes[str(step)]!=S.sha_file(model_log/f"checkpoint-{step}"/"adapter_model.safetensors"):
+    for step in steps:
+        if (hashes[str(step)]!=S.sha_file(model_log/f"checkpoint-{step}"/"adapter_model.safetensors") or
+            (scope and receipt["checkpoint_hashes"][str(step)]!=hashes[str(step)])):
             raise ValueError(f"Checkpoint changed at step {step}")
     env={**os.environ,"OLLAMA_UUID":DEFAULT_GPU,
          "ALLOWED_UUIDS":approval["gpu_uuid"],"HF_HOME":str(WORK/"hf-cache"),
          "HF_HUB_OFFLINE":"1","TRANSFORMERS_OFFLINE":"1","PYTHONDONTWRITEBYTECODE":"1"}
     sys.path.insert(0,str(ROOT/"sft_dpo_inventory/pilot_007/results"))
-    with lock_path.open("a") as lock:
-        fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-        for checkpoint in job["checkpoints"]:
+    with gpu_locks(budget_option, approval["gpu_uuid"]):
+        boundary(deadline)
+        if scope:
+            from integration import json_lines
+            prior = {r["cell"]:r for r in json_lines(logdir/"eval_provenance.jsonl")}
+            cells = [f"{c['label']}_s{c['k']}" for c in checkpoints[0]["cells"]]
+            if all(k in prior for k in cells):
+                for k in cells:
+                    p = out/"cells"/f"{k}.json"
+                    if (prior[k]["commit"]!=commit or prior[k]["gpu_uuid"]!=approval["gpu_uuid"] or
+                        S.sha_file(p)!=prior[k]["sha256"] or
+                        load(p)["meta"]["vllm"]["server_meta"]["adapter_sha256"]!=hashes[str(STEPS)]):
+                        raise ValueError("Completed evaluation receipt does not match this run")
+                return
+        logdir.mkdir(parents=True, exist_ok=True)
+        for checkpoint in checkpoints:
             step=checkpoint["step"]
-            evaluate(checkpoint,plan,env,logdir,model_log,deadline,approval["gpu_uuid"],commit,
-                     MAIN_RESULTS,model_log/f"checkpoint-{step}",hashes[str(step)])
+            server_provenance = logdir if scope else model_log
+            evaluate(checkpoint,plan,env,logdir,server_provenance,deadline,approval["gpu_uuid"],commit,
+                     out,model_log/f"checkpoint-{step}",hashes[str(step)])
 
 
 def main():
@@ -274,6 +348,7 @@ def main():
     for name in ("dry-run","tokenizer-check","train","evaluate"):
         modes.add_argument("--"+name,metavar="RUN")
     parser.add_argument("--approval",type=Path)
+    parser.add_argument("--budget-option",choices=("A","B"))
     args=parser.parse_args()
     if args.prepare:
         dump(PLAN,matrix())
@@ -287,11 +362,16 @@ def main():
         return
     name=args.dry_run or args.tokenizer_check or args.train or args.evaluate
     job=next(j for j in plan["jobs"] if j["id"]==name)
+    if args.budget_option:
+        from budget_plan import manifest
+        scope, _ = manifest(args.budget_option)
+        if name not in {entry["job"] for entry in scope["jobs"]}:
+            parser.error("Job is outside the minimal budget scope")
     mode="--dry-run" if args.dry_run else "--tokenizer-check" if args.tokenizer_check else None
     if args.evaluate:
-        evaluate_checkpoints(job,args.approval)
+        evaluate_checkpoints(job,args.approval,args.budget_option)
     else:
-        execute_train(job,mode,args.approval)
+        execute_train(job,mode,args.approval,args.budget_option)
 
 
 if __name__=="__main__":

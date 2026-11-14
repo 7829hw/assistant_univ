@@ -111,7 +111,7 @@ def environment_key(metadata, train):
     return S.canonical(dict(eval=metadata[0],training={k:train[k] for k in ("gpu_uuid","packages","cuda","commit")}))
 
 
-def result_paths(checkpoint, dataset, receipts, train, eval_input_sha256):
+def result_paths(checkpoint, dataset, receipts, train, eval_input_sha256, out=HERE):
     paths = []
     signatures=[]
     checkpoint_hashes=set()
@@ -122,7 +122,7 @@ def result_paths(checkpoint, dataset, receipts, train, eval_input_sha256):
         receipt=receipts.get(label)
         if not receipt:
             return [],[]
-        file=HERE/"cells"/f"{label}.json"
+        file=out/"cells"/f"{label}.json"
         if S.sha_file(file)!=receipt["sha256"] or receipt["commit"]!=train["commit"] or receipt["gpu_uuid"]!=train["gpu_uuid"]:
             raise ValueError(f"Evaluation receipt mismatch: {label}")
         m=load(file)["meta"]
@@ -132,8 +132,9 @@ def result_paths(checkpoint, dataset, receipts, train, eval_input_sha256):
         checkpoint_hashes.add(m["vllm"]["server_meta"]["adapter_sha256"])
         signatures.append(core_eval_signature(m))
         paths.append(local(file))
-    if len(checkpoint_hashes)>1:
-        raise ValueError("Mixed adapters within a checkpoint evaluation")
+    expected_hash=train.get("checkpoint_hashes",{}).get(str(checkpoint["step"]))
+    if len(checkpoint_hashes)>1 or (expected_hash and checkpoint_hashes!={expected_hash}):
+        raise ValueError("Evaluation adapter does not match the training checkpoint")
     return paths,signatures
 
 
