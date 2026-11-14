@@ -12,6 +12,7 @@ from common import ROOT, S, dump, load, local
 from execution import CHECKPOINT_STEPS, plan_locked
 from regression import A, context, read_model, run_summary
 from taxonomy import summarize_cells, write_csv
+from uncertainty import secondary_intervals, transition_summary
 
 CONTRASTS = {
     "semantic": {"S0T0":-.5,"S1T0":.5,"S0T1":-.5,"S1T1":.5},
@@ -138,17 +139,20 @@ def result_paths(checkpoint, dataset, receipts, train, eval_input_sha256):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out-dir",type=Path,default=HERE/"tables/new_runs")
+    parser.add_argument("--out-dir",type=Path,required=True)
     args=parser.parse_args()
     plan=plan_locked()
     audits={s:load(HERE/f"audits/o{s}.json") for s in ORDER_SEEDS}
     receipt_path=HERE/"execution/eval_provenance.jsonl"
     receipts={r["cell"]:r for r in S.read_jsonl(receipt_path)} if receipt_path.exists() else {}
+    if args.out_dir.exists():
+        parser.error("--out-dir must be a fresh snapshot directory")
     runs, trajectories, summaries, taxonomy_cells = {},[],[],[]
+    vectors, transitions, sensitivity = {}, [], {}
     dynamics=defaultdict(list)
     if receipts:
         for dataset in ("CT10K","H-dev"):
-            ids,_,groups=context(dataset)
+            ids,clusters,groups=context(dataset)
             base_paths = A.ct_base_paths() if dataset=="CT10K" else [[f"{A.C12}/hdev_base_s{k}.json"] for k in (1,2)]
             base=np.mean([read_model(p,ids)[0]=="match" for p in base_paths],axis=0)
             for job in plan["jobs"]:
@@ -169,12 +173,22 @@ def main():
                     taxonomy_cells.extend(("causal_controls",f"{job['id']}-ck{step}",job["order_seed"],dataset,p) for p in paths)
                     cats,diagnostics=read_model(paths,ids)
                     key=environment_key(sigs,train)
-                    summary=run_summary(cats,groups,base)
+                    correct=cats=="match"
+                    summary=run_summary(cats,groups,base) | transition_summary(correct,base)
                     shared=dict(run=job["id"],arm=job["arm"],order_seed=job["order_seed"],
                                 training_seed=job["training_seed"],dataset=dataset)
                     summaries.append(dict(**shared,step=step,**summary,**diagnostics))
+                    for level in ("fine","coarse","type"):
+                        for label,mask in groups[level].items():
+                            transitions.append(dict(**shared,step=step,level=level,group=label,items=int(mask.sum()),
+                                                    accuracy=float(correct[mask].mean()),
+                                                    refusal=float((cats[mask]=="refused_unsupported").mean()),
+                                                    silent_wrong=float((cats[mask]=="answered_mismatch").mean()),
+                                                    **transition_summary(correct[mask],base[mask])))
                     if dataset=="CT10K" and step==CHECKPOINT_STEPS[-1] and key is not None:
-                        runs[job["arm"],job["order_seed"],job["training_seed"]] = dict(**summary,comparison_signature=key)
+                        run_key=(job["arm"],job["order_seed"],job["training_seed"])
+                        runs[run_key] = dict(**summary,comparison_signature=key)
+                        vectors[run_key] = correct.astype(float)
                     intermediate[step]=cats=="match"
                     signatures_by_step[step]=key
                 if (set(intermediate)==set(CHECKPOINT_STEPS) and all(signatures_by_step.values())
@@ -190,8 +204,20 @@ def main():
                                                       accuracy_75=accuracy[2],accuracy_100=accuracy[3],
                                                       prior_peak_minus_final=prior_minus_final,forgetting=forget,final_minus_first=gain))
                             dynamics[(job["id"],job["arm"],dataset,level)].append((forget,gain))
+            if dataset=="CT10K" and vectors:
+                gold=A.load_gold(A.CT)
+                group_of={item:A.esig(gold[item].get("gold"))[1] for item in ids}
+                tab=A.Tab(ids,group_of,clusters,A.MIN_CT)
+                contrasts={**CONTRASTS,"semantic_at_supervision_off":{"S1T0":1,"S0T0":-1}}
+                compatible={name:weights for name,weights in contrasts.items()
+                            if all(len({runs.get((arm,o,t),{}).get("comparison_signature") for arm in weights})==1
+                                   for o in ORDER_SEEDS for t in TRAIN_SEEDS)}
+                sensitivity=secondary_intervals(tab,vectors,base,ORDER_SEEDS,TRAIN_SEEDS,compatible)
     output=args.out_dir
     dump(output/"registered_contrasts.json",dict(comparable_final_ct10k_runs=len(runs),contrasts=paired_contrasts(runs,audits)))
+    dump(output/"secondary_uncertainty.json",sensitivity)
+    if transitions:
+        write_csv(output/"checkpoint_group_transitions.csv",transitions)
     if summaries:
         write_csv(output/"checkpoint_summary.csv",summaries)
     if trajectories:

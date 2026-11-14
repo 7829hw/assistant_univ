@@ -8,3 +8,6 @@
 - 원본 O4′ A는 질문 안 canonical trace 순서를 보존하지 않는다(5개 seed에서 각각 355/347/349/351/357 질문의 trace 순서가 canonical과 다름). C는 A의 정확한 복제 순서다. A/C와 semantic 군 전체에 동일한 within-question 규칙을 적용하는 것은 원본 재사용 요구와 양립하지 않는다. F0/B/F48끼리는 동일한 within-question 규칙으로 비교한다.
 - HF/TRL scheduler CPU 계산: 두 LR 합 0.1984, 첫 optimizer LR=0, linear 마지막 1.008572869e-7, constant 마지막 0.0001000504286434695. 기존 10개 A/B 로그의 step별 LR 및 input token 누계가 맞는다. 신규 GPU에서 실제로 기록된 LR·loss·runtime model hash는 없다.
 - [설정/순서/통제 manifest](configs/manifest.json), [모델 없는 실제 sampler와 tokenizer 검증](gates/GATES.json), [step별 예정 LR](tables/planned_step_lrs.csv). 원래 G1–G10 코드/결과는 그대로 두고, wrapper에서 기존 A11와 semantic gate, trainer CLI, HF scheduler 및 TRL sampler를 호출했다. GPU에서만 확인 가능한 gate는 실제 실행 직전에 다시 검사해야 한다.
+
+
+E5–E7의 승인 TRAIN·정확한 loss ledger·순서 SHA는 [고정된 실행 규격](causal_controls/run_plan.json)과 [추가 매칭 감사](causal_controls/tables/integration_temporal/)에 있다. [통합 실행 현황](INTEGRATED_STATUS.md).

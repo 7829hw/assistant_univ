@@ -8,6 +8,8 @@ from common import load, np
 from execution import CHECKPOINT_STEPS, evaluate_checkpoints, execute_train, plan_locked, validate_job
 from analyze_controls import holm, paired_contrasts, sign_flip_p
 from taxonomy import classify
+from uncertainty import secondary_intervals, transition_summary
+from attribution import attribution_flags
 
 
 class ControlsTests(unittest.TestCase):
@@ -60,6 +62,40 @@ class ControlsTests(unittest.TestCase):
             execute_train(None,None,None)
         with self.assertRaisesRegex(ValueError,"New task-specific GPU authorization"):
             evaluate_checkpoints(None,None)
+
+    def test_transition_rates_use_separate_base_denominators(self):
+        summary = transition_summary(np.array([False, True, True]), np.array([1., .5, 0.]))
+        self.assertEqual(summary["base_correct_to_wrong"], 1.)
+        self.assertEqual(summary["base_wrong_to_correct"], 1.5)
+        self.assertAlmostEqual(summary["base_correct_to_wrong_rate"], 2/3)
+        self.assertEqual(summary["base_wrong_to_correct_rate"], 1.)
+        self.assertIsNone(transition_summary(np.array([True]), np.array([0.]))["base_correct_to_wrong_rate"])
+
+    def test_bootstrap_pairs_arms_and_resamples_whole_templates(self):
+        class TwoTemplates:
+            K = 2
+            N = np.ones((2,1))
+            @staticmethod
+            def sums(vector):
+                return np.asarray(vector).reshape(2,1),
+
+        orders, training = (1,2), (11,12)
+        vectors = {(a,o,t):[1, 0] if a=="ours" else [1, 1]
+                   for a in ("ours","reference") for o in orders for t in training}
+        intervals = secondary_intervals(TwoTemplates(), vectors, [1,1], orders, training,
+                                        {"difference":{"ours":1,"reference":-1}}, reps=512)
+        self.assertEqual(intervals["difference"]["run_only_ci95"], [1.,1.])
+        self.assertEqual(intervals["difference"]["run_plus_template_ci95"], [0.,1.])
+        self.assertEqual(intervals["difference"]["within_order_sample_sd"], [0.,0.])
+
+    def test_place_omission_attributes_only_parseable_single_plan(self):
+        gold = {"gold":[{"tool":"get_place_scope","args":{"name":"p"}}]}
+        row = {"outcome":"answered","llm_calls":[{"kind":"plan","content":'{"concepts": []}'}]}
+        self.assertIn("model_plan_location_omission", attribution_flags(row,gold))
+        row["llm_calls"].append({"kind":"repair","content":"{}"})
+        flags = attribution_flags(row,gold)
+        self.assertIn("place_origin_ambiguous",flags)
+        self.assertNotIn("model_plan_location_omission",flags)
 
     def test_overlapping_errors(self):
         r={"category":"answered_mismatch","grounding_ok":False,

@@ -1,6 +1,6 @@
 # Semantic interleaving: failure conditions
 
-현재 상태: 기존 결과 CPU 진단 및 반복 재분석 완료, 새 순서와 20개 config/gates 완료. 신규 GPU 작업의 현재 상태는 [실행 기록](gpu/STATUS.md)에 있다. Experiment 4는 승인 전 준비만 했다. 원래 결과와 H-final 봉인은 유지한다.
+E0 진단과 E3 기존 반복 분석을 마쳤다. E1·E2는 승인된 세 GPU에서 실행 중이며 같은 GPU로 맞추는 A/B 재평가가 예약돼 있다. E4는 데이터 승인 전 준비만 했다. E5–E7 순서와 실행 규격은 CPU 검증을 마쳤고 GPU 작업은 별도 승인이 필요하다. [통합 상태와 결과](INTEGRATED_STATUS.md) · [추가 실험 재현](causal_controls/README.md) · [승인 실행 기록](gpu/STATUS.md).
 
 - [사전등록](EXPERIMENT_PLAN.md) · [실험 매트릭스](EXPERIMENT_MATRIX.md) · [감사](DATA_AND_CONFIG_AUDIT.md)
 - [기존 결과 진단](EXISTING_RESULT_DIAGNOSTICS.md) · [결과](RESULTS.md) · [통계](STATISTICAL_ANALYSIS.md)
@@ -25,7 +25,7 @@ f=topic2_semantic_order/followup_conditions
 "$p" "$f/verify.py"
 "$p" "$f/test_followup.py" -v
 PYTHONPATH=topic2_semantic_order "$p" -m unittest topic2_semantic_order.test_semantic_schedule -v
-"$p" "$f/analyze_new.py"
+"$p" "$f/analyze_new.py" --out /tmp/topic2-followup-analysis.json
 "$p" "$f/launch.py" --phase 1
 "$p" "$f/launch.py" --phase 2
 ```
@@ -46,6 +46,6 @@ cd "$FOLLOWUP_WORKTREE"
 "$p" "$f/launch.py" --phase 1 2 --approval "$FOLLOWUP_APPROVAL" --run
 ```
 
-각 GPU는 작업 하나씩 실행하고, CT10K/H-dev/E1에는 동결된 평가 코드를 사용한다. 산출물은 원래 checkout의 이 디렉터리 아래 `gpu/execution/`, `cells/`, `cells_raw/`에 생성된다. Adapter와 체크포인트 및 adapter SHA 기록은 외부 `/data/hwkim/sftdpo_work/topic2_semantic_order/followup_conditions/`에 유지한다. 장치 비교는 `gpu/execution/device_probe/`, phase별 GPU 배정과 학습·평가 기록은 `gpu/execution/`에 저장된다. Probe에서 응답 차이가 나와, GPU가 다른 기존 A/B 셀만 [매칭 계획](gpu/device_matched_baselines.json)에 따라 재평가한다. 결과 분석은 `analyze_new.py --device-matched`로 실행한다.
+각 GPU는 작업 하나씩 실행하고, CT10K/H-dev/E1에는 동결된 평가 코드를 사용한다. 산출물은 원래 checkout의 이 디렉터리 아래 `gpu/execution/`, `cells/`, `cells_raw/`에 생성된다. Adapter와 체크포인트 및 adapter SHA 기록은 외부 `/data/hwkim/sftdpo_work/topic2_semantic_order/followup_conditions/`에 유지한다. 장치 비교는 `gpu/execution/device_probe/`, phase별 GPU 배정과 학습·평가 기록은 `gpu/execution/`에 저장된다. Probe에서 응답 차이가 나와, GPU가 다른 기존 A/B 셀만 [매칭 계획](gpu/device_matched_baselines.json)에 따라 재평가한다. 결과 분석은 `analyze_new.py --device-matched`로 실행하며 출력은 `tables/device_matched/`에 저장한다.
 
 [Coverage 계획](coverage/COVERAGE_PLAN.md)은 새 학습이나 신규 teacher trace 생성 없이 감사 요건과 validator만 제공한다.

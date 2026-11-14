@@ -17,13 +17,17 @@ The full factorial and its interaction are exploratory under the fixed construct
 
 The [matching tables](tables/) and [full audits](audits/) include measured residuals and eligibility per seed. Each order consumes the exact 1,984 records, preserving all 494 questions, both loss scopes and their masked-token totals, and the canonical question trace order. Questions with more than four records are split into fixed chunks, and distinct chunks of one question may not be adjacent. The random-arm permutation is group blind subject to these constraints. Fine and coarse labels in the placebo audit are scheduling assignments separate from the canonical V4 labels.
 
+별도 CPU 감사에서 감독 유형별 record·input·loss·LR-weighted loss 노출을 검증했다. S0T0–S1T0의 decile별 full-response 가중 비중 차이는 seed별 평균 절대값 0.07–0.25%p, 최대 1.26%p였다. S0T1–S1T1의 해당 차이는 2.54–4.38%p, 최대 11.46%p였다. 이 추가 감사는 동결된 eligibility를 바꾸지 않는다. [잔여 차이, decile별 노출 및 연속 구간](tables/integration_temporal/).
+
 ## Error analysis and comparability
 
-The snapshot covers 225,066 scored predictions from 314 complete cells, including 130,760 historical A/B and 94,306 predictions already produced by the running follow-up. It includes overlapping tool selection, grounding, argument, aggregation, refusal and silent-wrong flags, plus truncation, execution failure and unclassified outcomes. Flags use the frozen scorer evidence. Co-occurrence is retained and root causes remain undetermined. The tables are by cohort, arm, order seed, dataset and group. The predictions were reused for CPU scoring only. No output was used to construct an order.
+The first snapshot covers 225,066 scored predictions from 314 complete cells, including 130,760 historical A/B and 94,306 predictions already produced by the running follow-up. It includes overlapping tool selection, grounding, argument, aggregation, refusal and silent-wrong flags, plus truncation, execution failure and unclassified outcomes. Flags use the frozen scorer evidence. Co-occurrence is retained and root causes remain undetermined. The tables are by cohort, arm, order seed, dataset and group. The predictions were reused for CPU scoring only. No output was used to construct an order.
 
 For example, historical CT10K T1 gave overlapping grounding flags on 12.90% (A) and 52.35% (B) and argument flags on 10.27% and 37.53%, respectively, across five historical seeds. The taxonomy retains the underlying frozen scoring category. A grounding flag can occur on a matching answer because the separate grounding assessor measures additional conditions.
 
 Historical and current follow-up evaluation snapshots agree on the observed sets of base revision, scorer fingerprint, decoding, serving versions and GPU identifiers. Code commits differ, and the audit summarizes distributions of recorded settings across cells. The two inspected training profiles agree on the recorded Torch, Transformers, TRL, PEFT, Accelerate and datasets versions. The prior five-item device probe had byte differences between server starts. Historical evidence therefore supplies descriptive context for the new intervention runs.
+
+The expanded snapshot covers 227,164 scores across 316 cells. For historical T1, 481/5,100 A scores and 1,904/5,100 B scores lack a required executed place lookup. A single parseable model plan contained no location concept in 481 A and 1,883 B scores. Twenty-one B scores lack sufficient evidence to localize the omission. The frozen scorer definitions and first snapshot remain available. [Attribution rules](TAXONOMY.md) · [Expanded tables](tables/integration_snapshot/).
 
 ## Reproduction
 
@@ -34,19 +38,18 @@ f=topic2_semantic_order/followup_conditions/causal_controls
 p=/data/hwkim/sftdpo_work/runtime/envs/hf/bin/python
 export CUDA_VISIBLE_DEVICES="" PYTHONDONTWRITEBYTECODE=1 OPENBLAS_NUM_THREADS=1
 export HF_HOME=/data/hwkim/sftdpo_work/hf-cache HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
-(cd "$f" && sha256sum -c PREREGISTRATION.sha256)
-"$p" "$f/schedules.py"
-"$p" "$f/execution.py" --prepare
+(cd "$f" && sha256sum -c PREREGISTRATION.sha256 && sha256sum -c PREREGISTRATION_AMENDMENT.sha256)
 "$p" "$f/execution.py" --validate
 "$p" "$f/test_controls.py" -v
 "$p" "$f/execution.py" --dry-run S0T0-o1102-t43
 "$p" "$f/execution.py" --tokenizer-check placebo-o211102-t51004
-"$p" "$f/summarize_audits.py"
-"$p" "$f/taxonomy.py" --snapshot-from "$f/tables/taxonomy_sources_snapshot.csv"
-"$p" "$f/compare_environment.py"
-"$p" "$f/analyze_controls.py"
+out=$(mktemp -d)
+"$p" "$f/audit_temporal.py" --out-dir "$out/temporal"
+"$p" "$f/taxonomy.py" --out-dir "$out/taxonomy" --snapshot-from "$f/tables/integration_snapshot/taxonomy_sources_snapshot.csv"
+"$p" "$f/analyze_controls.py" --out-dir "$out/new_runs"
+"$p" "$f/integration.py" --out-dir "$out/inventory"
 ```
 
-The snapshot source CSV pins file hashes. Reproducing its current-follow-up rows requires that run's local prediction files. Use `taxonomy.py --historical-only` to analyze only the existing A/B cells. The generated run matrix contains all conditions, including exploratory schedules, and does not authorize them. The checked-in results under `tables/new_runs/` reflect the absence of any newly completed causal-control training runs.
+The snapshot source CSV pins file hashes. Reproducing its current-follow-up rows requires that run's local prediction files. Use `taxonomy.py --historical-only` to analyze only the existing A/B cells. The generated run matrix contains all conditions, including exploratory schedules, and does not authorize them. The current status under `tables/integration_run_status/` reflect the absence of any newly completed causal-control training runs.
 
-For a future authorized run, use a clean detached worktree at the approved commit and provide an authorization record containing that full commit, the run plan SHA-256, the named jobs, one permitted GPU UUID and a timezone-aware start cutoff. Use `execution.py --train RUN --approval PATH` with the frozen HF environment, CUDA index and allocator setting. The checkpoint evaluator `execution.py --evaluate RUN --approval PATH` verifies a completed training receipt and the four external adapter hashes before using the pinned CT10K/H-dev manifests. It reuses the existing evaluation harness and serializes through the existing GPU lock. Final analysis consumes only verified receipts. It reports order-block sign-flip inference with Holm correction and group-level checkpoint trajectories. It does not treat test items or checkpoints as additional training replicates.
+After the existing E1/E2 queue, same-GPU A/B reevaluation and final analysis have completed, use a clean detached worktree at the approved commit and provide an authorization record containing that full commit, the run plan SHA-256, the named jobs, one permitted GPU UUID and a timezone-aware start cutoff. Use `execution.py --train RUN --approval PATH` with the frozen HF environment, CUDA index and allocator setting. The checkpoint evaluator `execution.py --evaluate RUN --approval PATH` verifies a completed training receipt and the four external adapter hashes before using the pinned CT10K/H-dev manifests. It reuses the existing evaluation harness and serializes through the existing GPU lock. Final analysis consumes only verified receipts. It reports order-block sign-flip inference with Holm correction and group-level checkpoint trajectories. Secondary intervals distinguish run variation from joint run-and-template variation. Original E1/E2 intermediate adapters are external and inventoried. Supplemental scoring of those checkpoints has its own authorization boundary. [Amendment](PREREGISTRATION_AMENDMENT.md).

@@ -6,10 +6,10 @@ import csv
 from common import *
 
 
-def write_csv(name, rows):
+def write_csv(name, rows, directory=HERE / "tables"):
     if not rows:
         raise ValueError(f"No rows for {name}")
-    p = HERE / "tables" / (name + ".csv")
+    p = directory / (name + ".csv")
     p.parent.mkdir(exist_ok=True)
     fields = list(dict.fromkeys(k for row in rows for k in row))
     with p.open("w", newline="", encoding="utf-8") as f:

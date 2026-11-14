@@ -111,6 +111,17 @@ def plan_locked():
     return plan
 
 
+def ensure_original_complete():
+    followup = MAIN_RESULTS.parent
+    pending = (
+        followup/"gpu/execution/phase2_done.json",
+        followup/"gpu/execution/matched_baselines/done.json",
+        followup/"tables/device_matched/followup_analysis.json",
+    )
+    if any(not path.is_file() for path in pending):
+        raise RuntimeError("The authorized E1/E2 queue, device-matched A/B and final analysis take priority")
+
+
 def execute_train(job, mode, approval_path):
     if not mode and approval_path is None:
         raise ValueError("New task-specific GPU authorization is required")
@@ -129,6 +140,7 @@ def execute_train(job, mode, approval_path):
     if tuple(save_points(STEPS))!=CHECKPOINT_STEPS:
         raise ValueError("Checkpoint callback does not match the protocol")
     if not mode:
+        ensure_original_complete()
         commit=command(["git","rev-parse","HEAD"])
         if ROOT==Path("/home/hwkim/assistant_univ") or shell(["git","symbolic-ref","-q","HEAD"]).returncode!=1 or command(["git","status","--porcelain"]):
             raise RuntimeError("Train from a clean detached worktree at the approved commit")
@@ -216,6 +228,7 @@ def evaluate_checkpoints(job, approval_path):
     from launch import DEFAULT_GPU, boundary, command, evaluate, shell
     if approval_path is None:
         raise ValueError("New task-specific GPU authorization is required")
+    ensure_original_complete()
     plan=plan_locked()
     commit=command(["git","rev-parse","HEAD"])
     approval=load(approval_path)

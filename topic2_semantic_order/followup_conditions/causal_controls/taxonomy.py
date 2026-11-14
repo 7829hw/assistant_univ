@@ -2,13 +2,19 @@
 import argparse
 from collections import Counter, defaultdict
 import csv
+from pathlib import Path
 
 from schedules import HERE
 from common import ROOT, load, local, S
 from regression import A
+from attribution import attribution_flags
 
 ERRORS = ("tool_selection", "grounding", "argument", "aggregation", "refusal", "silent_wrong",
-          "truncation", "execution_failure", "unclassified_error")
+          "truncation", "execution_failure", "unclassified_error",
+          "missing_get_place_scope", "zero_place_lookups", "wrong_or_partial_place_lookup",
+          "model_plan_location_omission", "place_lost_during_grounding", "place_plan_present_lookup_missing",
+          "place_origin_ambiguous", "evaluator_or_transport_exception", "deterministic_stage_failure",
+          "execution_stage_failure", "answer_stage_failure", "planner_stage_failure")
 REFUSAL = {"refused_unsupported", "refused_clarification", "wrong_refusal_reason",
            "wrong_refusal_kind", "answered_instead_of_refusal"}
 AGGREGATION_KEYS = {"aggregation", "rollup", "bucket"}
@@ -60,24 +66,39 @@ def recorded_cells(historical_only=False):
                         for p in paths)
     if historical_only:
         return
-    f=HERE.parent/"gpu/execution/eval_provenance.jsonl"
-    if not f.exists():
+    gpu = HERE.parent/"gpu"
+    execution = gpu/"execution"
+    original_jobs = [j for phase in (1,2) for j in load(gpu/f"jobs_phase{phase}.json")["jobs"]]
+    yield from receipt_cells("followup", original_jobs, execution/"eval_provenance.jsonl", "order_seed")
+
+    matched = execution/"matched_baselines"
+    manifest = gpu/"device_matched_baselines.json"
+    if (matched/"done.json").is_file():
+        if load(matched/"done.json")["manifest_sha256"] != S.sha_file(manifest):
+            raise ValueError("Device-matched baseline execution manifest mismatch")
+        yield from receipt_cells("matched_baseline_new_cells", load(manifest)["jobs"],
+                                 matched/"eval_provenance.jsonl", "seed")
+
+
+def receipt_cells(study, jobs, receipt_path, seed_key):
+    if not receipt_path.is_file():
         return
-    labels={f"{c['label']}_s{c['k']}":(j["arm"],str(j["order_seed"]),c["dataset"])
-            for phase in (1,2) for j in load(HERE.parent/f"gpu/jobs_phase{phase}.json")["jobs"] for c in j["cells"]}
-    for receipt in S.read_jsonl(f):
-        cell = receipt["cell"]
+    labels = {f"{c['label']}_s{c['k']}": (j["arm"], str(j[seed_key]), c["dataset"])
+              for j in jobs for c in j["cells"] if not c.get("reuse")}
+    receipts = {r["cell"]: r for r in S.read_jsonl(receipt_path)}
+    for cell, receipt in receipts.items():
         source = HERE.parent/"cells"/f"{cell}.json"
-        if S.sha_file(source)!=receipt["sha256"]:
+        if S.sha_file(source) != receipt["sha256"]:
             raise ValueError(f"Stored evaluation hash mismatch: {cell}")
-        arm,seed,dataset=labels[cell]
-        yield "followup",arm,seed,dataset,local(source)
+        arm, seed, dataset = labels[cell]
+        yield study, arm, seed, dataset, local(source)
 
 
 def summarize_cells(cells):
     counts=defaultdict(Counter)
     provenance=[]
     maps={}
+    gold_items={}
     seen=set()
     for study,arm,seed,dataset,path in cells:
         source=ROOT/path
@@ -95,12 +116,13 @@ def summarize_cells(cells):
         if gold_path not in allowed:
             raise ValueError(f"Evaluation source outside the development allowlist: {gold_path}")
         if gold_path not in maps:
-            maps[gold_path]={i:(A.A13.tsig(r.get("gold")),*A.esig(r.get("gold"))) for i,r in A.load_gold(gold_path).items()}
+            gold_items[gold_path]=A.load_gold(gold_path)
+            maps[gold_path]={i:(A.A13.tsig(r.get("gold")),*A.esig(r.get("gold"))) for i,r in gold_items[gold_path].items()}
         tmap=maps[gold_path]
         provenance.append(dict(study=study,arm=arm,order_seed=seed,dataset=dataset,source=path,
                                sha256=S.sha_file(source),n=len(ids)))
         for r in doc["rows"]:
-            flags=classify(r)
+            flags=classify(r)|attribution_flags(r,gold_items[gold_path][r["id"]])
             key=tuple(sorted(flags))
             typ,coarse,fine=tmap[r["id"]]
             for group in ("ALL",f"type:{typ}",f"coarse:{coarse}",f"fine:{fine}"):
@@ -124,8 +146,11 @@ def summarize_cells(cells):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--historical-only",action="store_true")
+    parser.add_argument("--out-dir",type=Path,required=True,help="Write to a separate snapshot directory")
     parser.add_argument("--snapshot-from",type=str,help="Reuse the exact paths and hashes in a prior taxonomy sources CSV")
     args=parser.parse_args()
+    if args.out_dir.exists():
+        parser.error("--out-dir must be a fresh directory")
     cells=list(recorded_cells(args.historical_only)) if not args.snapshot_from else []
     if args.snapshot_from:
         allowed={row[-1] for row in recorded_cells(args.historical_only)}
@@ -137,7 +162,7 @@ def main():
     rows,overlaps,provenance=summarize_cells(cells)
     suffix="_historical" if args.historical_only else "_snapshot"
     for stem,data in (("taxonomy",rows),("taxonomy_overlap",overlaps),("taxonomy_sources",provenance)):
-        write_csv(HERE/"tables"/f"{stem}{suffix}.csv",data)
+        write_csv(args.out_dir/f"{stem}{suffix}.csv",data)
     print(f"Classified {sum(r['n'] for r in provenance)} scored rows from {len(provenance)} cells")
 
 

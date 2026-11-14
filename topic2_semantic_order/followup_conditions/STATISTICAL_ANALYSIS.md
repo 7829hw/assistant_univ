@@ -22,3 +22,8 @@
 ### 평가 장치가 다른 경우
 
 5문항 probe에서 GPU 간 응답 바이트가 달랐다. 같은 seed의 신규 조건을 한 GPU에 고정했고, 기존 A/B는 그 GPU에서 평가한 셀을 재사용한다. 일치하지 않는 셀은 원래 A/B adapter를 사용해 다시 평가한다. 같은 GPU를 사용한 A/B와 신규 결과에 동결된 통계 절차를 적용하고, 원래 A/B를 사용한 분석을 민감도 결과로 보존한다. Base collapse threshold, seed, endpoint 및 bootstrap 방식은 사전등록과 같다. Probe는 별도 serving session을 사용했으므로 하드웨어 차이와 serving 비결정성을 분리하지 못한다.
+
+
+### E5–E7 추가 분석
+
+8개 order seed, 각 2개 training seed를 쌍으로 보존한다. 등록된 E5–E7 검정과 별도로 run-only와 run-plus-template percentile CI를 출력한다. E5의 현재 factorial 순서는 고정 exposure gate를 통과하지 못했다. [사전등록 수정 기록](causal_controls/PREREGISTRATION_AMENDMENT.md) · [실제 run 상태](causal_controls/tables/integration_run_status/).

@@ -9,3 +9,8 @@
 | Q5. 순서 효과와 재학습 변동을 구분할 수 있는가? | INCONCLUSIVE | 같은 순서에서 run 차이의 존재는 SUPPORTED. 세 seed H-dev 반복 평균의 전체·T1 대비 CI에 0이 포함된다. seed, train-run, serving variability를 모집단 수준에서 식별하기에는 부족하다. |
 
 확인된 범위: 정해진 V4 recipe에서 의미 그룹의 **레코드 노출 균형만으로 관찰된 기능 회귀를 방지하기에 충분하지 않았다**. 특히 coarse record exposure가 크게 균일해진 조건에서 감독 토큰 노출은 거의 균일해지지 않았고, T1 정확도가 매우 낮은 run이 남았다. 이 둘 사이의 매개 관계는 검증되지 않았다. 기존 A와 B는 within-question 순서도 다르고 시간 간격·전환·LR 노출이 함께 바뀌므로, 그 중 한 변수를 원인으로 식별할 수 없다.
+
+
+### 추가 통제의 범위
+
+E5에서는 모든 factorial edge의 비교 가능성을 확보하지 못했다. E6·E7은 CPU 조작 조건을 충족했다. 기능 성공률의 인과 비교는 추가 승인 후 수행한다. [통합 결과 및 한계](INTEGRATED_STATUS.md).

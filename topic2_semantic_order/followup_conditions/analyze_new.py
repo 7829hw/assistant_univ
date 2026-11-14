@@ -1,6 +1,7 @@
 """Frozen contrasts for complete follow-up cells. Missing results stay missing."""
 import argparse
 import os
+from tempfile import TemporaryDirectory
 
 # Small matrix products run faster with one BLAS thread.
 os.environ["OPENBLAS_NUM_THREADS"]="1"
@@ -205,6 +206,13 @@ def e1(jobs,validated,baselines,baseline_receipts):
     return comparisons,by_run
 
 
+def write_analysis(directory, tables, runs, groups, e1_runs, summary):
+    for name, rows in (("registered_contrasts", tables), ("followup_evaluation_per_run", runs),
+                       ("followup_group_results", groups), ("followup_e1_per_run", e1_runs)):
+        write_csv(name, rows, directory)
+    dump(directory/"followup_analysis.json", summary)
+
+
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("--reps",type=int,default=A.REPS)
@@ -213,6 +221,9 @@ def main():
     args=p.parse_args()
     if not args.out and args.reps!=A.REPS:
         p.error("Reduced replicate count requires a separate smoke output")
+    target = HERE/"tables"/"device_matched" if args.device_matched and not args.out else None
+    if target and target.exists():
+        p.error("Device-matched results directory already exists. Use --out for a separate analysis.")
     jobs={(j["arm"],j["order_seed"]):j for phase in (1,2) for j in load(HERE/f"gpu/jobs_phase{phase}.json")["jobs"]}
     receipt=HERE/"gpu/execution/eval_provenance.jsonl"
     validated={r["cell"]:r for r in S.read_jsonl(receipt)} if receipt.is_file() else {}
@@ -233,10 +244,14 @@ def main():
     if args.out:
         dump(args.out,dict(status=status,contrasts=tables,runs=runs,e1=er,reps=args.reps,smoke=args.reps!=A.REPS,device_matched=args.device_matched))
     else:
-        dump(HERE/"tables/followup_analysis.json",dict(status=status,e1_vs_A=er,reps=args.reps,device_matched=args.device_matched))
-        for n,d in (("registered_contrasts",tables),("followup_evaluation_per_run",runs),
-                    ("followup_group_results",groups),("followup_e1_per_run",erun)):
-            write_csv(n,d)
+        summary = dict(status=status,e1_vs_A=er,reps=args.reps,device_matched=args.device_matched)
+        if target:
+            with TemporaryDirectory(prefix=".device-matched-", dir=target.parent) as work:
+                output = Path(work)/target.name
+                write_analysis(output, tables, runs, groups, erun, summary)
+                output.rename(target)
+        else:
+            write_analysis(HERE/"tables", tables, runs, groups, erun, summary)
     print(status)
 
 
