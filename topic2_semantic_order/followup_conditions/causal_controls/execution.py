@@ -335,7 +335,7 @@ def evaluate_checkpoints(job, approval_path, budget_option=None):
         logdir.mkdir(parents=True, exist_ok=True)
         for checkpoint in checkpoints:
             step=checkpoint["step"]
-            server_provenance = logdir if scope else model_log
+            server_provenance = logdir/"server_full" if scope else model_log
             evaluate(checkpoint,plan,env,logdir,server_provenance,deadline,approval["gpu_uuid"],commit,
                      out,model_log/f"checkpoint-{step}",hashes[str(step)])
 
