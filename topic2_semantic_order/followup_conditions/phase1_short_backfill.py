@@ -34,6 +34,9 @@ def safe_window(jobs, slot):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("slot", type=int, choices=tuple(SELECTION))
+    parser.add_argument("--job", help="A/B job ID on this Phase 1 GPU")
+    parser.add_argument("--cells", nargs="+", help="Short E1 cell suffixes from the approved job")
+    parser.add_argument("--start-minutes",type=int,choices=range(1,33),default=32)
     parser.add_argument("--preview",action="store_true")
     args = parser.parse_args()
     if (ROOT!=LEGACY or command(["git","rev-parse","HEAD"])!=LEGACY_COMMIT or command(["git","status","--porcelain"])):
@@ -43,8 +46,15 @@ def main():
         raise RuntimeError("This lane reservation belongs to workstation4")
     manifest=load(MANIFEST_PATH)
     jobs={phase:load(path)["jobs"] for phase,path in TREATMENT_PATHS.items()}
-    name,suffixes=SELECTION[args.slot]
-    job=next(j for j in manifest["jobs"] if j["id"]==name and j["gpu_uuid"]==WORKSTATION_GPUS[args.slot])
+    if bool(args.job)!=bool(args.cells):
+        parser.error("Specify both --job and --cells")
+    name,suffixes=(args.job,args.cells) if args.job else SELECTION[args.slot]
+    gpu=WORKSTATION_GPUS[args.slot]
+    phase1_seeds={j["order_seed"] for j in jobs[1] if j["id"] in allocations(jobs)[1][gpu]}
+    job=next((j for j in manifest["jobs"] if j["id"]==name and j["gpu_uuid"]==gpu and
+              j["seed"] in phase1_seeds),None)
+    if job is None:
+        raise ValueError("The selected baseline job does not belong to this Phase 1 GPU")
     selected={f"{name}_{suffix}" for suffix in suffixes}
     cells=[c for c in job["cells"] if c["dataset"]=="E1" and
            f"{c['label']}_s{c['k']}" in selected and not c["reuse"]]
@@ -60,7 +70,7 @@ def main():
         if args.preview or not todo:
             return
         cutoff=datetime.fromisoformat(START_BEFORE)
-        deadline=min(cutoff,datetime.now(cutoff.tzinfo)+timedelta(minutes=32))
+        deadline=min(cutoff,datetime.now(cutoff.tzinfo)+timedelta(minutes=args.start_minutes))
         boundary(deadline)
         sys.path.insert(0,str(INV/"pilot_007/results"))
         env={**os.environ,"HF_HOME":str(WORK/"hf-cache"),"HF_HUB_OFFLINE":"1","TRANSFORMERS_OFFLINE":"1",
