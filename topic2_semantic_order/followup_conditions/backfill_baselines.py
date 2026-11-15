@@ -48,7 +48,7 @@ def pending(jobs, receipts, out):
 
 def select(stage, manifest, execution):
     lane1, lane2 = WORKSTATION_GPUS[1:]
-    if stage=="idle1":
+    if stage in ("idle1","idle1-e1"):
         phase1=load(HERE/"gpu/jobs_phase1.json")["jobs"]
         completed={e["job"] for e in records(execution/"timeline.jsonl") if e["stage"]=="job_completed"}
         assigned=load(execution/"phase1_assignment.json")["jobs_by_gpu"]
@@ -57,10 +57,12 @@ def select(stage, manifest, execution):
         verified = {r["cell"] for r in records(execution/"eval_provenance.jsonl")}
         pending_ct10k = sum(f"{c['label']}_s{c['k']}" not in verified for j in phase1 for c in j["cells"]
                            if j["order_seed"]==1102 and c["dataset"]=="CT10K")
-        if pending_ct10k < 4:
+        if pending_ct10k < (5 if stage=="idle1-e1" else 4):
             raise RuntimeError("GPU 1 backfill is too close to the Phase 2 handoff")
         job=next(j for j in manifest["jobs"] if j["id"]=="matched_b_o211102" and j["gpu_uuid"]==lane1)
-        return [dict(job,cells=[c for c in job["cells"] if c["label"].endswith("_aux")])]
+        cells=[c for c in job["cells"] if c["dataset"]=="E1" and
+               (stage=="idle1-e1" or c["label"].endswith("_aux"))]
+        return [dict(job,cells=cells)]
     if stage=="idle2":
         if not (execution/"phase1_done.json").is_file():
             raise RuntimeError("GPU 2 still belongs to Phase 1")
@@ -98,7 +100,7 @@ def run_gpu(jobs,manifest,env,logdir,model_log,deadline,out):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("stage",choices=("idle1","idle2","complete"))
+    parser.add_argument("stage",choices=("idle1","idle1-e1","idle2","complete"))
     parser.add_argument("--preview",action="store_true")
     args=parser.parse_args()
     if (ROOT!=LEGACY or socket.gethostname().split(".")[0]!="workstation4" or
@@ -116,7 +118,10 @@ def main():
             raise RuntimeError(f"Evaluation input hash drift: {p}")
     approved=datetime.fromisoformat(START_BEFORE)
     # Bound the first group of cell starts to reserve GPU 1 for Phase 2.
-    deadline=min(approved,datetime.now(approved.tzinfo)+timedelta(minutes=45)) if args.stage=="idle1" else approved
+    idle_minutes = {"idle1":45,"idle1-e1":90}.get(args.stage)
+    deadline = approved
+    if idle_minutes:
+        deadline = min(approved,datetime.now(approved.tzinfo)+timedelta(minutes=idle_minutes))
     boundary(deadline)
     jobs=select(args.stage,manifest,execution)
     receipts={r["cell"]:r for r in records(logdir/"eval_provenance.jsonl")}
@@ -134,7 +139,7 @@ def main():
          "OLLAMA_UUID":DEFAULT_GPU,"ALLOWED_UUIDS":" ".join(WORKSTATION_GPUS),"FOLLOWUP_RUN_COMMIT":LEGACY_COMMIT}
     # Early lanes occupy GPUs already released by the active pinned treatment launcher.
     # Final dispatch uses the legacy global exclusion lock after its treatment barrier.
-    lock_name="run.lock" if args.stage=="complete" else f"baseline-{args.stage}.lock"
+    lock_name="run.lock" if args.stage=="complete" else f"baseline-{args.stage.split('-')[0]}.lock"
     with (model_log/lock_name).open("a") as lock, ThreadPoolExecutor(max_workers=3) as pool:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         futures=[pool.submit(run_gpu,[j for j in jobs if j["gpu_uuid"]==uuid],manifest,env,logdir,model_log,
