@@ -2,6 +2,7 @@
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
+import json
 import fcntl
 import os
 from pathlib import Path
@@ -14,15 +15,13 @@ START_BEFORE = "2026-11-20T07:04:14+09:00"
 RELATIVE = Path("topic2_semantic_order/followup_conditions")
 sys.path.insert(0, str(LEGACY/RELATIVE))
 
-from common import HERE, INV, ROOT, S, WORK, dump, load
-from launch import MAIN, DEFAULT_GPU, WORKSTATION_GPUS, boundary, command, shell
-from match_baselines import run_gpu
+from common import HERE, INV, ROOT, S, WORK, config, dump, load, source
+from launch import MAIN, DEFAULT_GPU, WORKSTATION_GPUS, boundary, command, evaluate
 
 
 def records(path):
     if not path.is_file():
         return []
-    import json
     return [json.loads(raw) for raw in path.read_bytes().splitlines(keepends=True) if raw.endswith(b"\n")]
 
 
@@ -81,6 +80,22 @@ def select(stage, manifest, execution):
     return manifest["jobs"]
 
 
+def adapter(job):
+    model = config(source(job["arm"],job["seed"]))["training"]["output_dir"]
+    checkpoint = Path(model)/"checkpoint-1984"
+    digest = S.sha_file(checkpoint/"adapter_model.safetensors")
+    original = load(ROOT/job["cells"][0]["prior"])["meta"]["vllm"]["server_meta"]
+    if digest!=original["adapter_sha256"]:
+        raise RuntimeError(f"Historical adapter hash mismatch for {job['id']}")
+    return checkpoint,digest
+
+
+def run_gpu(jobs,manifest,env,logdir,model_log,deadline,out):
+    for job in jobs:
+        checkpoint,digest=adapter(job)
+        evaluate(job,manifest,env,logdir,model_log,deadline,job["gpu_uuid"],LEGACY_COMMIT,out,checkpoint,digest)
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("stage",choices=("idle1","idle2","complete"))
@@ -108,6 +123,8 @@ def main():
     jobs=pending(jobs,receipts,out)
     print(args.stage,[(j["id"],len(j["cells"])) for j in jobs],flush=True)
     if args.preview:
+        for job in jobs:
+            adapter(job)
         return
     sys.path.insert(0,str(INV/"pilot_007/results"))
     logdir.mkdir(parents=True,exist_ok=True)
@@ -121,7 +138,7 @@ def main():
     with (model_log/lock_name).open("a") as lock, ThreadPoolExecutor(max_workers=3) as pool:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         futures=[pool.submit(run_gpu,[j for j in jobs if j["gpu_uuid"]==uuid],manifest,env,logdir,model_log,
-                             deadline,LEGACY_COMMIT,out) for uuid in WORKSTATION_GPUS]
+                             deadline,out) for uuid in WORKSTATION_GPUS]
         for future in futures:
             future.result()
         if args.stage=="complete":
