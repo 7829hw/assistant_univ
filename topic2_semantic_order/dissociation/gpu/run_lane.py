@@ -4,7 +4,7 @@
 
 - 작업마다 시작 전에 host nvidia-smi로 그 GPU의 UUID·메모리(<100 MiB)·compute 프로세스(0개)를 확인하고, Ollama 컨테이너가 있고 이 GPU가
   Ollama GPU(48f798cc…)면 /api/ps가 비어야 시작한다. 확인 결과는 MAIN의 dissociation/gpu/gpu_check.jsonl에 남긴다.
-- 작업 종류: "x12"(x12_score.py, HF), "cells"(vLLM 서버를 serve_a11.sh로 띄우고 run_cell6x.py 셀들을 돌린 뒤 서버를 PID로 끈다).
+- 작업 종류: "x12"(x12_score.py, HF), "train"(train_a11.py, cwd = worktree, 끝에 expect 파일 확인), "cells"(vLLM 서버를 serve_a11.sh로 띄우고 run_cell6x.py 셀들을 돌린 뒤 서버를 PID로 끈다).
 - MAIN의 dissociation/gpu/timeline.jsonl에 시작·끝·상태·커밋·GPU를 한 줄씩 쓴다(flock).
 - 이미 끝난 작업(출력의 완료 표시가 있음)은 건너뛴다.
 """
@@ -122,6 +122,11 @@ def main():
                 r = subprocess.run(cmd, env=dict(ENV, CUDA_VISIBLE_DEVICES=str(args.gpu)), stdout=log, stderr=subprocess.STDOUT)
                 if r.returncode != 0:
                     status = f"fail rc={r.returncode}"
+            elif j["kind"] == "train":
+                cmd = [PY, str(WT / "sft_dpo_inventory/ablation_011/train/train_a11.py"), "--config", str(WT / j["config"])]
+                r = subprocess.run(cmd, env=dict(ENV, CUDA_VISIBLE_DEVICES=str(args.gpu)), stdout=log, stderr=subprocess.STDOUT, cwd=str(WT))
+                if r.returncode != 0 or not Path(j["expect"]).exists():
+                    status = f"fail rc={r.returncode} expect={Path(j['expect']).exists()}"
             elif j["kind"] == "cells":
                 pid = start_server(args, j["loras"], gdir)
                 append(gdir / "timeline.jsonl", {"at": now(), "job": j["id"], "lane": args.lane, "event": "server_ready", "pid": pid,
