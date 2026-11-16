@@ -9,8 +9,21 @@ import sys
 
 import numpy as np
 
-tree = {(d["reader"], d["writer"], d["id"]): d for d in map(json.loads, open(sys.argv[1], encoding="utf-8"))}
-seq = {(d["reader"], d["writer"], d["id"]): d for d in map(json.loads, open(sys.argv[2], encoding="utf-8"))}
+
+
+def load(p):
+    """쓰는 중인 파일일 수 있으므로 끝의 덜 쓴 줄은 건너뛴다."""
+    out = {}
+    for line in open(p, encoding="utf-8"):
+        try:
+            d = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        out[(d["reader"], d["writer"], d["id"])] = d
+    return out
+
+
+tree, seq = load(sys.argv[1]), load(sys.argv[2])
 keys = sorted(set(tree) & set(seq))
 dd = np.array([abs(tree[k]["delta"] - seq[k]["delta"]) for k in keys]) if keys else np.array([np.inf])
 big = [k for k in keys if abs(seq[k]["delta"]) >= 0.1]
