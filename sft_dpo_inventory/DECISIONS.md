@@ -1247,3 +1247,11 @@ protected_final_v2 열람·고정, 주 셋 151 측정, Ollama 컨테이너 조�
     - GPU: 결정 114, scheduler16(= scheduler15 사본), UUID 0·1·2, 작업 하나 = GPU 하나, 학습 → H-dev → E1 → CT10K → A0 CT10K 2개 → 반복 쌍, 시작 24시간 뒤 새 작업 없음. 평가 작업은 분석 도구 고정 커밋(`gpu/ready/T2_TOOLS.json`) 뒤에만 시작.
 - 실행 기록(2026-11-08, Claude, 새 결정 아님): Gate G1–G10 모두 PASS(`topic2_semantic_order/gates/GATES.json`). G10 첫 실행은 `pgrep -f`가 자기 셸 명령줄에 매치해 오탐 → `ps comm` 검사로 교체.
 - 실행 기록(2026-11-09, Claude, 새 결정 아님): decision 264 A/B 완료. 학습 7개(B 5 + 반복 쌍 2, 실패·재시도 0), 평가 H-dev·E1·CT10K 완료, 자동 잘림 재실행 15작업(셀 65). 사용자 지시("24시간 안에 못 끝내도 계속 해")로 22시간 신규 작업 금지 규칙을 `RT2-15` 하나에 면제하고 데드라인 없는 두 번째 scheduler16로 마쳤다. **결과: 사전 등록 S1–S4 전부 실패, H1 미지지** — CT10K semantic_fine 전체 정답률 88.12→82.19 pp(−5.93 [−13.58, 0.57]), 최저 그룹 −7.09 [−29.05, 9.17], 20pp 붕괴 그룹 10.4→18.6(+8.2 [0.0, 12.8]); 악화는 운행 요금(T1) 그룹에 집중(77.4→47.3). 같은 순서 재학습만으로 H-dev가 1.8(A)·4.25(B) pp 달라져 한 seed의 A/B 차이와 같은 크기(1 seed·1 반복, 기술만). C/D·ablation 미실행, H-final 미사용. 판정이 아니라 진단. 기록 `topic2_semantic_order/{RESULTS,STATISTICAL_ANALYSIS,PAPER_FINDINGS}.md`.
+
+## 2026-11-16 — Topic 2 후속 GPU 실험 중단
+
+265. (2026-11-16, 사용자) 제출 기한이 1주 이내여서 workstation4 GPU 3장을 다른 세션에 인계한다. 중단 결정은 관측 정확도와 독립적이다.
+    - B안 S0T0·S1T0 32회는 종료한다. GPU 0·1 대기 트리거와 GPU 2 후속 실행을 차단한다. 진행 중 평가의 허용 마감은 2026-11-16 23:00 KST다.
+    - 마감 시점까지 E1/E2와 같은 장치 A/B에서 끝날 수 있는 작업만 마친다. 이후 GPU 작업은 사용자의 별도 결정을 기다린다.
+    - B안은 1회 완료, 1회 평가 중단, 30회 미시작이다. 원본 평가 출력·영수증·어댑터를 보존하고 중단 출력에는 `ABORTED_`를 표시한다. **등록된 비교 결과 없음(행렬 미완성)**.
+    - 작업별 기록은 [B안 실행 기록](../topic2_semantic_order/followup_conditions/causal_controls/budget/OPTION_B_STATUS.md)과 [종료 영수증](../topic2_semantic_order/followup_conditions/gpu/execution/submission_cutoff_20261116.json)에 보존했다.
