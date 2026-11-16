@@ -1,0 +1,139 @@
+{
+ "note": "X2·중간 체크포인트·B안 x12 작업(트리 계산). 끝나면 같은 GPU에서 X4 레인(jobs_x4.json)이 이어진다.",
+ "jobs": [
+  {
+   "id": "TREE-validate",
+   "lane": "g2",
+   "kind": "x12tree",
+   "done_marker": "topic2_semantic_order/dissociation/gpu/done/TREE-validate.json",
+   "args": [
+    "--readers",
+    "{MAIN}/topic2_semantic_order/dissociation/x12/readers_final18.json",
+    "--writers",
+    "{MAIN}/training/generated/topic2_dissociation/writer_prefixes.jsonl",
+    "--prompt-ids",
+    "{MAIN}/training/generated/topic2_dissociation/prompt_ids_147.jsonl",
+    "--pairs",
+    "self",
+    "--out",
+    "{MAIN}/training/generated/topic2_dissociation/x12/tree_validate.jsonl",
+    "--limit",
+    "12"
+   ]
+  },
+  {
+   "id": "TREE-check-g2",
+   "lane": "g2",
+   "kind": "check",
+   "script": "tree_check.py",
+   "done_marker": "topic2_semantic_order/dissociation/gpu/done/TREE-check-g2.json",
+   "args": [
+    "{MAIN}/training/generated/topic2_dissociation/x12/tree_validate.jsonl",
+    "{MAIN}/training/generated/topic2_dissociation/x12/x1_self_final18.jsonl",
+    "{MAIN}/topic2_semantic_order/dissociation/x12/tree_check_g2.json"
+   ]
+  },
+  {
+   "id": "X2-final18-p1",
+   "lane": "g2",
+   "kind": "x12tree",
+   "done_marker": "topic2_semantic_order/dissociation/gpu/done/X2-final18-p1.json",
+   "args": [
+    "--readers",
+    "{MAIN}/topic2_semantic_order/dissociation/x12/readers_final18_p1.json",
+    "--writers",
+    "{MAIN}/training/generated/topic2_dissociation/writer_prefixes.jsonl",
+    "--prompt-ids",
+    "{MAIN}/training/generated/topic2_dissociation/prompt_ids_147.jsonl",
+    "--pairs",
+    "all",
+    "--out",
+    "{MAIN}/training/generated/topic2_dissociation/x12/x2_final18_p1.jsonl"
+   ]
+  },
+  {
+   "id": "X2-base",
+   "lane": "g2",
+   "kind": "x12tree",
+   "done_marker": "topic2_semantic_order/dissociation/gpu/done/X2-base.json",
+   "args": [
+    "--readers",
+    "{MAIN}/topic2_semantic_order/dissociation/x12/readers_base.json",
+    "--writers",
+    "{MAIN}/training/generated/topic2_dissociation/writer_prefixes.jsonl",
+    "--prompt-ids",
+    "{MAIN}/training/generated/topic2_dissociation/prompt_ids_147.jsonl",
+    "--pairs",
+    "all",
+    "--out",
+    "{MAIN}/training/generated/topic2_dissociation/x12/x2_base.jsonl"
+   ]
+  },
+  {
+   "id": "X2-Bopt",
+   "lane": "g2",
+   "kind": "x12tree",
+   "done_marker": "topic2_semantic_order/dissociation/gpu/done/X2-Bopt.json",
+   "args": [
+    "--readers",
+    "{MAIN}/topic2_semantic_order/dissociation/x12/readers_B.json",
+    "--writers",
+    "{MAIN}/training/generated/topic2_dissociation/writer_prefixes.jsonl",
+    "--prompt-ids",
+    "{MAIN}/training/generated/topic2_dissociation/prompt_ids_147.jsonl",
+    "--pairs",
+    "all",
+    "--out",
+    "{MAIN}/training/generated/topic2_dissociation/x12/x2_bopt.jsonl"
+   ]
+  },
+  {
+   "id": "TREE-check-g0",
+   "lane": "g0",
+   "kind": "check",
+   "script": "tree_check.py",
+   "done_marker": "topic2_semantic_order/dissociation/gpu/done/TREE-check-g0.json",
+   "args": [
+    "{MAIN}/training/generated/topic2_dissociation/x12/tree_validate.jsonl",
+    "{MAIN}/training/generated/topic2_dissociation/x12/x1_self_final18.jsonl",
+    "{MAIN}/topic2_semantic_order/dissociation/x12/tree_check_g0.json"
+   ]
+  },
+  {
+   "id": "X2-final18-p2",
+   "lane": "g0",
+   "kind": "x12tree",
+   "done_marker": "topic2_semantic_order/dissociation/gpu/done/X2-final18-p2.json",
+   "args": [
+    "--readers",
+    "{MAIN}/topic2_semantic_order/dissociation/x12/readers_final18_p2.json",
+    "--writers",
+    "{MAIN}/training/generated/topic2_dissociation/writer_prefixes.jsonl",
+    "--prompt-ids",
+    "{MAIN}/training/generated/topic2_dissociation/prompt_ids_147.jsonl",
+    "--pairs",
+    "all",
+    "--out",
+    "{MAIN}/training/generated/topic2_dissociation/x12/x2_final18_p2.jsonl"
+   ]
+  },
+  {
+   "id": "X1-mid54",
+   "lane": "g0",
+   "kind": "x12tree",
+   "done_marker": "topic2_semantic_order/dissociation/gpu/done/X1-mid54.json",
+   "args": [
+    "--readers",
+    "{MAIN}/topic2_semantic_order/dissociation/x12/readers_mid54.json",
+    "--writers",
+    "{MAIN}/training/generated/topic2_dissociation/writer_prefixes.jsonl",
+    "--prompt-ids",
+    "{MAIN}/training/generated/topic2_dissociation/prompt_ids_147.jsonl",
+    "--pairs",
+    "same_run",
+    "--out",
+    "{MAIN}/training/generated/topic2_dissociation/x12/x1_mid54.jsonl"
+   ]
+  }
+ ]
+}
