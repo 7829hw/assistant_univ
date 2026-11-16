@@ -10,3 +10,7 @@
 - B안의 launcher와 분석은 `results_B/execution/`와 `results_B/analysis/`에 기록된다. 종료 근거는 `results_B/execution/done.json` 및 `results_B/analysis/contrast.json`이다.
 
 시작 이후 세 GPU 배정 기준 약 84시간이 기본 전망이다. 기존 평가의 관측 재시도 비율과 시도별 중앙값을 적용하면 약 120시간이다. 두 수치 모두 시작 전 대기 시간을 제외한다. [비용 산정](../MINIMAL_EXECUTION_PLAN.md).
+
+### GPU 2 조기 시작 승인
+
+2026-11-16 KST에 사용자가 GPU 2에 기존 배정된 B안 8개만 선행하도록 승인했다. GPU 2의 E1/E2 배정이 끝났고 기존 A/B 34셀과 해당 장치 해시가 검증됐다. 이번 허용 범위는 순서 시드 2026113·51001의 두 실험 조건과 두 학습 시드, 최종 CT10K 40셀이다. B안의 고정 설정과 GPU UUID 및 원래 실행 커밋 `decbc87a`를 사용한다. GPU 0·1은 기존 분석 완료 후 정규 실행한다. 새 워크플로는 GPU 2 실행 잠금과 검증된 결과를 정규 실행과 공유한다.
