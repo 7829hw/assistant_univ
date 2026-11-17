@@ -1255,3 +1255,12 @@ protected_final_v2 열람·고정, 주 셋 151 측정, Ollama 컨테이너 조�
     - 마감 시점까지 E1/E2와 같은 장치 A/B에서 끝날 수 있는 작업만 마친다. 이후 GPU 작업은 사용자의 별도 결정을 기다린다.
     - B안은 1회 완료, 1회 평가 중단, 30회 미시작이다. 원본 평가 출력·영수증·어댑터를 보존하고 중단 출력에는 `ABORTED_`를 표시한다. **등록된 비교 결과 없음(행렬 미완성)**.
     - 작업별 기록은 [B안 실행 기록](../topic2_semantic_order/followup_conditions/causal_controls/budget/OPTION_B_STATUS.md)과 [종료 영수증](../topic2_semantic_order/followup_conditions/gpu/execution/submission_cutoff_20261116.json)에 보존했다.
+
+## 2026-11-18 — topic2 dissociation X4 중단, pilot_010 판정 단계
+
+266. (2026-11-18, 사용자) 제출 기한 때문에 X4를 중단하고 workstation4 GPU 3장을 pilot_010 판정 단계에 쓴다. 중단은 관측 결과와 무관하다.
+    - X4 학습·평가 큐(T-X4*, H-X4*), 스케줄러(`run_lane2.py` 레인), vLLM 서버를 멈춘다. 진행 중 셀이 끝나기를 기다리지 않는다. X4 분석은 별도 지시 때 한다.
+    - 2026-11-18 01:00 KST 확인 때 X4 프로세스는 이미 모두 종료돼 있었다(기록된 PID 전부 없음, 이 세션은 신호를 보내지 않음, 종료 원인 미확인). GPU 3장 메모리 해제 확인.
+    - X4는 등록 9쌍 중 7쌍 완료(1–6, 8), 중단 학습 2개(쌍 7 `T-X4C-o2026131-s43`, 쌍 9 `T-X4T-o2026131-s2026119`), 미시작 5개. **등록된 9쌍 비교 결과 없음(미완성)**.
+    - 끝난 셀·영수증·어댑터·체크포인트는 보존하고 중단 출력에는 `ABORTED_`를 표시한다(결정 255).
+    - 작업별 기록은 [X4 변경 기록](../topic2_semantic_order/dissociation/AMENDMENTS.md) 2절과 [종료 영수증](../topic2_semantic_order/dissociation/x4/submission_cutoff_20261118.json)에 있다.
