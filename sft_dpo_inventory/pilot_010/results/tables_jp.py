@@ -2,7 +2,7 @@
 """판정 뒤 추가(사후, 결정 268) 보고 표 A–E를 수치 원본 JSON에서 그대로 만든다(손으로 옮기지 않음).
 
     python3 sft_dpo_inventory/pilot_010/results/tables_jp.py
-      입력: results/jp_posthoc.json(analyze_jp.py), results/selection_jp_dev.json(select_s10.py)
+      입력: results/jp_posthoc.json(analyze_jp.py), results/selection_jp_dev.json(select_s10.py), 있으면 results/jp_posthoc_b2f_base.json(표 B에 B2 F − base 추가)
       출력: results/jp_posthoc_tables.md, results/jp_posthoc_efficiency.json(표 E)
 
 표 E는 jp_posthoc.json의 셀 정보(analyze_j.cell_info: 문항당 호출·wall p50·p95·잘림·서버 오류)를 arm별로 모은다. 점수·문항 내용은 읽지 않는다.
@@ -16,6 +16,7 @@ HERE = Path(__file__).resolve().parent
 ARMS = ["base", "B2F", "P9", "V8", "V4"]
 NAME = {"base": "base", "B2F": "B2 F", "P9": "P9", "V8": "V8", "V4": "V4"}
 TAG = "판정 뒤 추가(사후)"
+ADDED = set()  # 측정 뒤 더한 비교(표 B에 † 표시)
 
 
 def cell(e):
@@ -50,7 +51,10 @@ def table_b(d):
     out = [f"**표 B — 차이(%p, {TAG})**. 칸: 차 [95% CI] (x seed 수·y seed 수). U1 bootstrap 10,000, 통계량마다 `default_rng(20261109)`.", "",
            "| 비교 | " + " | ".join(k[1] for k in keys) + " |", "|---|" + "---|" * len(keys)]
     for pr in cm:
-        out.append(f"| {pr.replace('B2F', 'B2 F')} | " + " | ".join(dcell(cm[pr][k]) for k, _ in keys) + " |")
+        mark = " †" if pr in ADDED else ""
+        out.append(f"| {pr.replace('B2F', 'B2 F')}{mark} | " + " | ".join(dcell(cm[pr][k]) for k, _ in keys) + " |")
+    if ADDED:
+        out += ["", "† 측정·보고 뒤 사용자 지시(2026-11-18)로 같은 방식으로 더한 비교(`analyze_jp_b2f_base.py` → `jp_posthoc_b2f_base.json`; 기존 비교·arm 값·분해는 다시 실행해도 모두 같음)."]
     return out
 
 
@@ -153,6 +157,12 @@ def table_e(eff):
 def main():
     d = json.loads((HERE / "jp_posthoc.json").read_text(encoding="utf-8"))
     sel = json.loads((HERE / "selection_jp_dev.json").read_text(encoding="utf-8"))
+    extra = HERE / "jp_posthoc_b2f_base.json"
+    if extra.exists():
+        e = json.loads(extra.read_text(encoding="utf-8"))
+        assert all(e["consistency_with_jp_posthoc"].values())
+        d["comparisons"].update(e["comparison"])
+        ADDED.update(e["comparison"])
     eff = efficiency(d)
     (HERE / "jp_posthoc_efficiency.json").write_text(json.dumps({"label": TAG, "decision": 268, "source": "results/jp_posthoc.json cells", "efficiency": eff},
                                                                 ensure_ascii=False, indent=1) + "\n", encoding="utf-8")

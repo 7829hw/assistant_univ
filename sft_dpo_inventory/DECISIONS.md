@@ -1288,3 +1288,4 @@ protected_final_v2 열람·고정, 주 셋 151 측정, Ollama 컨테이너 조�
     - 보고 `pilot_010/results/J_POSTHOC_RESULTS.md`(표 A–E)와 수치 원본 JSON. 계획과 달라진 점·건너뛴 arm·소요 시간을 모두 적고 결과가 예상과 달라도 그대로 보고한다.
 - 실행 기록(2026-11-18, Claude, 새 결정 아님): 판정 뒤 사후 측정 끝(scheduler18 26작업 ok = 21 + 다시 돌리기 RJP-01–05, 실패·건너뜀 0, 15:02–21:32 KST, 도구 커밋 `19d91001`). 새 GPU `c8f1bae2…`는 장치 일치 확인에서 달라 쓰지 않고 3장으로 했다. 어댑터 13개 sha256 모두 일치, 건너뛴 arm 없음. PF2 32셀·H-final 8셀(다시 돌리기 0)·E-A 60셀(28셀 교체) 모두 유효.
     - 결과·표·달라진 점은 [J_POSTHOC_RESULTS.md](pilot_010/results/J_POSTHOC_RESULTS.md). 모두 판정 뒤 추가(사후)이며 C1–C4 판정과 변형·seed 선택에 쓰지 않는다.
+    - 사용자 지시(2026-11-18, 보고 뒤): 표 B에 B2 F − base 비교를 같은 방식으로 더한다. `analyze_jp.py`는 그대로 두고 `results/analyze_jp_b2f_base.py`가 같은 `analyze()`에 이 한 쌍만 더해 다시 돌렸다(기존 값 모두 같음, 새 측정 없음). 결과 `results/jp_posthoc_b2f_base.json`.
