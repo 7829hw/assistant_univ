@@ -1289,3 +1289,13 @@ protected_final_v2 열람·고정, 주 셋 151 측정, Ollama 컨테이너 조�
 - 실행 기록(2026-11-18, Claude, 새 결정 아님): 판정 뒤 사후 측정 끝(scheduler18 26작업 ok = 21 + 다시 돌리기 RJP-01–05, 실패·건너뜀 0, 15:02–21:32 KST, 도구 커밋 `19d91001`). 새 GPU `c8f1bae2…`는 장치 일치 확인에서 달라 쓰지 않고 3장으로 했다. 어댑터 13개 sha256 모두 일치, 건너뛴 arm 없음. PF2 32셀·H-final 8셀(다시 돌리기 0)·E-A 60셀(28셀 교체) 모두 유효.
     - 결과·표·달라진 점은 [J_POSTHOC_RESULTS.md](pilot_010/results/J_POSTHOC_RESULTS.md). 모두 판정 뒤 추가(사후)이며 C1–C4 판정과 변형·seed 선택에 쓰지 않는다.
     - 사용자 지시(2026-11-18, 보고 뒤): 표 B에 B2 F − base 비교를 같은 방식으로 더한다. `analyze_jp.py`는 그대로 두고 `results/analyze_jp_b2f_base.py`가 같은 `analyze()`에 이 한 쌍만 더해 다시 돌렸다(기존 값 모두 같음, 새 측정 없음). 결과 `results/jp_posthoc_b2f_base.json`.
+
+269. (2026-11-19, 사용자) pilot_010 JQ: (A) seed 앙상블 사후 분석(CPU, 기존 셀만) + (B) RR+NM8(V8) 새 순서 seed 4개 학습·측정(GPU 4장). **모두 판정 뒤 추가(사후)이며 PF2·H-final의 두 번째 사용이다.** C1–C4 판정은 바꾸지 않는다.
+    - 이름: SFT = B2 F, RR = P9, RR+NM4 = V4, RR+NM8 = V8. 규칙·계획은 계산·측정 전에 `pilot_010/PLAN_JQ.md`로 고정·커밋한다. 결과를 본 뒤 규칙을 바꾸지 않고, 나빠도 그대로 보고한다. A와 B는 동시에(B 학습을 먼저 띄우고 A 계산).
+    - GPU 4장 모두 사용. 결정 83 장치 간 바이트 일치 검사는 이번 작업에서 면제한다(이 vLLM 경로는 같은 GPU끼리도 바이트 단위로 같지 않음, JP device_check). UUID·모델·드라이버·다른 프로세스 확인과 결정 114는 그대로.
+    - Ollama는 쓰지 않고 건드리지 않는다. 새 데이터 작성·교사 응답 생성·새 구성·규칙 조정·checkpoint·seed 선택·X4 분석·논문 수정은 하지 않는다.
+    - A: 한 구성의 어댑터 n개가 같은 문항에 낸 최종 결과(거부 M·P·C 또는 채점기가 쓰는 정규형) 다수결. 거부 > n/2면 거부, 아니면 거부하지 않은 모델 결과의 최빈값, 동률은 seed 표기 순서가 앞선 모델. PF2는 표본 j끼리 묶어 j별 앙상블, H-final k=1.
+      구성별 전체 seed 앙상블(SFT 5·RR 5·RR+NM4 5·RR+NM8 3), n=3 조합 10가지의 평균·범위, CT10K·H-dev 재현(V4 6 seed), PF2 거부 재확인 규칙(표본 (1,2)·(3,4)), 문항 bootstrap 10,000 CI, 비용(호출 합·병렬 wall 최댓값 p50·p95).
+    - B: V8 데이터 그대로(sha256 `5f830f36…`), J와 같은 recipe·wrapper·프롬프트·thinking, 모델 seed 43. 순서 seed는 저장소 전체 `git grep -w` 0건인 값으로 PLAN_JQ에 적은 뒤 학습. GPU마다 하나씩 한 바퀴, 실패는 같은 seed로 한 번만.
+      새 어댑터 4개 × PF2(k=4) + H-final(k=1, seed 20261101), J 셀과 같은 프로토콜·규칙. PF2 접근은 access_log.md에 기록하고 내용은 열지 않는다. 분석: 새 4 seed P1–P4(U1), − SFT·− base·− RR·− RR+NM4, 기존 3 seed와 나란히, 7 seed 합, 새 4·7 seed 앙상블.
+    - 보고 `pilot_010/results/JQ_RESULTS.md`와 수치 원본 JSON(표 1–7). A는 끝나는 대로 먼저 보고한다.
