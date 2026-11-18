@@ -1274,3 +1274,7 @@ protected_final_v2 열람·고정, 주 셋 151 측정, Ollama 컨테이너 조�
     - D6 시간 규칙: 마감(2026-11-20 12:00 KST)까지 7시간보다 적게 남으면 바퀴 2를 시작하지 않고 n = 3으로 판정·기록. 측정 우선순위 V4 PF2 → base PF2 → V4 H-final → base H-final → B2 F PF2 → (남으면) B2 F H-final·개발 셋·refusal_dev v2.
     - PF2 고정: 이 지시가 고정 지시다(결정 245·254). 검사 도구 `pilot_010/protected_final_v2/check_pf2_j.py`(기존 대상 + V4 학습 레코드·승인 corpus v6·주 셋 holdout 53·batch014) 결과 ok true, 150행, 문제 0, 제외 행 0 → `pilot_010/protected_final_v2/MANIFEST_PF2_J.json`(sha256 `c7174e71…`) 커밋으로 고정. 기록 `pilot_009/protected_final_v2/access_log.md`.
 - 실행 기록(2026-11-18, Claude, 새 결정 아님): B2 F 어댑터 5개(B2-F-o43·o1016·o7·o11·o2027 checkpoint-1811, `/data/hwkim/sftdpo_work/pilot_007/train_b2`)의 sha256이 `pilot_007/adapters_B2.json`과 모두 같아 (c)를 진행한다. 계획 `pilot_010/PLAN_J.md`·`FREEZE_J.json`.
+- 실행 기록(2026-11-18, Claude, 새 결정 아님): 판정 단계 끝(scheduler17 28작업 ok, 실패·건너뜀 0, 12:41 KST). V4 5 seed 학습(바퀴 1 01:19–04:38, 바퀴 2 04:32–07:54, 재시도 0, n = 5), PF2 48셀·H-final 12셀(다시 돌리기 RJ-01 1개 포함) 측정, `results/analyze_j.py`(측정 전 커밋 `ff8b159d`) 그대로 실행.
+    - 사전 기준: C1 통과(P1 V4 − B2 F +47.3 [34.9, 59.7]), C2 통과(P1 V4 − base +33.25 [19.4, 46.9]), **C3 미달**(P2 답하는 100 V4 − B2 F +6.85 [2.9, 11.65]), **C4 미달**(H-final V4 86.22, 최저 seed 79.33, base 83.85).
+    - 수치·표·계획과 달라진 점 전부는 [J_RESULTS.md](pilot_010/results/J_RESULTS.md). 결과를 본 뒤 바꾼 지표·기준·셋·seed·다시 측정 없음.
+    - 다시 돌리기 RJ-01(`hfinal_v4_o31_s1`, 잘림 1.39% > 1%)은 원 작업의 도구 커밋이 아니라 스케줄러 커밋 `ce9179e0` worktree에서 돌았다(H-final 실행 경로 파일은 두 커밋에서 같음). PF2 P·C 범주 설명은 저장소에서 코드로만 적는다(`results/redact_j.py`).
