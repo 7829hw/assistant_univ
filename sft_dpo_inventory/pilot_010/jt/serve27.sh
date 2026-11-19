@@ -3,6 +3,8 @@
 # 바꾼 것: GPU 두 장(tensor parallel 2, 결정 114 예외 — 이 작업의 27B 서빙에 한함), 모델 = Qwen/Qwen3.8-27B(revision 37561816…) 로컬 사본,
 #   --served-model-name teacher27, --language-model-only(이미지 입력 없음), LoRA 없음. 나머지(BF16, 17,408, flashinfer attention·sampler,
 #   --gpu-memory-utilization 0.85, --generation-config vllm, --seed 0, --max-logprobs 64, 요청 로그, gpu_ok 확인)는 같다.
+#   2026-11-20 03:05 실행 수정(PLAN_JT 7절 8, 측정 전): custom all-reduce가 CUDA graph 캡처 중 'custom_all_reduce.cuh:164 invalid argument'로 기동 실패(FLASHINFER·auto 둘 다)
+#   → --disable-custom-all-reduce(NCCL all-reduce). 다른 인자는 그대로.
 #   bash serve27.sh GPU_A GPU_B PORT        (환경 변수 ATTN=auto면 --attention-backend를 주지 않음: FLASHINFER 기동 실패 때 한 번만, PLAN_JT 7절)
 set -u
 GA=$1; GB=$2; PORT=$3
@@ -16,7 +18,7 @@ mkdir -p "$WORK"
 export PATH="$VPY:$CU/bin:$PATH" CUDA_HOME="$CU"
 export LIBRARY_PATH="/data/hwkim/sftdpo_work/runtime/cuda_link${LIBRARY_PATH:+:$LIBRARY_PATH}"
 ARGS=(serve "$MODEL" --dtype bfloat16 --max-model-len 17408 --tensor-parallel-size 2 --language-model-only
-      --served-model-name teacher27 --max-logprobs 64 --gpu-memory-utilization 0.85 --generation-config vllm --seed 0 --enable-log-requests
+      --served-model-name teacher27 --max-logprobs 64 --gpu-memory-utilization 0.85 --generation-config vllm --seed 0 --enable-log-requests --disable-custom-all-reduce
       --host 127.0.0.1 --port "$PORT")
 KER=fi
 if [ "${ATTN:-fi}" = auto ]; then KER=auto; else ARGS+=(--attention-backend FLASHINFER); fi
@@ -40,7 +42,7 @@ out, g, uuid, pid, model, log, ok, ker, *args = sys.argv[1:]
 text = open(log, errors="replace").read()
 backend = re.findall(r"Using (?:AttentionBackendEnum\.)?(\S+?)(?: attention)? backend", text)
 mem = subprocess.run(["nvidia-smi", "--query-gpu=index,uuid,memory.used,memory.total", "--format=csv,noheader"], capture_output=True, text=True).stdout.strip().splitlines()
-json.dump({"ready": ok == "1", "precision": "bf16", "kernels": ker, "gpu_index": g, "gpu_uuid": uuid, "pid": int(pid), "args": args, "tensor_parallel": 2,
+json.dump({"ready": ok == "1", "precision": "bf16", "kernels": ker, "gpu_index": g, "gpu_uuid": uuid, "pid": int(pid), "args": args, "tensor_parallel": 2, "custom_all_reduce": False,
            "model_dir": model, "model": "Qwen/Qwen3.8-27B", "revision": "37561816e66b5b9153b1b64c10968c18c1e6f4a0",
            "env": {k: os.environ.get(k) for k in ("VLLM_USE_FLASHINFER_SAMPLER", "CUDA_HOME", "CUDA_VISIBLE_DEVICES")},
            "log_attention_backend": sorted(set(backend)),

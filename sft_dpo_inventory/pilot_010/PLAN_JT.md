@@ -66,3 +66,4 @@ Ollama는 쓰지 않고 건드리지 않는다(`gpu_lib7.gpu_ok`의 `docker insp
 5. 27B 서버가 FLASHINFER attention으로 뜨지 않으면 attention backend 자동 선택(`ATTN=auto`, 다른 인자 같음)으로 한 번만 다시 띄우고, 이후 이 작업의 모든 27B 서버를 그 설정으로 둔다(학생 셀과 커널이 다름을 표에 적음). 그것도 실패하면 멈추고 보고한다.
 6. 개발 셋 149 = valid98 98 + aux 51(JP E-A와 같은 두 gold). 선택 셀 마감 2026-11-20 21:00 KST(시작 시각 기준).
 7. PF2 27B는 k=4(학생 어댑터 셀과 같음; J의 base k=8과 다름).
+8. 실행 수정(2026-11-20 03:05 KST, 측정 전·결과 없음): 첫 smoke 기동에서 서버 A가 FLASHINFER와 자동 backend 모두 CUDA graph 캡처 중 custom all-reduce 오류(`custom_all_reduce.cuh:164 'invalid argument'`, RTX 6000 Ada 2장 TP 2)로 뜨지 않았다. 원인이 attention backend가 아니므로 5의 '멈춤' 대신 `--disable-custom-all-reduce`(NCCL all-reduce)를 모든 27B 서버에 더하고 FLASHINFER 설정으로 다시 시작한다(5의 자동 backend 한 번은 그대로 남김). 실패 기록은 `vllm/failed_car/`, `gpu/JT/runs.log`. 학생 셀은 TP 1이라 all-reduce가 없다.
