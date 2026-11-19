@@ -1321,6 +1321,9 @@ protected_final_v2 열람·고정, 주 셋 151 측정, Ollama 컨테이너 조�
 - 실행 기록(2026-11-19, Claude, 새 결정 아님): JG smoke(12:19–12:37 KST, 커밋 `555cacaf`) 결과 **조건 G1 확정**(temperature 0.2·top-p 0.95·top-k 20; PF2 k=4, H-final k=1 seed 20261101).
   G0 잘림 base 3.36%(12/357)·SFT o43 0%(0/302)·RR+NM4 o101 6.23%(20/321) → base·RR+NM4가 3% 초과(2배 기준도 초과). 3% 기준만으로 결정되므로 대체 기준 해석은 영향 없음.
   근거 `pilot_010/results/jg_smoke.json`·PLAN_JG 6절. 정답률·거부율은 판단에 쓰지 않음.
+- 실행 기록(2026-11-20, Claude, 새 결정 아님): JG 본 측정(G1) 끝 — scheduler20 62작업 ok(2026-11-19 12:38 – 11-20 02:56 KST; PF2 23·H-final 23·잘림 다시 돌리기 RJG-01–16), 유효성 115셀 통과, 유출 검사 0.
+  H-final 16셀이 잘림 > 1%로 한 번 다시 돌렸고 16셀 모두 다시 돌린 뒤에도 > 1%(1.15–5.47%) — 규칙대로 그대로 씀. 운영 − sampling은 모든 arm·지표 |차| ≤ 3%p.
+  결과 `pilot_010/results/JG_RESULTS.md`·`jg_results.json`·`jg_tables.md`. 판정(C1–C4)은 바꾸지 않음, 이 수치로 아무것도 고르지 않음.
 
 ## 2026-11-19 — pilot_010 JT: 교사 모델(Qwen3.8-27B) 봉인 셋 참고 측정
 
@@ -1338,3 +1341,6 @@ protected_final_v2 열람·고정, 주 셋 151 측정, Ollama 컨테이너 조�
     - 하지 않는 것: Ollama 사용·조작, 새 학습, 새 교사 응답 수집, 양자화 모델 사용, 학생 환경 vLLM 버전 변경, X4 분석, 논문 수정.
 - 실행 기록(2026-11-19, Claude, 새 결정 아님): 계획 `pilot_010/PLAN_JT.md`·`FREEZE_JT.json`. 학생용 vLLM 0.30.0이 구조(`Qwen3_5ForConditionalGeneration`)·TP 2·`--language-model-only`를 코드상 지원해 별도 환경을 만들지 않았다(`jt/vllm_support.json`).
   27B chat template는 thinking 켬에서 기본 `reasoning_effort` xhigh 문장을 system 앞에 넣는다. 인자를 더 주지 않고 이 기본 렌더링을 쓰기로 측정 전에 고정했다(PLAN_JT 2절·7절, 지시에 없는 해석). 8B 지연은 같은 runtime 기록이 없어 다시 잰다(PLAN_JT 4절).
+- 실행 기록(2026-11-20, Claude, 새 결정 아님): JT 2단계 시작(02:57 KST, worktree `d4c8b196`). 서버 A(GPU 0·1, TP 2)가 FLASHINFER·자동 backend 모두 CUDA graph 캡처 중 custom all-reduce 오류
+  (`custom_all_reduce.cuh:164 'invalid argument'`)로 뜨지 않아, 측정 전(결과 없음) `--disable-custom-all-reduce`(NCCL all-reduce)를 더해 FLASHINFER로 다시 시작(PLAN_JT 7절 8, 커밋 `e37719c`,
+  worktree `wt_e37719c_jt`, 03:05 KST). PLAN_JT 7절 5의 '자동 backend도 실패하면 멈춤'은 attention backend 실패를 위한 규칙이고 원인이 달라 적용하지 않았다(보고에 적음). 03:07 서버 A 준비, smoke 시작.
