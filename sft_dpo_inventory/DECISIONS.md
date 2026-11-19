@@ -1321,3 +1321,20 @@ protected_final_v2 열람·고정, 주 셋 151 측정, Ollama 컨테이너 조�
 - 실행 기록(2026-11-19, Claude, 새 결정 아님): JG smoke(12:19–12:37 KST, 커밋 `555cacaf`) 결과 **조건 G1 확정**(temperature 0.2·top-p 0.95·top-k 20; PF2 k=4, H-final k=1 seed 20261101).
   G0 잘림 base 3.36%(12/357)·SFT o43 0%(0/302)·RR+NM4 o101 6.23%(20/321) → base·RR+NM4가 3% 초과(2배 기준도 초과). 3% 기준만으로 결정되므로 대체 기준 해석은 영향 없음.
   근거 `pilot_010/results/jg_smoke.json`·PLAN_JG 6절. 정답률·거부율은 판단에 쓰지 않음.
+
+## 2026-11-19 — pilot_010 JT: 교사 모델(Qwen3.8-27B) 봉인 셋 참고 측정
+
+271. (2026-11-19, 사용자) pilot_010 JT: 학생과 같은 문항·같은 backend(vLLM)에서 교사 모델의 올바른 거부·과잉 거부·정답률을 재서 논문의 기준점으로 쓴다. **판정이 아니라 참고 측정이며, 이 수치로 구성·seed를 고르지 않는다. PF2·H-final의 추가 사용**이며 문서·표에 그렇게 표시한다.
+    - 모델 표기: "Qwen/Qwen3.8-27B BF16 (vLLM)". 교사 응답 생성과 운영에 쓴 Ollama qwen3.8:27b(Q4_K_M, digest aaee06c3)와 같은 빌드가 아니며 모든 표와 문서에 이 차이를 적는다. Ollama는 쓰지 않고 건드리지 않는다.
+    - 결정 114의 예외(이 작업의 27B 서빙에 한함): 27B BF16(약 56 GB)은 GPU 한 장(49 GB)에 들어가지 않으므로 tensor parallel 2. 서버 A = GPU 0·1, 서버 B = GPU 2·3, 설정이 같고 한 셀의 문항을 둘로 나눠 받는다(규칙은 PLAN_JT). "한 GPU에 작업 둘 금지"와 다른 작업의 결정 114는 그대로. 결정 83 장치 간 바이트 일치 검사는 JQ·JG와 같이 면제, UUID·드라이버·메모리·다른 프로세스 확인은 한다.
+    - 계획·규칙·분석 스크립트는 측정 전에 `pilot_010/PLAN_JT.md`로 고정·커밋한다. 결과가 예상과 달라도 그대로 보고한다.
+    - 1단계(JG가 도는 동안, GPU 없음): PLAN_JT·분석 스크립트 커밋, 모델 내려받기(revision SHA·파일 sha256 기록), vLLM 0.30.0의 구조·TP 지원 확인(지원하지 않으면 27B 전용 별도 환경에 지원하는 가장 낮은 버전, 학생 환경은 바꾸지 않음), H-final 층화 부분집합 1,000문항 id 목록(template_group 비례, rng 고정) 커밋.
+    - 2단계(JG의 마지막 작업 뒤): smoke(서버 A만, H-dev 100 × 1, S) — 두 장 기동, 87048d0c chat template 렌더링, thinking 켬·분리 확인, 잘림·무효 출력·처리량·GPU 메모리 기록. 한도는 학생 셀과 같고 잘림 ≥ 5%면 멈추고 보고, 정답률은 기록만.
+      범위: smoke 처리량으로 H-final 3,000의 예상 시간(서버 2벌) ≤ 5시간이면 전체, 넘으면 부분집합 1,000. 본 측정은 학생 셀과 같은 하네스·채점기·잘림 규칙으로 S(T 0.6·top-p 0.95·top-k 20, thinking 켬) PF2 150 × k=4 → H-final × k=1, 이어서 JG 확정 조건(G1)으로 같은 두 셋·같은 k. 시간이 남으면 S로 refusal_dev v2 120 × 1, 개발 셋 149 × 1. PF2 접근은 access_log.md에 기록하고 내용은 열지 않는다.
+    - 지연·자원(결정 113의 순차 고정 30문항): 27B(서버 A, 동시 1)와 8B(base와 RR+NM 어댑터 하나, GPU 1장, 동시 1)를 같은 vLLM 조건에서. 같은 조건의 기존 8B 기록이 있으면 다시 재지 않는다. 문항당 wall 중앙값·p95, 생성 token(thinking / 최종 JSON), tok/s, 가중치 크기, GPU 수·메모리.
+    - 분석: 27B PF2 올바른 거부(전체·M·P·C·범주별), 과잉 거부(답하는 100·근접 25), 정답률, 결과 분해; H-final 정답률·과잉 거부율·결과 분해·도구 유형별. CI는 문항 bootstrap 10,000. 학생 수치는 같은 문항 기준으로 기존 셀에서 다시 계산(arm = base, SFT, RR, RR+NM4, RR+NM8(7), RR+NM 12 seed; 조건 S·G1 따로).
+      차이 = 학생 arm − 27B(학생 U1, 27B 문항만, 문항 공유 재추출). "교사 대비 회복 비율"은 계산하지 않는다.
+    - 보고 `pilot_010/results/JT_RESULTS.md`와 수치 원본 JSON(표 1–4), 교사 응답 수집 방식 한 절(새 측정 아님), 계획과 달라진 점·소요 시간.
+    - 하지 않는 것: Ollama 사용·조작, 새 학습, 새 교사 응답 수집, 양자화 모델 사용, 학생 환경 vLLM 버전 변경, X4 분석, 논문 수정.
+- 실행 기록(2026-11-19, Claude, 새 결정 아님): 계획 `pilot_010/PLAN_JT.md`·`FREEZE_JT.json`. 학생용 vLLM 0.30.0이 구조(`Qwen3_5ForConditionalGeneration`)·TP 2·`--language-model-only`를 코드상 지원해 별도 환경을 만들지 않았다(`jt/vllm_support.json`).
+  27B chat template는 thinking 켬에서 기본 `reasoning_effort` xhigh 문장을 system 앞에 넣는다. 인자를 더 주지 않고 이 기본 렌더링을 쓰기로 측정 전에 고정했다(PLAN_JT 2절·7절, 지시에 없는 해석). 8B 지연은 같은 runtime 기록이 없어 다시 잰다(PLAN_JT 4절).
