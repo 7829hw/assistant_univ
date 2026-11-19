@@ -1,0 +1,65 @@
+{
+ "decision": 270,
+ "label": "판정 뒤 추가(사후), PF2·H-final 세 번째 사용",
+ "plan": "sft_dpo_inventory/pilot_010/PLAN_JG.md",
+ "frozen_at": "2026-11-19T12:18:02+09:00",
+ "files": {
+  "sft_dpo_inventory/pilot_010/PLAN_JG.md": "c3c473066787db25c2100d4ed83c4926f24c13dcc6842b6bfce9ce9574148748",
+  "sft_dpo_inventory/pilot_010/freeze_jg.py": "a903818a703d0fb77fb7148a1641c173b179079a31159214718bed73851b5c9f",
+  "sft_dpo_inventory/pilot_010/gpu/scheduler20.py": "5d2cbee9c6acfc7cd63d0508cff4c2fe30de51182a43d673437401a4e72f5d6a",
+  "sft_dpo_inventory/pilot_010/gpu/make_jobs_jg.py": "255dc33bcf30b193eacda5c4a9d45e7e4204d6f5e0e39ef3243bf4701c3e7bc6",
+  "sft_dpo_inventory/pilot_010/protected_final_v2/run_cell_pf2_g1.py": "78ac40adce2f71f3083954dd2710b648f9f68fd8ac96504ef1878f1f50474be6",
+  "sft_dpo_inventory/pilot_006_prep/gpu_data/run_cell6x_g1.py": "23da84b33d8973d9b682f569a2db4f3516e4b67ec8010b4b91b392106bfea0b2",
+  "sft_dpo_inventory/pilot_010/results/smoke_jg.py": "61c96a17f25de4286b31755d8c5e22d7178b8af1de740a339d0bd1c1d94c76ba",
+  "sft_dpo_inventory/pilot_010/results/analyze_jg.py": "b6e5ceeb0b71264ffabf0db0ea650c0188541fc85d83504f67fb62f470da0df3",
+  "sft_dpo_inventory/pilot_010/results/analyze_jq.py": "32fdc4f9c0dd4958402c407878f1e95cf8e34885da92ef5521371e180b04276f",
+  "sft_dpo_inventory/pilot_010/results/analyze_j.py": "2b32d2415d620516e655dc59bd8682e3c6e03b4aaf2a33e64276aea243ace28a",
+  "sft_dpo_inventory/pilot_010/results/analyze_jp.py": "7cb0ce7a0494db80cea3b83ddcb9b0c0952bd8468d96045fedd92d7e40d406db",
+  "sft_dpo_inventory/pilot_010/results/validity_j.py": "2a2983067dab3172387a96ed8a785849b9292d9a48cc7f784e6a37b74b216135",
+  "sft_dpo_inventory/ablation_012/e2/h_final.yaml": "bbc4265071be36f99630bfcc00fa832950c07a131e2007ba63a0274aa0697ddb",
+  "sft_dpo_inventory/ablation_012/e2/h_dev.yaml": "9c7a00784fb5da69c01037d9536e0f1099377aee3c4a9647b70745717f45d3df",
+  "sft_dpo_inventory/pilot_010/protected_final_v2/run_cell_pf2.py": "a1c7ecb034fccacda1dd1681173a289ec2d5d10839829db375091817c7ae664d",
+  "sft_dpo_inventory/pilot_010/protected_final_v2/vllm_eval_pf2.py": "c65895556172f9acd1f828d534bd45daff42ebf0e00169cc7fc8669589a190a0",
+  "sft_dpo_inventory/pilot_006_prep/gpu_data/run_cell6x.py": "e176b94d1e6878b57af139575c289efe996ee55cd3b736bb7b9783f5f45451b0",
+  "sft_dpo_inventory/ablation_011/gpu/serve_a11.sh": "b3b2d9989119254d9159ddd055ad51feaf476347f27574c213e0c24091c99969",
+  "sft_dpo_inventory/pilot_007/results/completeness_B.py": "2b26a1f2714af8052b0dff4d28b1734315b3ed68d1a42e4b8bdb179492d39e36",
+  "evaluate_vendor100.py": "627298c8211100e57e289daba89e4cce9a44acd2b85f64525f82d9fb14a80c35",
+  "sft_dpo_inventory/pilot_005/vllm_eval_thinking5.py": "7f2c01b648523f842961c9928cfc0595ddec60704ec602d5ea16f272b230751c",
+  "sft_dpo_inventory/serving_vllm/vllm_thinking.py": "b2d7ff3e0cee5c7db7286dae8d1fe648b060ab82d43656350ce5b838bff2e5d6"
+ },
+ "exec_files_same_as_tools_commit_19d91001": {
+  "sft_dpo_inventory/pilot_010/protected_final_v2/run_cell_pf2.py": true,
+  "sft_dpo_inventory/pilot_010/protected_final_v2/vllm_eval_pf2.py": true,
+  "sft_dpo_inventory/pilot_006_prep/gpu_data/run_cell6x.py": true,
+  "sft_dpo_inventory/ablation_011/gpu/serve_a11.sh": true,
+  "sft_dpo_inventory/pilot_007/results/completeness_B.py": true,
+  "evaluate_vendor100.py": true,
+  "sft_dpo_inventory/pilot_005/vllm_eval_thinking5.py": true,
+  "sft_dpo_inventory/serving_vllm/vllm_thinking.py": true
+ },
+ "conditions": {
+  "G0": "temperature 0 (greedy, --greedy; PF2 k=1, H-final k=1)",
+  "G1": "temperature 0.2, top-p 0.95, top-k 20, min-p 0, repetition penalty 1 (PF2 k=4 rounds 20261101-04, H-final k=1 round 20261101)"
+ },
+ "smoke": {
+  "set": "sft_dpo_inventory/ablation_012/e2/h_dev.yaml first 300",
+  "cells": [
+   "base",
+   "B2F o43",
+   "V4 o101"
+  ],
+  "rule": "any cell: truncated-call pct > 3 or > 2 x same-model sampling reference -> G1, else G0; accuracy/refusal not used"
+ },
+ "pf2": {
+  "gold_sha256": "63189bbed616fe60b0a75caf9044fdfa2856b0eecedaa55cbd508190b031811c",
+  "meta_sha256": "e43dc11fd641758857a6a5695a2af5f96dc93de3efe5f2601e1fd78a9680bf28"
+ },
+ "gpus": [
+  "GPU-2445b100-70d8-e384-3a24-0249eeefc64d",
+  "GPU-a5ce83d0-6ca2-5e3a-276c-4c965ea9c555",
+  "GPU-c8f1bae2-de7a-a1c0-a054-8b6ebe5c2c8e",
+  "GPU-48f798cc-9437-50ac-d604-448bbad7b311"
+ ],
+ "device_byte_check": "exempt (decision 270, as decision 269)",
+ "deadline": "2026-11-20T21:00:00+09:00"
+}

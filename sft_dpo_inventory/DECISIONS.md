@@ -1300,3 +1300,21 @@ protected_final_v2 열람·고정, 주 셋 151 측정, Ollama 컨테이너 조�
       새 어댑터 4개 × PF2(k=4) + H-final(k=1, seed 20261101), J 셀과 같은 프로토콜·규칙. PF2 접근은 access_log.md에 기록하고 내용은 열지 않는다. 분석: 새 4 seed P1–P4(U1), − SFT·− base·− RR·− RR+NM4, 기존 3 seed와 나란히, 7 seed 합, 새 4·7 seed 앙상블.
     - 보고 `pilot_010/results/JQ_RESULTS.md`와 수치 원본 JSON(표 1–7). A는 끝나는 대로 먼저 보고한다.
 - 실행 기록(2026-11-19, Claude, 새 결정 아님): JQ 끝. A는 01:22–01:25 KST 계산(`analyze_jq.py --part A`, 커밋 `9481b711`), 결과 커밋 `e6e0347f`. B는 scheduler19 13작업 ok(학습 4 + PF2 4 + H-final 4 + 다시 돌리기 RJQ-01 1, 실패·건너뜀·학습 재시도 0, 01:19–07:17 KST, 작업 커밋 `b92e07ad`). 순서 seed 3110380·1821915·5415284·3616422(7자리 범위로 바꾼 것은 학습 전 PLAN_JQ에 적음). 어댑터 sha256 `pilot_010/train/logs_jq/adapters_jq.json`. H-final o5415284는 잘림 1.4%로 규칙대로 한 번 다시 돌려 교체. PF2 16셀·H-final 4셀 모두 유효. 결정 83 장치 일치 검사는 지시대로 면제. 결과 `pilot_010/results/JQ_RESULTS.md`·`jq_ensemble.json`·`jq_v8new.json`; 결과를 본 뒤 바꾼 규칙 없음.
+
+## 2026-11-19 — pilot_010 JG: 운영 조건(결정적 디코딩) 봉인 셋 측정
+
+270. (2026-11-19, 사용자) pilot_010 JG: 운영 조건(greedy)에서 같은 어댑터를 PF2·H-final에 다시 잰다(평가만, 새 학습 없음). **모두 판정 뒤 추가(사후)이며 PF2·H-final의 세 번째 사용이다.** C1–C4 판정은 바꾸지 않는다.
+    - 배경: J·JP·JQ 셀은 모두 sampling(temperature 0.6, top-p 0.95, top-k 20)이고 실제 운영은 greedy다(결정 97 기록). JQ 표 5에서 단일 모델의 과잉 거부가 표본 간 우연에 크게 좌우됐다.
+    - 계획·규칙·분석 스크립트는 측정 전에 `pilot_010/PLAN_JG.md`로 고정·커밋한다. 결과를 본 뒤 조건·규칙을 바꾸지 않고, 결과가 나빠도 그대로 보고한다. 조건은 하나만 미리 정하며 여러 temperature를 재고 고르지 않는다.
+    - GPU 4장. 결정 83 장치 간 바이트 일치 검사는 JQ와 같이 면제하고 UUID·모델·드라이버·다른 프로세스 확인과 결정 114는 지킨다. Ollama는 쓰지 않고 건드리지 않는다. 새 학습·새 데이터·새 구성은 없다.
+    - 조건 확정 smoke(봉인 셋을 열기 전): H-dev 앞 300문항을 base·SFT 1개·RR+NM4 1개(seed 표기 순서 첫째)로 주 조건 G0(temperature 0, k=1)에서 한 번 잰다.
+      세 셀 중 하나라도 잘림 비율 > 3% 또는 같은 모델·같은 300문항의 기존 sampling 셀 잘림 비율의 2배 초과면 G0를 버리고 G1(temperature 0.2, top-p 0.95, top-k 20)로 확정한다.
+      정답률·거부율은 이 판단에 쓰지 않는다. 확정 조건을 PLAN_JG에 적고 커밋한 뒤 측정한다. smoke 수치는 보고에만 쓴다.
+    - 측정: base, SFT 5, RR 5, RR+NM4 5(PLAN_J seed), RR+NM8 7(기존 3 + JQ 4). 어댑터는 기록된 sha256과 같을 때만. G0면 PF2·H-final k=1, G1이면 PF2 k=4·H-final k=1(seed 20261101).
+      잘림·다시 돌리기·유효성은 J 셀과 같다. PF2 접근은 access_log.md에 기록하고 내용은 열지 않는다. 우선순위 RR+NM4·SFT·base PF2 → 같은 arm H-final → RR+NM8 → RR.
+    - 분석: J·JP·JQ와 같은 지표·U1 계층 bootstrap 10,000. 운영 조건 안의 차이(RR+NM4 − SFT, RR+NM8(7) − SFT, 각 − base, RR+NM8(7) − RR, RR+NM4 − RR+NM8(7)), "RR+NM 12 seed" 합침 arm(− SFT·− base·− RR, sampling에도),
+      같은 어댑터의 운영 − sampling(arm별, 문항 공유 재추출), 결과 분해·PF2 형별·근접 대조 25·H-final 도구 유형별·template_group 붕괴·호출·wall.
+    - 보고 `pilot_010/results/JG_RESULTS.md`와 수치 원본 JSON(표 1–5, smoke와 조건 확정 근거를 맨 앞에).
+    - 하지 않는 것: 다른 temperature의 추가 측정, 조건 고르기, 새 학습, X4 분석, Ollama 작업, 논문 수정.
+- 실행 기록(2026-11-19, Claude, 새 결정 아님): 계획 `pilot_010/PLAN_JG.md`·`FREEZE_JG.json`. SFT `o43`·RR+NM4 `o101`은 같은 300문항의 기존 H-dev sampling 셀이 없어,
+  smoke 전에 같은 어댑터의 H-final sampling 셀(J, 3,000문항) 잘림 비율을 2배 기준으로 쓰기로 PLAN_JG 1절에 적었다(지시에 없는 해석, 보고에 적음).
