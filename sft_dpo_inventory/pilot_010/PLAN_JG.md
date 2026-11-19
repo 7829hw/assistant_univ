@@ -83,4 +83,16 @@
 
 ## 6. 조건 확정(smoke 뒤에 적음)
 
-(smoke 전: 비어 있음)
+**확정: G1**(temperature 0.2, top-p 0.95, top-k 20; PF2 k=4 회차 20261101–04, H-final k=1 회차 20261101). G0는 1절 규칙으로 버렸다. 판단 기록 `results/jg_smoke.json`(`results/smoke_jg.py`).
+
+smoke(2026-11-19 12:19–12:37 KST, scheduler20 작업 SM-base·SM-B2F-o43·SM-V4-o101, 고정 커밋 `555cacaf`, 3셀 모두 유효: 300행·prompt 87048d0c·지문 791c4a68·서버 오류 0·요청 temperature 0.0):
+
+| 셀(G0, H-dev 앞 300) | 잘린 호출 / 호출 | G0 잘림 % | 기준 sampling % | > 3% | > 2 × 기준 | G0 버림 |
+|---|---|---|---|---|---|---|
+| base | 12 / 357 | 3.36 | 0.00(hdev_base s1·s2 같은 300문항) | 예 | 예 | 예 |
+| SFT o43 | 0 / 302 | 0.00 | 0.36(J H-final o43, 대체 기준) | 아니오 | 아니오 | 아니오 |
+| RR+NM4 o101 | 20 / 321 | 6.23 | 0.97(J H-final o101, 대체 기준) | 예 | 예 | 예 |
+
+- base와 RR+NM4 o101은 3% 절대 기준만으로도 G0를 버리게 한다. 그래서 1절의 대체 기준(H-final 셀)을 쓴 해석은 이번 확정에 영향이 없다.
+- 정답률·거부율은 판단에 쓰지 않았다(보고용 값은 `jg_smoke.json`의 `report_only_not_used_for_decision`에만 있다).
+- 다음: `make_jobs_jg.py --phase main --cond g1 --commit 555cacaf…`(G1 실행기 `*_g1.py`는 그 커밋에 있음). 분석 `analyze_jg.py --cond g1`.

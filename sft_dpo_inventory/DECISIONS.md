@@ -1318,3 +1318,6 @@ protected_final_v2 열람·고정, 주 셋 151 측정, Ollama 컨테이너 조�
     - 하지 않는 것: 다른 temperature의 추가 측정, 조건 고르기, 새 학습, X4 분석, Ollama 작업, 논문 수정.
 - 실행 기록(2026-11-19, Claude, 새 결정 아님): 계획 `pilot_010/PLAN_JG.md`·`FREEZE_JG.json`. SFT `o43`·RR+NM4 `o101`은 같은 300문항의 기존 H-dev sampling 셀이 없어,
   smoke 전에 같은 어댑터의 H-final sampling 셀(J, 3,000문항) 잘림 비율을 2배 기준으로 쓰기로 PLAN_JG 1절에 적었다(지시에 없는 해석, 보고에 적음).
+- 실행 기록(2026-11-19, Claude, 새 결정 아님): JG smoke(12:19–12:37 KST, 커밋 `555cacaf`) 결과 **조건 G1 확정**(temperature 0.2·top-p 0.95·top-k 20; PF2 k=4, H-final k=1 seed 20261101).
+  G0 잘림 base 3.36%(12/357)·SFT o43 0%(0/302)·RR+NM4 o101 6.23%(20/321) → base·RR+NM4가 3% 초과(2배 기준도 초과). 3% 기준만으로 결정되므로 대체 기준 해석은 영향 없음.
+  근거 `pilot_010/results/jg_smoke.json`·PLAN_JG 6절. 정답률·거부율은 판단에 쓰지 않음.
