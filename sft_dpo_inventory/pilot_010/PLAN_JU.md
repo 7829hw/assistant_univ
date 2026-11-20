@@ -96,3 +96,7 @@
 10. 문항별 일치의 다수 결과 = k=4 중 3개 이상(2:2·2:1:1은 혼합).
 11. 학생 생성 token은 arm마다 seed 표기 순서 첫째 H-final 셀로 센다(전체 seed를 나누지 않음).
 12. PF2 셀 유효성에서 flashinfer 항목은 해당 없음(Ollama). 서버 오류 이름 목록에 httpx 예외를 더했다(3절).
+13. 실행 수정(2026-11-21 01:45 KST, 측정 전·결과 없음): 첫 기동에서 GPU 0용 서버가 Vulkan 장치 3개(GPU 1–3)도 찾고(0.40.6 `OLLAMA_VULKAN` 기본 true, Vulkan은 `CUDA_VISIBLE_DEVICES`를 따르지 않음)
+    Vulkan backend로 모델을 GPU 1–3에 나눠 올렸다. 둘째 서버의 `gpu_ok`가 GPU 1 사용 중(12.5 GB)을 잡아 멈췄다(`gpu/JU/failed_vulkan/`). 교사 수집 컨테이너는 CUDA 장치만 보았으므로
+    (`path_repeat_001/env/ollama_server.txt`: inference compute library=CUDA만) 모든 JU 서버에 `OLLAMA_VULKAN=false`를 더하고, 준비 조건에 로그의 backend = CUDA만·서버 runner 프로세스가 자기 GPU에만 있음을 더한다.
+    GPU 0 단독 시험 기동(생성 없음): CUDA0만, 100% GPU(18,542,682,438 B), context 262144, GPU 0에만 35.8 GB.

@@ -4,6 +4,8 @@
 #   bash serve_ju.sh GPU_INDEX PORT          (P3·OLLAMA_UUID·ALLOWED_UUIDS는 gpu_lib7.gpu_ok용)
 # 순서: gpu_ok(host nvidia-smi UUID·메모리·다른 프로세스, torch UUID) → ollama serve(nohup) → /api/version·/api/tags digest 확인 →
 #   모델 올리기(/api/generate에 model·keep_alive -1만, prompt 없음 → 생성 없음) → /api/ps size_vram == size(100% GPU) → server_<port>.json 기록.
+# 2026-11-21 01:45 실행 수정(PLAN_JU 6절 13, 측정 전): 0.40.6은 Vulkan 장치도 찾고(OLLAMA_VULKAN 기본 true) Vulkan은 CUDA_VISIBLE_DEVICES를 따르지 않아
+#   첫 서버가 다른 GPU 3장에 Vulkan으로 모델을 나눠 올렸다 → OLLAMA_VULKAN=false(교사 수집 컨테이너처럼 CUDA만). 준비 조건에 backend CUDA·모델 runner가 자기 GPU에만 있음을 더함.
 set -u
 G=$1; PORT=$2
 source "$(dirname "${BASH_SOURCE[0]}")/../../pilot_007/gpu_data/gpu_lib7.sh"
@@ -18,7 +20,7 @@ if curl -sf "http://127.0.0.1:$PORT/api/version" >/dev/null; then p3log "STOP: p
 LOG=$WORK/server_${PORT}.log
 U=${UUID[$G]}
 env -i PATH=/usr/bin:/bin HOME="$JU/home_$PORT" CUDA_VISIBLE_DEVICES="$U" OLLAMA_HOST="127.0.0.1:$PORT" OLLAMA_MODELS="$MODELS" \
-  OLLAMA_NUM_PARALLEL=1 OLLAMA_MAX_LOADED_MODELS=1 OLLAMA_KEEP_ALIVE=-1 OLLAMA_NOPRUNE=1 \
+  OLLAMA_NUM_PARALLEL=1 OLLAMA_MAX_LOADED_MODELS=1 OLLAMA_KEEP_ALIVE=-1 OLLAMA_NOPRUNE=1 OLLAMA_VULKAN=false \
   nohup "$BIN" serve > "$LOG" 2>&1 &
 PID=$!
 echo $PID > "$WORK/server_$PORT.pid"
@@ -41,7 +43,7 @@ def get(path, body=None):
 rec = {"ready": False, "port": int(port), "pid": int(pid), "started_at": started, "gpu_index": g, "gpu_uuid": uuid, "log": log, "binary": binp,
        "binary_sha256": hashlib.sha256(open(binp, "rb").read()).hexdigest(), "models_dir": models,
        "env": {"CUDA_VISIBLE_DEVICES": uuid, "OLLAMA_HOST": f"127.0.0.1:{port}", "OLLAMA_MODELS": models, "OLLAMA_NUM_PARALLEL": "1",
-               "OLLAMA_MAX_LOADED_MODELS": "1", "OLLAMA_KEEP_ALIVE": "-1", "OLLAMA_NOPRUNE": "1", "HOME": os.path.dirname(models) + f"/home_{port}"}}
+               "OLLAMA_MAX_LOADED_MODELS": "1", "OLLAMA_KEEP_ALIVE": "-1", "OLLAMA_NOPRUNE": "1", "OLLAMA_VULKAN": "false", "HOME": os.path.dirname(models) + f"/home_{port}"}}
 try:
     rec["version"] = get("/api/version").get("version")
     tags = {m["name"]: m for m in get("/api/tags").get("models", [])}
@@ -66,9 +68,20 @@ except Exception as error:  # noqa: BLE001
 rec["nvidia_smi_after_load"] = subprocess.run(["nvidia-smi", "--query-gpu=index,uuid,memory.used,memory.total", "--format=csv,noheader"],
                                               capture_output=True, text=True).stdout.strip().splitlines()
 text = open(log, errors="replace").read()
+import re as _re
+rec["backend_lines"] = [l.strip()[:300] for l in text.splitlines() if "selecting GPU backend" in l or "inference compute" in l][:10]
+lines = text.splitlines()
+rec["backend_cuda"] = any("inference compute" in l and "library=CUDA" in l for l in lines) and not any("library=Vulkan" in l for l in lines)
+kids = [int(x) for x in subprocess.run(["pgrep", "-P", pid], capture_output=True, text=True).stdout.split()]
+apps = [[y.strip() for y in a.split(",")] for a in subprocess.run(["nvidia-smi", "--query-compute-apps=gpu_uuid,pid,used_memory,process_name", "--format=csv,noheader"],
+                                                                  capture_output=True, text=True).stdout.strip().splitlines()]
+mine = [a for a in apps if a[1].isdigit() and int(a[1]) in kids + [int(pid)]]
+rec["server_gpu_processes_after_load"] = mine
+rec["only_own_gpu"] = bool(mine) and all(a[0] == uuid for a in mine)
+rec["ready"] = bool(rec["ready"] and rec["backend_cuda"] and rec["only_own_gpu"])
 rec["log_lines"] = [l.strip()[:300] for l in text.splitlines() if any(k in l for k in ("inference compute", "offload", "flash", "kv_cache", "KvSize", "num_ctx", "context", "layers", "library="))][:25]
 json.dump(rec, open(out, "w"), ensure_ascii=False, indent=1)
-print(json.dumps({k: rec.get(k) for k in ("ready", "version", "digest", "gpu_100", "context_length", "error")}))
+print(json.dumps({k: rec.get(k) for k in ("ready", "version", "digest", "gpu_100", "backend_cuda", "only_own_gpu", "context_length", "error")}))
 sys.exit(0 if rec["ready"] else 1)
 PYEOF
 rc=$?
