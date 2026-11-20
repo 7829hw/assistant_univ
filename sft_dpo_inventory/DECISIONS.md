@@ -1348,3 +1348,27 @@ protected_final_v2 열람·고정, 주 셋 151 측정, Ollama 컨테이너 조�
   S·G1 PF2 k=4·H-final k=1, 선택 rdev v2·valid98·aux, 지연(27B·8B base·RR+NM4 o101) 모두 rc 0. 다시 돌리기 H-final S·G1·rdev v2(H-final 두 셀은 다시 돌린 뒤에도 > 1%, 그대로 씀).
   유효성 17셀 통과, S 학생 단일 평균 jp_posthoc 30/30 같음, 유출 검사 0. 결과 `pilot_010/results/JT_RESULTS.md`·`jt_results.json`·`jt_tables.md`(참고 측정, 판정 아님, 회복 비율 없음).
   `analyze_jt.py` 선택 셀 note의 match 설명이 틀려 보고 표에서 바로잡음(수치·스크립트는 그대로).
+
+## 2026-11-21 — pilot_010 JU: 교사 4비트 빌드(Ollama qwen3.8:27b, Q4_K_M) 대조 측정
+
+272. (2026-11-21, 사용자) pilot_010 JU: 교사 응답 수집·운영에 쓴 4비트 빌드 "Ollama qwen3.8:27b (Q4_K_M, digest aaee06c3)"가 JT에서 잰 "Qwen/Qwen3.8-27B BF16 (vLLM)"(결정 271)와 같은 문항에서 비슷하게 행동하는지 확인한다.
+    **참고 측정이며 판정이 아니다. 이 수치로 구성·seed·조건을 고르지 않는다. PF2·H-final의 추가 사용**이며 문서·표에 그렇게 표시한다. 계획·규칙·분석 스크립트·유사 판정 기준은 측정 전에 `pilot_010/PLAN_JU.md`로 고정·커밋한다. 결과가 예상과 달라도 그대로 보고한다.
+    - 규칙 예외(이 작업에 한함): 규칙 4 — Docker 없이 사용자 권한의 Ollama 서버를 새로 띄워도 된다. 기존 "ollama" 컨테이너·포트 11434·`/data/hwkim/ollama`는 읽기만, 쓰기·삭제·pull·prune 금지.
+      결정 114 — 한 셀의 문항을 GPU 4장(서버 4벌)에 나눠 잰다("한 GPU에 작업 둘 금지"는 그대로). 결정 83 장치 간 바이트 일치 검사는 JT와 같이 면제, UUID·드라이버·메모리·다른 프로세스 확인은 한다.
+    - 1단계(GPU 없음): Ollama 공식 Linux 배포 파일 0.40.6(교사 수집 버전)을 작업 디렉터리에 푼다(설치 스크립트·systemd·root 없음, 받을 수 없으면 멈춤). 파일 sha256·버전 기록.
+      `/data/hwkim/ollama`에서 `qwen3.8:27b`의 manifest·blob만 새 모델 디렉터리로 복사(blob 파일명 = sha256 대조), 새 서버 `/api/tags` digest `aaee06c39dcf…` 확인(아니면 pull하지 말고 멈춤).
+    - 2단계: GPU마다 서버 하나(`CUDA_VISIBLE_DEVICES=<UUID>`, 포트 11441–11444, `OLLAMA_NUM_PARALLEL=1`·`MAX_LOADED_MODELS=1`·`KEEP_ALIVE=-1`·`NOPRUNE=1`). 요청은 하네스 Ollama 경로·87048d0c·think 켬·코드의 운영 options 그대로,
+      sampling만 JT S(temperature 0.6·top-p 0.95·top-k 20), 생성 상한은 학생 셀과 같게. `ollama show` template·parameters와 실제 요청 본문 기록.
+      guard(결정 55를 Docker 없이): 시작 전 nvidia-smi, 첫 문항 중 100% GPU, 문항별 생성 속도가 smoke 기준보다 크게 낮으면 그 조각을 멈추고 ABORTED. 입력 잘림(context 한도)이면 멈추고 보고.
+    - 3단계: 문항 i → 서버 i % 4, 서버마다 독립된 연속 세션(결정 79), 한 셀 = 4 세션을 metadata에 남김, 중단된 조각은 처음부터 다시. smoke H-dev 100 × 1(잘림 ≥ 5%면 한도를 바꾸지 말고 멈춤, 정답률은 기록만).
+      범위: smoke 처리량으로 H-final 3,000 예상 시간(서버 4벌) ≤ 8시간이면 전체, 넘으면 JT 층화 1,000(그때 BF16·학생도 같은 1,000으로 다시 계산). 순서 PF2 150 × k=4 → H-final × k=1(S), 시간이 남으면 G1 PF2 × k=4.
+      잘림 다시 돌리기는 JT와 같고, PF2 접근은 access_log.md에 적고 내용은 열지 않는다. 끝나면 새 서버 4벌을 내린다.
+    - 분석(측정 전 고정): Q4 단독(PF2 올바른 거부 전체·M·P·C·범주별, 과잉 거부 100·근접 25, 정답률, 결과 분해; H-final 정답률·과잉 거부·결과 분해·도구 유형별; 문항 bootstrap 10,000),
+      Q4 − BF16(문항 공유 재추출) 여섯 주 지표의 차이·95% CI, 유사 판정(CI 전체가 폭 안 → 유사: PF2 올바른 거부·과잉 거부 100·정답률 ±10%p, H-final 정답률 ±2%p, H-final 과잉 거부 ±1%p;
+      CI가 0을 벗어나면 다름, 그 밖 판단할 수 없음; 지표마다 따로), PF2 문항별 다수 결과 일치(형별), 학생 arm − Q4(JT 표 2 방식, 회복 비율 없음), 비용(backend가 달라 직접 비교 아님).
+    - 보고 `results/JU_RESULTS.md`와 수치 원본 JSON(표 1–5), 두 빌드의 요청 차이 한 절, 계획과 달라진 점·소요 시간. 작업 단위마다 검증 → 커밋 → push → SHA.
+    - 하지 않는 것: Docker·기존 컨테이너 조작, 모델 pull, 새 학습, 새 교사 응답 수집, 한도·sampling 조정, 논문 수정.
+- 실행 기록(2026-11-21, Claude, 새 결정 아님): 1단계 끝. 0.40.6 tar sha256 `c164ab8b…` = GitHub asset digest, `bin/ollama` `8b4e471b…`. blob 5개 sha256 일치, manifest sha256 = `aaee06c3…`, CPU 전용 서버(GPU 없음, 모델 올리지 않음) `/api/tags` digest 같음
+  (`pilot_010/ju/setup_record.json`). 기존 컨테이너는 없었고(`docker ps -a` 빈 목록) 포트 11434는 응답하지 않았다(읽기 확인만). v0.40.6 renderer 소스상 `think: true`는 수준 medium이라 **effort 문장을 넣지 않는다**
+  (BF16 JT 렌더링은 xhigh 문장 포함) — 바꾸지 않고 기록(PLAN_JU 1절·6절 2). 지시에 없는 사전 고정 해석: `num_predict` 8,192만 하네스에 더함, chat timeout 3,600 s, guard 기준 smoke 33.71 tok/s(교사 수집 O1 기준)·본 측정 smoke 중앙값 × 0.5,
+  근접 대조 25는 폭이 없어 판정하지 않음, G1 시작 마감 2026-11-21 20:00 KST(PLAN_JU 6절).
