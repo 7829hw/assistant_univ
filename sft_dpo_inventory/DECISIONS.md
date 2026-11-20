@@ -1372,3 +1372,8 @@ protected_final_v2 열람·고정, 주 셋 151 측정, Ollama 컨테이너 조�
   (`pilot_010/ju/setup_record.json`). 기존 컨테이너는 없었고(`docker ps -a` 빈 목록) 포트 11434는 응답하지 않았다(읽기 확인만). v0.40.6 renderer 소스상 `think: true`는 수준 medium이라 **effort 문장을 넣지 않는다**
   (BF16 JT 렌더링은 xhigh 문장 포함) — 바꾸지 않고 기록(PLAN_JU 1절·6절 2). 지시에 없는 사전 고정 해석: `num_predict` 8,192만 하네스에 더함, chat timeout 3,600 s, guard 기준 smoke 33.71 tok/s(교사 수집 O1 기준)·본 측정 smoke 중앙값 × 0.5,
   근접 대조 25는 폭이 없어 판정하지 않음, G1 시작 마감 2026-11-21 20:00 KST(PLAN_JU 6절).
+- 실행 기록(2026-11-21, Claude, 새 결정 아님): JU 2단계 끝(01:44–05:39 KST, worktree `wt_ea0cd0e0_ju`). 측정 전 실행 수정 둘을 사용자 확인 없이 했다(PLAN_JU 6절 13·14):
+  첫 기동에서 Vulkan이 다른 GPU에 모델을 올려 `OLLAMA_VULKAN=false`·준비 조건 추가(`e0014269`), 서버 로그 잘림 패턴이 `truncated = 0`을 잡아 `truncating input|truncated = [1-9]`로 좁힘(`ea0cd0e0`, smoke는 다시 돌리지 않음).
+  smoke 잘림 0/106, 예상 3.23시간 → H-final 3,000 전체. S PF2 k=4·H-final 3,000·G1 PF2 k=4 모두 rc 0, ABORTED 없음, H-final 잘림 0 → 다시 돌리기 없음. 서버 4벌 내림, 기존 컨테이너·포트 11434 건드리지 않음.
+  유효성 Q4 9셀 통과, jp_posthoc 30/30·jt_results 6/6 같음, 유출 검사 0. Ollama 0.40.6은 MTP speculative decoding이 기본으로 켜져 있었다(계획에 없던 빌드 차이, 바꾸지 않고 기록).
+  결과 `pilot_010/results/JU_RESULTS.md`·`ju_results.json`·`ju_tables.md`(참고 측정, 판정 아님, 회복 비율 없음). Q4 − BF16(S): PF2 올바른 거부 −14.50 [−23.50, −6.50] 다름, 과잉 거부 100·PF2 정답률·H-final 정답률·H-final 과잉 거부 유사.
