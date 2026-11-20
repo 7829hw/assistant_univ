@@ -100,3 +100,6 @@
     Vulkan backend로 모델을 GPU 1–3에 나눠 올렸다. 둘째 서버의 `gpu_ok`가 GPU 1 사용 중(12.5 GB)을 잡아 멈췄다(`gpu/JU/failed_vulkan/`). 교사 수집 컨테이너는 CUDA 장치만 보았으므로
     (`path_repeat_001/env/ollama_server.txt`: inference compute library=CUDA만) 모든 JU 서버에 `OLLAMA_VULKAN=false`를 더하고, 준비 조건에 로그의 backend = CUDA만·서버 runner 프로세스가 자기 GPU에만 있음을 더한다.
     GPU 0 단독 시험 기동(생성 없음): CUDA0만, 100% GPU(18,542,682,438 B), context 262144, GPU 0에만 35.8 GB.
+14. 실행 수정(2026-11-21 01:57 KST, smoke 뒤·본 측정 전): 서버 로그 입력 잘림 guard의 패턴 `truncat`이 llama-server의 요청마다 나오는 `stop processing: … truncated = 0`(잘림 없음 보고)까지 잡아
+    smoke(01:50–01:56, rc 0) 직후 멈췄다(`gpu/JU/stopped_regex/STOPPED`). 네 서버 로그의 `truncated = ` 106줄 모두 0, "truncating" 0줄, 요청 n_tokens 약 7,000–8,600(context 262,144) — 실제 잘림 없음.
+    패턴을 `truncating input|truncated = [1-9]`로 고친다. smoke는 다시 돌리지 않으므로 실행기는 이미 있는 smoke 셀로 잘림·범위·guard 기준을 계산한다(`step_smoke`). 서버는 다시 띄운다(새 세션, 기록).

@@ -167,7 +167,7 @@ def cell_cmd(ctx, *, label, k, cond, gold, out_dir, raw_dir, min_tok_s, only=Non
     return c
 
 
-TRUNC_RE = re.compile(r"(?i)truncat")
+TRUNC_RE = re.compile(r"(?i)truncating input|truncated = [1-9]")   # 2026-11-21 01:57 수정(PLAN_JU 6절 14): "truncated = 0"(잘림 없음 보고)까지 잡던 것을 고침
 
 
 def trunc_lines():
@@ -276,9 +276,13 @@ def step_smoke(ctx):
     import yaml
     ids = [i["id"] for i in yaml.safe_load((WT / HDEV_GOLD).read_text(encoding="utf-8"))["items"]][:SMOKE_N]
     out = ctx.cells / "smoke"
+    done = (out / "hdev100ju_s_q4_s1.json").exists()   # smoke는 다시 돌리지 않는다: 이미 있으면(guard 오판으로 멈춘 뒤) 그 셀로 판단
     cmd = cell_cmd(ctx, label="hdev100ju_s_q4", k=1, cond="s", gold=HDEV_GOLD, out_dir=out, raw_dir=ctx.raw, min_tok_s=SMOKE_MIN_TOK_S,
                    only=",".join(ids), check_input=True)
-    guarded(ctx, "smoke_hdev100", cmd)
+    if done:
+        ctx.log("smoke cell exists -> not rerun, judge from it")
+    else:
+        guarded(ctx, "smoke_hdev100", cmd)
     d, rows, calls = cell_stats(out / "hdev100ju_s_q4_s1.json")
     trunc = sum(c.get("finish_reason") == "length" for c in calls)
     pct = 100.0 * trunc / max(1, len(calls))
