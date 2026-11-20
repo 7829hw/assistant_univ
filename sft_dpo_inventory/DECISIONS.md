@@ -1344,3 +1344,7 @@ protected_final_v2 열람·고정, 주 셋 151 측정, Ollama 컨테이너 조�
 - 실행 기록(2026-11-20, Claude, 새 결정 아님): JT 2단계 시작(02:57 KST, worktree `d4c8b196`). 서버 A(GPU 0·1, TP 2)가 FLASHINFER·자동 backend 모두 CUDA graph 캡처 중 custom all-reduce 오류
   (`custom_all_reduce.cuh:164 'invalid argument'`)로 뜨지 않아, 측정 전(결과 없음) `--disable-custom-all-reduce`(NCCL all-reduce)를 더해 FLASHINFER로 다시 시작(PLAN_JT 7절 8, 커밋 `e37719c`,
   worktree `wt_e37719c_jt`, 03:05 KST). PLAN_JT 7절 5의 '자동 backend도 실패하면 멈춤'은 attention backend 실패를 위한 규칙이고 원인이 달라 적용하지 않았다(보고에 적음). 03:07 서버 A 준비, smoke 시작.
+- 실행 기록(2026-11-20, Claude, 새 결정 아님): JT 2단계 끝(03:05–18:49 KST, worktree `wt_e37719c_jt`). smoke 잘림 1/107 = 0.93%, 예상 3.24시간 → H-final 3,000 전체.
+  S·G1 PF2 k=4·H-final k=1, 선택 rdev v2·valid98·aux, 지연(27B·8B base·RR+NM4 o101) 모두 rc 0. 다시 돌리기 H-final S·G1·rdev v2(H-final 두 셀은 다시 돌린 뒤에도 > 1%, 그대로 씀).
+  유효성 17셀 통과, S 학생 단일 평균 jp_posthoc 30/30 같음, 유출 검사 0. 결과 `pilot_010/results/JT_RESULTS.md`·`jt_results.json`·`jt_tables.md`(참고 측정, 판정 아님, 회복 비율 없음).
+  `analyze_jt.py` 선택 셀 note의 match 설명이 틀려 보고 표에서 바로잡음(수치·스크립트는 그대로).
