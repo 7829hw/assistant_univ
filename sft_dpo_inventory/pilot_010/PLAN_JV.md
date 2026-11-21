@@ -91,3 +91,15 @@
 4. decode tok/s = eval_count / eval_duration(prompt 처리 제외), eval_count < 64인 호출은 guard에서 뺀다(JU와 같음).
 5. `think_closed`는 추정(Ollama parser의 content가 비면 닫히지 않음), 원문 `raw_text`는 thinking·content로 다시 만든 것(JU와 같음).
 6. 교사 지연 셀은 JU 모델 디렉터리·JU와 같은 실행 파일, context만 17,408(지시). speculative decoding(MTP)은 서버 기본값 그대로(바꾸지 않음, 기록).
+
+## 7. 1·2단계 실행 기록(측정 전, 2026-11-21)
+1. 변환(`convert_jv.py`, worktree `wt_6d1c6e67_jv`, 09:20–09:4x KST): 18개 모두 텐서 399개 이름·모양·타입이 공식 qwen3:8b blob과 같음(Q4_K 199·Q6_K 19·F16 36·F32 145), adapter sha256 모두 기록값과 같음.
+   base Q4는 결정 75 base 공식 방식 Q4와 sha256까지 같음(`c55752ae…`, rebuilt runtime으로 재현). 병합본·BF16 GGUF 34개를 지움(base는 기존 BF16 GGUF를 읽기만). 영수증은 worktree에서 `jv/receipts/`로 옮김.
+2. 등록(`register_jv.py`, CPU 서버, 저장소에서 실행 — GPU 작업 아님): 18개 `geoflow-jv-…:q4km-official-hfthink`. manifest template 층 = 보낸 hfthink TEMPLATE(565 B), config에 renderer·parser 없음, runner llamacpp.
+   **0.40.6 `/api/show`의 `template` 필드는 GGUF 안의 HF Jinja chat template(4,168자)을 보여 준다**(결정 75 기록의 sha256 `a55ee1b1…`도 그것). 그래서 manifest를 직접 읽어 확인했고(`manifest_check`) 실제 렌더링은 아래 3으로 확인한다.
+3. 렌더링 확인(`render_check_jv.py`, worktree `wt_fb8618a4_jv`, GPU 0, 09:29–09:32): H-dev 앞 5문항 첫 호출 `prompt_eval_count` = HF chat template(`enable_thinking=True`) token 수 5/5(차이 0),
+   raw 렌더링 `/api/generate`도 5/5 같음. 요청 11개 모두 sampler 값이 기대값(temp 0.6·top_k 20·top_p 0.95·min_p 0·repeat_penalty 1·presence_penalty 0; frequency 0, repeat_last_n 64, dry·xtc·mirostat 0).
+   기본 로그에 sampler 줄이 있어 `OLLAMA_DEBUG`는 쓰지 않는다. 학생 서버 기본 context = 40,960(모델 최대), llama-server는 `--no-jinja`·`--chat-template` 없이 Ollama가 렌더링한 prompt를 받음, speculative decoding 없음.
+4. 나눔 확인(`render_split_jv.py`, worktree `wt_a525061a_jv`, 09:34–09:35): `raw: true`·`think: false` `/api/generate`는 원문(`<think>\n…</think>…`)을 그대로 돌려주고, 5/5 같은 token 수로 같은 생성이 나왔으며
+   `hf_thinking.split_thinking`으로 나눈 thinking·content가 `/api/chat`의 것과 5/5 같음. (첫 확인의 `raw: true`만 준 생성은 parser가 thinking을 나눠 돌려줘 직접 비교가 안 됐고 2/5는 생성이 달랐다 — 기록만.)
+5. 분석 경로 시험(09:44–09:48): Q4 자리에 학생 BF16 셀을 넣은 scratchpad 래퍼로 `analyze_jv.py`를 돌려 짝 차이 0(모든 arm·지표), 회차 seed 짝 90개 같음, jp_posthoc 30/30, ju_results 6/6을 확인(출력은 scratchpad).

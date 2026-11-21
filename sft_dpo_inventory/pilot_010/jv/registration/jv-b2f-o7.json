@@ -1,0 +1,158 @@
+{
+ "decision": 273,
+ "model": "geoflow-jv-b2f-o7:q4km-official-hfthink",
+ "name": "jv-b2f-o7",
+ "digest": "7b20d68395ee933233198e35fa5fb036174461ecd0ad8bfed3608533173a7fd4",
+ "details": {
+  "parent_model": "jv-b2f-o7-Q4_K_M-official.gguf",
+  "format": "gguf",
+  "family": "qwen3",
+  "families": [
+   "qwen3"
+  ],
+  "parameter_size": "8.2B",
+  "quantization_level": "Q4_K_M",
+  "context_length": 40960,
+  "embedding_length": 4096,
+  "runner": "llamacpp"
+ },
+ "ollama_version": "0.40.6",
+ "models_dir": "/data/hwkim/sftdpo_work/pilot_010_jv/models",
+ "source_gguf": {
+  "path": "/data/hwkim/sftdpo_work/pilot_010_jv/gguf/jv-b2f-o7-Q4_K_M-official.gguf",
+  "sha256": "259133992b5c34ba4213385adf783b4669c2b0775ea1f4a0142e228378dec766",
+  "bytes": 5225374624
+ },
+ "modelfile_source": "sft_dpo_inventory/pilot_prep_003/ollama/Modelfile.base.thinking",
+ "sent_template_sha256": "e38a19eb4af49271e2b67e180fcc659f5dc31cb9f3493b36be63a333f7bd2634",
+ "sent_parameters": {
+  "stop": [
+   "<|im_start|>",
+   "<|im_end|>"
+  ],
+  "temperature": 0.6,
+  "top_k": 20,
+  "top_p": 0.95,
+  "repeat_penalty": 1
+ },
+ "show_keys": [
+  "capabilities",
+  "details",
+  "model_info",
+  "modelfile",
+  "modified_at",
+  "parameters",
+  "template"
+ ],
+ "show_renderer": null,
+ "show_parser": null,
+ "show_template": "{%- if tools %}\n    {{- '<|im_start|>system\\n' }}\n    {%- if messages[0].role == 'system' %}\n        {{- messages[0].content + '\\n\\n' }}\n    {%- endif %}\n    {{- \"# Tools\\n\\nYou may call one or more functions to assist with the user query.\\n\\nYou are provided with function signatures within <tools></tools> XML tags:\\n<tools>\" }}\n    {%- for tool in tools %}\n        {{- \"\\n\" }}\n        {{- tool | tojson }}\n    {%- endfor %}\n    {{- \"\\n</tools>\\n\\nFor each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:\\n<tool_call>\\n{\\\"name\\\": <function-name>, \\\"arguments\\\": <args-json-object>}\\n</tool_call><|im_end|>\\n\" }}\n{%- else %}\n    {%- if messages[0].role == 'system' %}\n        {{- '<|im_start|>system\\n' + messages[0].content + '<|im_end|>\\n' }}\n    {%- endif %}\n{%- endif %}\n{%- set ns = namespace(multi_step_tool=true, last_query_index=messages|length - 1) %}\n{%- for message in messages[::-1] %}\n    {%- set index = (messages|length - 1) - loop.index0 %}\n    {%- if ns.multi_step_tool and message.role == \"user\" and message.content is string and not(message.content.startswith('<tool_response>') and message.content.endswith('</tool_response>')) %}\n        {%- set ns.multi_step_tool = false %}\n        {%- set ns.last_query_index = index %}\n    {%- endif %}\n{%- endfor %}\n{%- for message in messages %}\n    {%- if message.content is string %}\n        {%- set content = message.content %}\n    {%- else %}\n        {%- set content = '' %}\n    {%- endif %}\n    {%- if (message.role == \"user\") or (message.role == \"system\" and not loop.first) %}\n        {{- '<|im_start|>' + message.role + '\\n' + content + '<|im_end|>' + '\\n' }}\n    {%- elif message.role == \"assistant\" %}\n        {%- set reasoning_content = '' %}\n        {%- if message.reasoning_content is string %}\n            {%- set reasoning_content = message.reasoning_content %}\n        {%- else %}\n            {%- if '</think>' in content %}\n                {%- set reasoning_content = content.split('</think>')[0].rstrip('\\n').split('<think>')[-1].lstrip('\\n') %}\n                {%- set content = content.split('</think>')[-1].lstrip('\\n') %}\n            {%- endif %}\n        {%- endif %}\n        {%- if loop.index0 > ns.last_query_index %}\n            {%- if loop.last or (not loop.last and reasoning_content) %}\n                {{- '<|im_start|>' + message.role + '\\n<think>\\n' + reasoning_content.strip('\\n') + '\\n</think>\\n\\n' + content.lstrip('\\n') }}\n            {%- else %}\n                {{- '<|im_start|>' + message.role + '\\n' + content }}\n            {%- endif %}\n        {%- else %}\n            {{- '<|im_start|>' + message.role + '\\n' + content }}\n        {%- endif %}\n        {%- if message.tool_calls %}\n            {%- for tool_call in message.tool_calls %}\n                {%- if (loop.first and content) or (not loop.first) %}\n                    {{- '\\n' }}\n                {%- endif %}\n                {%- if tool_call.function %}\n                    {%- set tool_call = tool_call.function %}\n                {%- endif %}\n                {{- '<tool_call>\\n{\"name\": \"' }}\n                {{- tool_call.name }}\n                {{- '\", \"arguments\": ' }}\n                {%- if tool_call.arguments is string %}\n                    {{- tool_call.arguments }}\n                {%- else %}\n                    {{- tool_call.arguments | tojson }}\n                {%- endif %}\n                {{- '}\\n</tool_call>' }}\n            {%- endfor %}\n        {%- endif %}\n        {{- '<|im_end|>\\n' }}\n    {%- elif message.role == \"tool\" %}\n        {%- if loop.first or (messages[loop.index0 - 1].role != \"tool\") %}\n            {{- '<|im_start|>user' }}\n        {%- endif %}\n        {{- '\\n<tool_response>\\n' }}\n        {{- content }}\n        {{- '\\n</tool_response>' }}\n        {%- if loop.last or (messages[loop.index0 + 1].role != \"tool\") %}\n            {{- '<|im_end|>\\n' }}\n        {%- endif %}\n    {%- endif %}\n{%- endfor %}\n{%- if add_generation_prompt %}\n    {{- '<|im_start|>assistant\\n' }}\n    {%- if enable_thinking is defined and enable_thinking is false %}\n        {{- '<think>\\n\\n</think>\\n\\n' }}\n    {%- endif %}\n{%- endif %}",
+ "show_template_sha256": "a55ee1b1660128b7098723e0abcd92caa0788061051c62d51cbe87d9cf1974d8",
+ "show_template_equals_sent": false,
+ "show_template_equals_decision75_base_official": true,
+ "show_parameters": "repeat_penalty                 1\nstop                           \"<|im_start|>\"\nstop                           \"<|im_end|>\"\ntemperature                    0.6\ntop_k                          20\ntop_p                          0.95",
+ "show_capabilities": [
+  "tools",
+  "thinking",
+  "completion"
+ ],
+ "show_details": {
+  "parent_model": "jv-b2f-o7-Q4_K_M-official.gguf",
+  "format": "gguf",
+  "family": "qwen3",
+  "families": [
+   "qwen3"
+  ],
+  "parameter_size": "8.2B",
+  "quantization_level": "Q4_K_M",
+  "runner": "llamacpp"
+ },
+ "show_model_info_keys_sample": [
+  "general.architecture",
+  "general.file_type",
+  "general.parameter_count",
+  "general.quantization_version",
+  "general.sampling.temp",
+  "general.sampling.top_k",
+  "general.sampling.top_p",
+  "general.size_label",
+  "general.type",
+  "qwen3.attention.head_count",
+  "qwen3.attention.head_count_kv",
+  "qwen3.attention.key_length"
+ ],
+ "show_modelfile_head": "# Modelfile generated by \"ollama show\"\n# To build a new Modelfile based on this, replace FROM with:\n# FROM geoflow-jv-b2f-o7:q4km-official-hfthink\n\nFROM /data/hwkim/sftdpo_work/pilot_010_jv/models/blobs/sha256-259133992b5c34ba4213385adf783b4669c2b0775ea1f4a0142e228378dec766\nTEMPLATE \"\"\"{{- if .System }}<|im_start|>system",
+ "method": "POST /api/blobs + POST /api/create (= ollama create, conversion_diag/register_diag.py와 같음)",
+ "existing_models_before": [
+  "geoflow-jv-b2f-o1016:q4km-official-hfthink",
+  "geoflow-jv-b2f-o43:q4km-official-hfthink",
+  "geoflow-jv-qwen3-8b-base:q4km-official-hfthink"
+ ],
+ "manifest_check": {
+  "manifest_path": "/data/hwkim/sftdpo_work/pilot_010_jv/models/manifests-v2/ollama.com/library/geoflow-jv-b2f-o7/q4km-official-hfthink",
+  "manifest_sha256": "7b20d68395ee933233198e35fa5fb036174461ecd0ad8bfed3608533173a7fd4",
+  "manifest": {
+   "schemaVersion": 2,
+   "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+   "config": {
+    "mediaType": "application/vnd.docker.container.image.v1+json",
+    "digest": "sha256:d2187e8e0fcedc92f0613fb38758f48644de46e8d3888fe153b82048545b5ad1",
+    "size": 115
+   },
+   "layers": [
+    {
+     "mediaType": "application/vnd.ollama.image.model",
+     "digest": "sha256:259133992b5c34ba4213385adf783b4669c2b0775ea1f4a0142e228378dec766",
+     "size": 5225374624,
+     "from": "jv-b2f-o7-Q4_K_M-official.gguf"
+    },
+    {
+     "mediaType": "application/vnd.ollama.image.template",
+     "digest": "sha256:e38a19eb4af49271e2b67e180fcc659f5dc31cb9f3493b36be63a333f7bd2634",
+     "size": 565
+    },
+    {
+     "mediaType": "application/vnd.ollama.image.params",
+     "digest": "sha256:cff3f395ef3756ab63e58b0ad1b32bb6f802905cae1472e6a12034e4246fbbdb",
+     "size": 120
+    }
+   ],
+   "runner": "llamacpp",
+   "format": "gguf"
+  },
+  "config": {
+   "model_format": "gguf",
+   "model_family": "qwen3",
+   "model_families": [
+    "qwen3"
+   ],
+   "model_type": "8.2B",
+   "file_type": "Q4_K_M"
+  },
+  "config_has_renderer_or_parser": false,
+  "runner": "llamacpp",
+  "template_layer_equals_sent_hfthink": true,
+  "template_layer_bytes": 565,
+  "params_layer": {
+   "repeat_penalty": 1,
+   "stop": [
+    "<|im_start|>",
+    "<|im_end|>"
+   ],
+   "temperature": 0.6,
+   "top_k": 20,
+   "top_p": 0.95
+  },
+  "model_layer_digest": "sha256:259133992b5c34ba4213385adf783b4669c2b0775ea1f4a0142e228378dec766"
+ },
+ "server_env": {
+  "PATH": "/usr/bin:/bin",
+  "HOME": "/data/hwkim/sftdpo_work/pilot_010_jv/home_reg",
+  "CUDA_VISIBLE_DEVICES": "-1",
+  "OLLAMA_VULKAN": "false",
+  "OLLAMA_HOST": "127.0.0.1:11460",
+  "OLLAMA_MODELS": "/data/hwkim/sftdpo_work/pilot_010_jv/models",
+  "OLLAMA_NOPRUNE": "1"
+ },
+ "registered_at": "2026-11-21T09:40:41+09:00"
+}
