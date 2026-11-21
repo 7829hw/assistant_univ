@@ -1406,3 +1406,10 @@ protected_final_v2 열람·고정, 주 셋 151 측정, Ollama 컨테이너 조�
     - 보고 `results/JV_RESULTS.md`와 수치 원본 JSON, 표 (1) 학생 Q4·학생 BF16·교사 Q4, (2) Q4 − BF16, (3) Q4 안 arm 차이, (4) 학생 Q4 − 교사 Q4, (5) 지연·자원, (6) 형별·도구 유형별.
       변환·등록·렌더링 확인 기록, 계획과 달라진 점, 소요 시간. 작업 단위마다 검증 → 커밋 → push → SHA.
     - 하지 않는 것: Docker·기존 컨테이너 조작, 모델 pull, 새 학습, 양자화 방식·한도·sampling 조정, seed 고르기, 운영 경로 변경, 논문 수정.
+- 실행 기록(2026-11-22, Claude, 새 결정 아님): JV 끝(측정 2026-11-21 09:50 – 2026-11-22 02:34 KST, worktree `wt_3471e05e_jv`, GPU 0–3, 모델마다 GPU 한 장·서버 한 벌, `OLLAMA_NUM_PARALLEL=1`).
+  변환 18개 텐서 타입 = 공식 qwen3:8b, base Q4 sha256 = 결정 75 파일, 등록 18개(manifest template = hfthink, renderer·parser 없음; 0.40.6 `/api/show` template 필드는 GGUF HF Jinja를 보여 줌 — 기록).
+  렌더링 첫 호출 token 수 = HF template 5/5와 측정 90셀 모두, sampler 로그 모두 기대값, thinking·JSON 나눔 = `split_thinking` 5/5. smoke 잘림 0%, 예상 11.82시간 → 줄이지 않음.
+  필수 11 + 선택 RR+NM8 7 모두 측정(PF2 72셀·H-final 1,000 × 18셀), 첫 셀 guard 멈춤 3건(첫 요청 느림, 서버 한 번 다시 띄워 다시 잼, ABORTED 보존), H-final 다시 돌리기 1건(1.55% 잘림, 다시 돌린 셀이 원본과 byte 단위로 같음).
+  지연 3셀(context 17,408) 끝, 서버 모두 내림. 유효성 90셀 통과, jp_posthoc 30/30·ju_results 6/6 같음, 유출 검사 0(결과·gpu/JV). Docker·컨테이너·11434·`/data/hwkim/ollama` 건드리지 않음, pull 없음.
+  결과 `pilot_010/results/JV_RESULTS.md`·`jv_results.json`·`jv_tables.md`(참고 측정, 판정 아님). Q4 − BF16(같은 seed): PF2 올바른 거부 −0.50 – −1.80(CI 모두 0 포함), H-final 정답률 −0.56 – −4.20
+  (SFT·RR+NM8·RR+NM 12는 CI가 0 아래). 학생 Q4 − 교사 Q4 올바른 거부 RR 계열 +1.70 – +6.43(CI 0 포함). 지연 중앙값 교사 Q4 12.62초, base Q4 8.60초, RR+NM4 o101 Q4 6.02초; GPU 메모리 19,531 대 7,881 MiB.
