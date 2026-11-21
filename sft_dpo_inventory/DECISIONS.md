@@ -1377,3 +1377,32 @@ protected_final_v2 열람·고정, 주 셋 151 측정, Ollama 컨테이너 조�
   smoke 잘림 0/106, 예상 3.23시간 → H-final 3,000 전체. S PF2 k=4·H-final 3,000·G1 PF2 k=4 모두 rc 0, ABORTED 없음, H-final 잘림 0 → 다시 돌리기 없음. 서버 4벌 내림, 기존 컨테이너·포트 11434 건드리지 않음.
   유효성 Q4 9셀 통과, jp_posthoc 30/30·jt_results 6/6 같음, 유출 검사 0. Ollama 0.40.6은 MTP speculative decoding이 기본으로 켜져 있었다(계획에 없던 빌드 차이, 바꾸지 않고 기록).
   결과 `pilot_010/results/JU_RESULTS.md`·`ju_results.json`·`ju_tables.md`(참고 측정, 판정 아님, 회복 비율 없음). Q4 − BF16(S): PF2 올바른 거부 −14.50 [−23.50, −6.50] 다름, 과잉 거부 100·PF2 정답률·H-final 정답률·H-final 과잉 거부 유사.
+
+## 2026-11-21 — pilot_010 JV: 학생 4비트 빌드(Ollama, Q4_K_M) 측정 — 교사 4비트 빌드(JU)와 같은 조건
+
+273. (2026-11-21, 사용자) pilot_010 JV: 학생을 교사 4비트 빌드(JU, 결정 272)와 같은 정밀도·같은 서버(Ollama 0.40.6, Q4_K_M, Docker 없는 사용자 권한 서버)에서 잰다.
+    목적 (1) 학생과 교사의 속도·메모리 차이를 같은 정밀도·같은 서버에서 잰다, (2) 학생의 거부·과잉 거부·정답률이 4비트 빌드에서도 유지되는지 본다.
+    **참고 측정이며 판정이 아니다. 이 수치로 구성·seed·조건을 고르지 않는다. 운영 경로(결정 76, HF BF16)를 바꾸지 않는다. PF2·H-final의 추가 사용**이며 문서·표에 그렇게 표시한다.
+    계획·규칙·분석 스크립트는 측정 전에 `pilot_010/PLAN_JV.md`로 고정·커밋하고, 결과가 예상과 달라도 그대로 보고한다.
+    - 규칙 예외(이 작업에 한함): 규칙 4 — JU와 같은 사용자 권한 Ollama 0.40.6 서버를 띄우고 그 서버의 새 모델 디렉터리에 모델을 등록해도 된다(규칙 12의 등록 승인도 이 작업의
+      `geoflow-jv-…` 이름에 한해 포함). 기존 컨테이너·포트 11434·`/data/hwkim/ollama`는 건드리지 않고 pull하지 않는다. 결정 114 그대로(모델 하나의 셀은 GPU 한 장·서버 한 벌에서
+      처음부터 끝까지, GPU 4장에 모델 네 개 동시). 결정 83 장치 간 바이트 일치 검사는 JU처럼 면제, UUID·드라이버·메모리·다른 프로세스 확인은 한다.
+    - 대상(결과와 무관하게 고정): 필수 11 = base Qwen3-8B@b968826d, SFT 5 seed(o43·o1016·o7·o11·o2027), RR+NM4 5 seed(o101·o523·o2029·o31·o20271027).
+      선택 7 = RR+NM8 7 seed(필수가 끝난 뒤 시간이 남으면). smoke 뒤 필수 전체 예상 > 14시간이면 SFT·RR+NM4를 위 순서 앞 3 seed로 줄인다(그 밖의 이유로 고르지 않음).
+    - 1단계 변환(CPU): 기존 절차 그대로 — adapter 병합 → BF16 GGUF → 공식 방식 Q4_K_M(`pilot_prep_001/gguf_convert.sh`, `QUANT_RECIPE=official`, llama.cpp b11434, attn_v만 F16;
+      `quant_recipe/RECIPE.md`). 모델마다 영수증(입력·출력 sha256, 명령, 텐서 타입 구성), 텐서 타입이 공식 qwen3:8b blob과 같은지 `compare_types` 방식으로 확인.
+      Modelfile은 기존 HF TEMPLATE(hfthink), 새 이름 `geoflow-jv-…`으로 JV 모델 디렉터리에 등록. 병합본·BF16 GGUF는 Q4 확인 뒤 지워도 됨(영수증은 남김). 가중치는 모두 저장소 밖, 디스크 여유 먼저 확인.
+    - 2단계 렌더링·요청 확인(측정 전): 0.40.6이 이 모델에 내장 renderer가 아니라 Modelfile TEMPLATE을 쓰는지 — 같은 문항에서 서버 prompt_eval_count = HF chat template(`enable_thinking=True`) token 수.
+      다르면 원인 기록, 맞출 수 없으면 측정하지 않고 보고. 요청 = 하네스 Ollama 경로, 프롬프트 87048d0c, think 켬, num_predict 8,192, S(T 0.6·top-p 0.95·top-k 20),
+      JU 교사 셀과 같아지도록 min_p 0·presence_penalty 0·repeat_penalty 1 명시(방법 기록), 서버가 실제로 쓴 sampler 값을 로그에서 확인. thinking·최종 JSON이 학생 vLLM 셀과 같은 방식으로 나뉘는지 확인.
+    - 3단계 측정: GPU마다 서버 한 벌(JU와 같은 환경 변수, NUM_PARALLEL=1, 연속 방식), 서버 하나가 모델 하나를 맡아 그 모델의 셀을 차례로. guard는 JU와 같음.
+      smoke = base Q4, H-dev 앞 100 × 1(잘림 ≥ 5%면 한도를 바꾸지 않고 멈춤). 순서: 모든 필수 PF2 150 × k=4 → 모든 필수 H-final(JT 층화 1,000 부분집합 × k=1) → 선택.
+      교사·BF16 학생 수치는 같은 1,000문항으로 다시 계산. 잘림 다시 돌리기 JU와 같음. PF2 접근은 access_log.md에 기록, 내용은 열지 않음.
+      지연·자원(결정 113 방식: 고정 30문항, 동시 1, S, 서버 한 벌·GPU 한 장, context 17,408 양쪽 동일): 교사 Q4, base Q4, RR+NM4 o101 Q4(시간 중앙값·p95, 생성 token thinking/JSON, tok/s,
+      가중치 크기, 올린 직후·측정 중 GPU 메모리, 교사의 speculative decoding 여부). 끝나면 새 서버 모두 내림.
+    - 분석(측정 전 고정): 학생 Q4 arm별(base, SFT, RR+NM4, 선택 시 RR+NM8·12 seed 합침) PF2 올바른 거부(전체·M·P·C), 과잉 거부(100·근접 25), 정답률, H-final 정답률·과잉 거부, 결과 분해,
+      도구 유형별, CI = U1 bootstrap 10,000회. 같은 어댑터 Q4 − BF16(seed·문항 짝) 여섯 주 지표 차이·95% CI(판정 문구 없이 값만). Q4 안 arm 차이(RR+NM − SFT, RR+NM − base, SFT − base).
+      학생 Q4 − 교사 Q4(JU 표 3 방식, 회복 비율 없음). 지연·자원 표: 교사 Q4 대 학생 Q4(같은 서버·같은 context), 참고로 BF16 vLLM(JT 표 4).
+    - 보고 `results/JV_RESULTS.md`와 수치 원본 JSON, 표 (1) 학생 Q4·학생 BF16·교사 Q4, (2) Q4 − BF16, (3) Q4 안 arm 차이, (4) 학생 Q4 − 교사 Q4, (5) 지연·자원, (6) 형별·도구 유형별.
+      변환·등록·렌더링 확인 기록, 계획과 달라진 점, 소요 시간. 작업 단위마다 검증 → 커밋 → push → SHA.
+    - 하지 않는 것: Docker·기존 컨테이너 조작, 모델 pull, 새 학습, 양자화 방식·한도·sampling 조정, seed 고르기, 운영 경로 변경, 논문 수정.
