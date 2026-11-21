@@ -1,0 +1,148 @@
+{
+ "ready": true,
+ "port": 11461,
+ "pid": 2028285,
+ "started_at": "2026-11-22T02:21:09+09:00",
+ "gpu_index": "0",
+ "gpu_uuid": "GPU-2445b100-70d8-e384-3a24-0249eeefc64d",
+ "log": "/data/hwkim/sftdpo_work/pilot_010_jv/servers/latency_jv-qwen3-8b-base/server_11461.log",
+ "binary": "/data/hwkim/sftdpo_work/pilot_010_ju/ollama-0.40.6/bin/ollama",
+ "binary_sha256": "8b4e471bcfc99125ae028b3b05938071999f8fddbebb30027f073460c5cb02e8",
+ "models_dir": "/data/hwkim/sftdpo_work/pilot_010_jv/models",
+ "env": {
+  "CUDA_VISIBLE_DEVICES": "GPU-2445b100-70d8-e384-3a24-0249eeefc64d",
+  "OLLAMA_HOST": "127.0.0.1:11461",
+  "OLLAMA_MODELS": "/data/hwkim/sftdpo_work/pilot_010_jv/models",
+  "OLLAMA_NUM_PARALLEL": "1",
+  "OLLAMA_MAX_LOADED_MODELS": "1",
+  "OLLAMA_KEEP_ALIVE": "-1",
+  "OLLAMA_NOPRUNE": "1",
+  "OLLAMA_VULKAN": "false",
+  "HOME": "/data/hwkim/sftdpo_work/pilot_010_jv/home_11461",
+  "OLLAMA_CONTEXT_LENGTH": "17408"
+ },
+ "model": "geoflow-jv-qwen3-8b-base:q4km-official-hfthink",
+ "digest_expected": "e621ceee578911e2abfc344a8b515186cf50b0f59e42259d40a7086d1243d002",
+ "version": "0.40.6",
+ "digest": "e621ceee578911e2abfc344a8b515186cf50b0f59e42259d40a7086d1243d002",
+ "tags_details": {
+  "parent_model": "jv-qwen3-8b-base-Q4_K_M-official.gguf",
+  "format": "gguf",
+  "family": "qwen3",
+  "families": [
+   "qwen3"
+  ],
+  "parameter_size": "8.2B",
+  "quantization_level": "Q4_K_M",
+  "context_length": 40960,
+  "embedding_length": 4096,
+  "runner": "llamacpp"
+ },
+ "show_parameters": "stop                           \"<|im_start|>\"\nstop                           \"<|im_end|>\"\ntemperature                    0.6\ntop_k                          20\ntop_p                          0.95\nrepeat_penalty                 1",
+ "show_template": "{%- if tools %}\n    {{- '<|im_start|>system\\n' }}\n    {%- if messages[0].role == 'system' %}\n        {{- messages[0].content + '\\n\\n' }}\n    {%- endif %}\n    {{- \"# Tools\\n\\nYou may call one or more functions to assist with the user query.\\n\\nYou are provided with function signatures within <tools></tools> XML tags:\\n<tools>\" }}\n    {%- for tool in tools %}\n        {{- \"\\n\" }}\n        {{- tool | tojson }}\n    {%- endfor %}\n    {{- \"\\n</tools>\\n\\nFor each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:\\n<tool_call>\\n{\\\"name\\\": <function-name>, \\\"arguments\\\": <args-json-object>}\\n</tool_call><|im_end|>\\n\" }}\n{%- else %}\n    {%- if messages[0].role == 'system' %}\n        {{- '<|im_start|>system\\n' + messages[0].content + '<|im_end|>\\n' }}\n    {%- endif %}\n{%- endif %}\n{%- set ns = namespace(multi_step_tool=true, last_query_index=messages|length - 1) %}\n{%- for message in messages[::-1] %}\n    {%- set index = (messages|length - 1) - loop.index0 %}\n    {%- if ns.multi_step_tool and message.role == \"user\" and message.content is string and not(message.content.startswith('<tool_response>') and message.content.endswith('</tool_response>')) %}\n        {%- set ns.multi_step_tool = false %}\n        {%- set ns.last_query_index = index %}\n    {%- endif %}\n{%- endfor %}\n{%- for message in messages %}\n    {%- if message.content is string %}\n        {%- set content = message.content %}\n    {%- else %}\n        {%- set content = '' %}\n    {%- endif %}\n    {%- if (message.role == \"user\") or (message.role == \"system\" and not loop.first) %}\n        {{- '<|im_start|>' + message.role + '\\n' + content + '<|im_end|>' + '\\n' }}\n    {%- elif message.role == \"assistant\" %}\n        {%- set reasoning_content = '' %}\n        {%- if message.reasoning_content is string %}\n            {%- set reasoning_content = message.reasoning_content %}\n        {%- else %}\n            {%- if '</think>' in content %}\n                {%- set reasoning_content = content.split('</think>')[0].rstrip('\\n').split('<think>')[-1].lstrip('\\n') %}\n                {%- set content = content.split('</think>')[-1].lstrip('\\n') %}\n            {%- endif %}\n        {%- endif %}\n        {%- if loop.index0 > ns.last_query_index %}\n            {%- if loop.last or (not loop.last and reasoning_content) %}\n                {{- '<|im_start|>' + message.role + '\\n<think>\\n' + reasoning_content.strip('\\n') + '\\n</think>\\n\\n' + content.lstrip('\\n') }}\n            {%- else %}\n                {{- '<|im_start|>' + message.role + '\\n' + content }}\n            {%- endif %}\n        {%- else %}\n            {{- '<|im_start|>' + message.role + '\\n' + content }}\n        {%- endif %}\n        {%- if message.tool_calls %}\n            {%- for tool_call in message.tool_calls %}\n                {%- if (loop.first and content) or (not loop.first) %}\n                    {{- '\\n' }}\n                {%- endif %}\n                {%- if tool_call.function %}\n                    {%- set tool_call = tool_call.function %}\n                {%- endif %}\n                {{- '<tool_call>\\n{\"name\": \"' }}\n                {{- tool_call.name }}\n                {{- '\", \"arguments\": ' }}\n                {%- if tool_call.arguments is string %}\n                    {{- tool_call.arguments }}\n                {%- else %}\n                    {{- tool_call.arguments | tojson }}\n                {%- endif %}\n                {{- '}\\n</tool_call>' }}\n            {%- endfor %}\n        {%- endif %}\n        {{- '<|im_end|>\\n' }}\n    {%- elif message.role == \"tool\" %}\n        {%- if loop.first or (messages[loop.index0 - 1].role != \"tool\") %}\n            {{- '<|im_start|>user' }}\n        {%- endif %}\n        {{- '\\n<tool_response>\\n' }}\n        {{- content }}\n        {{- '\\n</tool_response>' }}\n        {%- if loop.last or (messages[loop.index0 + 1].role != \"tool\") %}\n            {{- '<|im_end|>\\n' }}\n        {%- endif %}\n    {%- endif %}\n{%- endfor %}\n{%- if add_generation_prompt %}\n    {{- '<|im_start|>assistant\\n' }}\n    {%- if enable_thinking is defined and enable_thinking is false %}\n        {{- '<think>\\n\\n</think>\\n\\n' }}\n    {%- endif %}\n{%- endif %}",
+ "show_modelfile_head": "# Modelfile generated by \"ollama show\"\n# To build a new Modelfile based on this, replace FROM with:\n# FROM geoflow-jv-qwen3-8b-base:q4km-official-hfthink\n\nFROM /data/hwkim/sftdpo_work/pilot_010_jv/models/blobs/sha256-c55752ae518c9f07e72b03e3ad031e7efb157eab09fea201da91c1f88d681a20\nTEMPLATE \"\"\"{{- if .System }}<|im_start|>system\n{{ .System }}<|im_end|>\n{{ end }}\n{{- range $i, $_ := .Messages }}\n{{- $last := eq (len (slice $.Messages $i)) 1 -}}\n{{- if eq .Role \"user\" }}<|im_start|>user\n{{ .Content }}<|im_end|>",
+ "show_capabilities": [
+  "tools",
+  "thinking",
+  "completion"
+ ],
+ "show_thinking": null,
+ "show_details": {
+  "parent_model": "jv-qwen3-8b-base-Q4_K_M-official.gguf",
+  "format": "gguf",
+  "family": "qwen3",
+  "families": [
+   "qwen3"
+  ],
+  "parameter_size": "8.2B",
+  "quantization_level": "Q4_K_M",
+  "runner": "llamacpp"
+ },
+ "show_keys": [
+  "capabilities",
+  "details",
+  "model_info",
+  "modelfile",
+  "modified_at",
+  "parameters",
+  "template"
+ ],
+ "show_renderer": null,
+ "show_parser": null,
+ "api_ps_after_load": [
+  {
+   "name": "geoflow-jv-qwen3-8b-base:q4km-official-hfthink",
+   "model": "geoflow-jv-qwen3-8b-base:q4km-official-hfthink",
+   "size": 7690057154,
+   "digest": "e621ceee578911e2abfc344a8b515186cf50b0f59e42259d40a7086d1243d002",
+   "details": {
+    "parent_model": "",
+    "format": "gguf",
+    "family": "qwen3",
+    "families": [
+     "qwen3"
+    ],
+    "parameter_size": "8.2B",
+    "quantization_level": "Q4_K_M"
+   },
+   "expires_at": "2319-03-04T02:08:32.682130915+09:00",
+   "size_vram": 7690057154,
+   "context_length": 17408,
+   "runner": "llamacpp"
+  }
+ ],
+ "gpu_100": true,
+ "context_length": 17408,
+ "ollama_show_cli": {
+  "--parameters": "",
+  "--template": "",
+  "--modelfile": ""
+ },
+ "nvidia_smi_after_load": [
+  "0, GPU-2445b100-70d8-e384-3a24-0249eeefc64d, 7843 MiB, 49140 MiB",
+  "1, GPU-a5ce83d0-6ca2-5e3a-276c-4c965ea9c555, 19 MiB, 49140 MiB",
+  "2, GPU-c8f1bae2-de7a-a1c0-a054-8b6ebe5c2c8e, 19 MiB, 49140 MiB",
+  "3, GPU-48f798cc-9437-50ac-d604-448bbad7b311, 21 MiB, 49140 MiB"
+ ],
+ "backend_lines": [
+  "time=2026-11-22T02:21:12.714+09:00 level=INFO source=types.go:32 msg=\"inference compute\" id=0 filter_id=GPU-2445b100-70d8-e384-3a24-0249eeefc64d library=CUDA compute=8.9 name=CUDA0 description=\"NVIDIA RTX 6000 Ada Generation\" libdirs=ollama,cuda_v13 driver=13.2 pci_id=0000:2a:00.0 type=discrete tota"
+ ],
+ "llama_server_cmd": "time=2026-11-22T02:21:13.808+09:00 level=INFO source=llama_server.go:457 msg=\"starting llama-server\" cmd=\"/data/hwkim/sftdpo_work/pilot_010_ju/ollama-0.40.6/lib/ollama/llama-server --model /data/hwkim/sftdpo_work/pilot_010_jv/models/blobs/sha256-c55752ae518c9f07e72b03e3ad031e7efb157eab09fea201da91c1f88d681a20 --port 39777 --host 127.0.0.1 --no-webui --offline -c 17408 -np 1 --log-verbosity 4 --no-log-prefix --no-log-timestamps --flash-attn auto -b 1024 -ub 1024 --context-shift --keep 4\"",
+ "backend_cuda": true,
+ "server_gpu_processes_after_load": [
+  [
+   "GPU-2445b100-70d8-e384-3a24-0249eeefc64d",
+   "2028567",
+   "7816 MiB",
+   "/data/hwkim/sftdpo_work/pilot_010_ju/ollama-0.40.6/lib/ollama/llama-server"
+  ]
+ ],
+ "only_own_gpu": true,
+ "log_lines": [
+  "time=2026-11-22T02:21:12.714+09:00 level=INFO source=types.go:32 msg=\"inference compute\" id=0 filter_id=GPU-2445b100-70d8-e384-3a24-0249eeefc64d library=CUDA compute=8.9 name=CUDA0 description=\"NVIDIA RTX 6000 Ada Generation\" libdirs=ollama,cuda_v13 driver=13.2 pci_id=0000:2a:00.0 type=discrete tota",
+  "time=2026-11-22T02:21:12.714+09:00 level=INFO source=routes.go:2551 msg=\"vram-based default context\" total_vram=\"47.4 GiB\" default_num_ctx=262144",
+  "time=2026-11-22T02:21:13.808+09:00 level=INFO source=llama_server.go:457 msg=\"starting llama-server\" cmd=\"/data/hwkim/sftdpo_work/pilot_010_ju/ollama-0.40.6/lib/ollama/llama-server --model /data/hwkim/sftdpo_work/pilot_010_jv/models/blobs/sha256-c55752ae518c9f07e72b03e3ad031e7efb157eab09fea201da91c1",
+  "time=2026-11-22T02:21:13.809+09:00 level=INFO source=sched.go:671 msg=\"gpu memory\" id=0 library=CUDA available=\"46.5 GiB\" free=\"46.9 GiB\" minimum=\"457.0 MiB\" overhead=\"0 B\"",
+  "common_memory_breakdown_print: | memory breakdown [MiB]              | total    free    self   model   context   compute    unaccounted |",
+  "llama_model_loader: - kv  15:                       qwen3.context_length u32              = 40960",
+  "load_tensors: offloading output layer to GPU",
+  "load_tensors: offloading 35 repeating layers to GPU",
+  "load_tensors: offloaded 37/37 layers to GPU",
+  "llama_context: constructing llama_context",
+  "llama_context: n_seq_max             = 1",
+  "llama_context: n_ctx                 = 17408",
+  "llama_context: n_ctx_seq             = 17408",
+  "llama_context: n_batch               = 1024",
+  "llama_context: n_ubatch              = 1024",
+  "llama_context: causal_attn           = 1",
+  "llama_context: flash_attn            = auto",
+  "llama_context: kv_unified            = false",
+  "llama_context: freq_base             = 1000000.0",
+  "llama_context: freq_scale            = 1",
+  "llama_context: n_rs_seq              = 0",
+  "llama_context: n_outputs_max         = 1",
+  "llama_context: n_outputs_max_per_seq = 1",
+  "llama_context: n_ctx_seq (17408) < n_ctx_train (40960) -- the full capacity of the model will not be utilized",
+  "llama_context:  CUDA_Host  output buffer size =     0.58 MiB"
+ ]
+}
