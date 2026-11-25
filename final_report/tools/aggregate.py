@@ -266,7 +266,7 @@ def hbar_svg(path, title, subtitle, items, unit, xmax=None, ref=None, ref_label=
     """items: [(label, value)] 또는 stacked=[(label, [v1, v2])]."""
     rows = stacked if stacked else items
     W, left, right, rh = 900, 340, 90, 40
-    top = 92 if legend else 72
+    top = (92 if legend else 72) + (18 if ref is not None else 0)
     ph = rh * len(rows)
     H = top + ph + 44
     vmax = xmax or max((sum(v) if stacked else v) for _, v in rows) * 1.12
@@ -279,7 +279,7 @@ def hbar_svg(path, title, subtitle, items, unit, xmax=None, ref=None, ref_label=
          f'<rect width="{W}" height="{H}" fill="{SURF}"/>',
          f'<rect x="0.5" y="0.5" width="{W - 1}" height="{H - 1}" fill="none" stroke="{INK}" stroke-width="1"/>',
          f'<text x="{W / 2}" y="32" font-size="18" font-weight="700" fill="{INK}" text-anchor="middle">&lt; {esc(title)} &gt;</text>',
-         f'<text x="{pr}" y="{top - 10}" font-size="12" fill="{INK}" text-anchor="end">(단위: {esc(unit)})</text>']
+         f'<text x="{pr}" y="{top - (28 if ref is not None else 10)}" font-size="12" fill="{INK}" text-anchor="end">(단위: {esc(unit)})</text>']
     for i in range(n + 1):
         v = step * i
         x = sx(v)
@@ -305,7 +305,8 @@ def hbar_svg(path, title, subtitle, items, unit, xmax=None, ref=None, ref_label=
     if ref is not None:
         x = sx(ref)
         o.append(f'<line x1="{x:.1f}" y1="{top}" x2="{x:.1f}" y2="{top + ph}" stroke="{INK}" stroke-width="1.5" stroke-dasharray="6 3"/>')
-        o.append(f'<text x="{x + 5:.1f}" y="{top + 14}" font-size="12" fill="{INK}">{esc(ref_label)}</text>')
+        o.append(f'<line x1="{x:.1f}" y1="{top - 4}" x2="{x:.1f}" y2="{top}" stroke="{INK}" stroke-width="1.5"/>')
+        o.append(f'<text x="{x:.1f}" y="{top - 8}" font-size="12" fill="{INK}" text-anchor="middle">{esc(ref_label)}</text>')
     o.append(f'<rect x="{left}" y="{top}" width="{pr - left}" height="{ph}" fill="none" stroke="{INK}" stroke-width="1"/>')
     if legend:
         sizes = [24 + 13 * len(name) for name in legend]
