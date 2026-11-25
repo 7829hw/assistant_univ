@@ -268,7 +268,7 @@ def hbar_svg(path, title, subtitle, items, unit, xmax=None, ref=None, ref_label=
     W, left, right, rh = 900, 340, 90, 40
     top = 92 if legend else 72
     ph = rh * len(rows)
-    H = top + ph + 74
+    H = top + ph + 44
     vmax = xmax or max((sum(v) if stacked else v) for _, v in rows) * 1.12
     step = nice_step(vmax)
     vmax = step * (int(vmax / step - 1e-9) + 1)
@@ -317,7 +317,6 @@ def hbar_svg(path, title, subtitle, items, unit, xmax=None, ref=None, ref_label=
             o.append(f'<rect x="{cx}" y="{top - 32}" width="14" height="10" fill="{[S1, S2][j]}" stroke="{INK}" stroke-width="0.8"/>'
                      f'<text x="{cx + 19}" y="{top - 22}" font-size="12" fill="{INK}">{esc(name)}</text>')
             cx += sizes[j]
-    o.append(f'<text x="16" y="{H - 14}" font-size="11.5" fill="{INK}">※ {esc(subtitle)}</text>')
     o.append("</svg>")
     path.write_text("\n".join(o), encoding="utf-8")
 
