@@ -243,9 +243,10 @@ def existing():
 
 
 # ---------------------------------------------------------------- SVG
-FONT = "Noto Sans CJK KR"
-INK, INK2, GRID, SURF = "#0b0b0b", "#52514e", "#e4e3df", "#fcfcfb"
-S1, S2, S3 = "#2a78d6", "#eb6834", "#1baf7a"
+# 정부기관 제출 보고서 양식: 흰 바탕, 검은 테두리, 회색·검정 막대, 굴림/돋움 계열, 단위·주석 표기
+FONT = "Gulim, 굴림, Dotum, 돋움, 'Malgun Gothic', 'Noto Sans CJK KR', 'WenQuanYi Zen Hei', sans-serif"
+INK, GRID, SURF = "#000000", "#999999", "#ffffff"
+S1, S2 = "#a6a6a6", "#000000"
 
 
 def esc(s):
@@ -264,47 +265,59 @@ def nice_step(vmax):
 def hbar_svg(path, title, subtitle, items, unit, xmax=None, ref=None, ref_label=None, stacked=None, legend=None, fmt="{:.2f}", tfmt="{:g}"):
     """items: [(label, value)] 또는 stacked=[(label, [v1, v2])]."""
     rows = stacked if stacked else items
-    W, left, right, top, rh = 900, 330, 110, 92, 40
-    H = top + rh * len(rows) + 60
+    W, left, right, rh = 900, 340, 90, 40
+    top = 92 if legend else 72
+    ph = rh * len(rows)
+    H = top + ph + 74
     vmax = xmax or max((sum(v) if stacked else v) for _, v in rows) * 1.12
-    sx = lambda v: left + (W - left - right) * v / vmax
-    o = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" font-family="{FONT}">',
-         f'<rect width="{W}" height="{H}" fill="{SURF}"/>',
-         f'<text x="24" y="34" font-size="20" font-weight="700" fill="{INK}">{esc(title)}</text>',
-         f'<text x="24" y="58" font-size="13" fill="{INK2}">{esc(subtitle)}</text>']
     step = nice_step(vmax)
     vmax = step * (int(vmax / step - 1e-9) + 1)
     n = int(round(vmax / step))
+    sx = lambda v: left + (W - left - right) * v / vmax
+    pr = W - right
+    o = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" font-family="{FONT}">',
+         f'<rect width="{W}" height="{H}" fill="{SURF}"/>',
+         f'<rect x="0.5" y="0.5" width="{W - 1}" height="{H - 1}" fill="none" stroke="{INK}" stroke-width="1"/>',
+         f'<text x="{W / 2}" y="32" font-size="18" font-weight="700" fill="{INK}" text-anchor="middle">&lt; {esc(title)} &gt;</text>',
+         f'<text x="{pr}" y="{top - 10}" font-size="12" fill="{INK}" text-anchor="end">(단위: {esc(unit)})</text>']
     for i in range(n + 1):
         v = step * i
         x = sx(v)
-        o.append(f'<line x1="{x:.1f}" y1="{top - 8}" x2="{x:.1f}" y2="{top + rh * len(rows)}" stroke="{GRID}" stroke-width="1"/>')
-        o.append(f'<text x="{x:.1f}" y="{top + rh * len(rows) + 18}" font-size="11" fill="{INK2}" text-anchor="middle">{tfmt.format(v)}</text>')
-    o.append(f'<text x="{W - right}" y="{top + rh * len(rows) + 36}" font-size="11" fill="{INK2}" text-anchor="end">{esc(unit)}</text>')
+        if 0 < i < n:
+            o.append(f'<line x1="{x:.1f}" y1="{top}" x2="{x:.1f}" y2="{top + ph}" stroke="{GRID}" stroke-width="0.8" stroke-dasharray="3 3"/>')
+        o.append(f'<line x1="{x:.1f}" y1="{top + ph}" x2="{x:.1f}" y2="{top + ph + 5}" stroke="{INK}" stroke-width="1"/>')
+        o.append(f'<text x="{x:.1f}" y="{top + ph + 19}" font-size="12" fill="{INK}" text-anchor="middle">{tfmt.format(v)}</text>')
     for i, (lab, v) in enumerate(rows):
         y = top + i * rh
-        o.append(f'<text x="{left - 10}" y="{y + rh / 2 + 4}" font-size="13" fill="{INK}" text-anchor="end">{esc(lab)}</text>')
+        o.append(f'<line x1="{left - 5}" y1="{y + rh / 2}" x2="{left}" y2="{y + rh / 2}" stroke="{INK}" stroke-width="1"/>')
+        o.append(f'<text x="{left - 9}" y="{y + rh / 2 + 4}" font-size="13" fill="{INK}" text-anchor="end">{esc(lab)}</text>')
         if stacked:
             x0 = left
             for j, part in enumerate(v):
                 w = sx(part) - left
-                col = [S1, S2][j]
-                o.append(f'<rect x="{x0:.1f}" y="{y + 9}" width="{max(w - 2, 0.5):.1f}" height="{rh - 18}" rx="3" fill="{col}"><title>{esc(lab)}: {fmt.format(part)} {esc(unit)}</title></rect>')
+                o.append(f'<rect x="{x0:.1f}" y="{y + 10}" width="{max(w, 0.8):.1f}" height="{rh - 20}" fill="{[S1, S2][j]}" stroke="{INK}" stroke-width="0.8"><title>{esc(lab)}: {fmt.format(part)} {esc(unit)}</title></rect>')
                 x0 += w
             tot = sum(v)
-            o.append(f'<text x="{sx(tot) + 6:.1f}" y="{y + rh / 2 + 4}" font-size="12" fill="{INK}">{fmt.format(tot)}</text>')
+            o.append(f'<text x="{sx(tot) + 7:.1f}" y="{y + rh / 2 + 4}" font-size="12" fill="{INK}">{fmt.format(tot)}</text>')
         else:
-            o.append(f'<rect x="{left}" y="{y + 9}" width="{max(sx(v) - left, 0.5):.1f}" height="{rh - 18}" rx="3" fill="{S1}"><title>{esc(lab)}: {fmt.format(v)} {esc(unit)}</title></rect>')
-            o.append(f'<text x="{sx(v) + 6:.1f}" y="{y + rh / 2 + 4}" font-size="12" fill="{INK}">{fmt.format(v)}</text>')
+            o.append(f'<rect x="{left}" y="{y + 10}" width="{max(sx(v) - left, 0.8):.1f}" height="{rh - 20}" fill="{S1}" stroke="{INK}" stroke-width="0.8"><title>{esc(lab)}: {fmt.format(v)} {esc(unit)}</title></rect>')
+            o.append(f'<text x="{sx(v) + 7:.1f}" y="{y + rh / 2 + 4}" font-size="12" fill="{INK}">{fmt.format(v)}</text>')
     if ref is not None:
         x = sx(ref)
-        o.append(f'<line x1="{x:.1f}" y1="{top - 12}" x2="{x:.1f}" y2="{top + rh * len(rows)}" stroke="{S2}" stroke-width="2" stroke-dasharray="5 4"/>')
-        o.append(f'<text x="{x + 4:.1f}" y="{top - 16}" font-size="12" fill="{INK}">{esc(ref_label)}</text>')
+        o.append(f'<line x1="{x:.1f}" y1="{top}" x2="{x:.1f}" y2="{top + ph}" stroke="{INK}" stroke-width="1.5" stroke-dasharray="6 3"/>')
+        o.append(f'<text x="{x + 5:.1f}" y="{top + 14}" font-size="12" fill="{INK}">{esc(ref_label)}</text>')
+    o.append(f'<rect x="{left}" y="{top}" width="{pr - left}" height="{ph}" fill="none" stroke="{INK}" stroke-width="1"/>')
     if legend:
-        lx = 24
+        sizes = [24 + 13 * len(name) for name in legend]
+        lw = sum(sizes) + 12
+        lx = left
+        o.append(f'<rect x="{lx}" y="{top - 38}" width="{lw}" height="22" fill="{SURF}" stroke="{INK}" stroke-width="0.8"/>')
+        cx = lx + 8
         for j, name in enumerate(legend):
-            o.append(f'<rect x="{lx}" y="68" width="12" height="12" rx="2" fill="{[S1, S2][j]}"/><text x="{lx + 18}" y="79" font-size="12" fill="{INK2}">{esc(name)}</text>')
-            lx += 40 + 13 * len(name)
+            o.append(f'<rect x="{cx}" y="{top - 32}" width="14" height="10" fill="{[S1, S2][j]}" stroke="{INK}" stroke-width="0.8"/>'
+                     f'<text x="{cx + 19}" y="{top - 22}" font-size="12" fill="{INK}">{esc(name)}</text>')
+            cx += sizes[j]
+    o.append(f'<text x="16" y="{H - 14}" font-size="11.5" fill="{INK}">※ {esc(subtitle)}</text>')
     o.append("</svg>")
     path.write_text("\n".join(o), encoding="utf-8")
 
