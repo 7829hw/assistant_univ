@@ -1431,6 +1431,10 @@ protected_final_v2 열람·고정, 주 셋 151 측정, Ollama 컨테이너 조�
       optimizer.pt 52개(18.18 GB; 마지막 체크포인트 기준 완료 + 루트 어댑터 있음: `ablation_013` A3T 3개, `pilot_004`, `pilot_005`, `pilot_008` P8 5개, `pipeline_pilot_001`). `/data` 여유 514 GB → 577 GB(사용률 68%).
       남긴 것: `pilot_002/merged/final`(`logprob_diag/score_hf.py`·`serving_vllm/score_hf_p3.py`가 입력으로 참조), 최근 파일이 참조하는 optimizer.pt 36개(`A0-o2026117`·`A0-o2026131`·`pilot_003`·`P9-F-*`와 미완료 run 2개),
       `gguf/`의 자체 Q4_K_M 5개·`gguf/diag`(재생성 명령이 산문뿐)·중간 체크포인트 어댑터 사본(결정 164·174·210의 어댑터 보존). `merged/`를 다시 만들려면 영수증·`run_register.sh`의 `/home/hwkim/sftdpo_work` 경로를 `/data/hwkim/sftdpo_work`로 바꿔야 하며, 재생성은 해 보지 않았다.
+    - 완화 기준의 3차 삭제(2026-11-26, 사용자 "완화 범위로 제거", 가중치만): `gguf/`의 자체 Q4_K_M 5개(base·pilot001 sft/final·pilot002 sft/final)와 `quant_recipe/qwen3-8b-pilot002-final-Q4_K_M-official.gguf` 1개(30.36 GB; 파일 10월, 11-12 이후 변경 파일의 참조 없음),
+      중간 체크포인트 어댑터 66개(11.53 GB; `ablation_011`·`012`·`013`, `topic2_semantic_order/train`의 22개 run). 마지막 체크포인트는 모두 남기고, 저장소 코드·설정·문서·영수증의 `run/checkpoint-N` 참조 435개에 걸린 체크포인트와 11-12 이후 파일이 바뀐 run(42개)은 지우지 않았다.
+      삭제한 22개 run은 루트 어댑터와 마지막 체크포인트의 sha256이 일치함을 확인했다(22/22). `/data` 여유 577 GB → 622 GB(사용률 66%).
+      남은 중간 체크포인트 어댑터 약 64 GB는 참조로 보호되어 남겼다. `gguf/diag`(재생성 명령이 산문뿐)·27B 교사(`pilot_010_jt`, 최근 사용)·`base-bf16`·`hf-cache`·루트 어댑터는 그대로. 이 범위에서 더 지울 가중치는 없다고 판단했다.
     - Git 데이터: 평가 전용 원문 제외 규칙(`calibration_001`·`quant_recipe`·`pilot_003`~`010`의 `raw/`·`cells_raw/`·`latency_raw/`·`post_cells_raw/`, `pilot_006_prep/raw` 59개, `pilot_010` `cells_raw_JP` 개발 셋 파일)을 `.gitignore`에서 제거하고 1,852개 파일(약 0.46 GB)을 커밋했다(`71931029`).
       100MiB를 넘는 `pilot_006/self_2d/raw/S128F_raw.jsonl`은 계속 무시하고 추적 중인 `.shards/`로 보존한다(`verify-shards` 112,103,234 B 일치). 새로 100MiB를 넘는 파일도 같은 방식으로 나눈다. 가중치·체크포인트 규칙은 그대로.
       결정 257의 "혼합 폴더는 확인된 평가 파일만 제외" 항목을 대체한다. 평가·보호 데이터를 학습·체크포인트 선택·annotation 후보에 쓰지 않는 제한(규칙 8)과 Git 보존이 학습 사용 허가가 아니라는 점은 그대로. `CLAUDE.md` 규칙 3과 `.gitignore` 주석을 맞췄다(`e3de0a3a`).
