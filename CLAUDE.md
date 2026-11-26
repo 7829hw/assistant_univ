@@ -50,9 +50,17 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
      teacher, self samples), annotation-candidate first responses, review documents/queues/sheets, and their provenance.
      This supersedes earlier instructions to keep these originals ignored or commit only summaries. The current policy
      is `sft_dpo_inventory/DATA_RETENTION.md`; historical reports and frozen scripts retain their original bytes.
-     Preserve explicit evaluation-only and final-set restrictions separately. Git preservation does not approve a
-     draft or authorize using evaluation data for training. For mixed training/review/evaluation directories, exclude
-     only the identified evaluation files, so future training/review originals remain visible to Git.
+     Preserve explicit evaluation-only and final-set restrictions on *use* separately. Git preservation does not approve a
+     draft or authorize using evaluation data for training.
+   - Evaluation raw outputs (user instruction, 2026-11-26): commit them too. Everything except model weights is
+     committed: the evaluation-only raw-output ignore rules (`raw/`, `cells_raw/`, `latency_raw/`, `post_cells_raw/`,
+     the 59 `pilot_006_prep/raw` files, `pilot_010` `cells_raw_JP` dev files) were removed from `.gitignore` (commit
+     `0bc67189`). The only ignored data file is a single original over 100MiB, `pilot_006/self_2d/raw/S128F_raw.jsonl`,
+     kept as tracked `.shards/` with a manifest (`scripts/restore_missing_training_data.py verify-shards`). Split any
+     new file over 100MiB the same way instead of ignoring it. The use restrictions are unchanged: evaluation and
+     protected data never become training input, checkpoint selection or annotation candidates (rule 8). This
+     supersedes the "exclude only the identified evaluation files" rule for mixed directories; no decision number is
+     assigned yet (add one to `sft_dpo_inventory/DECISIONS.md` under rule 14).
 4. Ollama: use the existing Docker server (`localhost:11434`) as is. Since decision 69 (2026-10-12) the default GPU for
    Ollama measurements is host GPU 3 (UUID `GPU-48f798cc-9437-50ac-d604-448bbad7b311`). The container's `device_ids`
    decide which GPU Ollama actually uses (2026-10-12: "3"; earlier records under decisions 32 and 38 ran on GPU 2;
