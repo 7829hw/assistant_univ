@@ -1424,7 +1424,13 @@ protected_final_v2 열람·고정, 주 셋 151 측정, Ollama 컨테이너 조�
       규칙 12(기존 Ollama 모델을 지우지 않음)의 예외로 이 세 모델에 한해 사용자가 직접 지시했다(결정 82와 같은 방식).
     - 남긴 것: `hf-cache`(기반 모델), `pilot_010_jt/model`(27B 교사), `gguf/qwen3-8b-b968826d-base-bf16.gguf`, `pilot_001`·`pilot_002`의 `merged/`, `gguf/diag`, 자체 Q4_K_M 5개, 모든 LoRA 어댑터(Git에는 sha256 기록만 있고 파일은 없음), `J-V4-o101/checkpoint-1984`(final_report 사용),
       미완료 run 2개(`X4C-o2026131-s43`, `X4T-o2026131-s2026119`)의 optimizer.pt, 조사 범위 밖 optimizer.pt 84개(`ablation_013`, `pilot_003`·`004`·`005`·`008`·`009`, `pipeline_pilot_001`). 지운 가중치는 `pilot_010/jv/convert_jv.py`·영수증(`receipts/`, `registration/`)과 어댑터·hf-cache로 다시 만든다. BF16 GGUF·merged 재생성은 실제로 해 보지 않았다.
-    - 진행 중: "제조법이 Git에 있고 2026-11-12 이후 쓰이지 않은 가중치를 모두 지운다"는 사용자 지시의 감사(읽기 전용 workflow `wf_f7eb1779-748`). 결과와 삭제는 끝난 뒤 별도로 기록한다.
+    - 지시 "제조법이 Git에 있고 최근 2주(2026-11-12 이후) 쓰이지 않은 가중치를 모두 지운다"(사용자): 읽기 전용 workflow `wf_f7eb1779-748`(감사자 4 + 반박 검증자 4)로 감사했다. 엄격한 기준(파일 atime·mtime·참조 어느 하나라도 11-12 이후면 사용)으로는 삭제할 파일이 0개였다.
+      atime이 모두 2026-11-26이었으나 이 감사의 읽기가 갱신한 값으로 보여(relatime 마운트) 판정 근거로 쓰지 않기로 했다(원인은 확정하지 못함). 사용자가 "mtime·참조 기준으로 완화"를 지시했다.
+    - 완화 기준의 2차 삭제(2026-11-26, 가중치만): 파일 mtime이 11-12 이전이고, 11-12 이후 변경된 추적 파일이 경로·run 이름을 참조하지 않으며, 재생성 입력이 확인된 것.
+      `pilot_001/merged/{sft,final}`, `pilot_002/merged/sft`의 `*.safetensors` 12개(49.14 GB; 어댑터 sha256 `4a4992a5`·`e1749007`·`416dd303`이 기록과 일치, 기반 스냅샷 b968826d·`training/merge_adapter.py`(origin/main) 있음)와
+      optimizer.pt 52개(18.18 GB; 마지막 체크포인트 기준 완료 + 루트 어댑터 있음: `ablation_013` A3T 3개, `pilot_004`, `pilot_005`, `pilot_008` P8 5개, `pipeline_pilot_001`). `/data` 여유 514 GB → 577 GB(사용률 68%).
+      남긴 것: `pilot_002/merged/final`(`logprob_diag/score_hf.py`·`serving_vllm/score_hf_p3.py`가 입력으로 참조), 최근 파일이 참조하는 optimizer.pt 36개(`A0-o2026117`·`A0-o2026131`·`pilot_003`·`P9-F-*`와 미완료 run 2개),
+      `gguf/`의 자체 Q4_K_M 5개·`gguf/diag`(재생성 명령이 산문뿐)·중간 체크포인트 어댑터 사본(결정 164·174·210의 어댑터 보존). `merged/`를 다시 만들려면 영수증·`run_register.sh`의 `/home/hwkim/sftdpo_work` 경로를 `/data/hwkim/sftdpo_work`로 바꿔야 하며, 재생성은 해 보지 않았다.
     - Git 데이터: 평가 전용 원문 제외 규칙(`calibration_001`·`quant_recipe`·`pilot_003`~`010`의 `raw/`·`cells_raw/`·`latency_raw/`·`post_cells_raw/`, `pilot_006_prep/raw` 59개, `pilot_010` `cells_raw_JP` 개발 셋 파일)을 `.gitignore`에서 제거하고 1,852개 파일(약 0.46 GB)을 커밋했다(`71931029`).
       100MiB를 넘는 `pilot_006/self_2d/raw/S128F_raw.jsonl`은 계속 무시하고 추적 중인 `.shards/`로 보존한다(`verify-shards` 112,103,234 B 일치). 새로 100MiB를 넘는 파일도 같은 방식으로 나눈다. 가중치·체크포인트 규칙은 그대로.
       결정 257의 "혼합 폴더는 확인된 평가 파일만 제외" 항목을 대체한다. 평가·보호 데이터를 학습·체크포인트 선택·annotation 후보에 쓰지 않는 제한(규칙 8)과 Git 보존이 학습 사용 허가가 아니라는 점은 그대로. `CLAUDE.md` 규칙 3과 `.gitignore` 주석을 맞췄다(`e3de0a3a`).
