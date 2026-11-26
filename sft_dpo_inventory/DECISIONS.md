@@ -1413,3 +1413,22 @@ protected_final_v2 열람·고정, 주 셋 151 측정, Ollama 컨테이너 조�
   지연 3셀(context 17,408) 끝, 서버 모두 내림. 유효성 90셀 통과, jp_posthoc 30/30·ju_results 6/6 같음, 유출 검사 0(결과·gpu/JV). Docker·컨테이너·11434·`/data/hwkim/ollama` 건드리지 않음, pull 없음.
   결과 `pilot_010/results/JV_RESULTS.md`·`jv_results.json`·`jv_tables.md`(참고 측정, 판정 아님). Q4 − BF16(같은 seed): PF2 올바른 거부 −0.50 – −1.80(CI 모두 0 포함), H-final 정답률 −0.56 – −4.20
   (SFT·RR+NM8·RR+NM 12는 CI가 0 아래). 학생 Q4 − 교사 Q4 올바른 거부 RR 계열 +1.70 – +6.43(CI 0 포함). 지연 중앙값 교사 Q4 12.62초, base Q4 8.60초, RR+NM4 o101 Q4 6.02초; GPU 메모리 19,531 대 7,881 MiB.
+
+## 2026-11-26 — 저장공간 정리(가중치·Ollama), 평가 원문 Git 보존, 브랜치·태그 정리와 main 역할 변경
+
+274. (2026-11-26, 사용자) 저장공간 확보를 위해 중요도가 낮은 가중치와 Ollama 모델을 지우고, 가중치를 제외한 모든 데이터를 Git에 올리며, 브랜치를 정리한다. 저장소는 PUBLIC으로 둔다(사용자 확인).
+    - 지운 것(`/data/hwkim/sftdpo_work`, 가중치 파일만; 영수증·스크립트·어댑터는 남김): `pilot_010_jv/gguf` Q4 18개(sha256 18/18 = JV Ollama blob 이름, 삭제 전 전체 해시 확인),
+      `gguf/quant_recipe/qwen3-8b-b968826d-base-Q4_K_M-official.gguf`(sha256 `c55752ae…` = JV base blob), BF16 GGUF 4개(pilot001·pilot002 sft·final), 완료된 run의 `checkpoint-*/optimizer.pt` 518개(181.09 GB; 루트 어댑터가 있는 run만),
+      별도 Ollama 저장소 `pilot_010_ju/models`(17 GB; blob 5개가 메인 저장소와 이름·크기 같음)와 `pilot_010_jv/models`(88 GB; 모델 18개). `/data` 여유 75 GB → 514 GB.
+    - 메인 Ollama(컨테이너는 건드리지 않음): 2026-11-26T22:02:30+09:00 `/api/ps` 빈 상태에서 `DELETE /api/delete` — `gemma4:12b`(`4eb23ef187e2`), `gemma4:e4b`(`c6eb396dbd59`), `qwen3.5:9b`(`6488c96fa5fa`), 모두 HTTP 200. 남은 모델: `qwen3:8b`(`500a1f067a9f`, E), `qwen3.8:27b`(`aaee06c39dcf`). blob 46.7 → 23.0 GB.
+      규칙 12(기존 Ollama 모델을 지우지 않음)의 예외로 이 세 모델에 한해 사용자가 직접 지시했다(결정 82와 같은 방식).
+    - 남긴 것: `hf-cache`(기반 모델), `pilot_010_jt/model`(27B 교사), `gguf/qwen3-8b-b968826d-base-bf16.gguf`, `pilot_001`·`pilot_002`의 `merged/`, `gguf/diag`, 자체 Q4_K_M 5개, 모든 LoRA 어댑터(Git에는 sha256 기록만 있고 파일은 없음), `J-V4-o101/checkpoint-1984`(final_report 사용),
+      미완료 run 2개(`X4C-o2026131-s43`, `X4T-o2026131-s2026119`)의 optimizer.pt, 조사 범위 밖 optimizer.pt 84개(`ablation_013`, `pilot_003`·`004`·`005`·`008`·`009`, `pipeline_pilot_001`). 지운 가중치는 `pilot_010/jv/convert_jv.py`·영수증(`receipts/`, `registration/`)과 어댑터·hf-cache로 다시 만든다. BF16 GGUF·merged 재생성은 실제로 해 보지 않았다.
+    - 진행 중: "제조법이 Git에 있고 2026-11-12 이후 쓰이지 않은 가중치를 모두 지운다"는 사용자 지시의 감사(읽기 전용 workflow `wf_f7eb1779-748`). 결과와 삭제는 끝난 뒤 별도로 기록한다.
+    - Git 데이터: 평가 전용 원문 제외 규칙(`calibration_001`·`quant_recipe`·`pilot_003`~`010`의 `raw/`·`cells_raw/`·`latency_raw/`·`post_cells_raw/`, `pilot_006_prep/raw` 59개, `pilot_010` `cells_raw_JP` 개발 셋 파일)을 `.gitignore`에서 제거하고 1,852개 파일(약 0.46 GB)을 커밋했다(`71931029`).
+      100MiB를 넘는 `pilot_006/self_2d/raw/S128F_raw.jsonl`은 계속 무시하고 추적 중인 `.shards/`로 보존한다(`verify-shards` 112,103,234 B 일치). 새로 100MiB를 넘는 파일도 같은 방식으로 나눈다. 가중치·체크포인트 규칙은 그대로.
+      결정 257의 "혼합 폴더는 확인된 평가 파일만 제외" 항목을 대체한다. 평가·보호 데이터를 학습·체크포인트 선택·annotation 후보에 쓰지 않는 제한(규칙 8)과 Git 보존이 학습 사용 허가가 아니라는 점은 그대로. `CLAUDE.md` 규칙 3과 `.gitignore` 주석을 맞췄다(`e3de0a3a`).
+    - 브랜치: `geoflow/final-report-perf`의 로컬 커밋 2개를 원격의 다른 세션 커밋 3개 위로 rebase(겹치는 파일 없음, 규칙 14)한 뒤 `geoflow/sft-dpo-t2pc`를 fast-forward했다(`e3de0a3a`, force push 없음).
+      태그 `archive/*` 9개로 남기고 삭제: `grounding-v9-desc`·`v10-status`·`v11-t2`·`v11-t2c`·`v12-t3`·`v12-t3c`(로컬 전용 커밋 4개 포함), `geoflow/fix-condition-hoist`·`geoflow/topic2-repro`·`geoflow/dev`(원격도 삭제).
+      `main`은 업체 제공 v2 기준선(`ebb9bc3f`)이었고 어떤 작업도 합쳐진 적이 없어, 태그 `vendor-v2-baseline`로 남긴 뒤 `t2pc`로 fast-forward했다. 기본 브랜치는 `main`. `geoflow/dev-v2`, `geoflow/sft-dpo-thor`, `geoflow/partial-grounding`은 건드리지 않았다(규칙 1, 결정 111).
+    - 이후 SFT/DPO 작업은 계속 `geoflow/sft-dpo-t2pc`에서 하고, `main`은 정리된 작업 줄기로 따라간다.
