@@ -1437,6 +1437,10 @@ protected_final_v2 열람·고정, 주 셋 151 측정, Ollama 컨테이너 조�
       남은 중간 체크포인트 어댑터 약 64 GB는 참조로 보호되어 남겼다. `gguf/diag`(재생성 명령이 산문뿐)·27B 교사(`pilot_010_jt`, 최근 사용)·`base-bf16`·`hf-cache`·루트 어댑터는 그대로. 이 범위에서 더 지울 가중치는 없다고 판단했다.
     - `CLAUDE.md` 정리(2026-11-26, 사용자 "쓸모없는 것 제거", 새 결정 아님): 결정 191이 되돌린 결정 181의 Ollama GPU 이동 안내(규칙 4·13의 "Update" 4줄)를 합쳐 현재 상태(Ollama GPU `48f798cc…` index 2, 시작 전 `/api/ps` 비어 있음·내리지 않음·30분 대기)만 남겼다. 규칙 15와 16 사이 빈 줄 제거.
       `DECISIONS.md`의 결정은 지우지 않았다: 번호를 다른 파일 60곳이 인용하고, 앞선 결정을 뒤집는 기록 자체가 이력이다(번호 74는 원래 비어 있음).
+    - `CLAUDE.md` 규칙 4·5·6·13 재작성(2026-11-26, 사용자 "규칙 5와 6을 현재 상태에 맞게 다시 쓰고 Ollama 전용 GPU 관련 내용도 없앤다", 새 결정 아님): 현재 구성(`nvidia-smi -L`, RTX 6000 Ada 49 GB 4장, index 0 `2445b100…`·1 `a5ce83d0…`·2 `c8f1bae2…`·3 `48f798cc…`, 프로세스 없음)에 맞춰
+      기본 GPU 3·예비 GPU 2·"GPU 0·1 금지"(결정 38·69)와 결정 83·89·100·105의 GPU 예외를 결정 114의 일반 규칙(네 장 모두 사용 가능, 한 작업 = GPU 한 장, 시작 전 `nvidia-smi` UUID·메모리·다른 프로세스 확인, UUID로 매핑)으로 합쳤다.
+      Ollama 전용 GPU 지정(결정 69·181·191, 규칙 13의 Ollama GPU UUID 확인)을 없앴다. 불러 둔 Ollama 모델은 다른 프로세스로 보고 그 GPU를 피하며, 모델을 내리거나 컨테이너를 건드리지 않는다. 규칙 13은 컨테이너가 GPU를 잃고 CPU로 도는 것을 막는 확인(GPU 목록·100% GPU·생성 속도 guard)만 남겼다.
+      관찰: Ollama 컨테이너(`docker inspect` DeviceRequests `nvidia.com/gpu=2`)가 지금은 UUID `c8f1bae2…`(호스트 index 2) 한 장을 쓰며, 결정 191의 `48f798cc…`와 다르다. 사람이 옮긴 것으로 보이며 결정 기록은 없다.
     - Git 데이터: 평가 전용 원문 제외 규칙(`calibration_001`·`quant_recipe`·`pilot_003`~`010`의 `raw/`·`cells_raw/`·`latency_raw/`·`post_cells_raw/`, `pilot_006_prep/raw` 59개, `pilot_010` `cells_raw_JP` 개발 셋 파일)을 `.gitignore`에서 제거하고 1,852개 파일(약 0.46 GB)을 커밋했다(`71931029`).
       100MiB를 넘는 `pilot_006/self_2d/raw/S128F_raw.jsonl`은 계속 무시하고 추적 중인 `.shards/`로 보존한다(`verify-shards` 112,103,234 B 일치). 새로 100MiB를 넘는 파일도 같은 방식으로 나눈다. 가중치·체크포인트 규칙은 그대로.
       결정 257의 "혼합 폴더는 확인된 평가 파일만 제외" 항목을 대체한다. 평가·보호 데이터를 학습·체크포인트 선택·annotation 후보에 쓰지 않는 제한(규칙 8)과 Git 보존이 학습 사용 허가가 아니라는 점은 그대로. `CLAUDE.md` 규칙 3과 `.gitignore` 주석을 맞췄다(`e3de0a3a`).

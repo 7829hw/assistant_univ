@@ -60,48 +60,29 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
      new file over 100MiB the same way instead of ignoring it. The use restrictions are unchanged: evaluation and
      protected data never become training input, checkpoint selection or annotation candidates (rule 8). This
      supersedes the "exclude only the identified evaluation files" rule for mixed directories (decision 274).
-4. Ollama: use the existing Docker server (`localhost:11434`) as is. Since decision 69 (2026-10-12) the default GPU for
-   Ollama measurements is host GPU 3 (UUID `GPU-48f798cc-9437-50ac-d604-448bbad7b311`). The container's `device_ids`
-   decide which GPU Ollama actually uses (2026-10-12: "3"; earlier records under decisions 32 and 38 ran on GPU 2;
-   record in `sft_dpo_inventory/pilot_001/ollama/container/`).
-   - Update (decision 191, 2026-10-20): the Ollama container is on `GPU-48f798cc-9437-50ac-d604-448bbad7b311`
-     (index 2); map by UUID. (A move to `2445b100…` under decision 181 was reverted by decision 191.)
+4. Ollama: use the existing Docker server (`localhost:11434`) as is. No GPU is reserved for Ollama (see rules 5 and 6).
    - Do not move, restart or reconfigure the container or change its GPU assignment. A person does that.
    - Do not start another Ollama server and do not pull models. If something is needed, stop and report.
    - Ollama calls are allowed (decision 19, 2026-10-06). Rule 7 (measurement method, HF and Ollama measurements in
      sequence) still applies.
-5. Default GPU (decision 69, 2026-10-12; replaces the GPU split of decision 38): Ollama measurements and HF work
-   (training, HF inference) both use host GPU 3 (UUID `GPU-48f798cc-9437-50ac-d604-448bbad7b311`) by default.
-   - GPU 2 (UUID `GPU-a644de12-2a2c-ca3d-4822-b80f704b0b21`) is a spare, used only when GPU 3 cannot be used (for
-     example, another user's process is on it). Never use GPU 0 or GPU 1.
-   - Exception (decision 83, 2026-10-13): in work under decision Y (pilot_003), GPU 0–3 may be used. Since decision 84 (2026-10-13)
-     GPU `a644de12…` is gone and the remaining three are indices 0–2; GPU `48f798cc…` (the Ollama GPU) is now index 2, so map by UUID. Training still uses one
-     GPU. Before each use check UUID, state, memory in use and other users' processes, and skip a GPU that has another
-     process. Do not run HF on GPU 3 while an Ollama measurement (E reference cell, teacher collection) runs. Before splitting
-     work across GPUs, compare HF sampling of 5 items with the same seed on each GPU against GPU 3 byte for byte; if any GPU
-     differs, measure all samples of a cell on one GPU and both cells of a paired comparison on the same GPU. Record the
-     device of every sample.
-     Decision 89 (2026-10-14) allows the same GPUs and checks for the vLLM serving check (`serving_vllm`).
-     Decision 100 (AN, 2026-10-14) allows all three GPUs for pilot_004: training on one GPU; sample collection, checkpoint
-     evaluation and vendor 100 evaluation split across the three. Same checks every time; nothing else on the Ollama GPU
-     during an Ollama measurement (E, 27b); cells of one comparison use the same backend, sampler and concurrency.
-     Decision 105 (AS, 2026-10-15) continues this for pilot_005: one GPU per training variant (three variants at once); before
-     training on the Ollama GPU confirm no Ollama model is loaded; evaluation starts on GPUs freed by finished training; one vLLM
-     server may hold several LoRA adapters.
-     Decision 114 (BB, 2026-10-15) continues this from pilot_006: one job = one GPU (never split a job across GPUs, never two
-     jobs on one GPU); when a job finishes, start the next ready job on that GPU within 5 minutes; GPU jobs run from a
-     `git worktree` pinned at a commit and are logged in the run's `gpu/timeline.jsonl`.
-   - HF runs with `CUDA_VISIBLE_DEVICES=3` (or `=2` for the spare); inside the process it appears as `cuda:0`. Do not
-     change `CUDA_DEVICE_ORDER`.
-   - Never unload Ollama models yourself and never touch the container to free a GPU. If an Ollama measurement is
-     scheduled, finish or stop HF work on the Ollama GPU before it starts.
-   - Before using any GPU, check host `nvidia-smi` (not the Ollama API): the UUID, state, memory already in use, and
-     processes of other users. If another user's process is on that GPU (GPU 3 is shared with another user at
-     times), do not use it; switch to the spare or stop and report.
+5. GPU use (decision 114 and later; replaces the default/spare GPU split of decisions 38 and 69). The host has four RTX 6000 Ada
+   GPUs (49 GB, checked 2026-11-26: index 0 `GPU-2445b100…`, 1 `GPU-a5ce83d0…`, 2 `GPU-c8f1bae2…`, 3 `GPU-48f798cc…`).
+   Any of them may be used; no GPU is reserved for Ollama. Indices can change, so always map by UUID.
+   - One job = one GPU: never split a job across GPUs and never put two jobs on one GPU, unless a decision allows it for
+     that work (for example tensor parallel for the 27B BF16 teacher). When a job finishes, start the next ready job on that
+     GPU within 5 minutes. GPU jobs run from a `git worktree` pinned at a commit and are logged in the run's
+     `gpu/timeline.jsonl`. One vLLM server may hold several LoRA adapters.
+   - Before each use check host `nvidia-smi` (not the Ollama API): the UUID, state, memory already in use, and processes of
+     other users or of Ollama (a loaded Ollama model counts). Skip a GPU that has any other process; if none is free, wait or
+     report. Never unload Ollama models and never touch the container to free a GPU. If an Ollama measurement is scheduled,
+     finish or stop other work on its GPU before it starts, and keep other work off that GPU during the measurement.
+   - Before splitting work of one comparison across GPUs, compare HF sampling of 5 items with the same seed on each GPU against
+     one reference GPU byte for byte (decision 83; a decision may waive it). If any GPU differs, measure all samples of a cell on
+     one GPU and both cells of a paired comparison on the same GPU. Record the device of every sample.
+   - HF runs with `CUDA_VISIBLE_DEVICES=<UUID>` (or an index confirmed by UUID); inside the process it appears as `cuda:0`.
+     Do not change `CUDA_DEVICE_ORDER`.
 6. Before GPU work, confirm by UUID which physical GPU each job uses.
-   - Compare host `nvidia-smi -L`, the Ollama container's GPU (`nvidia-smi -L` inside it; if that fails with the
-     NVML error, its `docker inspect` DeviceRequests and `/dev/nvidia*` node), and the torch device UUID under the
-     `CUDA_VISIBLE_DEVICES` value in use.
+   - Compare host `nvidia-smi -L` with the torch device UUID under the `CUDA_VISIBLE_DEVICES` value in use.
    - HF and Ollama may share one GPU only in sequence (rule 7), never at the same time. If the GPU in use cannot be
      confirmed, stop and report.
 7. Ollama measurement method (decision 79, 2026-10-12; replaces the per-question and per-sample model unload).
@@ -145,13 +126,9 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
     registration needs a new user approval.
 13. Ollama GPU check (decision 55, 2026-10-08). When the container loses its GPU, Ollama silently runs on the CPU. This
     rule protects the execution condition only; it does not change any judgment rule.
-    - Before starting an Ollama cell (evaluation, render check, collection): `docker exec ollama nvidia-smi -L` must list
-      the Ollama GPU of rule 5 (default GPU 3, UUID `GPU-48f798cc…`; the guard's `--gpu-uuid` names the spare GPU 2
-      when it is used). After (or during) the first item, `ollama ps` must show PROCESSOR 100% GPU
+    - Before starting an Ollama cell (evaluation, render check, collection): `docker exec ollama nvidia-smi -L` must list a GPU
+      (the guard's `--gpu-uuid` names it). After (or during) the first item, `ollama ps` must show PROCESSOR 100% GPU
       (`/api/ps` `size_vram == size`).
-    - Update (decisions 181 and 191, 2026-10-19/20): this check expects `GPU-48f798cc…` (index 2). Before any training or
-      vLLM job on that GPU, `/api/ps` must be empty; if a model is loaded, do not unload it, use another GPU first and
-      wait (30 minutes, decision 181).
     - During the cell, check the recorded generation rate of every item (eval_count / eval_duration; evaluation records
       without eval_duration use eval_count / (duration_ms − load_duration_ms)). If it falls far below the same model's
       GPU records (threshold fixed beforehand from existing records and written in the run's plan-deviation record;
