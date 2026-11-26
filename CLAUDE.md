@@ -64,11 +64,8 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
    Ollama measurements is host GPU 3 (UUID `GPU-48f798cc-9437-50ac-d604-448bbad7b311`). The container's `device_ids`
    decide which GPU Ollama actually uses (2026-10-12: "3"; earlier records under decisions 32 and 38 ran on GPU 2;
    record in `sft_dpo_inventory/pilot_001/ollama/container/`).
-   - Update (decision 181, 2026-10-19): a person moved the Ollama container to host GPU UUID
-     `GPU-2445b100-70d8-e384-3a24-0249eeefc64d` (index 0). The Ollama GPU is now `2445b100…`; the text above about
-     `48f798cc…` is kept as history. Map by UUID.
-   - Update (decision 191, 2026-10-20): the Ollama container is back on `GPU-48f798cc-9437-50ac-d604-448bbad7b311`
-     (index 2). The Ollama GPU is now `48f798cc…` again; the decision 181 line above is kept as history.
+   - Update (decision 191, 2026-10-20): the Ollama container is on `GPU-48f798cc-9437-50ac-d604-448bbad7b311`
+     (index 2); map by UUID. (A move to `2445b100…` under decision 181 was reverted by decision 191.)
    - Do not move, restart or reconfigure the container or change its GPU assignment. A person does that.
    - Do not start another Ollama server and do not pull models. If something is needed, stop and report.
    - Ollama calls are allowed (decision 19, 2026-10-06). Rule 7 (measurement method, HF and Ollama measurements in
@@ -152,11 +149,9 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
       the Ollama GPU of rule 5 (default GPU 3, UUID `GPU-48f798cc…`; the guard's `--gpu-uuid` names the spare GPU 2
       when it is used). After (or during) the first item, `ollama ps` must show PROCESSOR 100% GPU
       (`/api/ps` `size_vram == size`).
-    - Update (decision 181, 2026-10-19): the container's GPU is now `GPU-2445b100…` (index 0), so this check expects
-      `2445b100…`. Before any training or vLLM job on GPU 0, `/api/ps` must be empty; if a model is loaded, do not unload it,
-      fill GPU 1 first and wait (decision 181).
-    - Update (decision 191, 2026-10-20): the container's GPU is `GPU-48f798cc…` (index 2) again, so this check expects
-      `48f798cc…`, and the decision 181 rules (empty `/api/ps` before a job, never unload, 30-minute wait) apply to GPU 2, not GPU 0.
+    - Update (decisions 181 and 191, 2026-10-19/20): this check expects `GPU-48f798cc…` (index 2). Before any training or
+      vLLM job on that GPU, `/api/ps` must be empty; if a model is loaded, do not unload it, use another GPU first and
+      wait (30 minutes, decision 181).
     - During the cell, check the recorded generation rate of every item (eval_count / eval_duration; evaluation records
       without eval_duration use eval_count / (duration_ms − load_duration_ms)). If it falls far below the same model's
       GPU records (threshold fixed beforehand from existing records and written in the run's plan-deviation record;
@@ -175,7 +170,6 @@ These rules apply to all SFT/DPO work on this branch, in this and later sessions
 15. Running scripts (decision 88, 2026-10-14). Never edit a script file while a process is executing it: bash reads scripts
     incrementally, so an edit can make the running shell execute different or partial lines. If a change is needed, write a new
     file and use it from the next run.
-
 16. Consolidated storage (decision 258, 2026-10-29): external SFT/DPO assets live only under
     `/data/hwkim/sftdpo_work`. Do not recreate `/home/hwkim/sftdpo_work` or add a compatibility symlink.
     - Keep model/adapter/checkpoint/GGUF files and caches outside Git. Keep original training/review data and
